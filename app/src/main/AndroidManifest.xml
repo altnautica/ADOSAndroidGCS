@@ -32,6 +32,10 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.ADOSAndroidGCS">
 
+        <meta-data
+            android:name="MAPBOX_ACCESS_TOKEN"
+            android:value="@string/mapbox_access_token" />
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"

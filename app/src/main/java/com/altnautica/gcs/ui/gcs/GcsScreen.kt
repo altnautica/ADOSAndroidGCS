@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.data.telemetry.PositionState
+import com.altnautica.gcs.ui.settings.SettingsViewModel
 import com.altnautica.gcs.ui.theme.ErrorRed
 import com.altnautica.gcs.ui.theme.SuccessGreen
 
@@ -53,18 +54,23 @@ private fun ArmDisarmButton(
 }
 
 @Composable
-fun GcsScreen(viewModel: GcsViewModel = hiltViewModel()) {
+fun GcsScreen(
+    viewModel: GcsViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
+) {
     val flightMode by viewModel.flightMode.collectAsStateWithLifecycle()
     val armed by viewModel.armed.collectAsStateWithLifecycle()
     val position by viewModel.position.collectAsStateWithLifecycle()
     val homePosition by viewModel.homePosition.collectAsStateWithLifecycle()
     val confirmAction by viewModel.confirmAction.collectAsStateWithLifecycle()
+    val mapProvider by settingsViewModel.mapProvider.collectAsStateWithLifecycle()
 
     Row(Modifier.fillMaxSize()) {
         // Map panel (60% width)
         DroneMapView(
             dronePosition = position,
             homePosition = homePosition,
+            useMapbox = shouldUseMapbox(mapProvider),
             modifier = Modifier
                 .weight(0.6f)
                 .fillMaxSize(),
