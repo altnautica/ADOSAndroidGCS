@@ -1,12 +1,16 @@
 package com.altnautica.gcs.ui.agriculture
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.data.agriculture.MissionGenerator
 import com.altnautica.gcs.data.agriculture.Waypoint
+import com.altnautica.gcs.data.mavlink.MavLinkMissionUploader
+import com.altnautica.gcs.data.mavlink.UploadState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class LatLon(val lat: Double, val lon: Double)
@@ -25,7 +29,9 @@ enum class MissionState(val label: String) {
 }
 
 @HiltViewModel
-class AgricultureViewModel @Inject constructor() : ViewModel() {
+class AgricultureViewModel @Inject constructor(
+    private val missionUploader: MavLinkMissionUploader,
+) : ViewModel() {
 
     private val _fieldState = MutableStateFlow(FieldState())
     val fieldState: StateFlow<FieldState> = _fieldState.asStateFlow()
@@ -76,9 +82,20 @@ class AgricultureViewModel @Inject constructor() : ViewModel() {
         _missionWaypoints.value = waypoints
         _missionState.value = MissionState.RUNNING
 
-        // TODO: Upload waypoints to flight controller via MAVLink mission protocol
-        // For now, mark complete after generation
-        _missionState.value = MissionState.COMPLETE
+        viewModelScope.launch {
+            missionUploader.uploadMission(waypoints)
+            missionUploader.uploadState.collect { state ->
+                when (state) {
+                    is UploadState.Complete -> {
+                        _missionState.value = MissionState.COMPLETE
+                    }
+                    is UploadState.Error -> {
+                        _missionState.value = MissionState.CONFIGURED
+                    }
+                    else -> { /* Idle, Uploading: no state change needed */ }
+                }
+            }
+        }
     }
 
     fun viewSummary() {

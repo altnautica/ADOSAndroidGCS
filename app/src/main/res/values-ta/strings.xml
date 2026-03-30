@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ADOS ஆண்ட்ராய்டு GCS</string>
+
+    <!-- Navigation -->
+    <string name="nav_video">வீடியோ</string>
+    <string name="nav_map">வரைபடம்</string>
+    <string name="nav_gcs">கட்டுப்பாடு</string>
+    <string name="nav_agriculture">வேளாண்மை</string>
+    <string name="nav_settings">அமைப்புகள்</string>
+
+    <!-- Video Screen -->
+    <string name="video_no_signal">வீடியோ சிக்னல் இல்லை</string>
+    <string name="video_connecting">இணைக்கிறது…</string>
+    <string name="video_mode_a">மோட் A: தரை நிலையம்</string>
+    <string name="video_mode_b">மோட் B: நேரடி USB</string>
+    <string name="video_mode_c">மோட் C: கிளவுட்</string>
+    <string name="video_no_connection">இணைப்பு இல்லை</string>
+    <string name="video_latency">தாமதம்</string>
+    <string name="video_snapshot">ஸ்னாப்ஷாட்</string>
+    <string name="video_fullscreen">முழுத்திரை</string>
+
+    <!-- HUD -->
+    <string name="hud_alt">உயரம்</string>
+    <string name="hud_spd">வேகம்</string>
+    <string name="hud_bat">பேட்டரி</string>
+    <string name="hud_home">ஹோம்</string>
+    <string name="hud_armed">செயலில்</string>
+    <string name="hud_disarmed">செயலற்றது</string>
+    <string name="hud_heading">திசை</string>
+    <string name="hud_distance">தூரம்</string>
+    <string name="hud_flight_time">நேரம்</string>
+    <string name="hud_no_gps">GPS இல்லை</string>
+    <string name="hud_no_data">--</string>
+
+    <!-- GCS -->
+    <string name="gcs_flight_mode">பறப்பு முறை</string>
+    <string name="gcs_arm">ARM</string>
+    <string name="gcs_disarm">DISARM</string>
+    <string name="gcs_rtl">RTL</string>
+    <string name="gcs_confirm_arm">ARM உறுதிப்படுத்து</string>
+    <string name="gcs_confirm_arm_message">மோட்டார் தொடங்குவதற்கு முன் பகுதி காலியாக உள்ளதா என்பதை உறுதிப்படுத்தவும்.</string>
+    <string name="gcs_confirm_disarm">DISARM உறுதிப்படுத்து</string>
+    <string name="gcs_confirm_disarm_message">மோட்டார்கள் நிற்கும். ட்ரோன் தரையிறங்கியிருக்க வேண்டும்.</string>
+    <string name="gcs_confirm">உறுதிப்படுத்து</string>
+    <string name="gcs_cancel">ரத்து செய்</string>
+    <string name="gcs_telemetry">டெலிமெட்ரி</string>
+    <string name="gcs_battery">பேட்டரி</string>
+    <string name="gcs_satellites">செயற்கைக்கோள்கள்</string>
+    <string name="gcs_voltage">மின்னழுத்தம்</string>
+    <string name="gcs_current">மின்னோட்டம்</string>
+    <string name="gcs_remaining">மீதி</string>
+    <string name="gcs_messages">செய்திகள்</string>
+    <string name="gcs_params">அளவுருக்கள்</string>
+    <string name="gcs_actions">செயல்கள்</string>
+    <string name="gcs_reboot_fc">FC மறுதொடக்கம்</string>
+    <string name="gcs_preflight_check">பறப்புக்கு முன் சோதனை</string>
+    <string name="gcs_takeoff">புறப்படு</string>
+    <string name="gcs_takeoff_altitude">புறப்படும் உயரம் (மீ)</string>
+
+    <!-- Map -->
+    <string name="map_satellite">செயற்கைக்கோள்</string>
+    <string name="map_terrain">நிலப்பரப்பு</string>
+    <string name="map_street">சாலை</string>
+    <string name="map_center_drone">ட்ரோனை மையப்படுத்து</string>
+    <string name="map_center_home">ஹோமை மையப்படுத்து</string>
+    <string name="map_follow_drone">ட்ரோனைப் பின்தொடர்</string>
+    <string name="map_show_trail">பாதை காட்டு</string>
+    <string name="map_waypoints">வழிப்புள்ளிகள்</string>
+    <string name="map_no_position">நிலை தரவு இல்லை</string>
+
+    <!-- Ground Station -->
+    <string name="gs_title">தரை நிலையம்</string>
+    <string name="gs_connected">இணைக்கப்பட்டது</string>
+    <string name="gs_disconnected">துண்டிக்கப்பட்டது</string>
+    <string name="gs_scanning">தேடுகிறது…</string>
+    <string name="gs_signal">சிக்னல்</string>
+    <string name="gs_packet_loss">பாக்கெட் இழப்பு</string>
+    <string name="gs_fec_recovery">FEC மீட்பு</string>
+    <string name="gs_bitrate">பிட்ரேட்</string>
+    <string name="gs_recording">பதிவு</string>
+    <string name="gs_start_recording">பதிவு தொடங்கு</string>
+    <string name="gs_stop_recording">பதிவு நிறுத்து</string>
+    <string name="gs_firmware">ஃபர்ம்வேர்</string>
+    <string name="gs_temperature">வெப்பநிலை</string>
+    <string name="gs_reboot">மறுதொடக்கம்</string>
+
+    <!-- Agriculture -->
+    <string name="agri_title">வேளாண்மை</string>
+    <string name="agri_map_field">வயல் வரைபடம் செய்</string>
+    <string name="agri_spray_setup">தெளிப்பு அமை</string>
+    <string name="agri_start_mission">பணி தொடங்கு</string>
+    <string name="agri_view_summary">சுருக்கம் காண்</string>
+    <string name="agri_field">வயல்</string>
+    <string name="agri_area">பரப்பளவு</string>
+    <string name="agri_points">புள்ளிகள்</string>
+    <string name="agri_acres">ஏக்கர்</string>
+    <string name="agri_hectares">ஹெக்டேர்</string>
+    <string name="agri_start_walking">நடக்க தொடங்கு</string>
+    <string name="agri_stop_walking">முடி</string>
+    <string name="agri_gps_accuracy">GPS துல்லியம்</string>
+    <string name="agri_crop_type">பயிர் வகை</string>
+    <string name="agri_chemical">இரசாயனம்</string>
+    <string name="agri_rate_per_acre">விகிதம் (லி/ஏக்கர்)</string>
+    <string name="agri_altitude">பறப்பு உயரம் (மீ)</string>
+    <string name="agri_speed">பறப்பு வேகம் (மீ/வி)</string>
+    <string name="agri_swath_width">தெளிப்பு அகலம் (மீ)</string>
+    <string name="agri_spray_config">தெளிப்பு அமைப்பு</string>
+    <string name="agri_confirm">உறுதிப்படுத்து</string>
+    <string name="agri_mission_idle">தயார்</string>
+    <string name="agri_mission_mapping">வரைபடமிடுகிறது</string>
+    <string name="agri_mission_configured">கட்டமைக்கப்பட்டது</string>
+    <string name="agri_mission_running">பணி நடக்கிறது</string>
+    <string name="agri_mission_complete">நிறைவு</string>
+    <string name="agri_mission_summary">பணி சுருக்கம்</string>
+    <string name="agri_waypoints">வழிப்புள்ளிகள்</string>
+    <string name="agri_est_total">மதிப்பிட்ட மொத்தம்</string>
+    <string name="agri_crop_rice">நெல்</string>
+    <string name="agri_crop_wheat">கோதுமை</string>
+    <string name="agri_crop_cotton">பருத்தி</string>
+    <string name="agri_crop_sugarcane">கரும்பு</string>
+    <string name="agri_crop_maize">மக்காச்சோளம்</string>
+    <string name="agri_crop_soybean">சோயாபீன்</string>
+    <string name="agri_crop_mustard">கடுகு</string>
+    <string name="agri_crop_vegetables">காய்கறிகள்</string>
+    <string name="agri_chem_pesticide">பூச்சிக்கொல்லி</string>
+    <string name="agri_chem_herbicide">களைக்கொல்லி</string>
+    <string name="agri_chem_fungicide">பூஞ்சைக்கொல்லி</string>
+    <string name="agri_chem_fertilizer">திரவ உரம்</string>
+    <string name="agri_chem_growth_reg">வளர்ச்சி ஒழுங்குபடுத்தி</string>
+    <string name="agri_close">மூடு</string>
+
+    <!-- Settings -->
+    <string name="settings_title">அமைப்புகள்</string>
+    <string name="settings_theme">தீம்</string>
+    <string name="settings_theme_dark">இருண்ட</string>
+    <string name="settings_theme_oled">OLED கருப்பு</string>
+    <string name="settings_units">அலகு</string>
+    <string name="settings_units_metric">மெட்ரிக்</string>
+    <string name="settings_units_imperial">இம்பீரியல்</string>
+    <string name="settings_about">பற்றி</string>
+    <string name="settings_version">பதிப்பு</string>
+    <string name="settings_source">மூல குறியீடு</string>
+
+    <!-- Permissions -->
+    <string name="permission_location_title">இருப்பிட அனுமதி</string>
+    <string name="permission_location_rationale">தரை நிலையம் WiFi மற்றும் வேளாண்மை வரைபடத்திற்கு இருப்பிட அனுமதி தேவை.</string>
+    <string name="permission_camera_title">கேமரா அனுமதி</string>
+    <string name="permission_camera_rationale">தரை நிலையம் இணைப்பிற்கு QR குறியீடு ஸ்கேன் செய்ய கேமரா அனுமதி தேவை.</string>
+    <string name="permission_storage_title">சேமிப்பிட அனுமதி</string>
+    <string name="permission_storage_rationale">வீடியோ பதிவு மற்றும் பறப்புப் பதிவுகள் சேமிக்க சேமிப்பிட அனுமதி தேவை.</string>
+    <string name="permission_usb_title">USB அனுமதி</string>
+    <string name="permission_usb_rationale">நேரடி WFB-ng வீடியோ இணைப்புக்கு USB அனுமதி தேவை.</string>
+    <string name="permission_grant">அனுமதி</string>
+    <string name="permission_deny">இப்போது வேண்டாம்</string>
+    <string name="permission_open_settings">அமைப்புகளைத் திற</string>
+
+    <!-- Connection -->
+    <string name="connection_searching">ட்ரோன் தேடுகிறது…</string>
+    <string name="connection_found">ட்ரோன் கிடைத்தது</string>
+    <string name="connection_failed">இணைப்பு தோல்வி</string>
+    <string name="connection_timeout">இணைப்பு நேரம் முடிந்தது</string>
+    <string name="connection_retry">மீண்டும் முயற்சி</string>
+    <string name="connection_disconnect">துண்டி</string>
+
+    <!-- Errors -->
+    <string name="error_no_drone">ட்ரோன் இணைக்கப்படவில்லை</string>
+    <string name="error_connection_lost">இணைப்பு தொலைந்தது</string>
+    <string name="error_wifi_disconnect">தரை நிலையம் WiFi துண்டிக்கப்பட்டது</string>
+    <string name="error_video_freeze">வீடியோ சிக்னல் இழந்தது</string>
+    <string name="error_usb_disconnect">USB அடாப்டர் துண்டிக்கப்பட்டது</string>
+    <string name="error_low_battery">பேட்டரி குறைவு எச்சரிக்கை</string>
+    <string name="error_gps_lost">GPS சிக்னல் இழந்தது</string>
+    <string name="error_ekf_bad">EKF மாறுபாடு அதிகம்</string>
+    <string name="error_geofence_breach">ஜியோஃபென்ஸ் மீறல்</string>
+    <string name="error_mission_failed">பணி பதிவேற்றம் தோல்வி</string>
+    <string name="error_param_write_failed">அளவுரு எழுதுதல் தோல்வி</string>
+    <string name="error_generic">ஏதோ தவறு நடந்தது</string>
+
+    <!-- Common -->
+    <string name="ok">சரி</string>
+    <string name="cancel">ரத்து</string>
+    <string name="close">மூடு</string>
+    <string name="save">சேமி</string>
+    <string name="delete">நீக்கு</string>
+    <string name="reset">மீட்டமை</string>
+    <string name="loading">ஏற்றுகிறது…</string>
+    <string name="done">முடிந்தது</string>
+    <string name="yes">ஆம்</string>
+    <string name="no">இல்லை</string>
+    <string name="on">ஆன்</string>
+    <string name="off">ஆஃப்</string>
+    <string name="enabled">இயக்கத்தில்</string>
+    <string name="disabled">முடக்கத்தில்</string>
+    <string name="unknown">தெரியாத</string>
+    <string name="none">எதுவுமில்லை</string>
+</resources>

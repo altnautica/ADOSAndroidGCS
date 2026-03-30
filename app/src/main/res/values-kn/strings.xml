@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ADOS ಆಂಡ್ರಾಯ್ಡ್ GCS</string>
+
+    <!-- Navigation -->
+    <string name="nav_video">ವೀಡಿಯೊ</string>
+    <string name="nav_map">ನಕ್ಷೆ</string>
+    <string name="nav_gcs">ನಿಯಂತ್ರಣ</string>
+    <string name="nav_agriculture">ಕೃಷಿ</string>
+    <string name="nav_settings">ಸೆಟ್ಟಿಂಗ್‌ಗಳು</string>
+
+    <!-- Video Screen -->
+    <string name="video_no_signal">ವೀಡಿಯೊ ಸಿಗ್ನಲ್ ಇಲ್ಲ</string>
+    <string name="video_connecting">ಸಂಪರ್ಕಿಸುತ್ತಿದೆ…</string>
+    <string name="video_mode_a">ಮೋಡ್ A: ಗ್ರೌಂಡ್ ಸ್ಟೇಷನ್</string>
+    <string name="video_mode_b">ಮೋಡ್ B: ನೇರ USB</string>
+    <string name="video_mode_c">ಮೋಡ್ C: ಕ್ಲೌಡ್</string>
+    <string name="video_no_connection">ಸಂಪರ್ಕ ಇಲ್ಲ</string>
+    <string name="video_latency">ವಿಳಂಬ</string>
+    <string name="video_snapshot">ಸ್ನ್ಯಾಪ್‌ಶಾಟ್</string>
+    <string name="video_fullscreen">ಪೂರ್ಣ ಪರದೆ</string>
+
+    <!-- HUD -->
+    <string name="hud_alt">ಎತ್ತರ</string>
+    <string name="hud_spd">ವೇಗ</string>
+    <string name="hud_bat">ಬ್ಯಾಟರಿ</string>
+    <string name="hud_home">ಹೋಮ್</string>
+    <string name="hud_armed">ಸಕ್ರಿಯ</string>
+    <string name="hud_disarmed">ನಿಷ್ಕ್ರಿಯ</string>
+    <string name="hud_heading">ದಿಕ್ಕು</string>
+    <string name="hud_distance">ದೂರ</string>
+    <string name="hud_flight_time">ಸಮಯ</string>
+    <string name="hud_no_gps">GPS ಇಲ್ಲ</string>
+    <string name="hud_no_data">--</string>
+
+    <!-- GCS -->
+    <string name="gcs_flight_mode">ಹಾರಾಟ ಮೋಡ್</string>
+    <string name="gcs_arm">ARM</string>
+    <string name="gcs_disarm">DISARM</string>
+    <string name="gcs_rtl">RTL</string>
+    <string name="gcs_confirm_arm">ARM ದೃಢೀಕರಿಸಿ</string>
+    <string name="gcs_confirm_arm_message">ಮೋಟಾರ್ ಆರಂಭಿಸುವ ಮೊದಲು ಪ್ರದೇಶ ಖಾಲಿ ಇದೆ ಎಂದು ಖಚಿತಪಡಿಸಿ.</string>
+    <string name="gcs_confirm_disarm">DISARM ದೃಢೀಕರಿಸಿ</string>
+    <string name="gcs_confirm_disarm_message">ಮೋಟಾರ್‌ಗಳು ನಿಲ್ಲುತ್ತವೆ. ಡ್ರೋನ್ ಇಳಿದಿರಬೇಕು.</string>
+    <string name="gcs_confirm">ದೃಢೀಕರಿಸಿ</string>
+    <string name="gcs_cancel">ರದ್ದುಮಾಡಿ</string>
+    <string name="gcs_telemetry">ಟೆಲಿಮೆಟ್ರಿ</string>
+    <string name="gcs_battery">ಬ್ಯಾಟರಿ</string>
+    <string name="gcs_satellites">ಉಪಗ್ರಹಗಳು</string>
+    <string name="gcs_voltage">ವೋಲ್ಟೇಜ್</string>
+    <string name="gcs_current">ಕರೆಂಟ್</string>
+    <string name="gcs_remaining">ಉಳಿದಿದೆ</string>
+    <string name="gcs_messages">ಸಂದೇಶಗಳು</string>
+    <string name="gcs_params">ಪ್ಯಾರಾಮೀಟರ್‌ಗಳು</string>
+    <string name="gcs_actions">ಕ್ರಿಯೆಗಳು</string>
+    <string name="gcs_reboot_fc">FC ರೀಬೂಟ್ ಮಾಡಿ</string>
+    <string name="gcs_preflight_check">ಹಾರಾಟ ಪೂರ್ವ ಪರಿಶೀಲನೆ</string>
+    <string name="gcs_takeoff">ಟೇಕ್‌ಆಫ್</string>
+    <string name="gcs_takeoff_altitude">ಟೇಕ್‌ಆಫ್ ಎತ್ತರ (ಮೀ)</string>
+
+    <!-- Map -->
+    <string name="map_satellite">ಉಪಗ್ರಹ</string>
+    <string name="map_terrain">ಭೂಪ್ರದೇಶ</string>
+    <string name="map_street">ರಸ್ತೆ</string>
+    <string name="map_center_drone">ಡ್ರೋನ್ ಮೇಲೆ ಕೇಂದ್ರೀಕರಿಸಿ</string>
+    <string name="map_center_home">ಹೋಮ್ ಮೇಲೆ ಕೇಂದ್ರೀಕರಿಸಿ</string>
+    <string name="map_follow_drone">ಡ್ರೋನ್ ಅನುಸರಿಸಿ</string>
+    <string name="map_show_trail">ಹಾದಿ ತೋರಿಸಿ</string>
+    <string name="map_waypoints">ವೇಪಾಯಿಂಟ್‌ಗಳು</string>
+    <string name="map_no_position">ಸ್ಥಾನ ಡೇಟಾ ಇಲ್ಲ</string>
+
+    <!-- Ground Station -->
+    <string name="gs_title">ಗ್ರೌಂಡ್ ಸ್ಟೇಷನ್</string>
+    <string name="gs_connected">ಸಂಪರ್ಕಿತ</string>
+    <string name="gs_disconnected">ಸಂಪರ್ಕ ಕಡಿತ</string>
+    <string name="gs_scanning">ಹುಡುಕುತ್ತಿದೆ…</string>
+    <string name="gs_signal">ಸಿಗ್ನಲ್</string>
+    <string name="gs_packet_loss">ಪ್ಯಾಕೆಟ್ ನಷ್ಟ</string>
+    <string name="gs_fec_recovery">FEC ಮರುಪಡೆಯುವಿಕೆ</string>
+    <string name="gs_bitrate">ಬಿಟ್‌ರೇಟ್</string>
+    <string name="gs_recording">ರೆಕಾರ್ಡಿಂಗ್</string>
+    <string name="gs_start_recording">ರೆಕಾರ್ಡಿಂಗ್ ಪ್ರಾರಂಭಿಸಿ</string>
+    <string name="gs_stop_recording">ರೆಕಾರ್ಡಿಂಗ್ ನಿಲ್ಲಿಸಿ</string>
+    <string name="gs_firmware">ಫರ್ಮ್‌ವೇರ್</string>
+    <string name="gs_temperature">ತಾಪಮಾನ</string>
+    <string name="gs_reboot">ರೀಬೂಟ್ ಮಾಡಿ</string>
+
+    <!-- Agriculture -->
+    <string name="agri_title">ಕೃಷಿ</string>
+    <string name="agri_map_field">ಹೊಲ ನಕ್ಷೆ ಮಾಡಿ</string>
+    <string name="agri_spray_setup">ಸ್ಪ್ರೇ ಸೆಟ್ ಮಾಡಿ</string>
+    <string name="agri_start_mission">ಮಿಷನ್ ಪ್ರಾರಂಭಿಸಿ</string>
+    <string name="agri_view_summary">ಸಾರಾಂಶ ನೋಡಿ</string>
+    <string name="agri_field">ಹೊಲ</string>
+    <string name="agri_area">ವಿಸ್ತೀರ್ಣ</string>
+    <string name="agri_points">ಬಿಂದುಗಳು</string>
+    <string name="agri_acres">ಎಕರೆ</string>
+    <string name="agri_hectares">ಹೆಕ್ಟೇರ್</string>
+    <string name="agri_start_walking">ನಡೆಯಲು ಪ್ರಾರಂಭಿಸಿ</string>
+    <string name="agri_stop_walking">ಮುಗಿಸಿ</string>
+    <string name="agri_gps_accuracy">GPS ನಿಖರತೆ</string>
+    <string name="agri_crop_type">ಬಿತ್ತನೆ ಪ್ರಕಾರ</string>
+    <string name="agri_chemical">ರಾಸಾಯನಿಕ</string>
+    <string name="agri_rate_per_acre">ದರ (ಲೀ/ಎಕರೆ)</string>
+    <string name="agri_altitude">ಹಾರಾಟ ಎತ್ತರ (ಮೀ)</string>
+    <string name="agri_speed">ಹಾರಾಟ ವೇಗ (ಮೀ/ಸೆ)</string>
+    <string name="agri_swath_width">ಸ್ಪ್ರೇ ಅಗಲ (ಮೀ)</string>
+    <string name="agri_spray_config">ಸ್ಪ್ರೇ ಸೆಟ್ಟಿಂಗ್</string>
+    <string name="agri_confirm">ದೃಢೀಕರಿಸಿ</string>
+    <string name="agri_mission_idle">ಸಿದ್ಧ</string>
+    <string name="agri_mission_mapping">ನಕ್ಷೆ ಮಾಡುತ್ತಿದೆ</string>
+    <string name="agri_mission_configured">ಸಂರಚಿಸಲಾಗಿದೆ</string>
+    <string name="agri_mission_running">ಮಿಷನ್ ಚಾಲನೆಯಲ್ಲಿ</string>
+    <string name="agri_mission_complete">ಪೂರ್ಣ</string>
+    <string name="agri_mission_summary">ಮಿಷನ್ ಸಾರಾಂಶ</string>
+    <string name="agri_waypoints">ವೇಪಾಯಿಂಟ್‌ಗಳು</string>
+    <string name="agri_est_total">ಅಂದಾಜು ಒಟ್ಟು</string>
+    <string name="agri_crop_rice">ಭತ್ತ</string>
+    <string name="agri_crop_wheat">ಗೋಧಿ</string>
+    <string name="agri_crop_cotton">ಹತ್ತಿ</string>
+    <string name="agri_crop_sugarcane">ಕಬ್ಬು</string>
+    <string name="agri_crop_maize">ಮೆಕ್ಕೆಜೋಳ</string>
+    <string name="agri_crop_soybean">ಸೋಯಾಬೀನ್</string>
+    <string name="agri_crop_mustard">ಸಾಸಿವೆ</string>
+    <string name="agri_crop_vegetables">ತರಕಾರಿ</string>
+    <string name="agri_chem_pesticide">ಕೀಟನಾಶಕ</string>
+    <string name="agri_chem_herbicide">ಕಳೆನಾಶಕ</string>
+    <string name="agri_chem_fungicide">ಶಿಲೀಂಧ್ರನಾಶಕ</string>
+    <string name="agri_chem_fertilizer">ದ್ರವ ಗೊಬ್ಬರ</string>
+    <string name="agri_chem_growth_reg">ಬೆಳವಣಿಗೆ ನಿಯಂತ್ರಕ</string>
+    <string name="agri_close">ಮುಚ್ಚಿ</string>
+
+    <!-- Settings -->
+    <string name="settings_title">ಸೆಟ್ಟಿಂಗ್‌ಗಳು</string>
+    <string name="settings_theme">ಥೀಮ್</string>
+    <string name="settings_theme_dark">ಡಾರ್ಕ್</string>
+    <string name="settings_theme_oled">OLED ಕಪ್ಪು</string>
+    <string name="settings_units">ಮಾಪನ</string>
+    <string name="settings_units_metric">ಮೆಟ್ರಿಕ್</string>
+    <string name="settings_units_imperial">ಇಂಪೀರಿಯಲ್</string>
+    <string name="settings_about">ಕುರಿತು</string>
+    <string name="settings_version">ಆವೃತ್ತಿ</string>
+    <string name="settings_source">ಮೂಲ ಕೋಡ್</string>
+
+    <!-- Permissions -->
+    <string name="permission_location_title">ಸ್ಥಳ ಅನುಮತಿ</string>
+    <string name="permission_location_rationale">ಗ್ರೌಂಡ್ ಸ್ಟೇಷನ್ WiFi ಮತ್ತು ಕೃಷಿ ನಕ್ಷೆಗಾಗಿ ಸ್ಥಳ ಅನುಮತಿ ಅಗತ್ಯ.</string>
+    <string name="permission_camera_title">ಕ್ಯಾಮರಾ ಅನುಮತಿ</string>
+    <string name="permission_camera_rationale">ಗ್ರೌಂಡ್ ಸ್ಟೇಷನ್ ಜೋಡಣೆಗಾಗಿ QR ಕೋಡ್ ಸ್ಕ್ಯಾನ್ ಮಾಡಲು ಕ್ಯಾಮರಾ ಅನುಮತಿ ಬೇಕು.</string>
+    <string name="permission_storage_title">ಸಂಗ್ರಹ ಅನುಮತಿ</string>
+    <string name="permission_storage_rationale">ವೀಡಿಯೊ ರೆಕಾರ್ಡಿಂಗ್ ಮತ್ತು ಫ್ಲೈಟ್ ಲಾಗ್ ಉಳಿಸಲು ಸಂಗ್ರಹ ಅನುಮತಿ ಬೇಕು.</string>
+    <string name="permission_usb_title">USB ಅನುಮತಿ</string>
+    <string name="permission_usb_rationale">ನೇರ WFB-ng ವೀಡಿಯೊ ಲಿಂಕ್‌ಗಾಗಿ USB ಅನುಮತಿ ಅಗತ್ಯ.</string>
+    <string name="permission_grant">ಅನುಮತಿಸಿ</string>
+    <string name="permission_deny">ಈಗ ಬೇಡ</string>
+    <string name="permission_open_settings">ಸೆಟ್ಟಿಂಗ್‌ಗಳನ್ನು ತೆರೆಯಿರಿ</string>
+
+    <!-- Connection -->
+    <string name="connection_searching">ಡ್ರೋನ್ ಹುಡುಕುತ್ತಿದೆ…</string>
+    <string name="connection_found">ಡ್ರೋನ್ ಸಿಕ್ಕಿತು</string>
+    <string name="connection_failed">ಸಂಪರ್ಕ ವಿಫಲ</string>
+    <string name="connection_timeout">ಸಂಪರ್ಕ ಸಮಯ ಮೀರಿತು</string>
+    <string name="connection_retry">ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ</string>
+    <string name="connection_disconnect">ಸಂಪರ್ಕ ಕಡಿತ</string>
+
+    <!-- Errors -->
+    <string name="error_no_drone">ಯಾವುದೇ ಡ್ರೋನ್ ಸಂಪರ್ಕಿತವಾಗಿಲ್ಲ</string>
+    <string name="error_connection_lost">ಸಂಪರ್ಕ ಕಳೆದುಹೋಯಿತು</string>
+    <string name="error_wifi_disconnect">ಗ್ರೌಂಡ್ ಸ್ಟೇಷನ್ WiFi ಕಡಿತಗೊಂಡಿತು</string>
+    <string name="error_video_freeze">ವೀಡಿಯೊ ಸಿಗ್ನಲ್ ಕಳೆದುಹೋಯಿತು</string>
+    <string name="error_usb_disconnect">USB ಅಡಾಪ್ಟರ್ ಕಡಿತಗೊಂಡಿತು</string>
+    <string name="error_low_battery">ಬ್ಯಾಟರಿ ಕಡಿಮೆ ಎಚ್ಚರಿಕೆ</string>
+    <string name="error_gps_lost">GPS ಸಿಗ್ನಲ್ ಕಳೆದುಹೋಯಿತು</string>
+    <string name="error_ekf_bad">EKF ವ್ಯತ್ಯಾಸ ಹೆಚ್ಚಿದೆ</string>
+    <string name="error_geofence_breach">ಜಿಯೋಫೆನ್ಸ್ ಉಲ್ಲಂಘನೆ</string>
+    <string name="error_mission_failed">ಮಿಷನ್ ಅಪ್‌ಲೋಡ್ ವಿಫಲ</string>
+    <string name="error_param_write_failed">ಪ್ಯಾರಾಮೀಟರ್ ಬರೆಯುವಿಕೆ ವಿಫಲ</string>
+    <string name="error_generic">ಏನೋ ತಪ್ಪಾಯಿತು</string>
+
+    <!-- Common -->
+    <string name="ok">ಸರಿ</string>
+    <string name="cancel">ರದ್ದುಮಾಡಿ</string>
+    <string name="close">ಮುಚ್ಚಿ</string>
+    <string name="save">ಉಳಿಸಿ</string>
+    <string name="delete">ಅಳಿಸಿ</string>
+    <string name="reset">ಮರುಹೊಂದಿಸಿ</string>
+    <string name="loading">ಲೋಡ್ ಆಗುತ್ತಿದೆ…</string>
+    <string name="done">ಆಯಿತು</string>
+    <string name="yes">ಹೌದು</string>
+    <string name="no">ಇಲ್ಲ</string>
+    <string name="on">ಆನ್</string>
+    <string name="off">ಆಫ್</string>
+    <string name="enabled">ಸಕ್ರಿಯ</string>
+    <string name="disabled">ನಿಷ್ಕ್ರಿಯ</string>
+    <string name="unknown">ಅಜ್ಞಾತ</string>
+    <string name="none">ಯಾವುದೂ ಇಲ್ಲ</string>
+</resources>

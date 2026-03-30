@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ADOS अँड्रॉइड GCS</string>
+
+    <!-- Navigation -->
+    <string name="nav_video">व्हिडिओ</string>
+    <string name="nav_map">नकाशा</string>
+    <string name="nav_gcs">नियंत्रण</string>
+    <string name="nav_agriculture">शेती</string>
+    <string name="nav_settings">सेटिंग्ज</string>
+
+    <!-- Video Screen -->
+    <string name="video_no_signal">व्हिडिओ सिग्नल नाही</string>
+    <string name="video_connecting">जोडत आहे…</string>
+    <string name="video_mode_a">मोड A: ग्राउंड स्टेशन</string>
+    <string name="video_mode_b">मोड B: डायरेक्ट USB</string>
+    <string name="video_mode_c">मोड C: क्लाउड</string>
+    <string name="video_no_connection">जोडणी नाही</string>
+    <string name="video_latency">विलंब</string>
+    <string name="video_snapshot">स्नॅपशॉट</string>
+    <string name="video_fullscreen">फुलस्क्रीन</string>
+
+    <!-- HUD -->
+    <string name="hud_alt">उंची</string>
+    <string name="hud_spd">वेग</string>
+    <string name="hud_bat">बॅटरी</string>
+    <string name="hud_home">होम</string>
+    <string name="hud_armed">सक्रिय</string>
+    <string name="hud_disarmed">निष्क्रिय</string>
+    <string name="hud_heading">दिशा</string>
+    <string name="hud_distance">अंतर</string>
+    <string name="hud_flight_time">वेळ</string>
+    <string name="hud_no_gps">GPS नाही</string>
+    <string name="hud_no_data">--</string>
+
+    <!-- GCS -->
+    <string name="gcs_flight_mode">उड्डाण मोड</string>
+    <string name="gcs_arm">ARM</string>
+    <string name="gcs_disarm">DISARM</string>
+    <string name="gcs_rtl">RTL</string>
+    <string name="gcs_confirm_arm">ARM निश्चित करा</string>
+    <string name="gcs_confirm_arm_message">मोटर सुरू करण्यापूर्वी परिसर रिकामा असल्याची खात्री करा.</string>
+    <string name="gcs_confirm_disarm">DISARM निश्चित करा</string>
+    <string name="gcs_confirm_disarm_message">मोटर बंद होतील. ड्रोन उतरलेला असावा.</string>
+    <string name="gcs_confirm">निश्चित करा</string>
+    <string name="gcs_cancel">रद्द करा</string>
+    <string name="gcs_telemetry">टेलिमेट्री</string>
+    <string name="gcs_battery">बॅटरी</string>
+    <string name="gcs_satellites">उपग्रह</string>
+    <string name="gcs_voltage">व्होल्टेज</string>
+    <string name="gcs_current">करंट</string>
+    <string name="gcs_remaining">उरलेले</string>
+    <string name="gcs_messages">संदेश</string>
+    <string name="gcs_params">पॅरामीटर</string>
+    <string name="gcs_actions">कृती</string>
+    <string name="gcs_reboot_fc">FC रीबूट करा</string>
+    <string name="gcs_preflight_check">उड्डाणपूर्व तपासणी</string>
+    <string name="gcs_takeoff">उड्डाण भरा</string>
+    <string name="gcs_takeoff_altitude">उड्डाण उंची (मी)</string>
+
+    <!-- Map -->
+    <string name="map_satellite">उपग्रह</string>
+    <string name="map_terrain">भूभाग</string>
+    <string name="map_street">रस्ता</string>
+    <string name="map_center_drone">ड्रोन वर केंद्रित करा</string>
+    <string name="map_center_home">होम वर केंद्रित करा</string>
+    <string name="map_follow_drone">ड्रोन फॉलो करा</string>
+    <string name="map_show_trail">ट्रेल दाखवा</string>
+    <string name="map_waypoints">वेपॉइंट</string>
+    <string name="map_no_position">स्थान डेटा नाही</string>
+
+    <!-- Ground Station -->
+    <string name="gs_title">ग्राउंड स्टेशन</string>
+    <string name="gs_connected">जोडलेले</string>
+    <string name="gs_disconnected">जोडणी तुटली</string>
+    <string name="gs_scanning">शोधत आहे…</string>
+    <string name="gs_signal">सिग्नल</string>
+    <string name="gs_packet_loss">पॅकेट लॉस</string>
+    <string name="gs_fec_recovery">FEC रिकव्हरी</string>
+    <string name="gs_bitrate">बिटरेट</string>
+    <string name="gs_recording">रेकॉर्डिंग</string>
+    <string name="gs_start_recording">रेकॉर्डिंग सुरू करा</string>
+    <string name="gs_stop_recording">रेकॉर्डिंग थांबवा</string>
+    <string name="gs_firmware">फर्मवेअर</string>
+    <string name="gs_temperature">तापमान</string>
+    <string name="gs_reboot">रीबूट करा</string>
+
+    <!-- Agriculture -->
+    <string name="agri_title">शेती</string>
+    <string name="agri_map_field">शेत मॅप करा</string>
+    <string name="agri_spray_setup">फवारणी सेट करा</string>
+    <string name="agri_start_mission">मिशन सुरू करा</string>
+    <string name="agri_view_summary">सारांश पहा</string>
+    <string name="agri_field">शेत</string>
+    <string name="agri_area">क्षेत्रफळ</string>
+    <string name="agri_points">बिंदू</string>
+    <string name="agri_acres">एकर</string>
+    <string name="agri_hectares">हेक्टर</string>
+    <string name="agri_start_walking">चालणे सुरू करा</string>
+    <string name="agri_stop_walking">संपले</string>
+    <string name="agri_gps_accuracy">GPS अचूकता</string>
+    <string name="agri_crop_type">पीक प्रकार</string>
+    <string name="agri_chemical">रसायन</string>
+    <string name="agri_rate_per_acre">दर (लि/एकर)</string>
+    <string name="agri_altitude">उड्डाण उंची (मी)</string>
+    <string name="agri_speed">उड्डाण वेग (मी/से)</string>
+    <string name="agri_swath_width">फवारणी रुंदी (मी)</string>
+    <string name="agri_spray_config">फवारणी सेटिंग</string>
+    <string name="agri_confirm">निश्चित करा</string>
+    <string name="agri_mission_idle">तयार</string>
+    <string name="agri_mission_mapping">मॅपिंग</string>
+    <string name="agri_mission_configured">कॉन्फिगर केलेले</string>
+    <string name="agri_mission_running">मिशन चालू</string>
+    <string name="agri_mission_complete">पूर्ण</string>
+    <string name="agri_mission_summary">मिशन सारांश</string>
+    <string name="agri_waypoints">वेपॉइंट</string>
+    <string name="agri_est_total">अंदाजे एकूण</string>
+    <string name="agri_crop_rice">भात</string>
+    <string name="agri_crop_wheat">गहू</string>
+    <string name="agri_crop_cotton">कापूस</string>
+    <string name="agri_crop_sugarcane">ऊस</string>
+    <string name="agri_crop_maize">मका</string>
+    <string name="agri_crop_soybean">सोयाबीन</string>
+    <string name="agri_crop_mustard">मोहरी</string>
+    <string name="agri_crop_vegetables">भाज्या</string>
+    <string name="agri_chem_pesticide">कीटकनाशक</string>
+    <string name="agri_chem_herbicide">तणनाशक</string>
+    <string name="agri_chem_fungicide">बुरशीनाशक</string>
+    <string name="agri_chem_fertilizer">द्रव खत</string>
+    <string name="agri_chem_growth_reg">वाढ नियंत्रक</string>
+    <string name="agri_close">बंद करा</string>
+
+    <!-- Settings -->
+    <string name="settings_title">सेटिंग्ज</string>
+    <string name="settings_theme">थीम</string>
+    <string name="settings_theme_dark">डार्क</string>
+    <string name="settings_theme_oled">OLED काळा</string>
+    <string name="settings_units">एकके</string>
+    <string name="settings_units_metric">मेट्रिक</string>
+    <string name="settings_units_imperial">इम्पिरियल</string>
+    <string name="settings_about">माहिती</string>
+    <string name="settings_version">आवृत्ती</string>
+    <string name="settings_source">सोर्स कोड</string>
+
+    <!-- Permissions -->
+    <string name="permission_location_title">स्थान परवानगी</string>
+    <string name="permission_location_rationale">ग्राउंड स्टेशन WiFi आणि शेती मॅपिंगसाठी स्थान परवानगी आवश्यक आहे.</string>
+    <string name="permission_camera_title">कॅमेरा परवानगी</string>
+    <string name="permission_camera_rationale">ग्राउंड स्टेशन पेयरिंगसाठी QR कोड स्कॅन करण्यासाठी कॅमेरा परवानगी हवी.</string>
+    <string name="permission_storage_title">स्टोरेज परवानगी</string>
+    <string name="permission_storage_rationale">व्हिडिओ रेकॉर्डिंग आणि फ्लाइट लॉग सेव्ह करण्यासाठी स्टोरेज परवानगी हवी.</string>
+    <string name="permission_usb_title">USB परवानगी</string>
+    <string name="permission_usb_rationale">डायरेक्ट WFB-ng व्हिडिओ लिंकसाठी USB परवानगी आवश्यक आहे.</string>
+    <string name="permission_grant">परवानगी द्या</string>
+    <string name="permission_deny">आत्ता नको</string>
+    <string name="permission_open_settings">सेटिंग्ज उघडा</string>
+
+    <!-- Connection -->
+    <string name="connection_searching">ड्रोन शोधत आहे…</string>
+    <string name="connection_found">ड्रोन सापडला</string>
+    <string name="connection_failed">जोडणी अयशस्वी</string>
+    <string name="connection_timeout">जोडणी वेळ संपली</string>
+    <string name="connection_retry">पुन्हा प्रयत्न करा</string>
+    <string name="connection_disconnect">जोडणी तोडा</string>
+
+    <!-- Errors -->
+    <string name="error_no_drone">ड्रोन जोडलेला नाही</string>
+    <string name="error_connection_lost">जोडणी तुटली</string>
+    <string name="error_wifi_disconnect">ग्राउंड स्टेशन WiFi तुटले</string>
+    <string name="error_video_freeze">व्हिडिओ सिग्नल गेला</string>
+    <string name="error_usb_disconnect">USB अडॅप्टर तुटला</string>
+    <string name="error_low_battery">बॅटरी कमी इशारा</string>
+    <string name="error_gps_lost">GPS सिग्नल गेला</string>
+    <string name="error_ekf_bad">EKF विचलन जास्त आहे</string>
+    <string name="error_geofence_breach">जिओफेन्स उल्लंघन</string>
+    <string name="error_mission_failed">मिशन अपलोड अयशस्वी</string>
+    <string name="error_param_write_failed">पॅरामीटर लिहिणे अयशस्वी</string>
+    <string name="error_generic">काहीतरी चूक झाली</string>
+
+    <!-- Common -->
+    <string name="ok">ठीक</string>
+    <string name="cancel">रद्द करा</string>
+    <string name="close">बंद करा</string>
+    <string name="save">जतन करा</string>
+    <string name="delete">हटवा</string>
+    <string name="reset">रीसेट</string>
+    <string name="loading">लोड होत आहे…</string>
+    <string name="done">झाले</string>
+    <string name="yes">हो</string>
+    <string name="no">नाही</string>
+    <string name="on">चालू</string>
+    <string name="off">बंद</string>
+    <string name="enabled">सक्षम</string>
+    <string name="disabled">अक्षम</string>
+    <string name="unknown">अज्ञात</string>
+    <string name="none">काहीही नाही</string>
+</resources>
