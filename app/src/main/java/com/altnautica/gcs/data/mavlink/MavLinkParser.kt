@@ -13,8 +13,8 @@ import io.dronefleet.mavlink.common.Attitude
 import io.dronefleet.mavlink.common.BatteryStatus
 import io.dronefleet.mavlink.common.GlobalPositionInt
 import io.dronefleet.mavlink.common.GpsRawInt
-import io.dronefleet.mavlink.common.Heartbeat
-import io.dronefleet.mavlink.common.MavModeFlag
+import io.dronefleet.mavlink.minimal.Heartbeat
+import io.dronefleet.mavlink.minimal.MavModeFlag
 import io.dronefleet.mavlink.common.Statustext
 import io.dronefleet.mavlink.common.SysStatus
 import io.dronefleet.mavlink.common.VfrHud
@@ -55,8 +55,7 @@ class MavLinkParser @Inject constructor(
         telemetryStore.updateFlightMode(mode)
 
         // Armed state from base_mode flag
-        val baseMode = heartbeat.baseMode().value()
-        val armed = (baseMode and MavModeFlag.MAV_MODE_FLAG_SAFETY_ARMED.value()) != 0
+        val armed = heartbeat.baseMode().flagsEnabled(MavModeFlag.MAV_MODE_FLAG_SAFETY_ARMED)
         telemetryStore.updateArmed(armed)
     }
 

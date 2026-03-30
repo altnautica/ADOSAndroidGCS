@@ -5,7 +5,7 @@ import com.altnautica.gcs.data.telemetry.FlightMode
 import io.dronefleet.mavlink.MavlinkConnection
 import io.dronefleet.mavlink.common.CommandLong
 import io.dronefleet.mavlink.common.MavCmd
-import io.dronefleet.mavlink.common.MavComponent
+import io.dronefleet.mavlink.common.MavMode
 import io.dronefleet.mavlink.common.SetMode
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
@@ -28,7 +28,7 @@ class MavLinkCommandSender @Inject constructor(
         Log.d(TAG, "Sending SET_MODE: ${mode.label}")
         val msg = SetMode.builder()
             .targetSystem(TARGET_SYS_ID)
-            .baseMode(209) // MAV_MODE_FLAG_CUSTOM_MODE_ENABLED | STABILIZE_ARMED baseline
+            .baseMode(MavMode.MAV_MODE_STABILIZE_ARMED) // MAV_MODE_FLAG_CUSTOM_MODE_ENABLED baseline
             .customMode(mode.modeNumber.toLong())
             .build()
         sendMessage(msg)

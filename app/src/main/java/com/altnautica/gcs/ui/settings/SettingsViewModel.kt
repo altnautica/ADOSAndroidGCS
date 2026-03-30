@@ -1,6 +1,7 @@
 package com.altnautica.gcs.ui.settings
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -82,7 +83,7 @@ class SettingsViewModel @Inject constructor(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), default)
     }
 
-    private fun setPref(block: suspend (Preferences.MutablePreferences) -> Unit) {
+    private fun setPref(block: suspend (MutablePreferences) -> Unit) {
         viewModelScope.launch {
             dataStore.edit { block(it) }
         }
