@@ -1,7 +1,5 @@
 package com.altnautica.gcs.ui
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -12,16 +10,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.altnautica.gcs.ui.agriculture.AgricultureScreen
+import com.altnautica.gcs.ui.gcs.GcsScreen
+import com.altnautica.gcs.ui.groundstation.GroundStationScreen
 import com.altnautica.gcs.ui.navigation.NavRoutes
+import com.altnautica.gcs.ui.settings.SettingsScreen
 import com.altnautica.gcs.ui.theme.DeepBlack
 import com.altnautica.gcs.ui.theme.SurfaceDark
+import com.altnautica.gcs.ui.video.VideoScreen
 
 @Composable
 fun ADOSApp() {
@@ -66,34 +68,21 @@ fun ADOSApp() {
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(NavRoutes.Video.route) {
-                PlaceholderScreen("Video Feed")
+                VideoScreen()
             }
             composable(NavRoutes.Map.route) {
-                PlaceholderScreen("Map View")
+                GroundStationScreen()
             }
             composable(NavRoutes.GCS.route) {
-                PlaceholderScreen("Ground Control")
+                GcsScreen()
             }
             composable(NavRoutes.Agriculture.route) {
-                PlaceholderScreen("Agriculture Suite")
+                AgricultureScreen()
             }
             composable(NavRoutes.Settings.route) {
-                PlaceholderScreen("Settings")
+                SettingsScreen()
             }
         }
     }
 }
 
-@Composable
-private fun PlaceholderScreen(title: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-    }
-}

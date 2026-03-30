@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.altnautica.gcs"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.altnautica.gcs"
@@ -100,6 +100,12 @@ dependencies {
 
     // Maps — OSMDroid (offline fallback)
     implementation("org.osmdroid:osmdroid-android:6.1.18")
+
+    // WebRTC for Mode A video
+    implementation("io.github.webrtc-sdk:android:125.6422.06")
+
+    // Location services for agriculture GPS
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
