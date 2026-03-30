@@ -2,12 +2,11 @@ package com.altnautica.gcs.ui.groundstation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.data.groundstation.GroundStationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -28,7 +27,9 @@ data class SystemInfo(
 )
 
 @HiltViewModel
-class GroundStationViewModel @Inject constructor() : ViewModel() {
+class GroundStationViewModel @Inject constructor(
+    private val repository: GroundStationRepository,
+) : ViewModel() {
 
     private val _stats = MutableStateFlow(GroundStationStats())
     val stats: StateFlow<GroundStationStats> = _stats.asStateFlow()
@@ -36,31 +37,62 @@ class GroundStationViewModel @Inject constructor() : ViewModel() {
     private val _recording = MutableStateFlow(false)
     val recording: StateFlow<Boolean> = _recording.asStateFlow()
 
+    private val _recordingStartTime = MutableStateFlow(0L)
+    val recordingStartTime: StateFlow<Long> = _recordingStartTime.asStateFlow()
+
     private val _systemInfo = MutableStateFlow(SystemInfo())
     val systemInfo: StateFlow<SystemInfo> = _systemInfo.asStateFlow()
 
     init {
-        startPolling()
+        repository.startPolling()
+        collectRepositoryFlows()
     }
 
-    private fun startPolling() {
+    private fun collectRepositoryFlows() {
         viewModelScope.launch {
-            while (isActive) {
-                // TODO: Poll GroundStationRepository for live stats
-                // _stats.value = repository.fetchStats()
-                // _systemInfo.value = repository.fetchSystemInfo()
-                delay(2000)
+            repository.wfbStats.collect { wfb ->
+                _stats.value = GroundStationStats(
+                    connected = repository.reachable.value,
+                    rssiDbm = wfb.rssi,
+                    packetLossPercent = wfb.packetLoss,
+                    fecRecovered = wfb.fecRecovery.toInt(),
+                    bitrateKbps = repository.videoStats.value.bitrate.toFloat(),
+                )
+            }
+        }
+        viewModelScope.launch {
+            repository.systemInfo.collect { info ->
+                _systemInfo.value = SystemInfo(
+                    hostname = info.hostname.ifEmpty { "--" },
+                    ipAddress = "--",
+                    cpuTempC = info.socTemp.toInt(),
+                    uptime = "--",
+                    wfbVersion = info.firmwareVersion.ifEmpty { "--" },
+                )
             }
         }
     }
 
     fun startRecording() {
-        _recording.value = true
-        // TODO: Send recording start command to ground station
+        viewModelScope.launch {
+            repository.startRecording().onSuccess {
+                _recording.value = true
+                _recordingStartTime.value = System.currentTimeMillis()
+            }
+        }
     }
 
     fun stopRecording() {
-        _recording.value = false
-        // TODO: Send recording stop command to ground station
+        viewModelScope.launch {
+            repository.stopRecording().onSuccess {
+                _recording.value = false
+                _recordingStartTime.value = 0L
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        repository.stopPolling()
     }
 }

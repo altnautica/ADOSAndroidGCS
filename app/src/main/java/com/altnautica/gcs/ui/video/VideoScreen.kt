@@ -12,17 +12,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.altnautica.gcs.ui.settings.SettingsViewModel
 
 @Composable
-fun VideoScreen(viewModel: VideoViewModel = hiltViewModel()) {
+fun VideoScreen(
+    viewModel: VideoViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
+) {
     val attitude by viewModel.attitude.collectAsStateWithLifecycle()
     val position by viewModel.position.collectAsStateWithLifecycle()
+    val homePosition by viewModel.homePosition.collectAsStateWithLifecycle()
     val battery by viewModel.battery.collectAsStateWithLifecycle()
     val gps by viewModel.gps.collectAsStateWithLifecycle()
     val vfr by viewModel.vfr.collectAsStateWithLifecycle()
     val flightMode by viewModel.flightMode.collectAsStateWithLifecycle()
     val armed by viewModel.armed.collectAsStateWithLifecycle()
     val videoMode by viewModel.videoMode.collectAsStateWithLifecycle()
+
+    val compassEnabled by settingsViewModel.compassEnabled.collectAsStateWithLifecycle()
+    val altLadderEnabled by settingsViewModel.altLadderEnabled.collectAsStateWithLifecycle()
+    val speedLadderEnabled by settingsViewModel.speedLadderEnabled.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Video SurfaceView (bottom layer)
@@ -44,6 +53,10 @@ fun VideoScreen(viewModel: VideoViewModel = hiltViewModel()) {
             vfr = vfr,
             flightMode = flightMode,
             armed = armed,
+            homePosition = homePosition,
+            compassEnabled = compassEnabled,
+            altLadderEnabled = altLadderEnabled,
+            speedLadderEnabled = speedLadderEnabled,
         )
 
         // Mode badge (top-right corner)

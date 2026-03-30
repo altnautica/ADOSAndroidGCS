@@ -18,9 +18,12 @@ import com.altnautica.gcs.data.telemetry.FlightMode
 import com.altnautica.gcs.data.telemetry.GpsState
 import com.altnautica.gcs.data.telemetry.PositionState
 import com.altnautica.gcs.data.telemetry.VfrState
+import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 private val HudGreen = Color(0xFF22C55E)
 private val HudAmber = Color(0xFFFBBF24)
@@ -37,20 +40,54 @@ fun HudOverlay(
     vfr: VfrState,
     flightMode: FlightMode?,
     armed: Boolean,
+    homePosition: PositionState? = null,
+    compassEnabled: Boolean = true,
+    altLadderEnabled: Boolean = true,
+    speedLadderEnabled: Boolean = true,
 ) {
+    val distanceToHome = if (homePosition != null &&
+        (homePosition.lat != 0.0 || homePosition.lon != 0.0)
+    ) {
+        haversineDistance(
+            position.lat, position.lon,
+            homePosition.lat, homePosition.lon,
+        )
+    } else {
+        null
+    }
+
     Canvas(modifier = Modifier.fillMaxSize()) {
         val cx = size.width / 2f
         val cy = size.height / 2f
 
         drawArtificialHorizon(cx, cy, attitude)
-        drawCompassTape(cx, position.heading)
-        drawAltitudeLadder(cx, cy, position.altRel)
-        drawSpeedLadder(cx, cy, vfr.groundspeed)
+        if (compassEnabled) {
+            drawCompassTape(cx, position.heading)
+        }
+        if (altLadderEnabled) {
+            drawAltitudeLadder(cx, cy, position.altRel)
+        }
+        if (speedLadderEnabled) {
+            drawSpeedLadder(cx, cy, vfr.groundspeed)
+        }
         drawBatteryInfo(battery)
         drawFlightModeInfo(cx, flightMode, armed)
         drawGpsInfo(gps)
-        drawDistanceToHome(position)
+        drawDistanceToHome(distanceToHome)
     }
+}
+
+private fun haversineDistance(
+    lat1: Double, lon1: Double,
+    lat2: Double, lon2: Double,
+): Double {
+    val r = 6371000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2) +
+        cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+        sin(dLon / 2).pow(2)
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a))
 }
 
 // -- Artificial Horizon --
@@ -376,16 +413,22 @@ private fun DrawScope.drawGpsInfo(gps: GpsState) {
 
 // -- Distance to Home (top-right, below mode indicator) --
 
-private fun DrawScope.drawDistanceToHome(position: PositionState) {
+private fun DrawScope.drawDistanceToHome(distanceMeters: Double?) {
     val canvas = drawContext.canvas.nativeCanvas
     val x = size.width - 80.dp.toPx()
     val y = 56.dp.toPx()
 
-    // Simple placeholder: show lat/lon. Real distance calc needs home position.
-    val latText = "%.5f".format(position.lat)
-    val lonText = "%.5f".format(position.lon)
-    canvas.drawText(latText, x, y, hudTextPaint(HudDim, 9f))
-    canvas.drawText(lonText, x, y + 14.dp.toPx(), hudTextPaint(HudDim, 9f))
+    canvas.drawText("HOME", x, y, hudTextPaint(HudDim, 9f))
+    val distText = if (distanceMeters != null) {
+        if (distanceMeters >= 1000.0) {
+            "%.2f km".format(distanceMeters / 1000.0)
+        } else {
+            "%.0f m".format(distanceMeters)
+        }
+    } else {
+        "-- m"
+    }
+    canvas.drawText(distText, x, y + 16.dp.toPx(), hudTextPaint(HudWhite, 11f))
 }
 
 // -- Paint helper --

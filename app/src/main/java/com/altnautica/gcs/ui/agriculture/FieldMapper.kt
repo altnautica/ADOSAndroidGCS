@@ -1,5 +1,6 @@
 package com.altnautica.gcs.ui.agriculture
 
+import android.os.Looper
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.ui.theme.ElectricBlue
@@ -41,6 +44,12 @@ import com.altnautica.gcs.ui.theme.NeonLime
 import com.altnautica.gcs.ui.theme.SuccessGreen
 import com.altnautica.gcs.ui.theme.SurfaceVariant
 import com.altnautica.gcs.ui.theme.WarningAmber
+import com.altnautica.gcs.util.PermissionManager
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 
 @Composable
 fun FieldMapper(
@@ -50,6 +59,49 @@ fun FieldMapper(
     val points = remember { mutableStateListOf<LatLon>() }
     var walking by remember { mutableStateOf(false) }
     var gpsAccuracy by remember { mutableStateOf(0f) }
+
+    val context = LocalContext.current
+    val fusedClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    val locationCallback = remember {
+        object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { loc ->
+                    if (walking) {
+                        points.add(LatLon(loc.latitude, loc.longitude))
+                        gpsAccuracy = loc.accuracy
+                    }
+                }
+            }
+        }
+    }
+
+    val startWalking = {
+        walking = true
+        points.clear()
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000L)
+            .setMinUpdateDistanceMeters(1f)
+            .build()
+        if (PermissionManager.hasLocationPermission(context)) {
+            fusedClient.requestLocationUpdates(request, locationCallback, Looper.getMainLooper())
+        }
+    }
+
+    val stopWalking = {
+        walking = false
+        fusedClient.removeLocationUpdates(locationCallback)
+        if (points.size >= 3) {
+            val area = computeAreaHectares(points)
+            onFinish(points.toList(), area)
+        }
+    }
+
+    // Clean up location updates when composable leaves composition
+    DisposableEffect(Unit) {
+        onDispose {
+            fusedClient.removeLocationUpdates(locationCallback)
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         // Map preview with polyline
@@ -151,12 +203,7 @@ fun FieldMapper(
             if (!walking) {
                 // Start walking button
                 FloatingActionButton(
-                    onClick = {
-                        walking = true
-                        points.clear()
-                        // TODO: Start FusedLocationProviderClient updates,
-                        // add each location to points list
-                    },
+                    onClick = { startWalking() },
                     containerColor = ElectricBlue,
                     contentColor = Color.White,
                     shape = RoundedCornerShape(16.dp),
@@ -173,11 +220,7 @@ fun FieldMapper(
             } else {
                 // Finish button (only when 3+ points exist)
                 FloatingActionButton(
-                    onClick = {
-                        walking = false
-                        val area = computeAreaHectares(points)
-                        onFinish(points.toList(), area)
-                    },
+                    onClick = { stopWalking() },
                     containerColor = if (points.size >= 3) NeonLime else SurfaceVariant,
                     contentColor = Color.Black,
                     shape = RoundedCornerShape(16.dp),

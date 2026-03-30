@@ -1,6 +1,8 @@
 package com.altnautica.gcs.ui.agriculture
 
 import androidx.lifecycle.ViewModel
+import com.altnautica.gcs.data.agriculture.MissionGenerator
+import com.altnautica.gcs.data.agriculture.Waypoint
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,13 +14,6 @@ data class LatLon(val lat: Double, val lon: Double)
 data class FieldState(
     val boundaryPoints: List<LatLon> = emptyList(),
     val areaHectares: Double = 0.0,
-)
-
-data class SprayConfig(
-    val flowRateLPerHa: Float = 10f,
-    val swathWidthM: Float = 5f,
-    val altitudeM: Float = 3f,
-    val speedMs: Float = 3f,
 )
 
 enum class MissionState(val label: String) {
@@ -35,15 +30,23 @@ class AgricultureViewModel @Inject constructor() : ViewModel() {
     private val _fieldState = MutableStateFlow(FieldState())
     val fieldState: StateFlow<FieldState> = _fieldState.asStateFlow()
 
-    private val _sprayConfig = MutableStateFlow(SprayConfig())
-    val sprayConfig: StateFlow<SprayConfig> = _sprayConfig.asStateFlow()
+    private val _sprayConfig = MutableStateFlow<SprayConfig?>(null)
+    val sprayConfig: StateFlow<SprayConfig?> = _sprayConfig.asStateFlow()
 
     private val _missionState = MutableStateFlow(MissionState.IDLE)
     val missionState: StateFlow<MissionState> = _missionState.asStateFlow()
 
+    private val _showSpraySheet = MutableStateFlow(false)
+    val showSpraySheet: StateFlow<Boolean> = _showSpraySheet.asStateFlow()
+
+    private val _showSummaryDialog = MutableStateFlow(false)
+    val showSummaryDialog: StateFlow<Boolean> = _showSummaryDialog.asStateFlow()
+
+    private val _missionWaypoints = MutableStateFlow<List<Waypoint>>(emptyList())
+    val missionWaypoints: StateFlow<List<Waypoint>> = _missionWaypoints.asStateFlow()
+
     fun startMapping() {
         _missionState.value = MissionState.MAPPING
-        // TODO: Launch FieldMapper flow
     }
 
     fun finishMapping(points: List<LatLon>, areaHa: Double) {
@@ -52,20 +55,37 @@ class AgricultureViewModel @Inject constructor() : ViewModel() {
     }
 
     fun openSprayConfig() {
-        // TODO: Show spray configuration bottom sheet
+        _showSpraySheet.value = true
     }
 
-    fun updateSprayConfig(config: SprayConfig) {
+    fun dismissSpraySheet() {
+        _showSpraySheet.value = false
+    }
+
+    fun setSprayConfig(config: SprayConfig) {
         _sprayConfig.value = config
+        _showSpraySheet.value = false
         _missionState.value = MissionState.CONFIGURED
     }
 
     fun startMission() {
+        val boundary = _fieldState.value.boundaryPoints
+        val config = _sprayConfig.value ?: return
+
+        val waypoints = MissionGenerator.generateSprayMission(boundary, config)
+        _missionWaypoints.value = waypoints
         _missionState.value = MissionState.RUNNING
-        // TODO: Generate waypoints from field boundary + spray config, upload to FC
+
+        // TODO: Upload waypoints to flight controller via MAVLink mission protocol
+        // For now, mark complete after generation
+        _missionState.value = MissionState.COMPLETE
     }
 
     fun viewSummary() {
-        // TODO: Navigate to mission summary screen
+        _showSummaryDialog.value = true
+    }
+
+    fun dismissSummaryDialog() {
+        _showSummaryDialog.value = false
     }
 }

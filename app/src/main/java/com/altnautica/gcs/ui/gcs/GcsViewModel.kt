@@ -1,16 +1,20 @@
 package com.altnautica.gcs.ui.gcs
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.data.mavlink.MavLinkCommandSender
 import com.altnautica.gcs.data.telemetry.BatteryState
+import com.altnautica.gcs.data.telemetry.ConnectionState
 import com.altnautica.gcs.data.telemetry.FlightMode
 import com.altnautica.gcs.data.telemetry.GpsState
+import com.altnautica.gcs.data.telemetry.PositionState
 import com.altnautica.gcs.data.telemetry.SysStatusState
 import com.altnautica.gcs.data.telemetry.TelemetryStore
-import com.altnautica.gcs.data.telemetry.ConnectionState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class PendingAction(
@@ -21,10 +25,13 @@ data class PendingAction(
 @HiltViewModel
 class GcsViewModel @Inject constructor(
     private val telemetryStore: TelemetryStore,
+    private val commandSender: MavLinkCommandSender,
 ) : ViewModel() {
 
     val flightMode: StateFlow<FlightMode?> = telemetryStore.flightMode
     val armed: StateFlow<Boolean> = telemetryStore.armed
+    val position: StateFlow<PositionState> = telemetryStore.position
+    val homePosition: StateFlow<PositionState?> = telemetryStore.homePosition
     val battery: StateFlow<BatteryState> = telemetryStore.battery
     val gps: StateFlow<GpsState> = telemetryStore.gps
     val sysStatus: StateFlow<SysStatusState> = telemetryStore.sysStatus
@@ -64,14 +71,14 @@ class GcsViewModel @Inject constructor(
     }
 
     private fun sendSetMode(mode: FlightMode) {
-        // TODO: Send MAV_CMD_DO_SET_MODE via MAVLink connection
+        viewModelScope.launch { commandSender.sendSetMode(mode) }
     }
 
     private fun sendArm() {
-        // TODO: Send MAV_CMD_COMPONENT_ARM_DISARM (arm) via MAVLink connection
+        viewModelScope.launch { commandSender.sendArm() }
     }
 
     private fun sendDisarm() {
-        // TODO: Send MAV_CMD_COMPONENT_ARM_DISARM (disarm) via MAVLink connection
+        viewModelScope.launch { commandSender.sendDisarm() }
     }
 }

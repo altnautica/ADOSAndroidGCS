@@ -1,4 +1,168 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ADOS एंड्रॉइड GCS</string>
+
+    <!-- Navigation -->
+    <string name="nav_video">वीडियो</string>
+    <string name="nav_map">नक्शा</string>
+    <string name="nav_gcs">नियंत्रण</string>
+    <string name="nav_agriculture">कृषि</string>
+    <string name="nav_settings">सेटिंग्स</string>
+
+    <!-- Video Screen -->
+    <string name="video_no_signal">वीडियो सिग्नल नहीं</string>
+    <string name="video_connecting">कनेक्ट हो रहा है…</string>
+    <string name="video_mode_a">मोड A: ग्राउंड स्टेशन</string>
+    <string name="video_mode_b">मोड B: डायरेक्ट USB</string>
+    <string name="video_mode_c">मोड C: क्लाउड</string>
+    <string name="video_no_connection">कनेक्शन नहीं</string>
+    <string name="video_snapshot">स्नैपशॉट</string>
+    <string name="video_fullscreen">फुलस्क्रीन</string>
+
+    <!-- HUD -->
+    <string name="hud_armed">सक्रिय</string>
+    <string name="hud_disarmed">निष्क्रिय</string>
+    <string name="hud_no_gps">GPS नहीं</string>
+    <string name="hud_no_data">--</string>
+
+    <!-- GCS -->
+    <string name="gcs_flight_mode">उड़ान मोड</string>
+    <string name="gcs_arm">ARM</string>
+    <string name="gcs_disarm">DISARM</string>
+    <string name="gcs_rtl">RTL</string>
+    <string name="gcs_confirm_arm">ARM की पुष्टि करें</string>
+    <string name="gcs_confirm_arm_message">मोटर शुरू करने से पहले सुनिश्चित करें कि क्षेत्र साफ है।</string>
+    <string name="gcs_confirm_disarm">DISARM की पुष्टि करें</string>
+    <string name="gcs_confirm_disarm_message">मोटर बंद हो जाएंगी। ड्रोन लैंड होना चाहिए।</string>
+    <string name="gcs_confirm">पुष्टि करें</string>
+    <string name="gcs_cancel">रद्द करें</string>
+    <string name="gcs_telemetry">टेलीमेट्री</string>
+    <string name="gcs_battery">बैटरी</string>
+    <string name="gcs_satellites">सैटेलाइट</string>
+    <string name="gcs_messages">संदेश</string>
+    <string name="gcs_params">पैरामीटर</string>
+    <string name="gcs_actions">कार्रवाई</string>
+    <string name="gcs_reboot_fc">FC रीबूट करें</string>
+    <string name="gcs_preflight_check">उड़ान पूर्व जांच</string>
+    <string name="gcs_takeoff">उड़ान भरें</string>
+    <string name="gcs_takeoff_altitude">उड़ान ऊंचाई (मी)</string>
+
+    <!-- Map -->
+    <string name="map_satellite">सैटेलाइट</string>
+    <string name="map_terrain">भूभाग</string>
+    <string name="map_center_drone">ड्रोन पर केंद्रित करें</string>
+    <string name="map_center_home">होम पर केंद्रित करें</string>
+    <string name="map_follow_drone">ड्रोन फॉलो करें</string>
+    <string name="map_show_trail">ट्रेल दिखाएं</string>
+    <string name="map_waypoints">वेपॉइंट</string>
+    <string name="map_no_position">स्थिति डेटा नहीं</string>
+
+    <!-- Ground Station -->
+    <string name="gs_title">ग्राउंड स्टेशन</string>
+    <string name="gs_connected">कनेक्टेड</string>
+    <string name="gs_disconnected">डिस्कनेक्टेड</string>
+    <string name="gs_scanning">खोज रहा है…</string>
+    <string name="gs_recording">रिकॉर्डिंग</string>
+    <string name="gs_start_recording">रिकॉर्डिंग शुरू करें</string>
+    <string name="gs_stop_recording">रिकॉर्डिंग बंद करें</string>
+    <string name="gs_reboot">रीबूट करें</string>
+
+    <!-- Agriculture -->
+    <string name="agri_title">कृषि</string>
+    <string name="agri_map_field">खेत मैप करें</string>
+    <string name="agri_spray_setup">स्प्रे सेट करें</string>
+    <string name="agri_start_mission">मिशन शुरू करें</string>
+    <string name="agri_view_summary">सारांश देखें</string>
+    <string name="agri_field">खेत</string>
+    <string name="agri_area">क्षेत्रफल</string>
+    <string name="agri_points">बिंदु</string>
+    <string name="agri_acres">एकड़</string>
+    <string name="agri_hectares">हेक्टेयर</string>
+    <string name="agri_start_walking">चलना शुरू करें</string>
+    <string name="agri_stop_walking">समाप्त</string>
+    <string name="agri_gps_accuracy">GPS सटीकता</string>
+    <string name="agri_crop_type">फसल का प्रकार</string>
+    <string name="agri_chemical">रसायन</string>
+    <string name="agri_rate_per_acre">दर (लीटर/एकड़)</string>
+    <string name="agri_altitude">उड़ान ऊंचाई (मी)</string>
+    <string name="agri_speed">उड़ान गति (मी/से)</string>
+    <string name="agri_swath_width">स्प्रे चौड़ाई (मी)</string>
+    <string name="agri_spray_config">स्प्रे सेटिंग</string>
+    <string name="agri_confirm">पुष्टि करें</string>
+    <string name="agri_mission_idle">तैयार</string>
+    <string name="agri_mission_mapping">मैपिंग</string>
+    <string name="agri_mission_configured">कॉन्फ़िगर्ड</string>
+    <string name="agri_mission_running">मिशन चालू</string>
+    <string name="agri_mission_complete">पूर्ण</string>
+    <string name="agri_mission_summary">मिशन सारांश</string>
+    <string name="agri_waypoints">वेपॉइंट</string>
+    <string name="agri_est_total">अनुमानित कुल</string>
+    <string name="agri_crop_rice">धान</string>
+    <string name="agri_crop_wheat">गेहूं</string>
+    <string name="agri_crop_cotton">कपास</string>
+    <string name="agri_crop_sugarcane">गन्ना</string>
+    <string name="agri_crop_maize">मक्का</string>
+    <string name="agri_crop_soybean">सोयाबीन</string>
+    <string name="agri_crop_mustard">सरसों</string>
+    <string name="agri_crop_vegetables">सब्जियां</string>
+    <string name="agri_chem_pesticide">कीटनाशक</string>
+    <string name="agri_chem_herbicide">शाकनाशक</string>
+    <string name="agri_chem_fungicide">फफूंदनाशक</string>
+    <string name="agri_chem_fertilizer">तरल खाद</string>
+    <string name="agri_chem_growth_reg">वृद्धि नियामक</string>
+    <string name="agri_close">बंद करें</string>
+
+    <!-- Settings -->
+    <string name="settings_title">सेटिंग्स</string>
+    <string name="settings_theme">थीम</string>
+    <string name="settings_theme_dark">डार्क</string>
+    <string name="settings_theme_oled">OLED ब्लैक</string>
+    <string name="settings_units">इकाई</string>
+    <string name="settings_units_metric">मीट्रिक</string>
+    <string name="settings_units_imperial">इम्पीरियल</string>
+    <string name="settings_map_provider">मैप प्रदाता</string>
+    <string name="settings_hud">HUD तत्व</string>
+    <string name="settings_about">ऐप के बारे में</string>
+    <string name="settings_version">संस्करण</string>
+    <string name="settings_source">सोर्स कोड</string>
+
+    <!-- Permissions -->
+    <string name="permission_location_title">स्थान की अनुमति</string>
+    <string name="permission_location_rationale">ग्राउंड स्टेशन WiFi और कृषि मैपिंग के लिए स्थान की अनुमति आवश्यक है।</string>
+    <string name="permission_grant">अनुमति दें</string>
+    <string name="permission_deny">अभी नहीं</string>
+    <string name="permission_open_settings">सेटिंग्स खोलें</string>
+
+    <!-- Connection -->
+    <string name="connection_searching">ड्रोन खोज रहा है…</string>
+    <string name="connection_found">ड्रोन मिला</string>
+    <string name="connection_failed">कनेक्शन विफल</string>
+    <string name="connection_timeout">कनेक्शन टाइम आउट</string>
+    <string name="connection_retry">पुनः प्रयास</string>
+    <string name="connection_disconnect">डिस्कनेक्ट</string>
+
+    <!-- Errors -->
+    <string name="error_no_drone">कोई ड्रोन कनेक्ट नहीं</string>
+    <string name="error_connection_lost">कनेक्शन खो गया</string>
+    <string name="error_wifi_disconnect">ग्राउंड स्टेशन से WiFi डिस्कनेक्ट</string>
+    <string name="error_video_freeze">वीडियो सिग्नल खो गया</string>
+    <string name="error_low_battery">बैटरी कम है</string>
+    <string name="error_gps_lost">GPS सिग्नल खो गया</string>
+    <string name="error_mission_failed">मिशन अपलोड विफल</string>
+    <string name="error_generic">कुछ गलत हो गया</string>
+
+    <!-- Common -->
+    <string name="ok">ठीक</string>
+    <string name="cancel">रद्द करें</string>
+    <string name="close">बंद करें</string>
+    <string name="save">सहेजें</string>
+    <string name="delete">हटाएं</string>
+    <string name="reset">रीसेट</string>
+    <string name="loading">लोड हो रहा है…</string>
+    <string name="done">हो गया</string>
+    <string name="yes">हां</string>
+    <string name="no">नहीं</string>
+    <string name="enabled">सक्षम</string>
+    <string name="disabled">अक्षम</string>
+    <string name="unknown">अज्ञात</string>
 </resources>

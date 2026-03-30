@@ -206,6 +206,14 @@ class VideoStreamManager @Inject constructor(
         }
     }
 
+    fun pause() {
+        videoTrack?.setEnabled(false)
+    }
+
+    fun resume() {
+        videoTrack?.setEnabled(true)
+    }
+
     fun stop() {
         videoTrack?.dispose()
         videoTrack = null

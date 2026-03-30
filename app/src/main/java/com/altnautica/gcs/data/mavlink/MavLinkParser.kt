@@ -15,6 +15,7 @@ import io.dronefleet.mavlink.common.GlobalPositionInt
 import io.dronefleet.mavlink.common.GpsRawInt
 import io.dronefleet.mavlink.minimal.Heartbeat
 import io.dronefleet.mavlink.minimal.MavModeFlag
+import io.dronefleet.mavlink.common.HomePosition
 import io.dronefleet.mavlink.common.Statustext
 import io.dronefleet.mavlink.common.SysStatus
 import io.dronefleet.mavlink.common.VfrHud
@@ -42,6 +43,7 @@ class MavLinkParser @Inject constructor(
                 is SysStatus -> handleSysStatus(payload)
                 is GpsRawInt -> handleGps(payload)
                 is BatteryStatus -> handleBattery(payload)
+                is HomePosition -> handleHomePosition(payload)
                 is Statustext -> handleStatusText(payload)
             }
         } catch (e: Exception) {
@@ -133,6 +135,18 @@ class MavLinkParser @Inject constructor(
                 voltage = totalVoltage,
                 current = battery.currentBattery() / 100f,
                 remaining = battery.batteryRemaining()
+            )
+        )
+    }
+
+    private fun handleHomePosition(home: HomePosition) {
+        telemetryStore.updateHomePosition(
+            PositionState(
+                lat = home.latitude() / 1e7,
+                lon = home.longitude() / 1e7,
+                altMsl = home.altitude() / 1000f,
+                altRel = 0f,
+                heading = 0,
             )
         )
     }

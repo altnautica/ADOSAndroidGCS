@@ -10,6 +10,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altnautica.gcs.data.video.VideoMode
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.ErrorRed
 import com.altnautica.gcs.ui.theme.SuccessGreen
@@ -21,14 +22,21 @@ fun ModeIndicator(
     modifier: Modifier = Modifier,
 ) {
     val color = when (videoMode) {
-        VideoMode.MODE_A -> ElectricBlue
-        VideoMode.MODE_B -> SuccessGreen
-        VideoMode.MODE_C -> WarningAmber
-        VideoMode.NONE -> ErrorRed
+        is VideoMode.GroundStation -> ElectricBlue
+        is VideoMode.DirectUsb -> SuccessGreen
+        is VideoMode.CloudRelay -> WarningAmber
+        is VideoMode.NoConnection -> ErrorRed
+    }
+
+    val label = when (videoMode) {
+        is VideoMode.GroundStation -> "A"
+        is VideoMode.DirectUsb -> "B"
+        is VideoMode.CloudRelay -> "C"
+        is VideoMode.NoConnection -> "--"
     }
 
     Text(
-        text = videoMode.label,
+        text = label,
         color = color,
         fontSize = 14.sp,
         fontWeight = FontWeight.Bold,

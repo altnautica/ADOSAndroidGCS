@@ -21,13 +21,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import com.altnautica.gcs.ui.theme.ErrorRed
 import com.altnautica.gcs.ui.theme.SuccessGreen
 import com.altnautica.gcs.ui.theme.SurfaceVariant
@@ -37,7 +43,21 @@ import com.altnautica.gcs.ui.theme.WarningAmber
 fun GroundStationScreen(viewModel: GroundStationViewModel = hiltViewModel()) {
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val recording by viewModel.recording.collectAsStateWithLifecycle()
+    val recordingStartTime by viewModel.recordingStartTime.collectAsStateWithLifecycle()
     val systemInfo by viewModel.systemInfo.collectAsStateWithLifecycle()
+
+    // Recording duration timer
+    var recordingElapsed by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(recording, recordingStartTime) {
+        if (recording && recordingStartTime > 0L) {
+            while (true) {
+                recordingElapsed = (System.currentTimeMillis() - recordingStartTime) / 1000L
+                delay(1000)
+            }
+        } else {
+            recordingElapsed = 0L
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -107,8 +127,10 @@ fun GroundStationScreen(viewModel: GroundStationViewModel = hiltViewModel()) {
                     modifier = Modifier.weight(1f),
                 )
                 if (recording) {
+                    val minutes = recordingElapsed / 60
+                    val seconds = recordingElapsed % 60
                     Text(
-                        text = "REC",
+                        text = "REC %02d:%02d".format(minutes, seconds),
                         color = ErrorRed,
                         style = MaterialTheme.typography.labelLarge,
                         fontFamily = FontFamily.Monospace,
@@ -142,7 +164,16 @@ fun GroundStationScreen(viewModel: GroundStationViewModel = hiltViewModel()) {
                 Spacer(Modifier.height(8.dp))
                 InfoRow("Hostname", systemInfo.hostname)
                 InfoRow("IP Address", systemInfo.ipAddress)
-                InfoRow("CPU Temp", "${systemInfo.cpuTempC}°C")
+                val socTempColor = when {
+                    systemInfo.cpuTempC >= 80 -> ErrorRed
+                    systemInfo.cpuTempC >= 60 -> WarningAmber
+                    else -> SuccessGreen
+                }
+                InfoRow(
+                    label = "SoC Temp",
+                    value = "${systemInfo.cpuTempC}°C",
+                    valueColor = socTempColor,
+                )
                 InfoRow("Uptime", systemInfo.uptime)
                 InfoRow("WFB-ng Version", systemInfo.wfbVersion)
             }
@@ -174,7 +205,11 @@ private fun StatCard(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
+private fun InfoRow(
+    label: String,
+    value: String,
+    valueColor: Color = Color.Unspecified,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -190,7 +225,8 @@ private fun InfoRow(label: String, value: String) {
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (valueColor != Color.Unspecified) valueColor
+                else MaterialTheme.colorScheme.onSurface,
         )
     }
 }

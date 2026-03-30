@@ -36,6 +36,9 @@ class TelemetryStore @Inject constructor() {
     private val _connection = MutableStateFlow(ConnectionState())
     val connection: StateFlow<ConnectionState> = _connection.asStateFlow()
 
+    private val _homePosition = MutableStateFlow<PositionState?>(null)
+    val homePosition: StateFlow<PositionState?> = _homePosition.asStateFlow()
+
     private val _statusMessages = MutableStateFlow<List<String>>(emptyList())
     val statusMessages: StateFlow<List<String>> = _statusMessages.asStateFlow()
 
@@ -75,6 +78,10 @@ class TelemetryStore @Inject constructor() {
         _connection.value = state
     }
 
+    fun updateHomePosition(pos: PositionState) {
+        _homePosition.value = pos
+    }
+
     fun addStatusMessage(message: String) {
         val current = _statusMessages.value.toMutableList()
         current.add(message)
@@ -94,6 +101,7 @@ class TelemetryStore @Inject constructor() {
         _sysStatus.value = SysStatusState()
         _flightMode.value = null
         _armed.value = false
+        _homePosition.value = null
         _connection.value = ConnectionState()
         _statusMessages.value = emptyList()
     }

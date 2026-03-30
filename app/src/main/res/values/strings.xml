@@ -1,4 +1,268 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ADOS Android GCS</string>
+
+    <!-- Navigation -->
+    <string name="nav_video">Video</string>
+    <string name="nav_map">Map</string>
+    <string name="nav_gcs">GCS</string>
+    <string name="nav_agriculture">Agriculture</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Video Screen -->
+    <string name="video_no_signal">No Video Signal</string>
+    <string name="video_connecting">Connecting…</string>
+    <string name="video_mode_a">Mode A: Ground Station</string>
+    <string name="video_mode_b">Mode B: Direct USB</string>
+    <string name="video_mode_c">Mode C: Cloud</string>
+    <string name="video_no_connection">No Connection</string>
+    <string name="video_latency">Latency</string>
+    <string name="video_codec">Codec</string>
+    <string name="video_resolution_label">Resolution</string>
+    <string name="video_snapshot">Snapshot</string>
+    <string name="video_fullscreen">Fullscreen</string>
+    <string name="video_pip">Picture in Picture</string>
+
+    <!-- HUD -->
+    <string name="hud_alt">ALT</string>
+    <string name="hud_spd">SPD</string>
+    <string name="hud_bat">BAT</string>
+    <string name="hud_gps">GPS</string>
+    <string name="hud_home">HOME</string>
+    <string name="hud_armed">ARMED</string>
+    <string name="hud_disarmed">DISARMED</string>
+    <string name="hud_heading">HDG</string>
+    <string name="hud_climb">VS</string>
+    <string name="hud_throttle">THR</string>
+    <string name="hud_distance">DIST</string>
+    <string name="hud_flight_time">TIME</string>
+    <string name="hud_no_gps">NO GPS</string>
+    <string name="hud_no_data">--</string>
+
+    <!-- GCS -->
+    <string name="gcs_flight_mode">Flight Mode</string>
+    <string name="gcs_arm">ARM</string>
+    <string name="gcs_disarm">DISARM</string>
+    <string name="gcs_rtl">RTL</string>
+    <string name="gcs_land">LAND</string>
+    <string name="gcs_loiter">LOITER</string>
+    <string name="gcs_auto">AUTO</string>
+    <string name="gcs_guided">GUIDED</string>
+    <string name="gcs_stabilize">STABILIZE</string>
+    <string name="gcs_confirm_arm">Confirm Arm</string>
+    <string name="gcs_confirm_arm_message">Make sure the area is clear before arming motors.</string>
+    <string name="gcs_confirm_disarm">Confirm Disarm</string>
+    <string name="gcs_confirm_disarm_message">Motors will stop. Make sure the drone has landed.</string>
+    <string name="gcs_confirm">Confirm</string>
+    <string name="gcs_cancel">Cancel</string>
+    <string name="gcs_telemetry">Telemetry</string>
+    <string name="gcs_battery">Battery</string>
+    <string name="gcs_satellites">Satellites</string>
+    <string name="gcs_ekf">EKF</string>
+    <string name="gcs_link">Link</string>
+    <string name="gcs_cpu">CPU</string>
+    <string name="gcs_voltage">Voltage</string>
+    <string name="gcs_current">Current</string>
+    <string name="gcs_remaining">Remaining</string>
+    <string name="gcs_gps_fix">GPS Fix</string>
+    <string name="gcs_hdop">HDOP</string>
+    <string name="gcs_vdop">VDOP</string>
+    <string name="gcs_messages">Messages</string>
+    <string name="gcs_params">Parameters</string>
+    <string name="gcs_actions">Actions</string>
+    <string name="gcs_reboot_fc">Reboot FC</string>
+    <string name="gcs_preflight_check">Preflight Check</string>
+    <string name="gcs_takeoff">Takeoff</string>
+    <string name="gcs_takeoff_altitude">Takeoff Altitude (m)</string>
+
+    <!-- Map -->
+    <string name="map_satellite">Satellite</string>
+    <string name="map_terrain">Terrain</string>
+    <string name="map_street">Street</string>
+    <string name="map_center_drone">Center on Drone</string>
+    <string name="map_center_home">Center on Home</string>
+    <string name="map_follow_drone">Follow Drone</string>
+    <string name="map_show_trail">Show Trail</string>
+    <string name="map_clear_trail">Clear Trail</string>
+    <string name="map_waypoints">Waypoints</string>
+    <string name="map_geofence">Geofence</string>
+    <string name="map_no_position">No position data</string>
+
+    <!-- Ground Station -->
+    <string name="gs_title">Ground Station</string>
+    <string name="gs_connected">Connected</string>
+    <string name="gs_disconnected">Disconnected</string>
+    <string name="gs_scanning">Scanning…</string>
+    <string name="gs_signal">Signal</string>
+    <string name="gs_rssi">RSSI</string>
+    <string name="gs_snr">SNR</string>
+    <string name="gs_packet_loss">Packet Loss</string>
+    <string name="gs_fec_recovery">FEC Recovery</string>
+    <string name="gs_bitrate">Bitrate</string>
+    <string name="gs_resolution">Resolution</string>
+    <string name="gs_fps">FPS</string>
+    <string name="gs_recording">Recording</string>
+    <string name="gs_start_recording">Start Recording</string>
+    <string name="gs_stop_recording">Stop Recording</string>
+    <string name="gs_firmware">Firmware</string>
+    <string name="gs_temperature">Temperature</string>
+    <string name="gs_storage">Storage Free</string>
+    <string name="gs_reboot">Reboot</string>
+    <string name="gs_channel">Channel</string>
+    <string name="gs_frequency">Frequency</string>
+    <string name="gs_bandwidth">Bandwidth</string>
+    <string name="gs_tx_power">TX Power</string>
+    <string name="gs_mcs_index">MCS Index</string>
+    <string name="gs_camera_select">Camera</string>
+    <string name="gs_ota_update">OTA Update</string>
+    <string name="gs_ota_available">Update Available</string>
+    <string name="gs_ota_up_to_date">Up to Date</string>
+    <string name="gs_wifi_ssid">WiFi Network</string>
+
+    <!-- Agriculture -->
+    <string name="agri_title">Agriculture</string>
+    <string name="agri_map_field">Map Field</string>
+    <string name="agri_spray_setup">Set Up Spray</string>
+    <string name="agri_start_mission">Start Mission</string>
+    <string name="agri_view_summary">View Summary</string>
+    <string name="agri_field">Field</string>
+    <string name="agri_area">Area</string>
+    <string name="agri_points">points</string>
+    <string name="agri_acres">acres</string>
+    <string name="agri_hectares">ha</string>
+    <string name="agri_start_walking">Start Walking</string>
+    <string name="agri_stop_walking">Finish</string>
+    <string name="agri_gps_accuracy">GPS Accuracy</string>
+    <string name="agri_crop_type">Crop Type</string>
+    <string name="agri_chemical">Chemical</string>
+    <string name="agri_rate_per_acre">Rate (L/acre)</string>
+    <string name="agri_altitude">Flight Altitude (m)</string>
+    <string name="agri_speed">Flight Speed (m/s)</string>
+    <string name="agri_swath_width">Swath Width (m)</string>
+    <string name="agri_spray_config">Spray Configuration</string>
+    <string name="agri_confirm">Confirm</string>
+    <string name="agri_mission_idle">Ready</string>
+    <string name="agri_mission_mapping">Mapping Field</string>
+    <string name="agri_mission_configured">Configured</string>
+    <string name="agri_mission_running">Mission Active</string>
+    <string name="agri_mission_complete">Complete</string>
+    <string name="agri_mission_summary">Mission Summary</string>
+    <string name="agri_waypoints">Waypoints</string>
+    <string name="agri_est_total">Est. Total</string>
+    <string name="agri_crop_rice">Rice</string>
+    <string name="agri_crop_wheat">Wheat</string>
+    <string name="agri_crop_cotton">Cotton</string>
+    <string name="agri_crop_sugarcane">Sugarcane</string>
+    <string name="agri_crop_maize">Maize</string>
+    <string name="agri_crop_soybean">Soybean</string>
+    <string name="agri_crop_mustard">Mustard</string>
+    <string name="agri_crop_vegetables">Vegetables</string>
+    <string name="agri_chem_pesticide">Pesticide</string>
+    <string name="agri_chem_herbicide">Herbicide</string>
+    <string name="agri_chem_fungicide">Fungicide</string>
+    <string name="agri_chem_fertilizer">Fertilizer (liquid)</string>
+    <string name="agri_chem_growth_reg">Growth Regulator</string>
+    <string name="agri_close">Close</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_oled">OLED Black</string>
+    <string name="settings_units">Units</string>
+    <string name="settings_units_metric">Metric</string>
+    <string name="settings_units_imperial">Imperial</string>
+    <string name="settings_map_provider">Map Provider</string>
+    <string name="settings_map_mapbox">Mapbox</string>
+    <string name="settings_map_osm">OpenStreetMap</string>
+    <string name="settings_hud">HUD Elements</string>
+    <string name="settings_hud_compass">Compass Tape</string>
+    <string name="settings_hud_alt_ladder">Altitude Ladder</string>
+    <string name="settings_hud_speed_ladder">Speed Ladder</string>
+    <string name="settings_hud_battery">Battery Info</string>
+    <string name="settings_hud_horizon">Artificial Horizon</string>
+    <string name="settings_hud_home_arrow">Home Arrow</string>
+    <string name="settings_connection">Connection</string>
+    <string name="settings_connection_auto">Auto-detect</string>
+    <string name="settings_connection_wifi">WiFi only</string>
+    <string name="settings_connection_usb">USB only</string>
+    <string name="settings_telemetry_rate">Telemetry Rate</string>
+    <string name="settings_video_quality">Video Quality</string>
+    <string name="settings_video_auto">Auto</string>
+    <string name="settings_video_high">High (1080p)</string>
+    <string name="settings_video_medium">Medium (720p)</string>
+    <string name="settings_video_low">Low (480p)</string>
+    <string name="settings_recording">Recording</string>
+    <string name="settings_recording_path">Storage Path</string>
+    <string name="settings_recording_format">Format</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_license">License: GPL-3.0</string>
+    <string name="settings_website">altnautica.com</string>
+    <string name="settings_source">Source Code</string>
+    <string name="settings_github">GitHub</string>
+    <string name="settings_discord">Discord</string>
+
+    <!-- Permissions -->
+    <string name="permission_location_title">Location Permission</string>
+    <string name="permission_location_rationale">Location access is required to detect the ground station WiFi network and for agriculture field mapping.</string>
+    <string name="permission_camera_title">Camera Permission</string>
+    <string name="permission_camera_rationale">Camera access is needed for QR code scanning during ground station pairing.</string>
+    <string name="permission_storage_title">Storage Permission</string>
+    <string name="permission_storage_rationale">Storage access is needed to save video recordings and flight logs.</string>
+    <string name="permission_usb_title">USB Permission</string>
+    <string name="permission_usb_rationale">USB access is required for direct WFB-ng video link.</string>
+    <string name="permission_grant">Grant</string>
+    <string name="permission_deny">Not Now</string>
+    <string name="permission_open_settings">Open Settings</string>
+
+    <!-- Connection -->
+    <string name="connection_searching">Searching for drone…</string>
+    <string name="connection_found">Drone found</string>
+    <string name="connection_failed">Connection failed</string>
+    <string name="connection_timeout">Connection timed out</string>
+    <string name="connection_retry">Retry</string>
+    <string name="connection_disconnect">Disconnect</string>
+    <string name="connection_mode_field">Field (Direct)</string>
+    <string name="connection_mode_cloud">Cloud (Relay)</string>
+    <string name="connection_mode_hybrid">Hybrid</string>
+
+    <!-- Errors -->
+    <string name="error_no_drone">No drone connected</string>
+    <string name="error_connection_lost">Connection lost</string>
+    <string name="error_wifi_disconnect">WiFi disconnected from ground station</string>
+    <string name="error_video_freeze">Video signal lost</string>
+    <string name="error_usb_disconnect">USB adapter disconnected</string>
+    <string name="error_low_battery">Low battery warning</string>
+    <string name="error_gps_lost">GPS signal lost</string>
+    <string name="error_ekf_bad">EKF variance high</string>
+    <string name="error_geofence_breach">Geofence breach</string>
+    <string name="error_mission_failed">Mission upload failed</string>
+    <string name="error_param_write_failed">Parameter write failed</string>
+    <string name="error_generic">Something went wrong</string>
+
+    <!-- Common -->
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="reset">Reset</string>
+    <string name="loading">Loading…</string>
+    <string name="done">Done</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
+    <string name="enabled">Enabled</string>
+    <string name="disabled">Disabled</string>
+    <string name="unknown">Unknown</string>
+    <string name="none">None</string>
+    <string name="meters">m</string>
+    <string name="meters_per_sec">m/s</string>
+    <string name="degrees">°</string>
+    <string name="percent">%</string>
+    <string name="volts">V</string>
+    <string name="amps">A</string>
+    <string name="milliamps_hour">mAh</string>
 </resources>
