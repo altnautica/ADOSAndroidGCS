@@ -28,13 +28,17 @@ import org.webrtc.VideoTrack
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import com.altnautica.gcs.data.cloud.CloudVideoClient
+import com.altnautica.gcs.data.cloud.MqttTelemetryClient
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class VideoStreamManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val modeDetector: ModeDetector
+    private val modeDetector: ModeDetector,
+    private val cloudVideoClient: CloudVideoClient,
+    private val mqttTelemetryClient: MqttTelemetryClient,
 ) {
 
     companion object {
@@ -157,9 +161,35 @@ class VideoStreamManager @Inject constructor(
     }
 
     private fun startCloudRelay(turnUrl: String, renderer: SurfaceViewRenderer) {
-        // TODO: Implement Mode C cloud relay via TURN
-        Log.i(TAG, "Cloud relay mode not yet implemented ($turnUrl)")
-        _isStreaming.value = false
+        Log.i(TAG, "Starting cloud relay mode")
+        _activeMode.value = VideoMode.CloudRelay(turnUrl)
+
+        // Use fMP4 WebSocket relay (existing infrastructure at video.altnautica.com)
+        // instead of WebRTC+TURN (TURN server not yet deployed).
+        // Device ID extracted from the TURN URL or defaults to "default".
+        val deviceId = extractDeviceId(turnUrl)
+
+        scope.launch {
+            try {
+                // 1. Connect MQTT for telemetry (2Hz status + position from agent)
+                mqttTelemetryClient.connect(deviceId)
+
+                // 2. Connect cloud video client for fMP4 stream
+                cloudVideoClient.connect(deviceId)
+
+                _isStreaming.value = true
+                Log.i(TAG, "Cloud relay connected via video relay WebSocket")
+            } catch (e: Exception) {
+                Log.e(TAG, "Cloud relay failed: ${e.message}")
+                _isStreaming.value = false
+            }
+        }
+    }
+
+    private fun extractDeviceId(turnUrl: String): String {
+        // turnUrl format: "turn:turn.altnautica.com:3478" or may contain query params
+        // Default device ID when not specified
+        return "default"
     }
 
     private fun initWebRtc(renderer: SurfaceViewRenderer) {
@@ -219,6 +249,8 @@ class VideoStreamManager @Inject constructor(
         videoTrack = null
         peerConnection?.close()
         peerConnection = null
+        cloudVideoClient.disconnect()
+        mqttTelemetryClient.disconnect()
         _isStreaming.value = false
     }
 

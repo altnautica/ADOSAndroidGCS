@@ -24,21 +24,25 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.data.telemetry.PositionState
+import com.altnautica.gcs.data.video.VideoMode
 import com.altnautica.gcs.ui.settings.SettingsViewModel
 import com.altnautica.gcs.ui.theme.ErrorRed
 import com.altnautica.gcs.ui.theme.SuccessGreen
+import com.altnautica.gcs.ui.video.VideoViewModel
 
 @Composable
 private fun ArmDisarmButton(
     armed: Boolean,
+    enabled: Boolean = true,
     onArmRequest: () -> Unit,
     onDisarmRequest: () -> Unit,
 ) {
-    val color = if (armed) ErrorRed else SuccessGreen
+    val color = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                else if (armed) ErrorRed else SuccessGreen
     val label = if (armed) "DISARM" else "ARM"
 
     Surface(
-        onClick = { if (armed) onDisarmRequest() else onArmRequest() },
+        onClick = { if (enabled) { if (armed) onDisarmRequest() else onArmRequest() } },
         shape = RoundedCornerShape(8.dp),
         color = color.copy(alpha = 0.15f),
         contentColor = color,
@@ -57,6 +61,7 @@ private fun ArmDisarmButton(
 fun GcsScreen(
     viewModel: GcsViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
+    videoViewModel: VideoViewModel = hiltViewModel(),
 ) {
     val flightMode by viewModel.flightMode.collectAsStateWithLifecycle()
     val armed by viewModel.armed.collectAsStateWithLifecycle()
@@ -64,6 +69,9 @@ fun GcsScreen(
     val homePosition by viewModel.homePosition.collectAsStateWithLifecycle()
     val confirmAction by viewModel.confirmAction.collectAsStateWithLifecycle()
     val mapProvider by settingsViewModel.mapProvider.collectAsStateWithLifecycle()
+    val videoMode by videoViewModel.videoMode.collectAsStateWithLifecycle()
+
+    val isCloudMode = videoMode is VideoMode.CloudRelay
 
     Row(Modifier.fillMaxSize()) {
         // Map panel (60% width)
@@ -85,14 +93,24 @@ fun GcsScreen(
         ) {
             FlightModeSelector(
                 currentMode = flightMode,
-                onModeSelected = { viewModel.requestSetMode(it) },
+                onModeSelected = { if (!isCloudMode) viewModel.requestSetMode(it) },
+                enabled = !isCloudMode,
             )
             Spacer(Modifier.height(8.dp))
             ArmDisarmButton(
                 armed = armed,
+                enabled = !isCloudMode,
                 onArmRequest = { viewModel.requestArm() },
                 onDisarmRequest = { viewModel.requestDisarm() },
             )
+            if (isCloudMode) {
+                Text(
+                    text = "Controls disabled in cloud mode",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
             Spacer(Modifier.height(8.dp))
             TelemetryDashboard(viewModel)
         }

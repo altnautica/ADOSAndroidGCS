@@ -108,6 +108,9 @@ dependencies {
     // Location services for agriculture GPS
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
+    // MQTT (HiveMQ client for cloud relay Mode C)
+    implementation("com.hivemq:hivemq-mqtt-client:1.3.3")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

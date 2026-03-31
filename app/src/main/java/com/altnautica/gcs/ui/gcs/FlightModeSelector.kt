@@ -34,6 +34,7 @@ private val selectorModes = listOf(
 fun FlightModeSelector(
     currentMode: FlightMode?,
     onModeSelected: (FlightMode) -> Unit,
+    enabled: Boolean = true,
 ) {
     Text(
         text = "Flight Mode",
@@ -49,12 +50,16 @@ fun FlightModeSelector(
     ) {
         selectorModes.forEach { mode ->
             val isActive = mode == currentMode
+            // RTL always enabled (safety override), other modes respect enabled flag
+            val modeEnabled = enabled || mode == FlightMode.RTL
+            val disabledAlpha = if (modeEnabled) 1f else 0.4f
+
             Surface(
-                onClick = { onModeSelected(mode) },
+                onClick = { if (modeEnabled) onModeSelected(mode) },
                 shape = RoundedCornerShape(8.dp),
-                color = if (isActive) ElectricBlue else SurfaceVariant,
-                contentColor = if (isActive) DeepBlack else MaterialTheme.colorScheme.onSurface,
-                border = if (isActive) null else BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)),
+                color = (if (isActive) ElectricBlue else SurfaceVariant).copy(alpha = disabledAlpha),
+                contentColor = (if (isActive) DeepBlack else MaterialTheme.colorScheme.onSurface).copy(alpha = disabledAlpha),
+                border = if (isActive) null else BorderStroke(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f * disabledAlpha)),
             ) {
                 Text(
                     text = mode.label,

@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.altnautica.gcs.data.cloud.CloudVideoClient
+import com.altnautica.gcs.data.cloud.MqttTelemetryClient
 import com.altnautica.gcs.data.mavlink.MavLinkRepository
 import com.altnautica.gcs.data.video.ModeDetector
 import com.altnautica.gcs.data.video.VideoMode
@@ -21,6 +23,8 @@ class AppLifecycleManager @Inject constructor(
     private val mavLinkRepository: MavLinkRepository,
     private val videoStreamManager: VideoStreamManager,
     private val groundStationRepository: GroundStationRepository,
+    private val mqttTelemetryClient: MqttTelemetryClient,
+    private val cloudVideoClient: CloudVideoClient,
 ) : DefaultLifecycleObserver {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -29,11 +33,26 @@ class AppLifecycleManager @Inject constructor(
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         scope.launch {
             val mode = modeDetector.detect()
-            if (mode is VideoMode.GroundStation) {
-                wifiManager.requestGroundStationNetwork()
-                groundStationRepository.startPolling()
+            when (mode) {
+                is VideoMode.GroundStation -> {
+                    wifiManager.requestGroundStationNetwork()
+                    groundStationRepository.startPolling()
+                    mavLinkRepository.connect()
+                }
+                is VideoMode.CloudRelay -> {
+                    // Cloud mode: telemetry via MQTT, video via fMP4 WebSocket.
+                    // No direct MAVLink connection needed.
+                    val deviceId = "default"
+                    mqttTelemetryClient.connect(deviceId)
+                    cloudVideoClient.connect(deviceId)
+                }
+                is VideoMode.DirectUsb -> {
+                    mavLinkRepository.connect()
+                }
+                is VideoMode.NoConnection -> {
+                    mavLinkRepository.connect()
+                }
             }
-            mavLinkRepository.connect()
         }
     }
 
@@ -53,5 +72,7 @@ class AppLifecycleManager @Inject constructor(
         mavLinkRepository.disconnect()
         wifiManager.releaseNetwork()
         groundStationRepository.stopPolling()
+        mqttTelemetryClient.disconnect()
+        cloudVideoClient.disconnect()
     }
 }
