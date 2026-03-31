@@ -8,7 +8,7 @@ import io.dronefleet.mavlink.common.MavFrame
 import io.dronefleet.mavlink.common.MavMissionType
 import io.dronefleet.mavlink.common.MissionCount
 import io.dronefleet.mavlink.common.MissionItemInt
-import io.dronefleet.mavlink.common.CommandLong
+import io.dronefleet.mavlink.common.MissionClearAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,7 +77,7 @@ class MavLinkMissionUploader @Inject constructor(
                 )
 
                 _uploadProgress.value = (index + 1).toFloat() / waypoints.size
-                Log.d(TAG, "Sent item $index/${waypoints.size}: ${command.name()} " +
+                Log.d(TAG, "Sent item $index/${waypoints.size}: ${command.name} " +
                     "lat=${wp.lat} lon=${wp.lon} alt=${wp.alt}")
             }
 
@@ -95,18 +95,9 @@ class MavLinkMissionUploader @Inject constructor(
      */
     suspend fun clearMission() {
         try {
-            val msg = CommandLong.builder()
+            val msg = MissionClearAll.builder()
                 .targetSystem(TARGET_SYS_ID)
                 .targetComponent(TARGET_COMP_ID)
-                .command(MavCmd.MAV_CMD_MISSION_CLEAR_ALL)
-                .confirmation(0)
-                .param1(0f)
-                .param2(0f)
-                .param3(0f)
-                .param4(0f)
-                .param5(0f)
-                .param6(0f)
-                .param7(0f)
                 .build()
             sendPayload(msg)
             Log.i(TAG, "Mission clear sent")
