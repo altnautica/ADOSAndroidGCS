@@ -23,22 +23,27 @@ fun ADOSApp() {
         startDestination = NavRoutes.Home.route,
     ) {
         composable(NavRoutes.Home.route) {
-            HomeScreen(onNavigate = { navController.navigate(it) })
+            HomeScreen(onNavigate = { route ->
+                navController.navigate(route) {
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            })
         }
         composable(NavRoutes.Fly.route) {
-            FlyScreen(onBack = { navController.popBackStack() })
+            FlyScreen(onBack = { navController.navigateUp() })
         }
         composable(NavRoutes.Map.route) {
-            MapScreen(onBack = { navController.popBackStack() })
+            MapScreen(onBack = { navController.navigateUp() })
         }
         composable(NavRoutes.Plan.route) {
-            MissionPlannerScreen(onBack = { navController.popBackStack() })
+            MissionPlannerScreen(onBack = { navController.navigateUp() })
         }
         composable(NavRoutes.Agriculture.route) {
-            AgricultureScreen(onBack = { navController.popBackStack() })
+            AgricultureScreen(onBack = { navController.navigateUp() })
         }
         composable(NavRoutes.Settings.route) {
-            SettingsScreen(onBack = { navController.popBackStack() })
+            SettingsScreen(onBack = { navController.navigateUp() })
         }
         composable(NavRoutes.Gallery.route) {
             VideoGalleryScreen()
