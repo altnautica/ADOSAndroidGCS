@@ -174,8 +174,9 @@ class VideoStreamManager @Inject constructor(
                 // 1. Connect MQTT for telemetry (2Hz status + position from agent)
                 mqttTelemetryClient.connect(deviceId)
 
-                // 2. Connect cloud video client for fMP4 stream
-                cloudVideoClient.connect(deviceId)
+                // 2. Connect cloud video client for fMP4 stream with Surface rendering
+                val surface = renderer.holder.surface
+                cloudVideoClient.connect(deviceId, surface)
 
                 _isStreaming.value = true
                 Log.i(TAG, "Cloud relay connected via video relay WebSocket")

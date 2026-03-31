@@ -34,7 +34,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import com.altnautica.gcs.data.firmware.FirmwareManager
+import com.altnautica.gcs.data.firmware.FirmwareState
+import com.altnautica.gcs.ui.firmware.FirmwareUpdateDialog
+import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.ErrorRed
+import com.altnautica.gcs.ui.theme.NeonLime
 import com.altnautica.gcs.ui.theme.SuccessGreen
 import com.altnautica.gcs.ui.theme.SurfaceVariant
 import com.altnautica.gcs.ui.theme.WarningAmber
@@ -95,6 +100,14 @@ fun GroundStationScreen(viewModel: GroundStationViewModel = hiltViewModel()) {
 
         // Signal meter
         SignalMeter(rssi = stats.rssiDbm, modifier = Modifier.fillMaxWidth())
+
+        Spacer(Modifier.height(8.dp))
+
+        // Diversity stats (only visible with 2+ adapters)
+        DiversityStatsPanel(
+            adapters = stats.adapterRssiList,
+            modifier = Modifier.fillMaxWidth(),
+        )
 
         Spacer(Modifier.height(16.dp))
 
@@ -176,8 +189,43 @@ fun GroundStationScreen(viewModel: GroundStationViewModel = hiltViewModel()) {
                 )
                 InfoRow("Uptime", systemInfo.uptime)
                 InfoRow("WFB-ng Version", systemInfo.wfbVersion)
+
+                // Firmware update badge
+                if (systemInfo.firmwareUpdateAvailable) {
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        onClick = { viewModel.showFirmwareDialog() },
+                        shape = RoundedCornerShape(6.dp),
+                        color = NeonLime.copy(alpha = 0.15f),
+                    ) {
+                        Text(
+                            text = "Update Available",
+                            color = NeonLime,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
+                }
             }
         }
+    }
+
+    // Firmware update dialog
+    val firmwareUpdate by viewModel.firmwareUpdate.collectAsStateWithLifecycle()
+    val firmwareState by viewModel.firmwareState.collectAsStateWithLifecycle()
+    val firmwareProgress by viewModel.firmwareProgress.collectAsStateWithLifecycle()
+    val firmwareError by viewModel.firmwareError.collectAsStateWithLifecycle()
+    val showFirmwareDialog by viewModel.showFirmwareDialog.collectAsStateWithLifecycle()
+
+    if (showFirmwareDialog && firmwareUpdate != null) {
+        FirmwareUpdateDialog(
+            update = firmwareUpdate!!,
+            state = firmwareState,
+            progress = firmwareProgress,
+            error = firmwareError,
+            onStartUpdate = { viewModel.startFirmwareUpdate() },
+            onDismiss = { viewModel.dismissFirmwareDialog() },
+        )
     }
 }
 

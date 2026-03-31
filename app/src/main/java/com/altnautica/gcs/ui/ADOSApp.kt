@@ -17,8 +17,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.altnautica.gcs.ui.agriculture.AgricultureScreen
+import com.altnautica.gcs.ui.gallery.VideoGalleryScreen
 import com.altnautica.gcs.ui.gcs.GcsScreen
 import com.altnautica.gcs.ui.groundstation.GroundStationScreen
+import com.altnautica.gcs.ui.maps.TileDownloadScreen
+import com.altnautica.gcs.ui.mission.MissionPlannerScreen
 import com.altnautica.gcs.ui.navigation.NavRoutes
 import com.altnautica.gcs.ui.settings.SettingsScreen
 import com.altnautica.gcs.ui.theme.DeepBlack
@@ -78,6 +81,15 @@ fun ADOSApp() {
             }
             composable(NavRoutes.Agriculture.route) {
                 AgricultureScreen()
+            }
+            composable(NavRoutes.MissionPlanner.route) {
+                MissionPlannerScreen()
+            }
+            composable(NavRoutes.Gallery.route) {
+                VideoGalleryScreen()
+            }
+            composable(NavRoutes.TileDownload.route) {
+                TileDownloadScreen()
             }
             composable(NavRoutes.Settings.route) {
                 SettingsScreen()
