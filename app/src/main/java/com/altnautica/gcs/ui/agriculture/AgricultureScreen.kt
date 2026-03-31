@@ -16,11 +16,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Agriculture
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Summarize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,7 +45,10 @@ import com.altnautica.gcs.ui.theme.WarningAmber
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AgricultureScreen(viewModel: AgricultureViewModel = hiltViewModel()) {
+fun AgricultureScreen(
+    onBack: () -> Unit = {},
+    viewModel: AgricultureViewModel = hiltViewModel(),
+) {
     val fieldState by viewModel.fieldState.collectAsStateWithLifecycle()
     val sprayConfig by viewModel.sprayConfig.collectAsStateWithLifecycle()
     val missionState by viewModel.missionState.collectAsStateWithLifecycle()
@@ -63,11 +68,20 @@ fun AgricultureScreen(viewModel: AgricultureViewModel = hiltViewModel()) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "Agriculture",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.Filled.ArrowBack,
+                        contentDescription = "Back to home",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                Text(
+                    text = "Agriculture",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
             val statusColor = when (missionState) {
                 MissionState.IDLE -> MaterialTheme.colorScheme.onSurfaceVariant
                 MissionState.MAPPING -> ElectricBlue

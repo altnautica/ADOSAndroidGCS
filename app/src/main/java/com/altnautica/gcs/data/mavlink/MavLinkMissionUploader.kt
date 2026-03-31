@@ -9,9 +9,11 @@ import io.dronefleet.mavlink.common.MavMissionType
 import io.dronefleet.mavlink.common.MissionCount
 import io.dronefleet.mavlink.common.MissionItemInt
 import io.dronefleet.mavlink.common.MissionClearAll
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withTimeout
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -57,32 +59,37 @@ class MavLinkMissionUploader @Inject constructor(
         _uploadProgress.value = 0f
 
         try {
-            // Step 1: Send MISSION_COUNT to tell the FC how many items to expect
-            sendMissionCount(waypoints.size)
+            withTimeout(30_000) {
+                // Step 1: Send MISSION_COUNT to tell the FC how many items to expect
+                sendMissionCount(waypoints.size)
 
-            // Step 2: Send each MISSION_ITEM_INT
-            for ((index, wp) in waypoints.withIndex()) {
-                val command = when {
-                    index == 0 -> MavCmd.MAV_CMD_NAV_TAKEOFF
-                    index == waypoints.size - 1 -> MavCmd.MAV_CMD_NAV_RETURN_TO_LAUNCH
-                    else -> MavCmd.MAV_CMD_NAV_WAYPOINT
+                // Step 2: Send each MISSION_ITEM_INT
+                for ((index, wp) in waypoints.withIndex()) {
+                    val command = when {
+                        index == 0 -> MavCmd.MAV_CMD_NAV_TAKEOFF
+                        index == waypoints.size - 1 -> MavCmd.MAV_CMD_NAV_RETURN_TO_LAUNCH
+                        else -> MavCmd.MAV_CMD_NAV_WAYPOINT
+                    }
+
+                    sendMissionItemInt(
+                        seq = index,
+                        command = command,
+                        lat = wp.lat,
+                        lon = wp.lon,
+                        alt = wp.alt,
+                    )
+
+                    _uploadProgress.value = (index + 1).toFloat() / waypoints.size
+                    Log.d(TAG, "Sent item $index/${waypoints.size}: ${command.name} " +
+                        "lat=${wp.lat} lon=${wp.lon} alt=${wp.alt}")
                 }
 
-                sendMissionItemInt(
-                    seq = index,
-                    command = command,
-                    lat = wp.lat,
-                    lon = wp.lon,
-                    alt = wp.alt,
-                )
-
-                _uploadProgress.value = (index + 1).toFloat() / waypoints.size
-                Log.d(TAG, "Sent item $index/${waypoints.size}: ${command.name} " +
-                    "lat=${wp.lat} lon=${wp.lon} alt=${wp.alt}")
+                _uploadState.value = UploadState.Complete
+                Log.i(TAG, "Mission upload complete: ${waypoints.size} items")
             }
-
-            _uploadState.value = UploadState.Complete
-            Log.i(TAG, "Mission upload complete: ${waypoints.size} items")
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Mission upload timed out", e)
+            _uploadState.value = UploadState.Error("Upload timed out")
         } catch (e: Exception) {
             Log.e(TAG, "Mission upload failed: ${e.message}", e)
             _uploadState.value = UploadState.Error(e.message ?: "Upload failed")

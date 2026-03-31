@@ -29,7 +29,7 @@ private val HudGreen = Color(0xFF22C55E)
 private val HudAmber = Color(0xFFFBBF24)
 private val HudRed = Color(0xFFEF4444)
 private val HudWhite = Color(0xFFE5E5E5)
-private val HudDim = Color(0x99A0A0A0)
+private val HudDim = Color(0xFFA0A0A0)
 
 @Composable
 fun HudOverlay(
@@ -44,6 +44,7 @@ fun HudOverlay(
     compassEnabled: Boolean = true,
     altLadderEnabled: Boolean = true,
     speedLadderEnabled: Boolean = true,
+    recording: Boolean = false,
 ) {
     val distanceToHome = if (homePosition != null &&
         (homePosition.lat != 0.0 || homePosition.lon != 0.0)
@@ -74,6 +75,10 @@ fun HudOverlay(
         drawFlightModeInfo(cx, flightMode, armed)
         drawGpsInfo(gps)
         drawDistanceToHome(distanceToHome)
+        drawFlightModeBadge(flightMode, armed)
+        if (recording) {
+            drawRecordingIndicator()
+        }
     }
 }
 
@@ -431,9 +436,42 @@ private fun DrawScope.drawDistanceToHome(distanceMeters: Double?) {
     canvas.drawText(distText, x, y + 16.dp.toPx(), hudTextPaint(HudWhite, 11f))
 }
 
+// -- Flight Mode Badge (top-left) --
+
+private fun DrawScope.drawFlightModeBadge(flightMode: FlightMode?, armed: Boolean) {
+    val canvas = drawContext.canvas.nativeCanvas
+    val x = 16.dp.toPx()
+    val y = 24.dp.toPx()
+
+    val modeText = flightMode?.label ?: "---"
+    canvas.drawText(modeText, x, y, hudTextPaint(HudWhite, 14f))
+
+    val armedText = if (armed) "ARMED" else "DISARMED"
+    val armedColor = if (armed) HudGreen else HudDim
+    canvas.drawText(armedText, x, y + 20.dp.toPx(), hudTextPaint(armedColor, 12f))
+}
+
+// -- Recording Indicator (top-right, below mode badge area) --
+
+private fun DrawScope.drawRecordingIndicator() {
+    val canvas = drawContext.canvas.nativeCanvas
+    val x = size.width - 100.dp.toPx()
+    val y = 24.dp.toPx()
+
+    // Red dot
+    drawCircle(
+        color = HudRed,
+        radius = 5.dp.toPx(),
+        center = Offset(x, y - 4.dp.toPx()),
+    )
+
+    canvas.drawText("REC", x + 10.dp.toPx(), y, hudTextPaint(HudRed, 12f))
+}
+
 // -- Paint helper --
 
 private fun hudTextPaint(color: Color, sizeSp: Float): android.graphics.Paint {
+    val effectiveSize = maxOf(sizeSp, 12f) // minimum 12sp for readability
     return android.graphics.Paint().apply {
         this.color = android.graphics.Color.argb(
             (color.alpha * 255).toInt(),
@@ -441,7 +479,7 @@ private fun hudTextPaint(color: Color, sizeSp: Float): android.graphics.Paint {
             (color.green * 255).toInt(),
             (color.blue * 255).toInt(),
         )
-        textSize = sizeSp * 2.5f // approximate sp to px for canvas
+        textSize = effectiveSize * 2.5f // approximate sp to px for canvas
         isAntiAlias = true
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.NORMAL)
     }

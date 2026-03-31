@@ -1,6 +1,7 @@
 package com.altnautica.gcs
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -50,7 +51,8 @@ class AppLifecycleManager @Inject constructor(
                     mavLinkRepository.connect()
                 }
                 is VideoMode.NoConnection -> {
-                    mavLinkRepository.connect()
+                    Log.w("AppLifecycleManager", "No connection mode detected, skipping MAVLink connect")
+                    return@launch
                 }
             }
         }

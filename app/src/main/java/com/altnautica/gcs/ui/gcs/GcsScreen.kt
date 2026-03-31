@@ -1,6 +1,6 @@
 package com.altnautica.gcs.ui.gcs
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,56 +9,38 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.data.telemetry.PositionState
 import com.altnautica.gcs.data.video.VideoMode
 import com.altnautica.gcs.ui.settings.SettingsViewModel
+import com.altnautica.gcs.ui.theme.DeepBlack
 import com.altnautica.gcs.ui.theme.ErrorRed
+import com.altnautica.gcs.ui.theme.OnSurfaceMedium
 import com.altnautica.gcs.ui.theme.SuccessGreen
+import com.altnautica.gcs.ui.theme.WarningAmber
 import com.altnautica.gcs.ui.video.VideoViewModel
 
 @Composable
-private fun ArmDisarmButton(
-    armed: Boolean,
-    enabled: Boolean = true,
-    onArmRequest: () -> Unit,
-    onDisarmRequest: () -> Unit,
-) {
-    val color = if (!enabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                else if (armed) ErrorRed else SuccessGreen
-    val label = if (armed) "DISARM" else "ARM"
-
-    Surface(
-        onClick = { if (enabled) { if (armed) onDisarmRequest() else onArmRequest() } },
-        shape = RoundedCornerShape(8.dp),
-        color = color.copy(alpha = 0.15f),
-        contentColor = color,
-        border = BorderStroke(1.dp, color),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp),
-        )
-    }
-}
-
-@Composable
-fun GcsScreen(
+fun MapScreen(
+    onBack: () -> Unit,
     viewModel: GcsViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     videoViewModel: VideoViewModel = hiltViewModel(),
@@ -67,52 +49,92 @@ fun GcsScreen(
     val armed by viewModel.armed.collectAsStateWithLifecycle()
     val position by viewModel.position.collectAsStateWithLifecycle()
     val homePosition by viewModel.homePosition.collectAsStateWithLifecycle()
+    val battery by viewModel.battery.collectAsStateWithLifecycle()
+    val gps by viewModel.gps.collectAsStateWithLifecycle()
     val confirmAction by viewModel.confirmAction.collectAsStateWithLifecycle()
     val mapProvider by settingsViewModel.mapProvider.collectAsStateWithLifecycle()
     val videoMode by videoViewModel.videoMode.collectAsStateWithLifecycle()
 
     val isCloudMode = videoMode is VideoMode.CloudRelay
 
-    Row(Modifier.fillMaxSize()) {
-        // Map panel (60% width)
+    Box(Modifier.fillMaxSize()) {
+        // Full-screen map
         DroneMapView(
             dronePosition = position,
             homePosition = homePosition,
             useMapbox = shouldUseMapbox(mapProvider),
-            modifier = Modifier
-                .weight(0.6f)
-                .fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
         )
 
-        // Controls panel (40% width)
-        Column(
+        // Back button (top-left)
+        IconButton(
+            onClick = onBack,
             modifier = Modifier
-                .weight(0.4f)
-                .verticalScroll(rememberScrollState())
+                .align(Alignment.TopStart)
                 .padding(8.dp),
+        ) {
+            Icon(
+                Icons.Filled.ArrowBack,
+                contentDescription = "Back to home",
+                tint = Color.White.copy(alpha = 0.7f),
+            )
+        }
+
+        // Flight mode selector overlay (top-right)
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = DeepBlack.copy(alpha = 0.85f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 8.dp, end = 8.dp),
         ) {
             FlightModeSelector(
                 currentMode = flightMode,
                 onModeSelected = { if (!isCloudMode) viewModel.requestSetMode(it) },
                 enabled = !isCloudMode,
             )
-            Spacer(Modifier.height(8.dp))
-            ArmDisarmButton(
-                armed = armed,
-                enabled = !isCloudMode,
-                onArmRequest = { viewModel.requestArm() },
-                onDisarmRequest = { viewModel.requestDisarm() },
-            )
-            if (isCloudMode) {
-                Text(
-                    text = "Controls disabled in cloud mode",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
+        }
+
+        // Compact telemetry overlay (bottom)
+        Surface(
+            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+            color = DeepBlack.copy(alpha = 0.85f),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Battery
+                val battColor = when {
+                    battery.remaining < 0 -> OnSurfaceMedium
+                    battery.remaining <= 20 -> ErrorRed
+                    battery.remaining <= 40 -> WarningAmber
+                    else -> SuccessGreen
+                }
+                CompactStat("BAT", if (battery.remaining >= 0) "${battery.remaining}%" else "--%", battColor)
+
+                // GPS
+                val gpsColor = when (gps.fixType) {
+                    0, 1 -> ErrorRed
+                    2 -> WarningAmber
+                    else -> SuccessGreen
+                }
+                CompactStat("GPS", "${gps.satellites} sats", gpsColor)
+
+                // Altitude
+                CompactStat("ALT", "%.1fm".format(position.altRel), OnSurfaceMedium)
+
+                // Armed status
+                val armedColor = if (armed) SuccessGreen else OnSurfaceMedium
+                CompactStat("", if (armed) "ARMED" else "DISARMED", armedColor)
+
+                // Flight mode
+                CompactStat("MODE", flightMode?.label ?: "---", Color.White)
             }
-            Spacer(Modifier.height(8.dp))
-            TelemetryDashboard(viewModel)
         }
     }
 
@@ -135,6 +157,25 @@ fun GcsScreen(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun CompactStat(label: String, value: String, valueColor: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (label.isNotEmpty()) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = OnSurfaceMedium,
+            )
+        }
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelLarge,
+            fontFamily = FontFamily.Monospace,
+            color = valueColor,
         )
     }
 }

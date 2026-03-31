@@ -72,6 +72,7 @@ class CloudVideoClient @Inject constructor(
 
     // MediaCodec state
     private var codec: MediaCodec? = null
+    @Volatile
     private var codecConfigured = false
     private var outputSurface: Surface? = null
     private var spsNalu: ByteArray? = null
@@ -196,7 +197,9 @@ class CloudVideoClient @Inject constructor(
                     val spsLen = ((data[cur].toInt() and 0xFF) shl 8) or (data[cur + 1].toInt() and 0xFF)
                     cur += 2
                     if (cur + spsLen > end) return
-                    spsNalu = data.copyOfRange(cur, cur + spsLen)
+                    synchronized(this@CloudVideoClient) {
+                        spsNalu = data.copyOfRange(cur, cur + spsLen)
+                    }
                     cur += spsLen
                 }
 
@@ -209,11 +212,13 @@ class CloudVideoClient @Inject constructor(
                     val ppsLen = ((data[cur].toInt() and 0xFF) shl 8) or (data[cur + 1].toInt() and 0xFF)
                     cur += 2
                     if (cur + ppsLen > end) return
-                    ppsNalu = data.copyOfRange(cur, cur + ppsLen)
+                    synchronized(this@CloudVideoClient) {
+                        ppsNalu = data.copyOfRange(cur, cur + ppsLen)
+                    }
                     cur += ppsLen
                 }
 
-                Log.i(TAG, "Extracted SPS (${spsNalu?.size}B) + PPS (${ppsNalu?.size}B) from avcC")
+                Log.i(TAG, "Extracted SPS (${synchronized(this@CloudVideoClient) { spsNalu }?.size}B) + PPS (${synchronized(this@CloudVideoClient) { ppsNalu }?.size}B) from avcC")
                 return
             }
         }
@@ -235,11 +240,11 @@ class CloudVideoClient @Inject constructor(
             val nalType = data[pos].toInt() and 0x1F
 
             // Capture SPS (7) and PPS (8) from in-band NAL units too
-            if (nalType == 7) spsNalu = data.copyOfRange(pos, pos + nalLen)
-            if (nalType == 8) ppsNalu = data.copyOfRange(pos, pos + nalLen)
+            if (nalType == 7) synchronized(this) { spsNalu = data.copyOfRange(pos, pos + nalLen) }
+            if (nalType == 8) synchronized(this) { ppsNalu = data.copyOfRange(pos, pos + nalLen) }
 
             // Initialize codec when we have both SPS and PPS
-            if (!codecConfigured && spsNalu != null && ppsNalu != null) {
+            if (!codecConfigured && synchronized(this) { spsNalu != null && ppsNalu != null }) {
                 initCodec(surface)
             }
 
@@ -351,8 +356,10 @@ class CloudVideoClient @Inject constructor(
             codec?.release()
         } catch (_: Exception) {}
         codec = null
-        spsNalu = null
-        ppsNalu = null
+        synchronized(this) {
+            spsNalu = null
+            ppsNalu = null
+        }
     }
 
     fun disconnect() {

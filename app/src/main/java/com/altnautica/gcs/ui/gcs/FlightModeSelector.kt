@@ -64,7 +64,7 @@ fun FlightModeSelector(
                 Text(
                     text = mode.label,
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
                 )
             }
         }

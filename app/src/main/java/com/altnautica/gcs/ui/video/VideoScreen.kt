@@ -6,10 +6,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,11 +27,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.data.video.VideoMode
+import com.altnautica.gcs.ui.common.ControlsPanel
+import com.altnautica.gcs.ui.common.FloatingControls
+import com.altnautica.gcs.ui.common.MapPip
+import com.altnautica.gcs.ui.gcs.GcsViewModel
 import com.altnautica.gcs.ui.settings.SettingsViewModel
 
 @Composable
-fun VideoScreen(
+fun FlyScreen(
+    onBack: () -> Unit,
     viewModel: VideoViewModel = hiltViewModel(),
+    gcsViewModel: GcsViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val attitude by viewModel.attitude.collectAsStateWithLifecycle()
@@ -35,13 +49,18 @@ fun VideoScreen(
     val flightMode by viewModel.flightMode.collectAsStateWithLifecycle()
     val armed by viewModel.armed.collectAsStateWithLifecycle()
     val videoMode by viewModel.videoMode.collectAsStateWithLifecycle()
+    val isStreaming by viewModel.isStreaming.collectAsStateWithLifecycle()
 
     val compassEnabled by settingsViewModel.compassEnabled.collectAsStateWithLifecycle()
     val altLadderEnabled by settingsViewModel.altLadderEnabled.collectAsStateWithLifecycle()
     val speedLadderEnabled by settingsViewModel.speedLadderEnabled.collectAsStateWithLifecycle()
 
+    var showControlsPanel by remember { mutableStateOf(false) }
+    var recording by remember { mutableStateOf(false) }
+    var activeCameraId by remember { mutableStateOf("cam0") }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        // Video SurfaceView (bottom layer)
+        // Layer 1: Video SurfaceView (fills entire screen)
         AndroidView(
             factory = { ctx ->
                 SurfaceView(ctx).apply {
@@ -51,7 +70,7 @@ fun VideoScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Cloud mode latency warning banner
+        // Layer 2: Cloud mode latency warning banner
         if (videoMode is VideoMode.CloudRelay) {
             Box(
                 modifier = Modifier
@@ -61,7 +80,7 @@ fun VideoScreen(
                     .align(Alignment.TopCenter)
             ) {
                 Text(
-                    text = "Cloud mode \u2014 high latency (~200ms). Not suitable for manual flight.",
+                    text = "Cloud mode -- high latency (~200ms). Not suitable for manual flight.",
                     color = Color.Black,
                     style = MaterialTheme.typography.labelMedium,
                     textAlign = TextAlign.Center,
@@ -70,7 +89,7 @@ fun VideoScreen(
             }
         }
 
-        // HUD Canvas overlay
+        // Layer 3: HUD Canvas overlay
         HudOverlay(
             attitude = attitude,
             position = position,
@@ -83,14 +102,78 @@ fun VideoScreen(
             compassEnabled = compassEnabled,
             altLadderEnabled = altLadderEnabled,
             speedLadderEnabled = speedLadderEnabled,
+            recording = recording,
         )
 
-        // Mode badge (top-right corner)
+        // Layer 4: Floating controls (ARM/DISARM, RTL, Record)
+        FloatingControls(
+            armed = armed,
+            recording = recording,
+            onArm = { gcsViewModel.requestArm() },
+            onDisarm = { gcsViewModel.requestDisarm() },
+            onRtl = { gcsViewModel.requestSetMode(com.altnautica.gcs.data.telemetry.FlightMode.RTL) },
+            onToggleRecord = { recording = !recording },
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        // Layer 5: Map PiP (bottom-right, above floating controls)
+        MapPip(
+            dronePosition = position,
+            homePosition = homePosition,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 80.dp, bottom = 16.dp),
+        )
+
+        // Layer 6: Back button (top-left)
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp),
+        ) {
+            Icon(
+                Icons.Filled.ArrowBack,
+                contentDescription = "Back to home",
+                tint = Color.White.copy(alpha = 0.7f),
+            )
+        }
+
+        // Layer 7: Mode indicator (top-right)
         ModeIndicator(
             videoMode = videoMode,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp),
+        )
+
+        // Layer 8: Hamburger menu for controls panel (top-right, below mode indicator)
+        IconButton(
+            onClick = { showControlsPanel = !showControlsPanel },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 48.dp, end = 8.dp),
+        ) {
+            Icon(
+                Icons.Filled.Menu,
+                contentDescription = "Open controls panel",
+                tint = Color.White.copy(alpha = 0.7f),
+            )
+        }
+
+        // Layer 9: Controls panel (slide-out from right)
+        ControlsPanel(
+            visible = showControlsPanel,
+            currentMode = flightMode,
+            onModeSelected = { gcsViewModel.requestSetMode(it) },
+            battery = battery,
+            gps = gps,
+            position = position,
+            vfr = vfr,
+            videoMode = videoMode,
+            activeCameraId = activeCameraId,
+            onSwitchCamera = { activeCameraId = it },
+            modifier = Modifier.align(Alignment.CenterEnd),
         )
     }
 }

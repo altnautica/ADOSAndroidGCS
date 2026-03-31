@@ -153,7 +153,7 @@ class MavLinkRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.v(TAG, "Frame parse error: ${e.message}")
+            Log.w(TAG, "Frame parse error: ${e.message}")
         }
     }
 
