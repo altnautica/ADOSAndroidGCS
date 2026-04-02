@@ -320,7 +320,7 @@ class MavLinkCommandSender @Inject constructor(
      * Used for commands that may not exist in the dronefleet MavCmd enum
      * (ArduPilot-specific or newer MAVLink extensions).
      */
-    private suspend fun sendCommandLongRaw(
+    suspend fun sendCommandLongRaw(
         commandId: Int,
         param1: Float = 0f,
         param2: Float = 0f,
