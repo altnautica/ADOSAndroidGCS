@@ -34,15 +34,16 @@ import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 
 /**
- * Dual-provider drone map view. Switches between Mapbox (online, dark style)
- * and OSMDroid (offline-capable, CARTO dark tiles) based on user preference.
- */
-/**
  * Coordinate pair for overlay polylines on the map.
  * Kept here to avoid coupling map view to mission data types.
  */
 data class MapLatLng(val lat: Double, val lon: Double)
 
+/**
+ * Dual-provider drone map view. Switches between Mapbox (online, dark style)
+ * and OSMDroid (offline-capable, CARTO dark tiles) based on user preference.
+ * Optionally renders an overlay polyline (survey grid preview, flight path, etc.).
+ */
 @Composable
 fun DroneMapView(
     dronePosition: PositionState,
