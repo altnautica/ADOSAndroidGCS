@@ -14,7 +14,8 @@ import javax.inject.Singleton
 
 @Singleton
 class MavLinkCommandSender @Inject constructor(
-    private val repository: MavLinkRepository
+    private val repository: MavLinkRepository,
+    private val commandQueue: CommandQueue
 ) {
 
     companion object {
@@ -227,6 +228,65 @@ class MavLinkCommandSender @Inject constructor(
             .mavlinkVersion(3)
             .build()
         sendMessage(msg)
+    }
+
+    /**
+     * Send a command with ACK verification via CommandQueue.
+     * Returns CommandResult with success/failure and MAV_RESULT value.
+     * Retries automatically on timeout (default 3 retries, 3s timeout each).
+     */
+    suspend fun sendCommandWithAck(
+        command: MavCmd,
+        param1: Float = 0f,
+        param2: Float = 0f,
+        param3: Float = 0f,
+        param4: Float = 0f,
+        param5: Float = 0f,
+        param6: Float = 0f,
+        param7: Float = 0f,
+        maxRetries: Int = 3,
+        timeoutMs: Long = 3000
+    ): CommandQueue.CommandResult {
+        return commandQueue.send(
+            commandId = command.value(),
+            maxRetries = maxRetries,
+            timeoutMs = timeoutMs
+        ) {
+            sendCommandLong(command, param1, param2, param3, param4, param5, param6, param7)
+        }
+    }
+
+    /**
+     * Arm with ACK verification and retry.
+     */
+    suspend fun sendArmWithAck(): CommandQueue.CommandResult {
+        Log.d(TAG, "Sending ARM (with ACK)")
+        return sendCommandWithAck(
+            command = MavCmd.MAV_CMD_COMPONENT_ARM_DISARM,
+            param1 = 1f
+        )
+    }
+
+    /**
+     * Disarm with ACK verification and retry.
+     */
+    suspend fun sendDisarmWithAck(): CommandQueue.CommandResult {
+        Log.d(TAG, "Sending DISARM (with ACK)")
+        return sendCommandWithAck(
+            command = MavCmd.MAV_CMD_COMPONENT_ARM_DISARM,
+            param1 = 0f
+        )
+    }
+
+    /**
+     * Takeoff with ACK verification.
+     */
+    suspend fun sendTakeoffWithAck(altitude: Float): CommandQueue.CommandResult {
+        Log.d(TAG, "Sending TAKEOFF (with ACK) alt=$altitude")
+        return sendCommandWithAck(
+            command = MavCmd.MAV_CMD_NAV_TAKEOFF,
+            param7 = altitude
+        )
     }
 
     private suspend fun sendCommandLong(
