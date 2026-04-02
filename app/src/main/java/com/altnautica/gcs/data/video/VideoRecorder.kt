@@ -80,8 +80,30 @@ class VideoRecorder @Inject constructor(
      * Start recording. Returns the input Surface that should receive video frames.
      * The caller should render/copy video frames onto this surface.
      */
+    /**
+     * Check available storage space on internal storage.
+     * @return available bytes.
+     */
+    fun getAvailableStorageBytes(): Long {
+        val stat = StatFs(context.filesDir.absolutePath)
+        return stat.availableBlocksLong * stat.blockSizeLong
+    }
+
+    /**
+     * Returns true if available storage is below the 2 GB minimum threshold.
+     */
+    fun isStorageLow(): Boolean = getAvailableStorageBytes() < MIN_FREE_SPACE_BYTES
+
     fun startRecording(outputFile: File? = null): Surface? {
         if (_isRecording.value) return inputSurface
+
+        // Storage check: warn if free space < 2 GB
+        if (isStorageLow()) {
+            _lowStorageWarning.value = true
+            Log.w(TAG, "Low storage: ${getAvailableStorageBytes() / (1024 * 1024)} MB free, need 2 GB")
+            return null
+        }
+        _lowStorageWarning.value = false
 
         try {
             val file = outputFile ?: generateOutputFile()

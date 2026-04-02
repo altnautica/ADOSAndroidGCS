@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Tlog recordings in app internal storage -->
+    <files-path name="tlogs" path="tlogs/" />
+    <!-- DVR recordings in app internal storage -->
+    <files-path name="recordings" path="recordings/" />
+</paths>
