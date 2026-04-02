@@ -153,6 +153,26 @@ data class WindState(
     val speedZ: Float = 0f
 )
 
+data class MagCalProgressState(
+    val compassId: Int = 0,
+    val completionPct: Float = 0f,
+    val directionX: Float = 0f,
+    val directionY: Float = 0f,
+    val directionZ: Float = 0f
+)
+
+data class MagCalReportState(
+    val compassId: Int = 0,
+    val calStatus: Int = 0, // MAG_CAL_SUCCESS = 4, MAG_CAL_FAILED = 5
+    val fitness: Float = 0f,
+    val ofsX: Float = 0f,
+    val ofsY: Float = 0f,
+    val ofsZ: Float = 0f
+) {
+    val isSuccess: Boolean get() = calStatus == 4
+    val isFailed: Boolean get() = calStatus == 5
+}
+
 enum class FlightMode(val modeNumber: Int, val label: String) {
     STABILIZE(0, "Stabilize"),
     ACRO(1, "Acro"),
