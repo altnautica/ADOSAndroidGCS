@@ -26,10 +26,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.altnautica.gcs.data.telemetry.FlightMode
 import com.altnautica.gcs.data.video.VideoMode
 import com.altnautica.gcs.ui.common.ControlsPanel
 import com.altnautica.gcs.ui.common.FloatingControls
+import com.altnautica.gcs.ui.common.GamepadOverlay
 import com.altnautica.gcs.ui.common.MapPip
+import com.altnautica.gcs.ui.common.TakeoffDialog
 import com.altnautica.gcs.ui.gcs.GcsViewModel
 import com.altnautica.gcs.ui.settings.SettingsViewModel
 
@@ -55,9 +58,15 @@ fun FlyScreen(
     val altLadderEnabled by settingsViewModel.altLadderEnabled.collectAsStateWithLifecycle()
     val speedLadderEnabled by settingsViewModel.speedLadderEnabled.collectAsStateWithLifecycle()
 
+    val missionPaused by gcsViewModel.missionPaused.collectAsStateWithLifecycle()
+    val showTakeoffDialog by gcsViewModel.showTakeoffDialog.collectAsStateWithLifecycle()
+    val gamepadState by gcsViewModel.gamepadState.collectAsStateWithLifecycle()
+
     var showControlsPanel by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
     var activeCameraId by remember { mutableStateOf("cam0") }
+
+    val inAutoMode = flightMode == FlightMode.AUTO
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Layer 1: Video SurfaceView (fills entire screen)
@@ -105,15 +114,29 @@ fun FlyScreen(
             recording = recording,
         )
 
-        // Layer 4: Floating controls (ARM/DISARM, RTL, Record)
+        // Layer 4: Floating controls (ARM/DISARM, RTL, Record, Takeoff, Land, Pause/Resume)
         FloatingControls(
             armed = armed,
             recording = recording,
+            paused = missionPaused,
+            inAutoMode = inAutoMode,
             onArm = { gcsViewModel.requestArm() },
             onDisarm = { gcsViewModel.requestDisarm() },
-            onRtl = { gcsViewModel.requestSetMode(com.altnautica.gcs.data.telemetry.FlightMode.RTL) },
+            onRtl = { gcsViewModel.requestSetMode(FlightMode.RTL) },
             onToggleRecord = { recording = !recording },
+            onTakeoff = { gcsViewModel.requestTakeoff() },
+            onLand = { gcsViewModel.requestLand() },
+            onPause = { gcsViewModel.requestPause() },
+            onResume = { gcsViewModel.requestResume() },
             modifier = Modifier.fillMaxSize(),
+        )
+
+        // Layer 4b: Gamepad overlay (top-left, below back button)
+        GamepadOverlay(
+            state = gamepadState,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 48.dp),
         )
 
         // Layer 5: Map PiP (bottom-right, above floating controls)
@@ -174,6 +197,14 @@ fun FlyScreen(
             activeCameraId = activeCameraId,
             onSwitchCamera = { activeCameraId = it },
             modifier = Modifier.align(Alignment.CenterEnd),
+        )
+    }
+
+    // Takeoff altitude dialog
+    if (showTakeoffDialog) {
+        TakeoffDialog(
+            onConfirm = { altitude -> gcsViewModel.confirmTakeoff(altitude) },
+            onDismiss = { gcsViewModel.dismissTakeoffDialog() },
         )
     }
 }

@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.FlightLand
+import androidx.compose.material.icons.filled.FlightTakeoff
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,19 +37,28 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altnautica.gcs.R
+import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.ErrorRed
+import com.altnautica.gcs.ui.theme.NeonLime
 import com.altnautica.gcs.ui.theme.OnSurfaceMedium
 import com.altnautica.gcs.ui.theme.SuccessGreen
+import com.altnautica.gcs.ui.theme.WarningAmber
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FloatingControls(
     armed: Boolean,
     recording: Boolean,
+    paused: Boolean = false,
+    inAutoMode: Boolean = false,
     onArm: () -> Unit,
     onDisarm: () -> Unit,
     onRtl: () -> Unit,
     onToggleRecord: () -> Unit,
+    onTakeoff: () -> Unit = {},
+    onLand: () -> Unit = {},
+    onPause: () -> Unit = {},
+    onResume: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val view = LocalView.current
@@ -87,12 +100,12 @@ fun FloatingControls(
             }
         }
 
-        // Right side: RTL + Record buttons
+        // Right side: action buttons column
         Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // Record button
@@ -103,15 +116,81 @@ fun FloatingControls(
                 },
                 shape = CircleShape,
                 color = if (recording) ErrorRed.copy(alpha = 0.9f) else OnSurfaceMedium.copy(alpha = 0.5f),
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(44.dp),
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
                     Icon(
                         Icons.Filled.FiberManualRecord,
                         contentDescription = if (recording) "Stop recording" else "Start recording",
                         tint = if (recording) Color.White else ErrorRed,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(18.dp),
                     )
+                }
+            }
+
+            // Pause/Resume button (only visible in Auto mode)
+            if (inAutoMode) {
+                Surface(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        if (paused) onResume() else onPause()
+                    },
+                    shape = CircleShape,
+                    color = if (paused) NeonLime.copy(alpha = 0.9f) else WarningAmber.copy(alpha = 0.9f),
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (paused) "Resume mission" else "Pause mission",
+                            tint = Color.Black,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+
+            // Takeoff button (shown when not armed or armed but on ground)
+            if (!armed || !inAutoMode) {
+                Surface(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onTakeoff()
+                    },
+                    shape = CircleShape,
+                    color = ElectricBlue.copy(alpha = 0.9f),
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            Icons.Filled.FlightTakeoff,
+                            contentDescription = "Takeoff",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
+            }
+
+            // Land button (shown when armed)
+            if (armed) {
+                Surface(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onLand()
+                    },
+                    shape = CircleShape,
+                    color = WarningAmber.copy(alpha = 0.9f),
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            Icons.Filled.FlightLand,
+                            contentDescription = "Land",
+                            tint = Color.Black,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 }
             }
 

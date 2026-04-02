@@ -18,6 +18,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.SurfaceVariant
 
+/**
+ * Calibration screen with tabs for Accel, Compass, and Level calibration wizards.
+ */
 @Composable
 fun CalibrationScreen(
     viewModel: CalibrationViewModel = hiltViewModel(),
