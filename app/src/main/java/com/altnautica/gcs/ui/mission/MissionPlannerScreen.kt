@@ -59,9 +59,13 @@ import com.altnautica.gcs.data.mavlink.MavLinkMissionUploader
 import com.altnautica.gcs.data.mavlink.UploadState
 import com.altnautica.gcs.data.mission.MissionRepository
 import com.altnautica.gcs.data.mission.SavedMission
+import com.altnautica.gcs.data.mission.SurveyLatLng
+import com.altnautica.gcs.data.mission.SurveyResult
+import com.altnautica.gcs.data.mission.toMissionWaypoints
 import com.altnautica.gcs.data.telemetry.PositionState
 import com.altnautica.gcs.data.telemetry.TelemetryStore
 import com.altnautica.gcs.ui.gcs.DroneMapView
+import com.altnautica.gcs.ui.gcs.MapLatLng
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.ErrorRed
 import com.altnautica.gcs.ui.theme.NeonLime
@@ -118,6 +122,22 @@ fun MissionPlannerScreen(
     var editingIndex by remember { mutableIntStateOf(-1) }
     var showEditor by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showSurveySheet by remember { mutableStateOf(false) }
+    var surveyPreviewPolyline by remember { mutableStateOf<List<MapLatLng>>(emptyList()) }
+
+    // Demo polygon for survey (4 corners around current drone position).
+    // In production, this would come from user-drawn polygon on the map.
+    val surveyPolygon = remember(position) {
+        val lat = if (position.lat != 0.0) position.lat else 12.9716
+        val lon = if (position.lon != 0.0) position.lon else 77.5946
+        val offset = 0.002 // roughly 200m
+        listOf(
+            SurveyLatLng(lat - offset, lon - offset),
+            SurveyLatLng(lat - offset, lon + offset),
+            SurveyLatLng(lat + offset, lon + offset),
+            SurveyLatLng(lat + offset, lon - offset),
+        )
+    }
 
     Row(modifier = Modifier.fillMaxSize()) {
         // Left: Map view (60%)
@@ -130,6 +150,7 @@ fun MissionPlannerScreen(
                 dronePosition = position,
                 homePosition = homePosition,
                 useMapbox = true,
+                overlayPolyline = surveyPreviewPolyline,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -179,7 +200,9 @@ fun MissionPlannerScreen(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                TemplateButton("Survey", Icons.Filled.GridView, Modifier.weight(1f))
+                TemplateButton("Survey", Icons.Filled.GridView, Modifier.weight(1f)) {
+                    showSurveySheet = true
+                }
                 TemplateButton("Corridor", Icons.Filled.LinearScale, Modifier.weight(1f))
                 TemplateButton("Orbit", Icons.Filled.RadioButtonChecked, Modifier.weight(1f))
                 TemplateButton("Custom", Icons.Filled.MyLocation, Modifier.weight(1f))

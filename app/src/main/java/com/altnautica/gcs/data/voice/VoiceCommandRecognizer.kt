@@ -31,6 +31,7 @@ import javax.inject.Singleton
 @Singleton
 class VoiceCommandRecognizer @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val executor: VoiceCommandExecutor,
 ) {
 
     companion object {
@@ -114,6 +115,13 @@ class VoiceCommandRecognizer @Inject constructor(
                 Log.i(TAG, "Result: $text")
                 if (text.isNotEmpty()) {
                     onResult?.invoke(text)
+                    // Match against grammar and propose for confirmation
+                    val action = CommandGrammar.match(text)
+                    if (action != null) {
+                        val voiceCmd = CommandGrammar.toVoiceCommand(action)
+                        executor.propose(voiceCmd)
+                        Log.i(TAG, "Proposed voice command: ${voiceCmd.label}")
+                    }
                 }
             }
 

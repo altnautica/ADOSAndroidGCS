@@ -55,6 +55,7 @@ class TileDownloadManager @Inject constructor(
             "https://tile.openstreetmap.org/%d/%d/%d.png"
         private const val AVG_TILE_SIZE_KB = 15 // average tile size for estimation
         private const val TILE_DIR = "offline_tiles"
+        private const val MAX_CACHE_SIZE_BYTES = 500L * 1024 * 1024 // 500MB
     }
 
     private val _downloading = MutableStateFlow(false)
@@ -154,6 +155,9 @@ class TileDownloadManager @Inject constructor(
         )
         _downloadedPacks.value = _downloadedPacks.value + pack
 
+        // Evict oldest packs if total cache exceeds 500MB
+        evictOldTiles()
+
         _downloading.value = false
         Log.i(TAG, "Download complete: $downloaded tiles, ${"%.1f".format(pack.sizeMb)} MB")
     }
@@ -199,6 +203,34 @@ class TileDownloadManager @Inject constructor(
             }
         }
         _downloadedPacks.value = packs
+    }
+
+    /**
+     * Evict oldest tile packs (by last-modified time) until the total
+     * cache directory is under [MAX_CACHE_SIZE_BYTES]. Runs on IO dispatcher.
+     */
+    private suspend fun evictOldTiles() = withContext(Dispatchers.IO) {
+        val cacheDir = File(context.filesDir, TILE_DIR)
+        if (!cacheDir.exists()) return@withContext
+
+        val packs = cacheDir.listFiles()
+            ?.filter { it.isDirectory }
+            ?.sortedBy { it.lastModified() }
+            ?.toMutableList() ?: return@withContext
+
+        var totalSize = packs.sumOf { dir ->
+            dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        }
+
+        while (totalSize > MAX_CACHE_SIZE_BYTES && packs.isNotEmpty()) {
+            val oldest = packs.removeFirst()
+            val freedSize = oldest.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+            oldest.deleteRecursively()
+            totalSize -= freedSize
+            // Also remove from in-memory pack list
+            _downloadedPacks.value = _downloadedPacks.value.filter { it.id != oldest.name }
+            Log.d(TAG, "Evicted tile pack: ${oldest.name}, freed ${freedSize / 1024}KB")
+        }
     }
 
     // Slippy map tile math

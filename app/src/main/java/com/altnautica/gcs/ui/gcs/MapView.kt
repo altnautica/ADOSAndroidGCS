@@ -37,15 +37,22 @@ import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManag
  * Dual-provider drone map view. Switches between Mapbox (online, dark style)
  * and OSMDroid (offline-capable, CARTO dark tiles) based on user preference.
  */
+/**
+ * Coordinate pair for overlay polylines on the map.
+ * Kept here to avoid coupling map view to mission data types.
+ */
+data class MapLatLng(val lat: Double, val lon: Double)
+
 @Composable
 fun DroneMapView(
     dronePosition: PositionState,
     homePosition: PositionState?,
     useMapbox: Boolean = true,
+    overlayPolyline: List<MapLatLng> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     if (useMapbox) {
-        MapboxMapView(dronePosition, homePosition, modifier)
+        MapboxMapView(dronePosition, homePosition, overlayPolyline, modifier)
     } else {
         OsmMapView(dronePosition, homePosition, modifier)
     }
@@ -55,12 +62,15 @@ fun DroneMapView(
 private fun MapboxMapView(
     dronePosition: PositionState,
     homePosition: PositionState?,
+    overlayPolyline: List<MapLatLng>,
     modifier: Modifier,
 ) {
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var droneAnnotation by remember { mutableStateOf<PointAnnotation?>(null) }
     var homeAnnotation by remember { mutableStateOf<PointAnnotation?>(null) }
     var annotationManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
+    var polylineManager by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
+    var polylineAnnotation by remember { mutableStateOf<PolylineAnnotation?>(null) }
     var autoCenter by remember { mutableStateOf(true) }
 
     val droneLat = dronePosition.lat
@@ -74,6 +84,8 @@ private fun MapboxMapView(
                     mv.mapboxMap.loadStyle(Style.DARK) {
                         val am = mv.annotations.createPointAnnotationManager()
                         annotationManager = am
+                        val pm = mv.annotations.createPolylineAnnotationManager()
+                        polylineManager = pm
                     }
                 }
             },
@@ -122,6 +134,28 @@ private fun MapboxMapView(
                     } else {
                         homeAnnotation?.point = homePoint
                         am.update(homeAnnotation!!)
+                    }
+                }
+
+                // Update overlay polyline (survey preview, etc.)
+                val pm = polylineManager
+                if (pm != null) {
+                    if (overlayPolyline.size >= 2) {
+                        val points = overlayPolyline.map { Point.fromLngLat(it.lon, it.lat) }
+                        if (polylineAnnotation == null) {
+                            val options = PolylineAnnotationOptions()
+                                .withPoints(points)
+                                .withLineColor("#3A82FF")
+                                .withLineWidth(2.0)
+                                .withLineOpacity(0.8)
+                            polylineAnnotation = pm.create(options)
+                        } else {
+                            polylineAnnotation?.points = points
+                            pm.update(polylineAnnotation!!)
+                        }
+                    } else if (polylineAnnotation != null) {
+                        pm.delete(polylineAnnotation!!)
+                        polylineAnnotation = null
                     }
                 }
             },
