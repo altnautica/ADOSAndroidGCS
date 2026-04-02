@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +58,7 @@ private val modeCards = listOf(
     ModeCard("map", "MAP", "Full-screen map with drone tracking", Icons.Filled.Map, SuccessGreen),
     ModeCard("plan", "PLAN", "Mission planning and waypoints", Icons.Filled.Assignment, WarningAmber),
     ModeCard("agriculture", "AGRICULTURE", "Spray missions and field mapping", Icons.Filled.Agriculture, NeonLime),
+    ModeCard("configure", "CONFIGURE", "FC parameters and calibration", Icons.Filled.Tune, ElectricBlue),
 )
 
 @Composable

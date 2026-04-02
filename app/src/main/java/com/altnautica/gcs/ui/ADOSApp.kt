@@ -52,5 +52,8 @@ fun ADOSApp() {
         composable(NavRoutes.TileDownload.route) {
             TileDownloadScreen()
         }
+        composable(NavRoutes.Configure.route) {
+            ConfigureScreen(onBack = { navController.navigateUp() })
+        }
     }
 }
