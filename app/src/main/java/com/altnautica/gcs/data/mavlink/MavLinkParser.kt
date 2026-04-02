@@ -20,9 +20,11 @@ import com.altnautica.gcs.data.telemetry.VfrState
 import com.altnautica.gcs.data.telemetry.VibrationState
 import com.altnautica.gcs.data.telemetry.WindState
 import io.dronefleet.mavlink.MavlinkMessage
+import com.altnautica.gcs.data.telemetry.FenceStatusState
 import io.dronefleet.mavlink.ardupilotmega.EkfStatusReport
 import io.dronefleet.mavlink.ardupilotmega.Wind
 import io.dronefleet.mavlink.common.Attitude
+import io.dronefleet.mavlink.common.FenceStatus
 import io.dronefleet.mavlink.common.BatteryStatus
 import io.dronefleet.mavlink.common.CommandAck
 import io.dronefleet.mavlink.common.GlobalPositionInt
@@ -85,6 +87,7 @@ class MavLinkParser @Inject constructor(
                 is EkfStatusReport -> handleEkfStatus(payload)
                 is RcChannels -> handleRcChannels(payload)
                 is Wind -> handleWind(payload)
+                is FenceStatus -> handleFenceStatus(payload)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to handle message: ${payload::class.simpleName}", e)
@@ -352,6 +355,17 @@ class MavLinkParser @Inject constructor(
                 direction = wind.direction(),
                 speed = wind.speed(),
                 speedZ = wind.speedZ()
+            )
+        )
+    }
+
+    private fun handleFenceStatus(fence: FenceStatus) {
+        telemetryStore.updateFenceStatus(
+            FenceStatusState(
+                breachStatus = fence.breachStatus(),
+                breachCount = fence.breachCount(),
+                breachType = fence.breachType().value(),
+                breachTime = fence.breachTime().toLong()
             )
         )
     }

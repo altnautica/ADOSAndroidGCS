@@ -173,6 +173,15 @@ data class MagCalReportState(
     val isFailed: Boolean get() = calStatus == 5
 }
 
+data class FenceStatusState(
+    val breachStatus: Int = 0, // 0 = no breach, 1 = breached
+    val breachCount: Int = 0,
+    val breachType: Int = 0, // FenceBreach enum value
+    val breachTime: Long = 0,
+) {
+    val isBreached: Boolean get() = breachStatus != 0
+}
+
 enum class FlightMode(val modeNumber: Int, val label: String) {
     STABILIZE(0, "Stabilize"),
     ACRO(1, "Acro"),

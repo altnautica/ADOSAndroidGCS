@@ -5,7 +5,6 @@ import com.altnautica.gcs.data.telemetry.TelemetryStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,8 +52,8 @@ class FlightSessionTracker @Inject constructor(
 
     fun initialize() {
         scope.launch {
+            // StateFlow already has distinct-until-changed semantics
             telemetryStore.armed
-                .distinctUntilChanged()
                 .collect { armed ->
                     if (armed) {
                         onArmed()

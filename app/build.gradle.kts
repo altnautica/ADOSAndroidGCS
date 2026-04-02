@@ -119,6 +119,9 @@ dependencies {
     // MQTT (HiveMQ client for cloud relay Mode C)
     implementation("com.hivemq:hivemq-mqtt-client:1.3.3")
 
+    // USB Serial (Mode D: direct FC connection via USB OTG)
+    implementation("com.github.mik3y:usb-serial-for-android:3.8.0")
+
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 

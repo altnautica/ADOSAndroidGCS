@@ -76,6 +76,9 @@ class TelemetryStore @Inject constructor() {
     private val _wind = MutableStateFlow(WindState())
     val wind: StateFlow<WindState> = _wind.asStateFlow()
 
+    private val _fenceStatus = MutableStateFlow(FenceStatusState())
+    val fenceStatus: StateFlow<FenceStatusState> = _fenceStatus.asStateFlow()
+
     private val _magCalProgress = MutableStateFlow<MagCalProgressState?>(null)
     val magCalProgress: StateFlow<MagCalProgressState?> = _magCalProgress.asStateFlow()
 
@@ -176,6 +179,10 @@ class TelemetryStore @Inject constructor() {
         _wind.value = wind
     }
 
+    fun updateFenceStatus(fence: FenceStatusState) {
+        _fenceStatus.value = fence
+    }
+
     fun updateMagCalProgress(progress: MagCalProgressState) {
         _magCalProgress.value = progress
     }
@@ -212,6 +219,7 @@ class TelemetryStore @Inject constructor() {
         _ekf.value = EkfState()
         _rcChannels.value = RcChannelsState()
         _wind.value = WindState()
+        _fenceStatus.value = FenceStatusState()
         _magCalProgress.value = null
         _magCalReport.value = null
     }

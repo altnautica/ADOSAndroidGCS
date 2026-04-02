@@ -6,13 +6,15 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.altnautica.gcs.data.serial.UsbSerialManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ModeDetector @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val usbSerialManager: UsbSerialManager,
 ) {
 
     companion object {
@@ -53,6 +55,29 @@ class ModeDetector @Inject constructor(
 
         Log.d(TAG, "No video connection available")
         return VideoMode.NoConnection
+    }
+
+    /**
+     * Detect the full connection mode, including Mode D (USB serial to FC).
+     * Mode D provides MAVLink telemetry only, no video stream.
+     */
+    fun detectConnectionMode(): ConnectionMode {
+        val videoMode = detect()
+
+        // If no video mode is available, check for USB serial FC (Mode D)
+        if (videoMode is VideoMode.NoConnection) {
+            if (usbSerialManager.isConnected.value) {
+                val deviceName = usbSerialManager.connectedDevice.value ?: "USB FC"
+                Log.d(TAG, "Mode D: USB serial FC connected ($deviceName)")
+                return ConnectionMode.DirectSerial(deviceName)
+            }
+            if (usbSerialManager.hasConnectedFc()) {
+                Log.d(TAG, "Mode D: USB serial FC detected (not connected yet)")
+                return ConnectionMode.DirectSerial("FC detected")
+            }
+        }
+
+        return ConnectionMode.WebSocket(videoMode)
     }
 
     private fun isUsbAdapterConnected(): Boolean {
