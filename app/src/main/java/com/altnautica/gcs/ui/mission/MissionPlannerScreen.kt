@@ -346,6 +346,28 @@ fun MissionPlannerScreen(
             containerColor = MaterialTheme.colorScheme.surface,
         )
     }
+
+    // Survey config bottom sheet
+    if (showSurveySheet) {
+        SurveyConfigSheet(
+            polygon = surveyPolygon,
+            onPreview = { result ->
+                surveyPreviewPolyline = result.waypoints.map { MapLatLng(it.lat, it.lon) }
+            },
+            onUpload = { result ->
+                // Replace manual waypoints with generated survey waypoints
+                waypoints.clear()
+                waypoints.addAll(result.toMissionWaypoints())
+                surveyPreviewPolyline = emptyList()
+                showSurveySheet = false
+                viewModel.uploadMission(waypoints.toList())
+            },
+            onDismiss = {
+                surveyPreviewPolyline = emptyList()
+                showSurveySheet = false
+            },
+        )
+    }
 }
 
 @Composable
@@ -416,9 +438,10 @@ private fun TemplateButton(
     label: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit = {},
 ) {
     OutlinedButton(
-        onClick = { /* Template generation placeholder */ },
+        onClick = onClick,
         modifier = modifier,
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
