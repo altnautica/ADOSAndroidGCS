@@ -5,6 +5,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.altnautica.gcs.ui.agriculture.AgricultureScreen
+import com.altnautica.gcs.ui.configure.ConfigureScreen
 import com.altnautica.gcs.ui.gallery.VideoGalleryScreen
 import com.altnautica.gcs.ui.gcs.MapScreen
 import com.altnautica.gcs.ui.home.HomeScreen

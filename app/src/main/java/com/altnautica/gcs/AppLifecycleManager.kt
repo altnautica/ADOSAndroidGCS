@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.altnautica.gcs.data.alerts.AlertEngine
+import com.altnautica.gcs.data.alerts.TtsManager
 import com.altnautica.gcs.data.cloud.CloudVideoClient
 import com.altnautica.gcs.data.cloud.MqttTelemetryClient
 import com.altnautica.gcs.data.mavlink.MavLinkRepository
@@ -28,6 +30,8 @@ class AppLifecycleManager @Inject constructor(
     private val mqttTelemetryClient: MqttTelemetryClient,
     private val cloudVideoClient: CloudVideoClient,
     private val mavLinkWiring: MavLinkWiring,
+    private val alertEngine: AlertEngine,
+    private val ttsManager: TtsManager,
 ) : DefaultLifecycleObserver {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -35,6 +39,8 @@ class AppLifecycleManager @Inject constructor(
     fun initialize() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         mavLinkWiring.initialize()
+        ttsManager.initialize()
+        alertEngine.start()
         scope.launch {
             val mode = modeDetector.detect()
             when (mode) {
@@ -72,6 +78,8 @@ class AppLifecycleManager @Inject constructor(
     }
 
     fun shutdown() {
+        alertEngine.shutdown()
+        ttsManager.shutdown()
         scope.cancel()
         videoStreamManager.stop()
         mavLinkRepository.disconnect()

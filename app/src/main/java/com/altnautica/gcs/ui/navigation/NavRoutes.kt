@@ -9,4 +9,5 @@ sealed class NavRoutes(val route: String) {
     data object Settings : NavRoutes("settings")
     data object Gallery : NavRoutes("gallery")
     data object TileDownload : NavRoutes("tile_download")
+    data object Configure : NavRoutes("configure")
 }

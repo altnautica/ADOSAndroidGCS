@@ -23,6 +23,9 @@
     <!-- Notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Haptic feedback for alerts -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:name=".ADOSApplication"
         android:allowBackup="false"
