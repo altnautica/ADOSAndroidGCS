@@ -27,10 +27,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altnautica.gcs.R
 import com.altnautica.gcs.ui.theme.ErrorRed
 import com.altnautica.gcs.ui.theme.OnSurfaceMedium
 import com.altnautica.gcs.ui.theme.SuccessGreen
@@ -76,7 +78,7 @@ fun FloatingControls(
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.size(72.dp)) {
                 Text(
-                    text = if (armed) "DISARM" else "ARM",
+                    text = if (armed) stringResource(R.string.gcs_disarm) else stringResource(R.string.gcs_arm),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,

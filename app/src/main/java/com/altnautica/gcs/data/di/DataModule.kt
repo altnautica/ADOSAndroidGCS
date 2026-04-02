@@ -46,6 +46,7 @@ object DataModule {
     @Singleton
     fun provideGroundStationApi(client: OkHttpClient): GroundStationApi =
         Retrofit.Builder()
+            // TODO: Read ground station base URL from DataStore preferences to support custom IPs
             .baseUrl("http://192.168.4.1:8080/")
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())

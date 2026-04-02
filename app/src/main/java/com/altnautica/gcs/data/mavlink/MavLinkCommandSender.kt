@@ -7,6 +7,7 @@ import io.dronefleet.mavlink.common.CommandLong
 import io.dronefleet.mavlink.common.MavCmd
 import io.dronefleet.mavlink.common.MavMode
 import io.dronefleet.mavlink.common.SetMode
+import io.dronefleet.mavlink.util.EnumValue
 import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -71,6 +72,163 @@ class MavLinkCommandSender @Inject constructor(
         )
     }
 
+    suspend fun sendTakeoff(altitude: Float) {
+        Log.d(TAG, "Sending TAKEOFF alt=$altitude")
+        sendCommandLong(
+            command = MavCmd.MAV_CMD_NAV_TAKEOFF,
+            param7 = altitude // altitude in meters
+        )
+    }
+
+    suspend fun sendLand() {
+        Log.d(TAG, "Sending LAND")
+        sendCommandLong(
+            command = MavCmd.MAV_CMD_NAV_LAND
+        )
+    }
+
+    suspend fun sendPauseMission() {
+        Log.d(TAG, "Sending PAUSE")
+        sendCommandLong(
+            command = MavCmd.MAV_CMD_DO_PAUSE_CONTINUE,
+            param1 = 0f // 0 = pause
+        )
+    }
+
+    suspend fun sendResumeMission() {
+        Log.d(TAG, "Sending RESUME")
+        sendCommandLong(
+            command = MavCmd.MAV_CMD_DO_PAUSE_CONTINUE,
+            param1 = 1f // 1 = resume
+        )
+    }
+
+    suspend fun sendOrbit(radius: Float, velocity: Float, lat: Double, lon: Double, alt: Float) {
+        Log.d(TAG, "Sending ORBIT r=$radius v=$velocity")
+        // MAV_CMD_DO_ORBIT = 34, may not be in dronefleet enum
+        sendCommandLongRaw(
+            commandId = 34,
+            param1 = radius,
+            param2 = velocity,
+            param5 = lat.toFloat(),
+            param6 = lon.toFloat(),
+            param7 = alt
+        )
+    }
+
+    suspend fun sendCalibrationAccel() {
+        Log.d(TAG, "Sending ACCEL CAL")
+        sendCommandLong(
+            command = MavCmd.MAV_CMD_PREFLIGHT_CALIBRATION,
+            param5 = 1f // accel cal
+        )
+    }
+
+    suspend fun sendCalibrationLevel() {
+        Log.d(TAG, "Sending LEVEL CAL")
+        sendCommandLong(
+            command = MavCmd.MAV_CMD_PREFLIGHT_CALIBRATION,
+            param5 = 2f // simple accel cal (level)
+        )
+    }
+
+    suspend fun sendStartMagCal() {
+        Log.d(TAG, "Sending MAG CAL START")
+        // MAV_CMD_DO_START_MAG_CAL = 42424, ArduPilot-specific
+        sendCommandLongRaw(
+            commandId = 42424,
+            param1 = 0f, // mag_mask (0 = all)
+            param2 = 1f, // retry on failure
+            param3 = 1f, // autosave
+            param4 = 0f  // delay
+        )
+    }
+
+    suspend fun sendSetRoi(lat: Double, lon: Double, alt: Float) {
+        Log.d(TAG, "Sending SET ROI lat=$lat lon=$lon alt=$alt")
+        // MAV_CMD_DO_SET_ROI_LOCATION = 195
+        sendCommandLongRaw(
+            commandId = 195,
+            param5 = lat.toFloat(),
+            param6 = lon.toFloat(),
+            param7 = alt
+        )
+    }
+
+    suspend fun sendClearRoi() {
+        Log.d(TAG, "Sending CLEAR ROI")
+        // MAV_CMD_DO_SET_ROI_NONE = 197
+        sendCommandLongRaw(commandId = 197)
+    }
+
+    suspend fun sendCameraTrigger() {
+        Log.d(TAG, "Sending CAMERA TRIGGER")
+        sendCommandLong(
+            command = MavCmd.MAV_CMD_DO_DIGICAM_CONTROL,
+            param5 = 1f // shoot
+        )
+    }
+
+    suspend fun sendGimbalPitchYaw(pitch: Float, yaw: Float) {
+        Log.d(TAG, "Sending GIMBAL pitch=$pitch yaw=$yaw")
+        // MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW = 1000
+        sendCommandLongRaw(
+            commandId = 1000,
+            param1 = pitch,
+            param2 = yaw,
+            param3 = Float.NaN, // pitch rate (NaN = use angle)
+            param4 = Float.NaN, // yaw rate
+            param5 = 0f // flags
+        )
+    }
+
+    suspend fun sendParamRequestList() {
+        Log.d(TAG, "Sending PARAM_REQUEST_LIST")
+        val msg = io.dronefleet.mavlink.common.ParamRequestList.builder()
+            .targetSystem(TARGET_SYS_ID)
+            .targetComponent(TARGET_COMP_ID)
+            .build()
+        sendMessage(msg)
+    }
+
+    suspend fun sendParamSet(paramId: String, value: Float, type: Int) {
+        Log.d(TAG, "Sending PARAM_SET $paramId=$value type=$type")
+        val msg = io.dronefleet.mavlink.common.ParamSet.builder()
+            .targetSystem(TARGET_SYS_ID)
+            .targetComponent(TARGET_COMP_ID)
+            .paramId(paramId)
+            .paramValue(value)
+            .paramType(
+                EnumValue.of(io.dronefleet.mavlink.common.MavParamType.entry(type))
+            )
+            .build()
+        sendMessage(msg)
+    }
+
+    suspend fun sendManualControl(x: Int, y: Int, z: Int, r: Int, buttons: Int) {
+        val msg = io.dronefleet.mavlink.common.ManualControl.builder()
+            .target(TARGET_SYS_ID)
+            .x(x)
+            .y(y)
+            .z(z)
+            .r(r)
+            .buttons(buttons)
+            .build()
+        sendMessage(msg)
+    }
+
+    suspend fun sendHeartbeat() {
+        val msg = io.dronefleet.mavlink.minimal.Heartbeat.builder()
+            .type(io.dronefleet.mavlink.minimal.MavType.MAV_TYPE_GCS)
+            .autopilot(io.dronefleet.mavlink.minimal.MavAutopilot.MAV_AUTOPILOT_INVALID)
+            .baseMode(io.dronefleet.mavlink.minimal.MavModeFlag.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)
+            .customMode(0)
+            .systemStatus(io.dronefleet.mavlink.minimal.MavState.MAV_STATE_ACTIVE)
+            .mavlinkVersion(3)
+            .build()
+        sendMessage(msg)
+    }
+
     private suspend fun sendCommandLong(
         command: MavCmd,
         param1: Float = 0f,
@@ -85,6 +243,37 @@ class MavLinkCommandSender @Inject constructor(
             .targetSystem(TARGET_SYS_ID)
             .targetComponent(TARGET_COMP_ID)
             .command(command)
+            .confirmation(0)
+            .param1(param1)
+            .param2(param2)
+            .param3(param3)
+            .param4(param4)
+            .param5(param5)
+            .param6(param6)
+            .param7(param7)
+            .build()
+        sendMessage(msg)
+    }
+
+    /**
+     * Send a COMMAND_LONG using a raw integer command ID.
+     * Used for commands that may not exist in the dronefleet MavCmd enum
+     * (ArduPilot-specific or newer MAVLink extensions).
+     */
+    private suspend fun sendCommandLongRaw(
+        commandId: Int,
+        param1: Float = 0f,
+        param2: Float = 0f,
+        param3: Float = 0f,
+        param4: Float = 0f,
+        param5: Float = 0f,
+        param6: Float = 0f,
+        param7: Float = 0f
+    ) {
+        val msg = CommandLong.builder()
+            .targetSystem(TARGET_SYS_ID)
+            .targetComponent(TARGET_COMP_ID)
+            .command(EnumValue.of(commandId))
             .confirmation(0)
             .param1(param1)
             .param2(param2)

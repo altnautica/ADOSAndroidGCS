@@ -8,6 +8,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.altnautica.gcs.data.cloud.CloudVideoClient
 import com.altnautica.gcs.data.cloud.MqttTelemetryClient
 import com.altnautica.gcs.data.mavlink.MavLinkRepository
+import com.altnautica.gcs.data.mavlink.MavLinkWiring
 import com.altnautica.gcs.data.video.ModeDetector
 import com.altnautica.gcs.data.video.VideoMode
 import com.altnautica.gcs.data.video.VideoStreamManager
@@ -26,12 +27,14 @@ class AppLifecycleManager @Inject constructor(
     private val groundStationRepository: GroundStationRepository,
     private val mqttTelemetryClient: MqttTelemetryClient,
     private val cloudVideoClient: CloudVideoClient,
+    private val mavLinkWiring: MavLinkWiring,
 ) : DefaultLifecycleObserver {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     fun initialize() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        mavLinkWiring.initialize()
         scope.launch {
             val mode = modeDetector.detect()
             when (mode) {
@@ -76,5 +79,6 @@ class AppLifecycleManager @Inject constructor(
         groundStationRepository.stopPolling()
         mqttTelemetryClient.disconnect()
         cloudVideoClient.disconnect()
+        mavLinkWiring.shutdown()
     }
 }
