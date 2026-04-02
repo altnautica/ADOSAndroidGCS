@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +60,7 @@ private val modeCards = listOf(
     ModeCard("plan", "PLAN", "Mission planning and waypoints", Icons.Filled.Assignment, WarningAmber),
     ModeCard("agriculture", "AGRICULTURE", "Spray missions and field mapping", Icons.Filled.Agriculture, NeonLime),
     ModeCard("configure", "CONFIGURE", "FC parameters and calibration", Icons.Filled.Tune, ElectricBlue),
+    ModeCard("logs", "LOGS", "Flight history and tlog recordings", Icons.Filled.History, OnSurfaceMedium),
 )
 
 @Composable
@@ -150,8 +152,11 @@ fun HomeScreen(
                     onClick = { onNavigate(modeCards[4].route) },
                     modifier = Modifier.weight(1f),
                 )
-                // Empty spacer to keep card half-width
-                Spacer(modifier = Modifier.weight(1f))
+                ModeCardItem(
+                    card = modeCards[5],
+                    onClick = { onNavigate(modeCards[5].route) },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
 

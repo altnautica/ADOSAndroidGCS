@@ -10,4 +10,8 @@ sealed class NavRoutes(val route: String) {
     data object Gallery : NavRoutes("gallery")
     data object TileDownload : NavRoutes("tile_download")
     data object Configure : NavRoutes("configure")
+    data object Logs : NavRoutes("logs")
+    data object FlightDetail : NavRoutes("flight_detail/{sessionId}") {
+        fun createRoute(sessionId: Long) = "flight_detail/$sessionId"
+    }
 }

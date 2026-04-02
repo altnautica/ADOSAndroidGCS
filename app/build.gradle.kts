@@ -125,6 +125,11 @@ dependencies {
     // DataStore (preferences)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // Room (flight log database)
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+
     // Unit tests
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.12")

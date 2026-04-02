@@ -1,6 +1,7 @@
 package com.altnautica.gcs.data.mavlink
 
 import android.util.Log
+import com.altnautica.gcs.data.flightlog.TlogRecorder
 import com.altnautica.gcs.data.telemetry.ConnectionState
 import com.altnautica.gcs.data.telemetry.ConnectionStatus
 import com.altnautica.gcs.data.telemetry.TelemetryStore
@@ -34,7 +35,8 @@ import kotlin.math.min
 class MavLinkRepository @Inject constructor(
     private val httpClient: HttpClient,
     private val parser: MavLinkParser,
-    private val telemetryStore: TelemetryStore
+    private val telemetryStore: TelemetryStore,
+    private val tlogRecorder: TlogRecorder,
 ) {
 
     companion object {
@@ -135,6 +137,9 @@ class MavLinkRepository @Inject constructor(
     }
 
     private fun processFrame(bytes: ByteArray) {
+        // Record raw bytes to tlog before parsing
+        tlogRecorder.recordFrame(bytes)
+
         try {
             val inputStream = ByteArrayInputStream(bytes)
             val connection = MavlinkConnection.create(

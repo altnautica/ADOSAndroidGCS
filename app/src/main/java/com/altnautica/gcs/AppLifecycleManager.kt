@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.altnautica.gcs.data.flightlog.FlightSessionTracker
 import com.altnautica.gcs.data.alerts.AlertEngine
 import com.altnautica.gcs.data.alerts.TtsManager
 import com.altnautica.gcs.data.cloud.CloudVideoClient
@@ -32,6 +33,7 @@ class AppLifecycleManager @Inject constructor(
     private val mavLinkWiring: MavLinkWiring,
     private val alertEngine: AlertEngine,
     private val ttsManager: TtsManager,
+    private val flightSessionTracker: FlightSessionTracker,
 ) : DefaultLifecycleObserver {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -41,6 +43,7 @@ class AppLifecycleManager @Inject constructor(
         mavLinkWiring.initialize()
         ttsManager.initialize()
         alertEngine.start()
+        flightSessionTracker.initialize()
         scope.launch {
             val mode = modeDetector.detect()
             when (mode) {

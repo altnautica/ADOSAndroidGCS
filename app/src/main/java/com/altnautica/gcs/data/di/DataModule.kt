@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.Room
+import com.altnautica.gcs.data.flightlog.FlightDatabase
+import com.altnautica.gcs.data.flightlog.FlightSessionDao
 import com.altnautica.gcs.data.groundstation.GroundStationApi
 import dagger.Module
 import dagger.Provides
@@ -52,6 +55,14 @@ object DataModule {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(GroundStationApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideFlightDatabase(@ApplicationContext context: Context): FlightDatabase =
+        Room.databaseBuilder(context, FlightDatabase::class.java, "ados_flights.db").build()
+
+    @Provides
+    fun provideFlightSessionDao(db: FlightDatabase): FlightSessionDao = db.flightSessionDao()
 
     @Provides
     @Singleton

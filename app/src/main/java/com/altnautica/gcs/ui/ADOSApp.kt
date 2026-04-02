@@ -1,11 +1,15 @@
 package com.altnautica.gcs.ui
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.altnautica.gcs.ui.agriculture.AgricultureScreen
 import com.altnautica.gcs.ui.configure.ConfigureScreen
+import com.altnautica.gcs.ui.flightlog.FlightDetailScreen
+import com.altnautica.gcs.ui.flightlog.FlightHistoryScreen
 import com.altnautica.gcs.ui.gallery.VideoGalleryScreen
 import com.altnautica.gcs.ui.gcs.MapScreen
 import com.altnautica.gcs.ui.home.HomeScreen
@@ -54,6 +58,24 @@ fun ADOSApp() {
         }
         composable(NavRoutes.Configure.route) {
             ConfigureScreen(onBack = { navController.navigateUp() })
+        }
+        composable(NavRoutes.Logs.route) {
+            FlightHistoryScreen(
+                onBack = { navController.navigateUp() },
+                onSessionClick = { sessionId ->
+                    navController.navigate(NavRoutes.FlightDetail.createRoute(sessionId))
+                },
+            )
+        }
+        composable(
+            route = NavRoutes.FlightDetail.route,
+            arguments = listOf(navArgument("sessionId") { type = NavType.LongType }),
+        ) { backStackEntry ->
+            val sessionId = backStackEntry.arguments?.getLong("sessionId") ?: 0L
+            FlightDetailScreen(
+                sessionId = sessionId,
+                onBack = { navController.navigateUp() },
+            )
         }
     }
 }

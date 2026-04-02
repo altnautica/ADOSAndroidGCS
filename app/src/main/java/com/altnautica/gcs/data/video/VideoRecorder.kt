@@ -5,6 +5,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.os.StatFs
 import android.util.Log
 import android.view.Surface
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,6 +46,7 @@ class VideoRecorder @Inject constructor(
         private const val BITRATE = 4_000_000 // 4 Mbps
         private const val I_FRAME_INTERVAL = 2 // seconds
         private const val CODEC_TIMEOUT_US = 10_000L
+        private const val MIN_FREE_SPACE_BYTES = 2L * 1024 * 1024 * 1024 // 2 GB
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -57,6 +59,9 @@ class VideoRecorder @Inject constructor(
 
     private val _recordingFileSize = MutableStateFlow(0L)
     val recordingFileSize: StateFlow<Long> = _recordingFileSize.asStateFlow()
+
+    private val _lowStorageWarning = MutableStateFlow(false)
+    val lowStorageWarning: StateFlow<Boolean> = _lowStorageWarning.asStateFlow()
 
     private var encoder: MediaCodec? = null
     private var muxer: MediaMuxer? = null
