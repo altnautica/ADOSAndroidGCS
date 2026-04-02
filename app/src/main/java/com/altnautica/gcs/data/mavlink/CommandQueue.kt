@@ -8,6 +8,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -94,55 +95,28 @@ class CommandQueue @Inject constructor() {
         timeoutMs: Long = DEFAULT_TIMEOUT_MS,
         sendFn: suspend () -> Unit
     ): CommandResult {
-        return sendInternal(commandId, 0, maxRetries, timeoutMs, sendFn)
-    }
+        repeat(maxRetries) { attempt ->
+            val deferred = CompletableDeferred<CommandResult>()
+            pending[commandId] = PendingCommand(
+                commandId = commandId,
+                deferred = deferred,
+                sendFn = sendFn
+            )
 
-    private suspend fun sendInternal(
-        commandId: Int,
-        retryCount: Int,
-        maxRetries: Int,
-        timeoutMs: Long,
-        sendFn: suspend () -> Unit
-    ): CommandResult {
-        val deferred = CompletableDeferred<CommandResult>()
-        val cmd = PendingCommand(
-            commandId = commandId,
-            deferred = deferred,
-            retryCount = retryCount,
-            maxRetries = maxRetries,
-            timeoutMs = timeoutMs,
-            sendFn = sendFn
-        )
-        pending[commandId] = cmd
-
-        try {
-            sendFn()
-            Log.d(TAG, "Sent command $commandId (attempt ${retryCount + 1}/${maxRetries + 1})")
-        } catch (e: Exception) {
-            pending.remove(commandId)
-            return CommandResult(false, message = "Send failed: ${e.message}")
-        }
-
-        // Start timeout watcher
-        val timeoutJob = scope.launch {
-            delay(timeoutMs)
-            if (pending.remove(commandId) != null) {
-                if (retryCount < maxRetries) {
-                    Log.d(TAG, "Timeout for command $commandId, retrying (${retryCount + 1}/$maxRetries)")
-                    val retryResult = sendInternal(commandId, retryCount + 1, maxRetries, timeoutMs, sendFn)
-                    deferred.complete(retryResult)
-                } else {
-                    Log.w(TAG, "Command $commandId timed out after ${maxRetries + 1} attempts")
-                    deferred.complete(
-                        CommandResult(false, message = "Timeout after ${maxRetries + 1} attempts")
-                    )
-                }
+            try {
+                sendFn()
+                Log.d(TAG, "Sent command $commandId (attempt ${attempt + 1}/$maxRetries)")
+            } catch (e: Exception) {
+                pending.remove(commandId)
+                return CommandResult(false, message = "Send failed: ${e.message}")
             }
-        }
 
-        val result = deferred.await()
-        timeoutJob.cancel()
-        return result
+            val result = withTimeoutOrNull(timeoutMs) { deferred.await() }
+            if (result != null) return result
+            pending.remove(commandId)
+            Log.w(TAG, "Command $commandId timeout (attempt ${attempt + 1}/$maxRetries)")
+        }
+        return CommandResult(false, message = "Timeout after $maxRetries retries")
     }
 
     /**

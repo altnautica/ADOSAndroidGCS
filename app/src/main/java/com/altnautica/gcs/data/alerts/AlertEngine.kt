@@ -124,11 +124,14 @@ class AlertEngine @Inject constructor(
 
     private fun watchGps() {
         scope.launch {
+            var hadGoodFix = false
             telemetryStore.gps
                 .map { it.fixType to it.satellites }
                 .distinctUntilChanged()
                 .collect { (fixType, sats) ->
-                    if (fixType in 1..2) {
+                    if (fixType >= 3) {
+                        hadGoodFix = true
+                    } else if (fixType < 3 && hadGoodFix) {
                         fire(Alert.GpsLost(sats))
                     }
                 }

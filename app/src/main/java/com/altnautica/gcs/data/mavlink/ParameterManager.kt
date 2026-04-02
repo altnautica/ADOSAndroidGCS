@@ -61,6 +61,7 @@ class ParameterManager @Inject constructor(
         IDLE,
         DOWNLOADING,
         COMPLETE,
+        PARTIAL,
         FAILED
     }
 
@@ -190,7 +191,7 @@ class ParameterManager @Inject constructor(
             _downloadStatus.value = DownloadStatus.COMPLETE
             Log.i(TAG, "Parameter download complete after retry: ${paramCache.size}/$expectedCount")
         } else {
-            _downloadStatus.value = DownloadStatus.COMPLETE // Accept partial
+            _downloadStatus.value = DownloadStatus.PARTIAL
             Log.w(TAG, "Partial download: ${paramCache.size}/$expectedCount params (${expectedCount - paramCache.size} missing)")
         }
     }

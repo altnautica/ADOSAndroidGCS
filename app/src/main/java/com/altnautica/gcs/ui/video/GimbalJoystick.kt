@@ -55,9 +55,9 @@ fun GimbalJoystick(
     )
 
     // Send gimbal commands at 10Hz while the joystick is active
-    LaunchedEffect(isDragging, offsetX, offsetY) {
+    LaunchedEffect(isDragging) {
         if (!enabled) return@LaunchedEffect
-        while (isDragging || offsetX != 0f || offsetY != 0f) {
+        while (isDragging) {
             val normalizedX = offsetX / 150f // Normalize to roughly -1..1
             val normalizedY = offsetY / 150f
             val pitch = -normalizedY * 45f * sensitivity // Up = negative Y = pitch up

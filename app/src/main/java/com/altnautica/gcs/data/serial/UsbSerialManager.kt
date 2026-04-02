@@ -281,6 +281,7 @@ class UsbSerialManager @Inject constructor(
     private fun processSerialFrame(bytes: ByteArray, sendStream: ByteArrayOutputStream) {
         try {
             val inputStream = ByteArrayInputStream(bytes)
+            sendStream.reset()
             val connection = MavlinkConnection.create(inputStream, sendStream)
 
             var message = connection.next()
@@ -291,6 +292,12 @@ class UsbSerialManager @Inject constructor(
                 } catch (_: Exception) {
                     null
                 }
+            }
+
+            // Write any outbound bytes generated during parsing
+            val outBytes = sendStream.toByteArray()
+            if (outBytes.isNotEmpty()) {
+                serialPort?.write(outBytes, READ_TIMEOUT_MS)
             }
         } catch (e: Exception) {
             // Partial frames are normal with serial; will be completed on next read

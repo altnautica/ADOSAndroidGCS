@@ -2,6 +2,7 @@ package com.altnautica.gcs.data.flightlog
 
 import android.util.Log
 import com.altnautica.gcs.data.telemetry.TelemetryStore
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -51,7 +52,7 @@ class FlightSessionTracker @Inject constructor(
     private var isTracking = false
 
     fun initialize() {
-        scope.launch {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             // StateFlow already has distinct-until-changed semantics
             telemetryStore.armed
                 .collect { armed ->
