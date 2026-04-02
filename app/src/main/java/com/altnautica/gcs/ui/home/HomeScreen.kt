@@ -98,7 +98,7 @@ fun HomeScreen(
             }
         }
 
-        // 2x2 mode grid
+        // Mode grid
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -138,6 +138,20 @@ fun HomeScreen(
                     onClick = { onNavigate(modeCards[3].route) },
                     modifier = Modifier.weight(1f),
                 )
+            }
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ModeCardItem(
+                    card = modeCards[4],
+                    onClick = { onNavigate(modeCards[4].route) },
+                    modifier = Modifier.weight(1f),
+                )
+                // Empty spacer to keep card half-width
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
 

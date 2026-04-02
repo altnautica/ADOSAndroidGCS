@@ -1,6 +1,5 @@
 package com.altnautica.gcs.ui.configure
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.OnSurfaceMedium
-import com.altnautica.gcs.ui.theme.SurfaceVariant
 
 private data class ConfigTab(
     val title: String,
@@ -134,22 +132,8 @@ fun ConfigureScreen(
                     viewModel = viewModel,
                     snackbarHostState = snackbarHostState,
                 )
-                1 -> CalibrationPlaceholder()
+                1 -> CalibrationScreen()
             }
         }
-    }
-}
-
-@Composable
-private fun CalibrationPlaceholder() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "Calibration coming soon",
-            style = MaterialTheme.typography.bodyLarge,
-            color = OnSurfaceMedium,
-        )
     }
 }
