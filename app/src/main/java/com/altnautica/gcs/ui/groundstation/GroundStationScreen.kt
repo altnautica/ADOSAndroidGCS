@@ -121,6 +121,14 @@ fun GroundStationScreen(viewModel: GroundStationViewModel = hiltViewModel()) {
             StatCard("Bitrate", "%.1f Mbps".format(stats.bitrateKbps / 1000f), Modifier.weight(1f))
         }
 
+        Spacer(Modifier.height(12.dp))
+
+        // Packet loss graph
+        PacketLossGraph(
+            currentPacketLoss = stats.packetLossPercent,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         Spacer(Modifier.height(16.dp))
 
         // Recording controls

@@ -14,6 +14,7 @@ sealed class GcsAction {
     data object Disarm : GcsAction()
     data object RTL : GcsAction()
     data object Land : GcsAction()
+    data class Takeoff(val altitude: Float = 10f) : GcsAction()
     data class SetMode(val mode: FlightMode) : GcsAction()
 }
 
@@ -24,6 +25,8 @@ object CommandGrammar {
         "return to launch" to GcsAction.RTL,
         "come back" to GcsAction.RTL,
         "rtl" to GcsAction.RTL,
+        "take off" to GcsAction.Takeoff(),
+        "takeoff" to GcsAction.Takeoff(),
         "arm" to GcsAction.Arm,
         "disarm" to GcsAction.Disarm,
         "land" to GcsAction.Land,
@@ -64,6 +67,19 @@ object CommandGrammar {
         is GcsAction.Disarm -> "Disarm motors"
         is GcsAction.RTL -> "Return to launch"
         is GcsAction.Land -> "Land"
+        is GcsAction.Takeoff -> "Takeoff to ${action.altitude.toInt()}m"
         is GcsAction.SetMode -> "Switch to ${action.mode.label}"
+    }
+
+    /**
+     * Convert a GcsAction to the corresponding VoiceCommand for execution.
+     */
+    fun toVoiceCommand(action: GcsAction): VoiceCommand = when (action) {
+        is GcsAction.Arm -> VoiceCommand.Arm
+        is GcsAction.Disarm -> VoiceCommand.Disarm
+        is GcsAction.RTL -> VoiceCommand.Rtl
+        is GcsAction.Land -> VoiceCommand.Land
+        is GcsAction.Takeoff -> VoiceCommand.Takeoff(action.altitude)
+        is GcsAction.SetMode -> VoiceCommand.SetMode(action.mode)
     }
 }
