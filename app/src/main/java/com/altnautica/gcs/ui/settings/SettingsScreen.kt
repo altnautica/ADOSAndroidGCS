@@ -13,10 +13,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -26,6 +32,9 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -46,6 +55,8 @@ fun SettingsScreen(
     val compassEnabled by viewModel.compassEnabled.collectAsStateWithLifecycle()
     val altLadderEnabled by viewModel.altLadderEnabled.collectAsStateWithLifecycle()
     val speedLadderEnabled by viewModel.speedLadderEnabled.collectAsStateWithLifecycle()
+    val wfbChannel by viewModel.wfbChannel.collectAsStateWithLifecycle()
+    val wfbBandwidth by viewModel.wfbBandwidth.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -132,6 +143,35 @@ fun SettingsScreen(
             ToggleRow("Speed Ladder", speedLadderEnabled) { viewModel.setSpeedLadderEnabled(it) }
         }
 
+        // WFB-ng Video Link
+        SettingsSection(title = "WFB-ng Video Link (Mode B)") {
+            WfbChannelDropdown(
+                selected = wfbChannel,
+                onSelected = { viewModel.setWfbChannel(it) },
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Bandwidth",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(4.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                WfbBandwidth.entries.forEachIndexed { index, option ->
+                    SegmentedButton(
+                        selected = wfbBandwidth == option,
+                        onClick = { viewModel.setWfbBandwidth(option) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = WfbBandwidth.entries.size,
+                        ),
+                    ) {
+                        Text(option.label)
+                    }
+                }
+            }
+        }
+
         Spacer(Modifier.height(20.dp))
 
         // About
@@ -214,5 +254,49 @@ private fun InfoRow(label: String, value: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun WfbChannelDropdown(
+    selected: WfbChannel,
+    onSelected: (WfbChannel) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Text(
+        text = "WiFi Channel",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(4.dp))
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedTextField(
+            value = selected.label,
+            onValueChange = {},
+            readOnly = true,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            WfbChannel.entries.forEach { channel ->
+                DropdownMenuItem(
+                    text = { Text(channel.label) },
+                    onClick = {
+                        onSelected(channel)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }

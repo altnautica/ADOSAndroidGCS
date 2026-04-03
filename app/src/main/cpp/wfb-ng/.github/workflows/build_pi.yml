@@ -1,0 +1,36 @@
+name: WFB-ng package builder for RPI and NanoPI
+
+on:
+  push:
+    branches: [ master, release-24.08, release-25.01 ]
+  pull_request:
+    # The branches below must be a subset of the branches above
+    branches: [ master, stable ]
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        docker-images:
+          - "2023-02-21-raspios-bullseye-armhf-lite"
+          - "2023-02-21-raspios-bullseye-arm64-lite"
+          - "armbian_23.02.2_nanopineo_jammy_current_5.15.93"
+          - "armbian_23.02.1_nanopineo2_jammy_current_5.15.93"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: build package
+        run: |
+          curl -s -L https://github.com/svpcom/wfb-ng/releases/download/wifibroadcast-17.10/qemu-7.2.15-fixed.tar.gz | sudo tar xzv -C /
+          make deb_docker CFLAGS="-march=native" DOCKER_SRC_IMAGE=p2ptech/cross-build:${{ matrix.docker-images }}
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        id: artifact-upload-step
+        with:
+          name: wfb-ng-${{ github.ref_name }}-${{ matrix.docker-images }}
+          path: |
+            deb_dist/*.deb

@@ -31,6 +31,21 @@ enum class MapProvider(val label: String) {
     OSM("OpenStreetMap"),
 }
 
+enum class WfbChannel(val channel: Int, val label: String) {
+    CH36(36, "36 (5.18 GHz)"),
+    CH48(48, "48 (5.24 GHz)"),
+    CH149(149, "149 (5.745 GHz)"),
+    CH153(153, "153 (5.765 GHz)"),
+    CH157(157, "157 (5.785 GHz)"),
+    CH161(161, "161 (5.805 GHz)"),
+    CH165(165, "165 (5.825 GHz)"),
+}
+
+enum class WfbBandwidth(val mhz: Int, val label: String) {
+    BW20(20, "20 MHz"),
+    BW40(40, "40 MHz"),
+}
+
 private object Keys {
     val THEME = stringPreferencesKey("theme")
     val UNITS = stringPreferencesKey("units")
@@ -39,6 +54,9 @@ private object Keys {
     val COMPASS_ENABLED = booleanPreferencesKey("compass_enabled")
     val ALT_LADDER_ENABLED = booleanPreferencesKey("alt_ladder_enabled")
     val SPEED_LADDER_ENABLED = booleanPreferencesKey("speed_ladder_enabled")
+    val WFB_CHANNEL = stringPreferencesKey("wfb_channel")
+    val WFB_BANDWIDTH = stringPreferencesKey("wfb_bandwidth")
+    val MODE_B_COMPAT_WARNING_DISMISSED = booleanPreferencesKey("mode_b_compat_warning_dismissed")
 }
 
 @HiltViewModel
@@ -69,6 +87,20 @@ class SettingsViewModel @Inject constructor(
     val altLadderEnabled: StateFlow<Boolean> = boolPref(Keys.ALT_LADDER_ENABLED, true)
     val speedLadderEnabled: StateFlow<Boolean> = boolPref(Keys.SPEED_LADDER_ENABLED, true)
 
+    val wfbChannel: StateFlow<WfbChannel> = dataStore.data
+        .map { prefs ->
+            prefs[Keys.WFB_CHANNEL]?.let { WfbChannel.valueOf(it) } ?: WfbChannel.CH149
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WfbChannel.CH149)
+
+    val wfbBandwidth: StateFlow<WfbBandwidth> = dataStore.data
+        .map { prefs ->
+            prefs[Keys.WFB_BANDWIDTH]?.let { WfbBandwidth.valueOf(it) } ?: WfbBandwidth.BW20
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WfbBandwidth.BW20)
+
+    val modeBCompatDismissed: StateFlow<Boolean> = boolPref(Keys.MODE_B_COMPAT_WARNING_DISMISSED, false)
+
     fun setTheme(option: ThemeOption) = setPref { it[Keys.THEME] = option.name }
     fun setUnits(option: UnitSystem) = setPref { it[Keys.UNITS] = option.name }
     fun setMapProvider(option: MapProvider) = setPref { it[Keys.MAP_PROVIDER] = option.name }
@@ -76,6 +108,9 @@ class SettingsViewModel @Inject constructor(
     fun setCompassEnabled(enabled: Boolean) = setPref { it[Keys.COMPASS_ENABLED] = enabled }
     fun setAltLadderEnabled(enabled: Boolean) = setPref { it[Keys.ALT_LADDER_ENABLED] = enabled }
     fun setSpeedLadderEnabled(enabled: Boolean) = setPref { it[Keys.SPEED_LADDER_ENABLED] = enabled }
+    fun setWfbChannel(channel: WfbChannel) = setPref { it[Keys.WFB_CHANNEL] = channel.name }
+    fun setWfbBandwidth(bandwidth: WfbBandwidth) = setPref { it[Keys.WFB_BANDWIDTH] = bandwidth.name }
+    fun dismissModeBCompatWarning() = setPref { it[Keys.MODE_B_COMPAT_WARNING_DISMISSED] = true }
 
     private fun boolPref(key: Preferences.Key<Boolean>, default: Boolean): StateFlow<Boolean> {
         return dataStore.data

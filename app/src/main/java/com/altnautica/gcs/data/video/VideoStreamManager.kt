@@ -3,15 +3,23 @@ package com.altnautica.gcs.data.video
 import android.content.Context
 import android.util.Log
 import android.view.SurfaceView
+import android.widget.Toast
+import com.altnautica.gcs.data.video.wfb.WfbMavlinkBridge
+import com.altnautica.gcs.data.video.wfb.WfbUsbManager
+import com.altnautica.gcs.data.video.wfb.WfbVideoManager
+import com.altnautica.gcs.data.telemetry.TelemetryStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.webrtc.DataChannel
 import org.webrtc.DefaultVideoDecoderFactory
 import org.webrtc.DefaultVideoEncoderFactory
@@ -40,11 +48,24 @@ class VideoStreamManager @Inject constructor(
     private val modeDetector: ModeDetector,
     private val cloudVideoClient: CloudVideoClient,
     private val mqttTelemetryClient: MqttTelemetryClient,
+    private val wfbVideoManager: WfbVideoManager,
+    private val wfbUsbManager: WfbUsbManager,
+    private val wfbMavlinkBridge: WfbMavlinkBridge,
+    private val telemetryStore: TelemetryStore,
 ) {
 
     companion object {
         private const val TAG = "VideoStreamManager"
+        private const val MODE_B_VIDEO_TIMEOUT_MS = 10_000L
+        private const val STATS_POLL_INTERVAL_MS = 1000L
+        private const val DEFAULT_WFB_CHANNEL = 149
+        private const val DEFAULT_WFB_BANDWIDTH = 20
     }
+
+    // WFB settings (updated from SettingsViewModel via setWfbConfig)
+    private var wfbChannel: Int = DEFAULT_WFB_CHANNEL
+    private var wfbBandwidth: Int = DEFAULT_WFB_BANDWIDTH
+    private var statsPollingJob: kotlinx.coroutines.Job? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -155,10 +176,140 @@ class VideoStreamManager @Inject constructor(
         }
     }
 
+    /**
+     * Update WFB-ng channel and bandwidth settings. Call before detectAndStart().
+     */
+    fun setWfbConfig(channel: Int, bandwidth: Int) {
+        wfbChannel = channel
+        wfbBandwidth = bandwidth
+    }
+
     private fun startDirectUsb(deviceId: Int, renderer: SurfaceViewRenderer) {
-        // TODO: Implement Mode B via devourer USB driver + LiveVideo10ms decoder
-        Log.i(TAG, "Direct USB mode not yet implemented (device $deviceId)")
-        _isStreaming.value = false
+        scope.launch {
+            try {
+                Log.i(TAG, "Starting Mode B (direct USB WFB-ng), deviceId=$deviceId")
+
+                // 1. Initialize native WFB-ng link
+                if (!wfbVideoManager.initialize()) {
+                    Log.e(TAG, "Failed to initialize WFB native library")
+                    fallbackFromModeB(renderer, "Native library failed to load")
+                    return@launch
+                }
+
+                // 2. Find and open the USB adapter
+                val device = wfbUsbManager.findAdapter()
+                if (device == null) {
+                    Log.e(TAG, "No WFB-ng USB adapter found")
+                    fallbackFromModeB(renderer, "USB adapter not found")
+                    return@launch
+                }
+
+                // 3. Request USB permission (suspends until user responds)
+                val permissionGranted = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+                    wfbUsbManager.requestPermission(device) { granted ->
+                        if (cont.isActive) cont.resume(granted) {}
+                    }
+                }
+                if (!permissionGranted) {
+                    Log.e(TAG, "USB permission denied")
+                    fallbackFromModeB(renderer, "USB permission denied")
+                    return@launch
+                }
+
+                // 4. Open USB device and get file descriptor
+                val fd = wfbUsbManager.openDevice(device)
+                if (fd < 0) {
+                    Log.e(TAG, "Failed to open USB device")
+                    fallbackFromModeB(renderer, "USB device open failed")
+                    return@launch
+                }
+
+                // 5. Start MAVLink UDP bridge (listens on localhost:14550)
+                wfbMavlinkBridge.start()
+
+                // 6. Start WFB-ng receiving with video surface
+                val surface = renderer.holder.surface
+                wfbVideoManager.startReceiving(fd, wfbChannel, wfbBandwidth, surface)
+
+                // 7. Wait for video data (timeout = 10s)
+                val hasVideo = wfbVideoManager.waitForVideoData(MODE_B_VIDEO_TIMEOUT_MS)
+                if (!hasVideo) {
+                    Log.w(TAG, "No video data received within ${MODE_B_VIDEO_TIMEOUT_MS}ms")
+                    stopModeB()
+                    fallbackFromModeB(renderer, "No video signal received")
+                    return@launch
+                }
+
+                // 8. Start stats polling (1Hz) to update telemetry store
+                startStatsPolling()
+
+                _isStreaming.value = true
+                Log.i(TAG, "Mode B active: WFB-ng ch=$wfbChannel bw=$wfbBandwidth")
+            } catch (e: Exception) {
+                Log.e(TAG, "Mode B failed: ${e.message}", e)
+                stopModeB()
+                fallbackFromModeB(renderer, e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    private fun startStatsPolling() {
+        statsPollingJob?.cancel()
+        statsPollingJob = scope.launch {
+            while (isActive) {
+                val stats = wfbVideoManager.stats.value
+                telemetryStore.addStatusMessage(
+                    "WFB: RSSI=${stats.avgRssi}dBm loss=${String.format("%.1f", stats.packetLossPercent)}%"
+                )
+                delay(STATS_POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun stopModeB() {
+        statsPollingJob?.cancel()
+        statsPollingJob = null
+        wfbVideoManager.stop()
+        wfbMavlinkBridge.stop()
+        wfbUsbManager.closeConnection()
+    }
+
+    /**
+     * Fallback from Mode B failure to Mode A or C.
+     */
+    private fun fallbackFromModeB(renderer: SurfaceViewRenderer, reason: String) {
+        scope.launch {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    "Direct USB video failed ($reason). Trying alternate mode.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+
+            // Try Mode A (ground station WiFi)
+            val gsMode = VideoMode.GroundStation("http://192.168.4.1:8080/whep")
+            _activeMode.value = gsMode
+            startWhep(gsMode.whepUrl, renderer)
+
+            // If WHEP also fails (no ground station), try cloud relay
+            if (!_isStreaming.value) {
+                val cloudMode = VideoMode.CloudRelay("turn:turn.altnautica.com:3478")
+                _activeMode.value = cloudMode
+                startCloudRelay(cloudMode.turnUrl, renderer)
+            }
+
+            if (!_isStreaming.value) {
+                _activeMode.value = VideoMode.NoConnection
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        context,
+                        "No video source available.",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+        }
     }
 
     private fun startCloudRelay(turnUrl: String, renderer: SurfaceViewRenderer) {
@@ -247,6 +398,9 @@ class VideoStreamManager @Inject constructor(
     }
 
     fun stop() {
+        // Stop Mode B resources
+        stopModeB()
+        // Stop WebRTC resources
         videoTrack?.dispose()
         videoTrack = null
         peerConnection?.close()
@@ -259,6 +413,9 @@ class VideoStreamManager @Inject constructor(
     fun release() {
         scope.cancel()
         stop()
+        wfbVideoManager.release()
+        wfbMavlinkBridge.release()
+        wfbUsbManager.unregister()
         peerConnectionFactory?.dispose()
         peerConnectionFactory = null
         eglBase?.release()

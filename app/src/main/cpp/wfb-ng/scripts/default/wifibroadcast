@@ -1,0 +1,15 @@
+#WFB_NICS="wlx00c0caa578a9"
+#WFB_NICS="wlan1 wlan2"
+
+# For multi-link setup you can specify path to custom config
+# and/or list of cards in /etc/default/wifibroadcast.<profile_name>
+# WIFIBROADCAST_CFG=/etc/wifibroadcast_linkXXX.cfg
+
+# Autodetect local cards supported by wfb-ng (8812au and 8812eu)
+WFB_NICS="$(wfb-nics)"
+
+# wfb_rtsp settings
+RTP_MTU=1400
+RTP_JITTER=0
+RTSP_PORT=8554
+RTSP_URI="/wfb"
