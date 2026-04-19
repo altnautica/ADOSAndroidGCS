@@ -18,8 +18,10 @@ import com.altnautica.gcs.data.telemetry.FlightMode
 import com.altnautica.gcs.data.telemetry.GpsState
 import com.altnautica.gcs.data.telemetry.PositionState
 import com.altnautica.gcs.data.telemetry.VfrState
+import com.altnautica.gcs.ui.theme.isPortrait
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -57,6 +59,11 @@ fun HudOverlay(
         null
     }
 
+    val portrait = isPortrait()
+    // In portrait the bottom strip is reserved for the floating-controls dock
+    // (ARM / record / takeoff / RTL). Lift bottom-row HUD text to clear it.
+    val bottomInsetDp = if (portrait) 92f else 20f
+
     Canvas(modifier = Modifier.fillMaxSize()) {
         val cx = size.width / 2f
         val cy = size.height / 2f
@@ -71,9 +78,9 @@ fun HudOverlay(
         if (speedLadderEnabled) {
             drawSpeedLadder(cx, cy, vfr.groundspeed)
         }
-        drawBatteryInfo(battery)
-        drawFlightModeInfo(cx, flightMode, armed)
-        drawGpsInfo(gps)
+        drawBatteryInfo(battery, bottomInsetDp)
+        drawFlightModeInfo(cx, flightMode, armed, bottomInsetDp)
+        drawGpsInfo(gps, bottomInsetDp)
         drawDistanceToHome(distanceToHome)
         drawFlightModeBadge(flightMode, armed)
         if (recording) {
@@ -102,7 +109,8 @@ private fun DrawScope.drawArtificialHorizon(
     cy: Float,
     attitude: AttitudeState,
 ) {
-    val horizonRadius = size.height * 0.25f
+    // Clamp by the shorter edge so portrait does not stretch the horizon arc.
+    val horizonRadius = min(size.width, size.height) * 0.25f
     val pitchScale = horizonRadius / 30f // pixels per degree
     val rollDeg = Math.toDegrees(attitude.roll.toDouble()).toFloat()
     val pitchDeg = Math.toDegrees(attitude.pitch.toDouble()).toFloat()
@@ -191,7 +199,8 @@ private fun DrawScope.drawArtificialHorizon(
 
 private fun DrawScope.drawCompassTape(cx: Float, heading: Int) {
     val tapeY = 28.dp.toPx()
-    val tapeWidth = size.width * 0.4f
+    // Let the tape use more of a narrow canvas (portrait) but cap it on wide screens.
+    val tapeWidth = min(size.width * 0.8f, 380.dp.toPx())
     val halfWidth = tapeWidth / 2f
     val degreesVisible = 60f
     val pxPerDeg = tapeWidth / degreesVisible
@@ -239,7 +248,8 @@ private fun DrawScope.drawCompassTape(cx: Float, heading: Int) {
 
 private fun DrawScope.drawAltitudeLadder(cx: Float, cy: Float, altRel: Float) {
     val ladderX = size.width - 60.dp.toPx()
-    val ladderHeight = size.height * 0.5f
+    // Cap at ~480dp so the ladder does not stretch vertically in tall portrait canvases.
+    val ladderHeight = min(size.height * 0.5f, 480.dp.toPx())
     val halfHeight = ladderHeight / 2f
     val metersVisible = 40f
     val pxPerMeter = ladderHeight / metersVisible
@@ -298,7 +308,7 @@ private fun DrawScope.drawAltitudeLadder(cx: Float, cy: Float, altRel: Float) {
 
 private fun DrawScope.drawSpeedLadder(cx: Float, cy: Float, groundspeed: Float) {
     val ladderX = 60.dp.toPx()
-    val ladderHeight = size.height * 0.5f
+    val ladderHeight = min(size.height * 0.5f, 480.dp.toPx())
     val halfHeight = ladderHeight / 2f
     val msVisible = 20f
     val pxPerMs = ladderHeight / msVisible
@@ -358,10 +368,10 @@ private fun DrawScope.drawSpeedLadder(cx: Float, cy: Float, groundspeed: Float) 
 
 // -- Battery Info (bottom-left) --
 
-private fun DrawScope.drawBatteryInfo(battery: BatteryState) {
+private fun DrawScope.drawBatteryInfo(battery: BatteryState, bottomInsetDp: Float) {
     val canvas = drawContext.canvas.nativeCanvas
     val x = 16.dp.toPx()
-    val y = size.height - 20.dp.toPx()
+    val y = size.height - bottomInsetDp.dp.toPx()
 
     val pct = battery.remaining
     val color = when {
@@ -379,9 +389,9 @@ private fun DrawScope.drawBatteryInfo(battery: BatteryState) {
 
 // -- Flight Mode + Armed (bottom-center) --
 
-private fun DrawScope.drawFlightModeInfo(cx: Float, flightMode: FlightMode?, armed: Boolean) {
+private fun DrawScope.drawFlightModeInfo(cx: Float, flightMode: FlightMode?, armed: Boolean, bottomInsetDp: Float) {
     val canvas = drawContext.canvas.nativeCanvas
-    val y = size.height - 20.dp.toPx()
+    val y = size.height - bottomInsetDp.dp.toPx()
 
     val modeText = flightMode?.label ?: "---"
     val armedText = if (armed) "ARMED" else "DISARMED"
@@ -393,10 +403,10 @@ private fun DrawScope.drawFlightModeInfo(cx: Float, flightMode: FlightMode?, arm
 
 // -- GPS Info (bottom-right) --
 
-private fun DrawScope.drawGpsInfo(gps: GpsState) {
+private fun DrawScope.drawGpsInfo(gps: GpsState, bottomInsetDp: Float) {
     val canvas = drawContext.canvas.nativeCanvas
     val x = size.width - 120.dp.toPx()
-    val y = size.height - 20.dp.toPx()
+    val y = size.height - bottomInsetDp.dp.toPx()
 
     val fixLabel = when (gps.fixType) {
         0, 1 -> "No Fix"

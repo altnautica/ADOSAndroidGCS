@@ -58,20 +58,26 @@ class GamepadManager @Inject constructor() {
      * Call this periodically or on device connection events.
      */
     fun refreshConnection() {
-        val deviceIds = InputDevice.getDeviceIds()
-        val gamepad = deviceIds
-            .mapNotNull { InputDevice.getDevice(it) }
-            .firstOrNull { device ->
-                val sources = device.sources
+        val deviceIds: IntArray = InputDevice.getDeviceIds()
+        var gamepad: InputDevice? = null
+        for (id in deviceIds) {
+            val device: InputDevice = InputDevice.getDevice(id) ?: continue
+            val sources: Int = device.sources
+            val isGamepad =
                 (sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
                     (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+            if (isGamepad) {
+                gamepad = device
+                break
             }
+        }
 
         if (gamepad != null) {
-            if (!_state.value.connected || _state.value.deviceName != gamepad.name) {
+            val name: String = gamepad.name ?: "Gamepad"
+            if (!_state.value.connected || _state.value.deviceName != name) {
                 _state.value = _state.value.copy(
                     connected = true,
-                    deviceName = gamepad.name ?: "Gamepad",
+                    deviceName = name,
                 )
             }
         } else {

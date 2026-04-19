@@ -2,7 +2,9 @@ package com.altnautica.gcs.ui.common
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,7 @@ import com.altnautica.gcs.ui.theme.OnSurfaceMedium
 import com.altnautica.gcs.ui.theme.SuccessGreen
 import com.altnautica.gcs.ui.theme.SurfaceVariant
 import com.altnautica.gcs.ui.theme.WarningAmber
+import com.altnautica.gcs.ui.theme.isPortrait
 import com.altnautica.gcs.ui.video.CameraSwitcher
 
 private val panelModes = listOf(
@@ -69,18 +72,29 @@ fun ControlsPanel(
     onSwitchCamera: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val portrait = isPortrait()
     AnimatedVisibility(
         visible = visible,
-        enter = slideInHorizontally(initialOffsetX = { it }),
-        exit = slideOutHorizontally(targetOffsetX = { it }),
+        enter = if (portrait) slideInVertically(initialOffsetY = { it }) else slideInHorizontally(initialOffsetX = { it }),
+        exit = if (portrait) slideOutVertically(targetOffsetY = { it }) else slideOutHorizontally(targetOffsetX = { it }),
         modifier = modifier,
     ) {
         Surface(
-            shape = RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp),
+            shape = if (portrait) {
+                RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+            } else {
+                RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp)
+            },
             color = DeepBlack.copy(alpha = 0.92f),
-            modifier = Modifier
-                .width(300.dp)
-                .fillMaxHeight(),
+            modifier = if (portrait) {
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.6f)
+            } else {
+                Modifier
+                    .width(300.dp)
+                    .fillMaxHeight()
+            },
         ) {
             Column(
                 modifier = Modifier

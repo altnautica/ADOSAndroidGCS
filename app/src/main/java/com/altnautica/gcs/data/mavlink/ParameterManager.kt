@@ -8,6 +8,7 @@ import io.dronefleet.mavlink.common.CommandLong
 import io.dronefleet.mavlink.common.ParamRequestList
 import io.dronefleet.mavlink.common.ParamRequestRead
 import io.dronefleet.mavlink.common.ParamSet
+import io.dronefleet.mavlink.util.EnumValue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -232,7 +233,7 @@ class ParameterManager @Inject constructor(
     suspend fun writeParam(name: String, value: Float, type: Int) {
         Log.d(TAG, "Writing param $name = $value (type=$type)")
 
-        val mavType = MavParamType.values().find { it.value() == type }
+        val mavType = MavParamType.values().find { EnumValue.of(it).value() == type }
             ?: MavParamType.MAV_PARAM_TYPE_REAL32
 
         val msg = ParamSet.builder()

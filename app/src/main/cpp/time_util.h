@@ -12,7 +12,7 @@
 /**
  * @return milliseconds
  */
-uint64_t get_time_ms()
+static inline uint64_t get_time_ms()
 {
     struct timespec spec;
     if (clock_gettime(1, &spec) == -1)

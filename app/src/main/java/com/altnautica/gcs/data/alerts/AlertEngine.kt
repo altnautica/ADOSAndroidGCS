@@ -142,7 +142,6 @@ class AlertEngine @Inject constructor(
         scope.launch {
             var first = true
             telemetryStore.armed
-                .distinctUntilChanged()
                 .collect { armed ->
                     // Skip the initial value emission
                     if (first) {
@@ -162,7 +161,6 @@ class AlertEngine @Inject constructor(
         scope.launch {
             var first = true
             telemetryStore.flightMode
-                .distinctUntilChanged()
                 .collect { mode ->
                     if (first) {
                         first = false

@@ -6,6 +6,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -43,6 +45,7 @@ import com.altnautica.gcs.ui.theme.NeonLime
 import com.altnautica.gcs.ui.theme.OnSurfaceMedium
 import com.altnautica.gcs.ui.theme.SuccessGreen
 import com.altnautica.gcs.ui.theme.WarningAmber
+import com.altnautica.gcs.ui.theme.isPortrait
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -63,23 +66,20 @@ fun FloatingControls(
 ) {
     val view = LocalView.current
     var showDisarmDialog by remember { mutableStateOf(false) }
+    val portrait = isPortrait()
 
-    Box(modifier = modifier) {
-        // Left side: ARM/DISARM button
+    val armButton: @Composable () -> Unit = {
         Surface(
             shape = CircleShape,
             color = if (armed) ErrorRed.copy(alpha = 0.9f) else SuccessGreen.copy(alpha = 0.9f),
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 16.dp)
-                .size(72.dp)
+                .size(if (portrait) 64.dp else 72.dp)
                 .combinedClickable(
                     onClick = {
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         if (armed) {
                             showDisarmDialog = true
                         }
-                        // ARM requires long press, single tap does nothing when disarmed
                     },
                     onLongClick = {
                         view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -89,7 +89,7 @@ fun FloatingControls(
                     },
                 ),
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(72.dp)) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(if (portrait) 64.dp else 72.dp)) {
                 Text(
                     text = if (armed) stringResource(R.string.gcs_disarm) else stringResource(R.string.gcs_arm),
                     color = Color.White,
@@ -99,127 +99,174 @@ fun FloatingControls(
                 )
             }
         }
+    }
 
-        // Right side: action buttons column
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+    val recordButton: @Composable () -> Unit = {
+        Surface(
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                onToggleRecord()
+            },
+            shape = CircleShape,
+            color = if (recording) ErrorRed.copy(alpha = 0.9f) else OnSurfaceMedium.copy(alpha = 0.5f),
+            modifier = Modifier.size(44.dp),
         ) {
-            // Record button
-            Surface(
-                onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                    onToggleRecord()
-                },
-                shape = CircleShape,
-                color = if (recording) ErrorRed.copy(alpha = 0.9f) else OnSurfaceMedium.copy(alpha = 0.5f),
-                modifier = Modifier.size(44.dp),
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    Icons.Filled.FiberManualRecord,
+                    contentDescription = if (recording) "Stop recording" else "Start recording",
+                    tint = if (recording) Color.White else ErrorRed,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        }
+    }
+
+    val pauseButton: @Composable () -> Unit = {
+        Surface(
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                if (paused) onResume() else onPause()
+            },
+            shape = CircleShape,
+            color = if (paused) NeonLime.copy(alpha = 0.9f) else WarningAmber.copy(alpha = 0.9f),
+            modifier = Modifier.size(48.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                    contentDescription = if (paused) "Resume mission" else "Pause mission",
+                    tint = Color.Black,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+    }
+
+    val takeoffButton: @Composable () -> Unit = {
+        Surface(
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                onTakeoff()
+            },
+            shape = CircleShape,
+            color = ElectricBlue.copy(alpha = 0.9f),
+            modifier = Modifier.size(48.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    Icons.Filled.FlightTakeoff,
+                    contentDescription = "Takeoff",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+    }
+
+    val landButton: @Composable () -> Unit = {
+        Surface(
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                onLand()
+            },
+            shape = CircleShape,
+            color = WarningAmber.copy(alpha = 0.9f),
+            modifier = Modifier.size(48.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
+                Icon(
+                    Icons.Filled.FlightLand,
+                    contentDescription = "Land",
+                    tint = Color.Black,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+    }
+
+    val rtlButton: @Composable () -> Unit = {
+        Surface(
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                onRtl()
+            },
+            shape = CircleShape,
+            color = ErrorRed.copy(alpha = 0.9f),
+            modifier = Modifier.size(56.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(56.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.Filled.FiberManualRecord,
-                        contentDescription = if (recording) "Stop recording" else "Start recording",
-                        tint = if (recording) Color.White else ErrorRed,
-                        modifier = Modifier.size(18.dp),
+                        Icons.Filled.Home,
+                        contentDescription = "Return to launch",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Text(
+                        text = "RTL",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
                     )
                 }
             }
+        }
+    }
 
-            // Pause/Resume button (only visible in Auto mode)
-            if (inAutoMode) {
-                Surface(
-                    onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        if (paused) onResume() else onPause()
-                    },
-                    shape = CircleShape,
-                    color = if (paused) NeonLime.copy(alpha = 0.9f) else WarningAmber.copy(alpha = 0.9f),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-                            contentDescription = if (paused) "Resume mission" else "Pause mission",
-                            tint = Color.Black,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-            }
+    val showTakeoff = !armed || !inAutoMode
 
-            // Takeoff button (shown when not armed or armed but on ground)
-            if (!armed || !inAutoMode) {
-                Surface(
-                    onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        onTakeoff()
-                    },
-                    shape = CircleShape,
-                    color = ElectricBlue.copy(alpha = 0.9f),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            Icons.Filled.FlightTakeoff,
-                            contentDescription = "Takeoff",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-            }
-
-            // Land button (shown when armed)
-            if (armed) {
-                Surface(
-                    onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        onLand()
-                    },
-                    shape = CircleShape,
-                    color = WarningAmber.copy(alpha = 0.9f),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(48.dp)) {
-                        Icon(
-                            Icons.Filled.FlightLand,
-                            contentDescription = "Land",
-                            tint = Color.Black,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-            }
-
-            // RTL button
-            Surface(
-                onClick = {
-                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                    onRtl()
-                },
-                shape = CircleShape,
-                color = ErrorRed.copy(alpha = 0.9f),
-                modifier = Modifier.size(56.dp),
+    Box(modifier = modifier) {
+        if (portrait) {
+            // Portrait: single horizontal dock at bottom-center.
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(56.dp)) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Filled.Home,
-                            contentDescription = "Return to launch",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Text(
-                            text = "RTL",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                        )
-                    }
+                armButton()
+                recordButton()
+                if (inAutoMode) {
+                    pauseButton()
                 }
+                if (showTakeoff) {
+                    takeoffButton()
+                }
+                if (armed) {
+                    landButton()
+                }
+                rtlButton()
+            }
+        } else {
+            // Landscape: ARM bottom-left, action column bottom-right.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 16.dp, bottom = 16.dp),
+            ) {
+                armButton()
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                recordButton()
+                if (inAutoMode) {
+                    pauseButton()
+                }
+                if (showTakeoff) {
+                    takeoffButton()
+                }
+                if (armed) {
+                    landButton()
+                }
+                rtlButton()
             }
         }
     }

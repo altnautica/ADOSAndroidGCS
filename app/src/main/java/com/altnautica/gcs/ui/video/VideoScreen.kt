@@ -35,6 +35,7 @@ import com.altnautica.gcs.ui.common.MapPip
 import com.altnautica.gcs.ui.common.TakeoffDialog
 import com.altnautica.gcs.ui.gcs.GcsViewModel
 import com.altnautica.gcs.ui.settings.SettingsViewModel
+import com.altnautica.gcs.ui.theme.isPortrait
 
 @Composable
 fun FlyScreen(
@@ -67,6 +68,7 @@ fun FlyScreen(
     var activeCameraId by remember { mutableStateOf("cam0") }
 
     val inAutoMode = flightMode == FlightMode.AUTO
+    val portrait = isPortrait()
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Layer 1: Video SurfaceView (fills entire screen)
@@ -139,13 +141,20 @@ fun FlyScreen(
                 .padding(top = 48.dp),
         )
 
-        // Layer 5: Map PiP (bottom-right, above floating controls)
+        // Layer 5: Map PiP. Landscape places it bottom-right above the action-button
+        // stack. Portrait moves it to top-end so it clears the bottom-dock controls.
         MapPip(
             dronePosition = position,
             homePosition = homePosition,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 80.dp, bottom = 16.dp),
+            modifier = if (portrait) {
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 96.dp, end = 8.dp)
+            } else {
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 80.dp, bottom = 16.dp)
+            },
         )
 
         // Layer 6: Back button (top-left)
@@ -184,7 +193,8 @@ fun FlyScreen(
             )
         }
 
-        // Layer 9: Controls panel (slide-out from right)
+        // Layer 9: Controls panel. Landscape slides in from the right edge;
+        // portrait slides up from the bottom as a sheet.
         ControlsPanel(
             visible = showControlsPanel,
             currentMode = flightMode,
@@ -196,7 +206,7 @@ fun FlyScreen(
             videoMode = videoMode,
             activeCameraId = activeCameraId,
             onSwitchCamera = { activeCameraId = it },
-            modifier = Modifier.align(Alignment.CenterEnd),
+            modifier = Modifier.align(if (portrait) Alignment.BottomCenter else Alignment.CenterEnd),
         )
     }
 

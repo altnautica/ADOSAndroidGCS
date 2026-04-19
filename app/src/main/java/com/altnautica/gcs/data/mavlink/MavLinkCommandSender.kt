@@ -200,7 +200,7 @@ class MavLinkCommandSender @Inject constructor(
             .paramId(paramId)
             .paramValue(value)
             .paramType(
-                EnumValue.of(io.dronefleet.mavlink.common.MavParamType.entry(type))
+                EnumValue.create(io.dronefleet.mavlink.common.MavParamType::class.java, type)
             )
             .build()
         sendMessage(msg)
@@ -248,7 +248,7 @@ class MavLinkCommandSender @Inject constructor(
         timeoutMs: Long = 3000
     ): CommandQueue.CommandResult {
         return commandQueue.send(
-            commandId = command.value(),
+            commandId = EnumValue.of(command).value(),
             maxRetries = maxRetries,
             timeoutMs = timeoutMs
         ) {
@@ -333,7 +333,7 @@ class MavLinkCommandSender @Inject constructor(
         val msg = CommandLong.builder()
             .targetSystem(TARGET_SYS_ID)
             .targetComponent(TARGET_COMP_ID)
-            .command(EnumValue.of(commandId))
+            .command(EnumValue.create(MavCmd::class.java, commandId))
             .confirmation(0)
             .param1(param1)
             .param2(param2)
