@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.data.firmware.FirmwareManager
 import com.altnautica.gcs.data.firmware.FirmwareState
 import com.altnautica.gcs.data.firmware.FirmwareUpdate
+import com.altnautica.gcs.data.groundstation.CameraNotSupportedError
 import com.altnautica.gcs.data.groundstation.GroundStationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -130,7 +131,7 @@ class GroundStationViewModel @Inject constructor(
                     _recordingStartTime.value = System.currentTimeMillis()
                 }
                 .onFailure {
-                    _notice.value = "Recording is not supported by this ground station yet"
+                    _notice.value = "Could not start recording on the ground station"
                 }
         }
     }
@@ -138,9 +139,15 @@ class GroundStationViewModel @Inject constructor(
     fun switchCamera(cameraId: String) {
         viewModelScope.launch {
             repository.switchCamera(cameraId)
-                .onSuccess { _activeCamera.value = cameraId }
-                .onFailure {
-                    _notice.value = "Camera switching is not supported by this ground station yet"
+                .onSuccess {
+                    _activeCamera.value = cameraId
+                }
+                .onFailure { err ->
+                    _notice.value = if (err is CameraNotSupportedError) {
+                        "This drone does not advertise multi-camera support"
+                    } else {
+                        "Could not switch the camera source"
+                    }
                 }
         }
     }
@@ -153,7 +160,7 @@ class GroundStationViewModel @Inject constructor(
                     _recordingStartTime.value = 0L
                 }
                 .onFailure {
-                    _notice.value = "Recording is not supported by this ground station yet"
+                    _notice.value = "Could not stop recording on the ground station"
                 }
         }
     }

@@ -2,9 +2,17 @@ package com.altnautica.gcs
 
 import com.altnautica.gcs.data.groundstation.ApConfig
 import com.altnautica.gcs.data.groundstation.ApUpdate
+import com.altnautica.gcs.data.groundstation.CameraNotSupportedError
+import com.altnautica.gcs.data.groundstation.CameraSwitchRequest
+import com.altnautica.gcs.data.groundstation.CameraSwitchResponse
 import com.altnautica.gcs.data.groundstation.GroundStationApi
 import com.altnautica.gcs.data.groundstation.GroundStationRepository
 import com.altnautica.gcs.data.groundstation.NetworkConfig
+import com.altnautica.gcs.data.groundstation.RecordingInfo
+import com.altnautica.gcs.data.groundstation.RecordingListResponse
+import com.altnautica.gcs.data.groundstation.RecordingStartRequest
+import com.altnautica.gcs.data.groundstation.RecordingStartResponse
+import com.altnautica.gcs.data.groundstation.RecordingStopResponse
 import com.altnautica.gcs.data.groundstation.StationStatus
 import com.altnautica.gcs.data.groundstation.WfbConfig
 import com.altnautica.gcs.data.groundstation.WfbUpdate
@@ -92,14 +100,103 @@ class GroundStationRepositoryTest {
     }
 
     @Test
-    fun `recording stubs return failure with not-implemented marker`() = runTest {
-        val start = repository.startRecording()
-        val stop = repository.stopRecording()
-        val cam = repository.switchCamera("cam1")
+    fun `startRecording forwards filename hint and returns response`() = runTest {
+        val expected = RecordingStartResponse(
+            filename = "ados-2026-05-07T1200.mp4",
+            startedAt = "2026-05-07T12:00:00+00:00",
+            path = "/var/lib/ados/recordings/ados-2026-05-07T1200.mp4",
+        )
+        coEvery { api.startRecording(RecordingStartRequest("test-flight")) } returns expected
+
+        val result = repository.startRecording("test-flight")
+
+        assertTrue(result.isSuccess)
+        assertEquals(expected.filename, result.getOrNull()?.filename)
+        coVerify(exactly = 1) { api.startRecording(RecordingStartRequest("test-flight")) }
+    }
+
+    @Test
+    fun `stopRecording returns duration and size`() = runTest {
+        val expected = RecordingStopResponse(
+            filename = "ados-2026-05-07T1200.mp4",
+            stoppedAt = "2026-05-07T12:01:30+00:00",
+            durationSeconds = 90.0f,
+            sizeBytes = 12_345_678L,
+        )
+        coEvery { api.stopRecording() } returns expected
+
+        val result = repository.stopRecording()
+
+        assertTrue(result.isSuccess)
+        assertEquals(90.0f, result.getOrNull()?.durationSeconds)
+        assertEquals(12_345_678L, result.getOrNull()?.sizeBytes)
+    }
+
+    @Test
+    fun `listRecordings returns disk listing`() = runTest {
+        val expected = RecordingListResponse(
+            recording = false,
+            currentFilename = null,
+            items = listOf(
+                RecordingInfo(filename = "a.mp4", sizeBytes = 1024, mtime = 1715000000.0),
+                RecordingInfo(filename = "b.mp4", sizeBytes = 2048, mtime = 1715001000.0),
+            ),
+        )
+        coEvery { api.listRecordings() } returns expected
+
+        val result = repository.listRecordings()
+
+        assertTrue(result.isSuccess)
+        assertEquals(2, result.getOrNull()?.items?.size)
+        assertEquals("a.mp4", result.getOrNull()?.items?.first()?.filename)
+    }
+
+    @Test
+    fun `switchCamera returns body on multi-camera success`() = runTest {
+        val request = CameraSwitchRequest(cameraId = "2")
+        val body = CameraSwitchResponse(cameraId = "2", accepted = true, reason = null)
+        coEvery { api.switchCamera(request) } returns Response.success(body)
+
+        val result = repository.switchCamera("2")
+
+        assertTrue(result.isSuccess)
+        assertEquals("2", result.getOrNull()?.cameraId)
+        assertTrue(result.getOrNull()?.accepted == true)
+    }
+
+    @Test
+    fun `switchCamera surfaces 501 as CameraNotSupportedError`() = runTest {
+        val request = CameraSwitchRequest(cameraId = "2")
+        coEvery { api.switchCamera(request) } returns
+            Response.error(501, okhttp3.ResponseBody.create(null, ""))
+
+        val result = repository.switchCamera("2")
+
+        assertTrue(result.isFailure)
+        assertTrue(
+            "Expected CameraNotSupportedError, got ${result.exceptionOrNull()}",
+            result.exceptionOrNull() is CameraNotSupportedError,
+        )
+    }
+
+    @Test
+    fun `switchCamera surfaces non-501 errors as IllegalStateException`() = runTest {
+        val request = CameraSwitchRequest(cameraId = "2")
+        coEvery { api.switchCamera(request) } returns
+            Response.error(500, okhttp3.ResponseBody.create(null, ""))
+
+        val result = repository.switchCamera("2")
+
+        assertTrue(result.isFailure)
+        assertFalse(result.exceptionOrNull() is CameraNotSupportedError)
+    }
+
+    @Test
+    fun `reboot and pushOta remain stubs`() = runTest {
         val reboot = repository.reboot()
         val ota = repository.pushOta("https://example.com/fw.bin", "1.0.0")
 
-        for (r in listOf(start, stop, cam, reboot, ota)) {
+        for (r in listOf(reboot, ota)) {
             assertTrue(r.isFailure)
             assertNotNull(r.exceptionOrNull())
             assertTrue(r.exceptionOrNull() is UnsupportedOperationException)

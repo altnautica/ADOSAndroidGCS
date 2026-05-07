@@ -165,3 +165,76 @@ data class ApUpdate(
     val passphrase: String? = null,
     val channel: Int? = null,
 )
+
+/**
+ * POST body for /api/v1/ground-station/recording/start. The hint is an
+ * optional filename stem; the agent appends an extension and a
+ * timestamp suffix when it conflicts with an existing file.
+ */
+data class RecordingStartRequest(
+    @SerializedName("filename_hint") val filenameHint: String? = null,
+)
+
+/**
+ * Response from POST /api/v1/ground-station/recording/start. Carries the
+ * resolved filename, an ISO-8601 UTC start timestamp, and the absolute
+ * path on the agent.
+ */
+data class RecordingStartResponse(
+    val filename: String,
+    @SerializedName("started_at") val startedAt: String,
+    val path: String,
+)
+
+/**
+ * Response from POST /api/v1/ground-station/recording/stop. Carries the
+ * filename, an ISO-8601 UTC stop timestamp, the duration in seconds,
+ * and the resulting file size in bytes.
+ */
+data class RecordingStopResponse(
+    val filename: String,
+    @SerializedName("stopped_at") val stoppedAt: String,
+    @SerializedName("duration_seconds") val durationSeconds: Float,
+    @SerializedName("size_bytes") val sizeBytes: Long,
+)
+
+/**
+ * One row from GET /api/v1/ground-station/recording/list. `mtime` is
+ * the file modification time as a Unix timestamp in seconds.
+ */
+data class RecordingInfo(
+    val filename: String,
+    @SerializedName("size_bytes") val sizeBytes: Long,
+    val mtime: Double,
+)
+
+/**
+ * Top-level response for GET /api/v1/ground-station/recording/list. The
+ * agent returns the active-recording flag, the current filename when
+ * one is in progress, and the disk listing.
+ */
+data class RecordingListResponse(
+    val recording: Boolean = false,
+    @SerializedName("current_filename") val currentFilename: String? = null,
+    val items: List<RecordingInfo> = emptyList(),
+)
+
+/**
+ * POST body for /api/v1/ground-station/camera/switch. The id is a small
+ * positive integer encoded as a string so the wire contract stays open
+ * to future named-source variants ("thermal", "rgb", "zoom").
+ */
+data class CameraSwitchRequest(
+    @SerializedName("camera_id") val cameraId: String,
+)
+
+/**
+ * Response from POST /api/v1/ground-station/camera/switch on a
+ * multi-camera drone. Single-camera drones return HTTP 501 instead and
+ * the GCS surfaces the capability hint without parsing this body.
+ */
+data class CameraSwitchResponse(
+    @SerializedName("camera_id") val cameraId: String,
+    val accepted: Boolean,
+    val reason: String? = null,
+)

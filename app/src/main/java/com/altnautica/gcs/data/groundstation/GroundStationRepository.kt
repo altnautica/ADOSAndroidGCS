@@ -11,8 +11,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Marker exception surfaced when the agent reports that the paired
+ * drone does not advertise multi-camera support (HTTP 501 on
+ * /camera/switch). Lets the UI distinguish a capability gap from a
+ * transport-level failure.
+ */
+class CameraNotSupportedError(message: String) : Exception(message)
 
 /**
  * Shared state holder for the ground-station REST surface.
@@ -21,10 +30,15 @@ import javax.inject.Singleton
  * system, and role views warm for the UI. The wfb radio config and the
  * full network view are fetched on demand via fetchWfb()/fetchNetwork().
  *
- * Endpoints not yet implemented in this agent profile (recording, camera
- * switch, system reboot, OTA push) return Result.failure with a stable
- * NotImplementedError marker so the UI can surface a friendly hint
- * without crashing.
+ * Recording (start/stop/list) and camera switch hit the agent's REST
+ * surface directly. System reboot and OTA push are still stubs and
+ * return Result.failure with a stable NotImplementedError marker so the
+ * UI can surface a friendly hint without crashing.
+ *
+ * Camera switch returns HTTP 501 on single-camera drones; the
+ * repository swallows that as a [CameraNotSupportedError] result and
+ * the UI shows a capability notice rather than treating it as a
+ * transport failure.
  */
 @Singleton
 class GroundStationRepository @Inject constructor(
@@ -114,15 +128,63 @@ class GroundStationRepository @Inject constructor(
         }
     }
 
-    /** Stub: no recording endpoint on this agent profile yet. */
-    suspend fun startRecording(): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
+    /**
+     * Start a server-side recording on the ground node. The optional
+     * [filenameHint] is a stem; the agent appends a timestamp and the
+     * .mp4 extension. Returns the resolved filename, an ISO-8601 UTC
+     * start time, and the absolute path on disk.
+     */
+    suspend fun startRecording(filenameHint: String? = null): Result<RecordingStartResponse> =
+        runApi { api.startRecording(RecordingStartRequest(filenameHint = filenameHint)) }
 
-    /** Stub: no recording endpoint on this agent profile yet. */
-    suspend fun stopRecording(): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
+    /**
+     * Stop the in-flight recording. Returns the filename, the stop
+     * time, the duration in seconds, and the resulting size in bytes.
+     */
+    suspend fun stopRecording(): Result<RecordingStopResponse> =
+        runApi { api.stopRecording() }
 
-    /** Stub: no camera switch endpoint on this agent profile yet. */
-    suspend fun switchCamera(@Suppress("UNUSED_PARAMETER") cameraId: String): Result<Unit> =
-        Result.failure(NOT_IMPLEMENTED)
+    /** Listing of recordings on disk, plus the active-recording flag. */
+    suspend fun listRecordings(): Result<RecordingListResponse> =
+        runApi { api.listRecordings() }
+
+    /**
+     * Ask the paired drone to switch to [cameraId]. On a single-camera
+     * drone the agent returns HTTP 501; the failure carries
+     * [CameraNotSupportedError] so the UI can surface a capability
+     * notice rather than treating it as a network error.
+     */
+    suspend fun switchCamera(cameraId: String): Result<CameraSwitchResponse> {
+        return try {
+            val response = api.switchCamera(CameraSwitchRequest(cameraId = cameraId))
+            val body = response.body()
+            when {
+                response.isSuccessful && body != null -> Result.success(body)
+                response.code() == 501 -> Result.failure(
+                    CameraNotSupportedError(
+                        "drone does not advertise multi-camera support",
+                    )
+                )
+                else -> Result.failure(
+                    IllegalStateException("camera switch failed: HTTP ${response.code()}")
+                )
+            }
+        } catch (e: HttpException) {
+            if (e.code() == 501) {
+                Result.failure(
+                    CameraNotSupportedError(
+                        "drone does not advertise multi-camera support",
+                    )
+                )
+            } else {
+                Log.w(TAG, "Camera switch failed: ${e.message}")
+                Result.failure(e)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Camera switch failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
 
     /** Stub: no system reboot endpoint on this agent profile yet. */
     suspend fun reboot(): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
