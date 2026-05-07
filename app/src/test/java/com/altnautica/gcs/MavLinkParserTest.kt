@@ -6,20 +6,21 @@ import io.dronefleet.mavlink.MavlinkMessage
 import io.dronefleet.mavlink.common.Attitude
 import io.dronefleet.mavlink.common.BatteryStatus
 import io.dronefleet.mavlink.common.GlobalPositionInt
+import io.dronefleet.mavlink.common.MavBatteryFunction
+import io.dronefleet.mavlink.common.MavBatteryType
 import io.dronefleet.mavlink.minimal.Heartbeat
 import io.dronefleet.mavlink.minimal.MavAutopilot
 import io.dronefleet.mavlink.minimal.MavModeFlag
+import io.dronefleet.mavlink.minimal.MavState
 import io.dronefleet.mavlink.minimal.MavType
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.util.EnumSet
 
 class MavLinkParserTest {
 
@@ -82,8 +83,8 @@ class MavLinkParserTest {
     fun `parser updates battery on BatteryStatus message`() {
         val battery = BatteryStatus.builder()
             .id(0)
-            .batteryFunction(0)
-            .type(0)
+            .batteryFunction(MavBatteryFunction.MAV_BATTERY_FUNCTION_UNKNOWN)
+            .type(MavBatteryType.MAV_BATTERY_TYPE_UNKNOWN)
             .temperature(2500)
             .voltages(listOf(4200, 4180, 4190, 0, 0, 0, 0, 0, 0, 0))
             .currentBattery(1500) // 15.00 A
@@ -107,9 +108,9 @@ class MavLinkParserTest {
         val heartbeat = Heartbeat.builder()
             .type(MavType.MAV_TYPE_QUADROTOR)
             .autopilot(MavAutopilot.MAV_AUTOPILOT_ARDUPILOTMEGA)
-            .baseMode(EnumSet.of(MavModeFlag.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED))
+            .baseMode(MavModeFlag.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)
             .customMode(5L)  // Loiter = 5
-            .systemStatus(0)
+            .systemStatus(MavState.MAV_STATE_UNINIT)
             .mavlinkVersion(3)
             .build()
 
@@ -127,12 +128,12 @@ class MavLinkParserTest {
         val armed = Heartbeat.builder()
             .type(MavType.MAV_TYPE_QUADROTOR)
             .autopilot(MavAutopilot.MAV_AUTOPILOT_ARDUPILOTMEGA)
-            .baseMode(EnumSet.of(
+            .baseMode(
                 MavModeFlag.MAV_MODE_FLAG_SAFETY_ARMED,
                 MavModeFlag.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            ))
+            )
             .customMode(0L)
-            .systemStatus(0)
+            .systemStatus(MavState.MAV_STATE_UNINIT)
             .mavlinkVersion(3)
             .build()
 
@@ -143,9 +144,9 @@ class MavLinkParserTest {
         val disarmed = Heartbeat.builder()
             .type(MavType.MAV_TYPE_QUADROTOR)
             .autopilot(MavAutopilot.MAV_AUTOPILOT_ARDUPILOTMEGA)
-            .baseMode(EnumSet.of(MavModeFlag.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED))
+            .baseMode(MavModeFlag.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED)
             .customMode(0L)
-            .systemStatus(0)
+            .systemStatus(MavState.MAV_STATE_UNINIT)
             .mavlinkVersion(3)
             .build()
 
