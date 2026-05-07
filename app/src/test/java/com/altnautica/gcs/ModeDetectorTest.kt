@@ -8,10 +8,13 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
+import com.altnautica.gcs.data.discovery.NsdAgentDiscovery
+import com.altnautica.gcs.data.serial.UsbSerialManager
 import com.altnautica.gcs.data.video.ModeDetector
 import com.altnautica.gcs.data.video.VideoMode
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -22,6 +25,8 @@ class ModeDetectorTest {
     private lateinit var usbManager: UsbManager
     private lateinit var wifiManager: WifiManager
     private lateinit var connectivityManager: ConnectivityManager
+    private lateinit var usbSerialManager: UsbSerialManager
+    private lateinit var nsdAgentDiscovery: NsdAgentDiscovery
     private lateinit var detector: ModeDetector
 
     @Before
@@ -30,13 +35,18 @@ class ModeDetectorTest {
         usbManager = mockk(relaxed = true)
         wifiManager = mockk(relaxed = true)
         connectivityManager = mockk(relaxed = true)
+        usbSerialManager = mockk(relaxed = true)
+        nsdAgentDiscovery = mockk(relaxed = true)
 
         every { context.getSystemService(Context.USB_SERVICE) } returns usbManager
         every { context.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
         every { context.applicationContext.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
         every { context.getSystemService(Context.CONNECTIVITY_SERVICE) } returns connectivityManager
+        // Default: NSD has not yet resolved anything, so detect() falls
+        // back to the hardcoded AP IP.
+        every { nsdAgentDiscovery.lastResolved } returns MutableStateFlow(null)
 
-        detector = ModeDetector(context)
+        detector = ModeDetector(context, usbSerialManager, nsdAgentDiscovery)
     }
 
     @Test
@@ -156,5 +166,53 @@ class ModeDetectorTest {
 
         val mode = detector.detect()
         assertTrue("WiFi should have priority over internet, got $mode", mode is VideoMode.GroundStation)
+    }
+
+    @Test
+    fun `discovered NSD endpoint overrides hardcoded fallback`() {
+        every { usbManager.deviceList } returns hashMapOf()
+
+        val wifiInfo = mockk<WifiInfo>()
+        every { wifiInfo.ssid } returns "\"ADOS-GS-FE12\""
+        @Suppress("DEPRECATION")
+        every { wifiManager.connectionInfo } returns wifiInfo
+
+        val resolved = NsdAgentDiscovery.AgentEndpoint(
+            host = "192.168.4.42",
+            port = 8081,
+            profile = "ground_station",
+            version = "1.2.3",
+            deviceId = "abcd",
+            path = "/api/v1/ground-station",
+        )
+        every { nsdAgentDiscovery.lastResolved } returns MutableStateFlow(resolved)
+
+        val mode = detector.detect()
+        assertTrue("Expected GroundStation, got $mode", mode is VideoMode.GroundStation)
+        val gs = mode as VideoMode.GroundStation
+        assertTrue(
+            "Expected discovered host in WHEP URL, got ${gs.whepUrl}",
+            gs.whepUrl == "http://192.168.4.42:8081/whep",
+        )
+    }
+
+    @Test
+    fun `falls back to hardcoded AP when NSD has not resolved yet`() {
+        every { usbManager.deviceList } returns hashMapOf()
+
+        val wifiInfo = mockk<WifiInfo>()
+        every { wifiInfo.ssid } returns "\"ADOS-GS-FE12\""
+        @Suppress("DEPRECATION")
+        every { wifiManager.connectionInfo } returns wifiInfo
+
+        every { nsdAgentDiscovery.lastResolved } returns MutableStateFlow(null)
+
+        val mode = detector.detect()
+        assertTrue("Expected GroundStation, got $mode", mode is VideoMode.GroundStation)
+        val gs = mode as VideoMode.GroundStation
+        assertTrue(
+            "Expected hardcoded fallback in WHEP URL, got ${gs.whepUrl}",
+            gs.whepUrl == "http://192.168.4.1:8080/whep",
+        )
     }
 }

@@ -6,6 +6,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.altnautica.gcs.data.discovery.NsdAgentDiscovery
 import com.altnautica.gcs.data.serial.UsbSerialManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -15,6 +16,7 @@ import javax.inject.Singleton
 class ModeDetector @Inject constructor(
     @ApplicationContext private val context: Context,
     private val usbSerialManager: UsbSerialManager,
+    private val nsdAgentDiscovery: NsdAgentDiscovery,
 ) {
 
     companion object {
@@ -28,7 +30,9 @@ class ModeDetector @Inject constructor(
         private const val RTL8812AU_PRODUCT_ID = 0x8812
 
         private const val GS_SSID_PREFIX = "ADOS-GS-"
-        private const val GS_BASE_URL = "http://192.168.4.1:8080"
+        private const val GS_DEFAULT_HOST = "192.168.4.1"
+        private const val GS_DEFAULT_PORT = 8080
+        private const val GS_BASE_URL = "http://$GS_DEFAULT_HOST:$GS_DEFAULT_PORT"
         private const val CLOUD_RELAY_URL = "turn:turn.altnautica.com:3478"
     }
 
@@ -41,10 +45,17 @@ class ModeDetector @Inject constructor(
             return VideoMode.DirectUsb(device?.deviceId ?: 0)
         }
 
-        // Priority 2: Ground station WiFi AP
+        // Priority 2: Ground station WiFi AP. Use the most recently
+        // resolved NSD endpoint when available; fall back to the
+        // hardcoded AP IP otherwise. The async discovery is kicked off
+        // by detectSuspending() so non-suspending callers still pick
+        // up a discovered host as soon as one round has completed.
         if (isGroundStationWifi()) {
-            Log.d(TAG, "Mode A: Ground station WiFi detected")
-            return VideoMode.GroundStation("$GS_BASE_URL/whep")
+            val whepUrl = nsdAgentDiscovery.lastResolved.value
+                ?.let { "http://${it.host}:${it.port}/whep" }
+                ?: "$GS_BASE_URL/whep"
+            Log.d(TAG, "Mode A: Ground station WiFi detected whep=$whepUrl")
+            return VideoMode.GroundStation(whepUrl)
         }
 
         // Priority 3: Internet available for cloud relay
@@ -55,6 +66,30 @@ class ModeDetector @Inject constructor(
 
         Log.d(TAG, "No video connection available")
         return VideoMode.NoConnection
+    }
+
+    /**
+     * Same as [detect] but kicks off an mDNS lookup before the
+     * GroundStation fallback so the discovered host beats the
+     * hardcoded AP IP. 3-second timeout. Falls back to
+     * `192.168.4.1:8080` on timeout or NSD failure.
+     */
+    suspend fun detectSuspending(): VideoMode {
+        if (isUsbAdapterConnected()) {
+            return detect()
+        }
+        if (isGroundStationWifi()) {
+            val resolved = nsdAgentDiscovery.discover()
+            val whepUrl = resolved
+                ?.let { "http://${it.host}:${it.port}/whep" }
+                ?: "$GS_BASE_URL/whep"
+            Log.d(
+                TAG,
+                "Mode A via ${if (resolved != null) "NSD" else "fallback"} whep=$whepUrl",
+            )
+            return VideoMode.GroundStation(whepUrl)
+        }
+        return detect()
     }
 
     /**
