@@ -42,7 +42,8 @@ class MavLinkRepository @Inject constructor(
     companion object {
         private const val TAG = "MavLinkRepository"
         // Default ADOS Ground Station AP address. Configurable at runtime via setUrl().
-        private const val DEFAULT_WS_URL = "ws://192.168.4.1:8080/ws"
+        private const val DEFAULT_WS_URL =
+            "ws://192.168.4.1:8080/api/v1/ground-station/ws/mavlink"
         private const val INITIAL_BACKOFF_MS = 1000L
         private const val MAX_BACKOFF_MS = 30000L
     }

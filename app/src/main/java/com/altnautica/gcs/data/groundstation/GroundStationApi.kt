@@ -3,47 +3,31 @@ package com.altnautica.gcs.data.groundstation
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
-import retrofit2.http.POST
 import retrofit2.http.PUT
 
+/**
+ * Retrofit binding for the ground-station REST surface served by the
+ * ADOS Drone Agent under /api/v1/ground-station. The base URL is set in
+ * DataModule; each path here is relative to that root.
+ *
+ * Recording, camera switch, video stats, system info/reboot, and OTA push
+ * have no agent counterpart on this profile yet. Repository surfaces a
+ * "not implemented" Result.failure for callers until those endpoints land.
+ */
 interface GroundStationApi {
 
-    @GET("api/status")
+    @GET("api/v1/ground-station/status")
     suspend fun getStatus(): StationStatus
 
-    @GET("api/wfb/stats")
-    suspend fun getWfbStats(): WfbStats
+    @GET("api/v1/ground-station/wfb")
+    suspend fun getWfb(): WfbConfig
 
-    @GET("api/video/stats")
-    suspend fun getVideoStats(): VideoStats
+    @PUT("api/v1/ground-station/wfb")
+    suspend fun putWfb(@Body update: WfbUpdate): WfbConfig
 
-    @POST("api/recording/start")
-    suspend fun startRecording(): Response<Unit>
+    @GET("api/v1/ground-station/network")
+    suspend fun getNetwork(): NetworkConfig
 
-    @POST("api/recording/stop")
-    suspend fun stopRecording(): Response<Unit>
-
-    @GET("api/recording/list")
-    suspend fun getRecordings(): List<RecordingInfo>
-
-    @POST("api/camera/switch")
-    suspend fun switchCamera(@Body body: CameraSwitchRequest): Response<Unit>
-
-    @GET("api/system/info")
-    suspend fun getSystemInfo(): SystemInfo
-
-    @POST("api/system/reboot")
-    suspend fun reboot(): Response<Unit>
-
-    @POST("api/system/ota")
-    suspend fun pushOta(@Body body: OtaRequest): Response<Unit>
-
-    @GET("api/config")
-    suspend fun getConfig(): StationConfig
-
-    @PUT("api/config")
-    suspend fun updateConfig(@Body config: StationConfig): Response<Unit>
-
-    @GET("api/wfb/adapters")
-    suspend fun getAdapters(): List<AdapterInfo>
+    @PUT("api/v1/ground-station/network/ap")
+    suspend fun putNetworkAp(@Body update: ApUpdate): Response<ApConfig>
 }

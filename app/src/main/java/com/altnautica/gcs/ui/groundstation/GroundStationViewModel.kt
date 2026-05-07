@@ -52,6 +52,9 @@ class GroundStationViewModel @Inject constructor(
     private val _systemInfo = MutableStateFlow(SystemInfo())
     val systemInfo: StateFlow<SystemInfo> = _systemInfo.asStateFlow()
 
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
     // Firmware state
     val firmwareUpdate: StateFlow<FirmwareUpdate?> = firmwareManager.availableUpdate
     val firmwareState: StateFlow<FirmwareState> = firmwareManager.state
@@ -92,26 +95,27 @@ class GroundStationViewModel @Inject constructor(
         }
     }
 
+    fun consumeNotice() {
+        _notice.value = null
+    }
+
     private fun collectRepositoryFlows() {
         viewModelScope.launch {
-            repository.wfbStats.collect { wfb ->
+            repository.status.collect { status ->
+                _recording.value = status.recording
                 _stats.value = GroundStationStats(
                     connected = repository.reachable.value,
-                    rssiDbm = wfb.rssi,
-                    packetLossPercent = wfb.packetLoss,
-                    fecRecovered = wfb.fecRecovery.toInt(),
-                    bitrateKbps = repository.videoStats.value.bitrate.toFloat(),
+                    rssiDbm = status.link.rssiDbm ?: -100,
+                    packetLossPercent = 0f,
+                    fecRecovered = status.link.fecRecovered,
+                    bitrateKbps = status.link.bitrateMbps?.let { it * 1000f } ?: 0f,
                 )
-            }
-        }
-        viewModelScope.launch {
-            repository.systemInfo.collect { info ->
                 _systemInfo.value = SystemInfo(
-                    hostname = info.hostname.ifEmpty { "--" },
-                    ipAddress = "--",
-                    cpuTempC = info.socTemp.toInt(),
-                    uptime = "--",
-                    wfbVersion = info.firmwareVersion.ifEmpty { "--" },
+                    hostname = status.network.apSsid ?: "--",
+                    ipAddress = status.network.apIp ?: "--",
+                    cpuTempC = status.system.tempC?.toInt() ?: 0,
+                    uptime = formatUptime(status.system.uptimeSeconds),
+                    wfbVersion = status.system.agentVersion.ifEmpty { "--" },
                     firmwareUpdateAvailable = firmwareManager.availableUpdate.value != null,
                 )
             }
@@ -120,28 +124,45 @@ class GroundStationViewModel @Inject constructor(
 
     fun startRecording() {
         viewModelScope.launch {
-            repository.startRecording().onSuccess {
-                _recording.value = true
-                _recordingStartTime.value = System.currentTimeMillis()
-            }
+            repository.startRecording()
+                .onSuccess {
+                    _recording.value = true
+                    _recordingStartTime.value = System.currentTimeMillis()
+                }
+                .onFailure {
+                    _notice.value = "Recording is not supported by this ground station yet"
+                }
         }
     }
 
     fun switchCamera(cameraId: String) {
         viewModelScope.launch {
-            repository.switchCamera(cameraId).onSuccess {
-                _activeCamera.value = cameraId
-            }
+            repository.switchCamera(cameraId)
+                .onSuccess { _activeCamera.value = cameraId }
+                .onFailure {
+                    _notice.value = "Camera switching is not supported by this ground station yet"
+                }
         }
     }
 
     fun stopRecording() {
         viewModelScope.launch {
-            repository.stopRecording().onSuccess {
-                _recording.value = false
-                _recordingStartTime.value = 0L
-            }
+            repository.stopRecording()
+                .onSuccess {
+                    _recording.value = false
+                    _recordingStartTime.value = 0L
+                }
+                .onFailure {
+                    _notice.value = "Recording is not supported by this ground station yet"
+                }
         }
+    }
+
+    private fun formatUptime(seconds: Long): String {
+        if (seconds <= 0) return "--"
+        val hours = seconds / 3600
+        val minutes = (seconds % 3600) / 60
+        return "%dh %02dm".format(hours, minutes)
     }
 
     override fun onCleared() {

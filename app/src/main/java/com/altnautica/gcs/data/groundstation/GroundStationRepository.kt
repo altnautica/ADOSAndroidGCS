@@ -14,6 +14,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Shared state holder for the ground-station REST surface.
+ *
+ * Polls /api/v1/ground-station/status at 2 Hz to keep the link, network,
+ * system, and role views warm for the UI. The wfb radio config and the
+ * full network view are fetched on demand via fetchWfb()/fetchNetwork().
+ *
+ * Endpoints not yet implemented in this agent profile (recording, camera
+ * switch, system reboot, OTA push) return Result.failure with a stable
+ * NotImplementedError marker so the UI can surface a friendly hint
+ * without crashing.
+ */
 @Singleton
 class GroundStationRepository @Inject constructor(
     private val api: GroundStationApi
@@ -22,6 +34,10 @@ class GroundStationRepository @Inject constructor(
     companion object {
         private const val TAG = "GroundStationRepo"
         private const val POLL_INTERVAL_MS = 2000L
+
+        private val NOT_IMPLEMENTED = UnsupportedOperationException(
+            "endpoint not implemented in this agent profile"
+        )
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -30,17 +46,11 @@ class GroundStationRepository @Inject constructor(
     private val _status = MutableStateFlow(StationStatus())
     val status: StateFlow<StationStatus> = _status.asStateFlow()
 
-    private val _wfbStats = MutableStateFlow(WfbStats())
-    val wfbStats: StateFlow<WfbStats> = _wfbStats.asStateFlow()
+    private val _wfb = MutableStateFlow(WfbConfig())
+    val wfb: StateFlow<WfbConfig> = _wfb.asStateFlow()
 
-    private val _videoStats = MutableStateFlow(VideoStats())
-    val videoStats: StateFlow<VideoStats> = _videoStats.asStateFlow()
-
-    private val _systemInfo = MutableStateFlow(SystemInfo())
-    val systemInfo: StateFlow<SystemInfo> = _systemInfo.asStateFlow()
-
-    private val _config = MutableStateFlow(StationConfig())
-    val config: StateFlow<StationConfig> = _config.asStateFlow()
+    private val _network = MutableStateFlow(NetworkConfig())
+    val network: StateFlow<NetworkConfig> = _network.asStateFlow()
 
     private val _reachable = MutableStateFlow(false)
     val reachable: StateFlow<Boolean> = _reachable.asStateFlow()
@@ -49,7 +59,7 @@ class GroundStationRepository @Inject constructor(
         stopPolling()
         pollingJob = scope.launch {
             while (isActive) {
-                pollStats()
+                pollStatus()
                 delay(POLL_INTERVAL_MS)
             }
         }
@@ -60,60 +70,68 @@ class GroundStationRepository @Inject constructor(
         pollingJob = null
     }
 
-    private suspend fun pollStats() {
-        val statusResult = runApi { api.getStatus() }
-        statusResult.onSuccess {
-            _status.value = it
-            _reachable.value = true
-        }.onFailure {
-            _reachable.value = false
-        }
-
-        if (_reachable.value) {
-            runApi { api.getWfbStats() }.onSuccess { _wfbStats.value = it }
-            runApi { api.getVideoStats() }.onSuccess { _videoStats.value = it }
-        }
+    private suspend fun pollStatus() {
+        runApi { api.getStatus() }
+            .onSuccess {
+                _status.value = it
+                _reachable.value = true
+            }
+            .onFailure {
+                _reachable.value = false
+            }
     }
 
-    suspend fun fetchSystemInfo(): Result<SystemInfo> {
-        return runApi { api.getSystemInfo() }.also { result ->
-            result.onSuccess { _systemInfo.value = it }
+    suspend fun fetchWfb(): Result<WfbConfig> {
+        return runApi { api.getWfb() }.also { result ->
+            result.onSuccess { _wfb.value = it }
         }
     }
 
-    suspend fun fetchConfig(): Result<StationConfig> {
-        return runApi { api.getConfig() }.also { result ->
-            result.onSuccess { _config.value = it }
+    suspend fun updateWfb(update: WfbUpdate): Result<WfbConfig> {
+        return runApi { api.putWfb(update) }.also { result ->
+            result.onSuccess { _wfb.value = it }
         }
     }
 
-    suspend fun updateConfig(config: StationConfig): Result<Unit> {
-        return runApi { api.updateConfig(config) }.map { }
+    suspend fun fetchNetwork(): Result<NetworkConfig> {
+        return runApi { api.getNetwork() }.also { result ->
+            result.onSuccess { _network.value = it }
+        }
     }
 
-    suspend fun startRecording(): Result<Unit> {
-        return runApi { api.startRecording() }.map { }
+    suspend fun updateNetworkAp(update: ApUpdate): Result<ApConfig> {
+        return try {
+            val response = api.putNetworkAp(update)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                Result.success(body)
+            } else {
+                Result.failure(IllegalStateException("ap update failed: HTTP ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "AP update failed: ${e.message}")
+            Result.failure(e)
+        }
     }
 
-    suspend fun stopRecording(): Result<Unit> {
-        return runApi { api.stopRecording() }.map { }
-    }
+    /** Stub: no recording endpoint on this agent profile yet. */
+    suspend fun startRecording(): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
 
-    suspend fun getRecordings(): Result<List<RecordingInfo>> {
-        return runApi { api.getRecordings() }
-    }
+    /** Stub: no recording endpoint on this agent profile yet. */
+    suspend fun stopRecording(): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
 
-    suspend fun switchCamera(cameraId: String): Result<Unit> {
-        return runApi { api.switchCamera(CameraSwitchRequest(cameraId)) }.map { }
-    }
+    /** Stub: no camera switch endpoint on this agent profile yet. */
+    suspend fun switchCamera(@Suppress("UNUSED_PARAMETER") cameraId: String): Result<Unit> =
+        Result.failure(NOT_IMPLEMENTED)
 
-    suspend fun reboot(): Result<Unit> {
-        return runApi { api.reboot() }.map { }
-    }
+    /** Stub: no system reboot endpoint on this agent profile yet. */
+    suspend fun reboot(): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
 
-    suspend fun pushOta(firmwareUrl: String, version: String): Result<Unit> {
-        return runApi { api.pushOta(OtaRequest(firmwareUrl, version)) }.map { }
-    }
+    /** Stub: no OTA push endpoint on this agent profile yet. */
+    suspend fun pushOta(
+        @Suppress("UNUSED_PARAMETER") firmwareUrl: String,
+        @Suppress("UNUSED_PARAMETER") version: String,
+    ): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
 
     private suspend fun <T> runApi(call: suspend () -> T): Result<T> {
         return try {

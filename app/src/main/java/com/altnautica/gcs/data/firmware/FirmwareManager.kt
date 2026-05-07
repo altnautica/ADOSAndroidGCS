@@ -29,8 +29,11 @@ enum class FirmwareState {
 /**
  * Manages firmware update checking and OTA push to the ADOS Ground Station.
  *
- * Flow: check for update -> download firmware -> POST to /api/system/ota -> reboot.
- * The ground station handles the actual flashing internally.
+ * Flow: check for update -> download firmware -> push to the agent OTA
+ * endpoint -> reboot. The ground station handles the actual flashing
+ * internally. The OTA push channel is currently stubbed at the repository
+ * layer; downloadAndPush() will surface a "not supported yet" error until
+ * the agent exposes the OTA endpoint on this profile.
  */
 @Singleton
 class FirmwareManager @Inject constructor(
