@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.data.mavlink.MavLinkRepository
+import com.altnautica.gcs.data.settings.BaseUrlProvider
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -62,7 +64,33 @@ private object Keys {
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
+    private val baseUrlProvider: BaseUrlProvider,
+    private val mavLinkRepository: MavLinkRepository,
 ) : ViewModel() {
+
+    val groundStationBaseUrl: StateFlow<String> = baseUrlProvider.baseUrl
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            BaseUrlProvider.DEFAULT_BASE_URL,
+        )
+
+    /**
+     * Update the ground station base URL. Returns true on success, false if
+     * the input is not a syntactically valid URL. On success the MAVLink
+     * WebSocket reconnects to the new endpoint.
+     */
+    fun setGroundStationBaseUrl(url: String, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val ok = baseUrlProvider.setBaseUrl(url)
+            if (ok) {
+                val wsUrl = BaseUrlProvider.toMavlinkWsUrl(url)
+                mavLinkRepository.setUrl(wsUrl)
+                mavLinkRepository.connect()
+            }
+            onResult(ok)
+        }
+    }
 
     val theme: StateFlow<ThemeOption> = dataStore.data
         .map { prefs ->

@@ -85,6 +85,17 @@ class TelemetryStore @Inject constructor() {
     private val _magCalReport = MutableStateFlow<MagCalReportState?>(null)
     val magCalReport: StateFlow<MagCalReportState?> = _magCalReport.asStateFlow()
 
+    private val _linkLatency = MutableStateFlow(LinkLatencyState())
+    val linkLatency: StateFlow<LinkLatencyState> = _linkLatency.asStateFlow()
+
+    /**
+     * Wall-clock millis of the most recent outgoing GCS heartbeat. Used by the
+     * parser to derive a latency sample when the next FC heartbeat arrives.
+     * Internal mutable; not exposed as a flow.
+     */
+    @Volatile
+    var lastGcsHeartbeatSentMs: Long = 0L
+
     fun updateAttitude(att: AttitudeState) {
         _attitude.value = att
     }
@@ -196,6 +207,13 @@ class TelemetryStore @Inject constructor() {
         _magCalReport.value = null
     }
 
+    fun updateLinkLatency(latencyMs: Int) {
+        _linkLatency.value = LinkLatencyState(
+            latencyMs = latencyMs,
+            lastSampleMs = System.currentTimeMillis(),
+        )
+    }
+
     fun clear() {
         _attitude.value = AttitudeState()
         _position.value = PositionState()
@@ -222,5 +240,7 @@ class TelemetryStore @Inject constructor() {
         _fenceStatus.value = FenceStatusState()
         _magCalProgress.value = null
         _magCalReport.value = null
+        _linkLatency.value = LinkLatencyState()
+        lastGcsHeartbeatSentMs = 0L
     }
 }

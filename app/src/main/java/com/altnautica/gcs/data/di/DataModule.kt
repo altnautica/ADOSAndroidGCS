@@ -8,6 +8,7 @@ import androidx.room.Room
 import com.altnautica.gcs.data.flightlog.FlightDatabase
 import com.altnautica.gcs.data.flightlog.FlightSessionDao
 import com.altnautica.gcs.data.groundstation.GroundStationApi
+import com.altnautica.gcs.data.settings.BaseUrlProvider
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -47,10 +48,12 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideGroundStationApi(client: OkHttpClient): GroundStationApi =
+    fun provideGroundStationApi(
+        client: OkHttpClient,
+        baseUrlProvider: BaseUrlProvider,
+    ): GroundStationApi =
         Retrofit.Builder()
-            // TODO: Read ground station base URL from DataStore preferences to support custom IPs
-            .baseUrl("http://192.168.4.1:8080/")
+            .baseUrl(baseUrlProvider.getBaseUrlBlocking())
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

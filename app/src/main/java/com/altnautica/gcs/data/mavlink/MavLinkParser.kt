@@ -102,6 +102,15 @@ class MavLinkParser @Inject constructor(
         // Armed state from base_mode flag
         val armed = heartbeat.baseMode().flagsEnabled(MavModeFlag.MAV_MODE_FLAG_SAFETY_ARMED)
         telemetryStore.updateArmed(armed)
+
+        // Approximate link latency: time between our last GCS heartbeat send
+        // and this FC heartbeat reception. See LinkLatencyState docs for caveats.
+        val sentMs = telemetryStore.lastGcsHeartbeatSentMs
+        if (sentMs > 0L) {
+            val now = System.currentTimeMillis()
+            val sampleMs = (now - sentMs).coerceIn(0L, 5_000L).toInt()
+            telemetryStore.updateLinkLatency(sampleMs)
+        }
     }
 
     private fun handleAttitude(attitude: Attitude) {

@@ -218,6 +218,54 @@ class MavLinkCommandSender @Inject constructor(
         sendMessage(msg)
     }
 
+    /**
+     * Upload a polygon geofence to the autopilot using the ArduPilot FENCE_POINT
+     * protocol.
+     *
+     * Sequence per ArduPilot/MAVLink convention:
+     *   1. MAV_CMD_DO_FENCE_ENABLE param1=0 to disable the fence while we rewrite it.
+     *   2. PARAM_SET FENCE_TOTAL = vertices.size (declares the polygon vertex count).
+     *   3. FENCE_POINT(idx, count, lat, lng) for each vertex with idx in 0..count-1.
+     *      Fire-and-forget; ArduPilot writes the points to EEPROM as they arrive.
+     *   4. MAV_CMD_DO_FENCE_ENABLE param1=1 to re-enable.
+     *
+     * Caller must already have at least three vertices (a valid polygon). The
+     * latitude/longitude are passed in as decimal degrees and forwarded as
+     * IEEE-754 floats which is what the FENCE_POINT message expects.
+     */
+    suspend fun sendFencePoints(points: List<Pair<Double, Double>>) {
+        if (points.isEmpty()) {
+            Log.w(TAG, "sendFencePoints: empty list, nothing to upload")
+            return
+        }
+        Log.d(TAG, "Sending ${points.size} fence points")
+
+        // 1. Disable fence while we rewrite it. MAV_CMD_DO_FENCE_ENABLE = 207.
+        sendCommandLongRaw(commandId = 207, param1 = 0f)
+
+        // 2. Declare vertex count. ArduPilot reads polygon size from FENCE_TOTAL.
+        // 9 = MAV_PARAM_TYPE_REAL32.
+        sendParamSet("FENCE_TOTAL", points.size.toFloat(), 9)
+
+        // 3. One FENCE_POINT per vertex.
+        val total = points.size
+        for ((idx, latLng) in points.withIndex()) {
+            val (lat, lng) = latLng
+            val msg = io.dronefleet.mavlink.ardupilotmega.FencePoint.builder()
+                .targetSystem(TARGET_SYS_ID)
+                .targetComponent(TARGET_COMP_ID)
+                .idx(idx)
+                .count(total)
+                .lat(lat.toFloat())
+                .lng(lng.toFloat())
+                .build()
+            sendMessage(msg)
+        }
+
+        // 4. Re-enable fence.
+        sendCommandLongRaw(commandId = 207, param1 = 1f)
+    }
+
     suspend fun sendHeartbeat() {
         val msg = io.dronefleet.mavlink.minimal.Heartbeat.builder()
             .type(io.dronefleet.mavlink.minimal.MavType.MAV_TYPE_GCS)

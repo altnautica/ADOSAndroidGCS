@@ -182,6 +182,22 @@ data class FenceStatusState(
     val isBreached: Boolean get() = breachStatus != 0
 }
 
+/**
+ * Approximate end-to-end link latency derived from heartbeat traffic.
+ *
+ * The pump records the system clock when it sends a GCS heartbeat. When the
+ * next FC heartbeat arrives, the parser records the elapsed time as the
+ * round-trip latency proxy. This mostly captures relay + FC processing time
+ * rather than true RTT (FC heartbeats arrive at 1Hz independent of our
+ * sends), but it tracks regressions in the WS path well enough for the HUD.
+ *
+ * `lastSampleMs == 0L` means no sample yet.
+ */
+data class LinkLatencyState(
+    val latencyMs: Int = 0,
+    val lastSampleMs: Long = 0L,
+)
+
 enum class FlightMode(val modeNumber: Int, val label: String) {
     STABILIZE(0, "Stabilize"),
     ACRO(1, "Acro"),

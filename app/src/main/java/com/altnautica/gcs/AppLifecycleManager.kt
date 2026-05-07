@@ -10,6 +10,7 @@ import com.altnautica.gcs.data.alerts.AlertEngine
 import com.altnautica.gcs.data.alerts.TtsManager
 import com.altnautica.gcs.data.cloud.CloudVideoClient
 import com.altnautica.gcs.data.cloud.MqttTelemetryClient
+import com.altnautica.gcs.data.mavlink.HeartbeatPump
 import com.altnautica.gcs.data.mavlink.MavLinkRepository
 import com.altnautica.gcs.data.mavlink.MavLinkWiring
 import com.altnautica.gcs.data.video.ModeDetector
@@ -31,6 +32,7 @@ class AppLifecycleManager @Inject constructor(
     private val mqttTelemetryClient: MqttTelemetryClient,
     private val cloudVideoClient: CloudVideoClient,
     private val mavLinkWiring: MavLinkWiring,
+    private val heartbeatPump: HeartbeatPump,
     private val alertEngine: AlertEngine,
     private val ttsManager: TtsManager,
     private val flightSessionTracker: FlightSessionTracker,
@@ -41,6 +43,7 @@ class AppLifecycleManager @Inject constructor(
     fun initialize() {
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         mavLinkWiring.initialize()
+        heartbeatPump.start()
         ttsManager.initialize()
         alertEngine.start()
         flightSessionTracker.initialize()
@@ -90,6 +93,7 @@ class AppLifecycleManager @Inject constructor(
         groundStationRepository.stopPolling()
         mqttTelemetryClient.disconnect()
         cloudVideoClient.disconnect()
+        heartbeatPump.release()
         mavLinkWiring.shutdown()
     }
 }

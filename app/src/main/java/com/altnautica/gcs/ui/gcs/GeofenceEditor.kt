@@ -380,16 +380,16 @@ private fun generateCirclePoints(
 /**
  * Upload fence vertices to the flight controller via MAVLink.
  *
- * Uses MAV_CMD_DO_FENCE_ENABLE to enable the geofence, followed by
- * the fence point protocol. The fence upload protocol requires:
- * 1. FENCE_TOTAL (param set) to declare vertex count
- * 2. Individual FENCE_POINT messages for each vertex
+ * For circular fences, sets FENCE_RADIUS and re-enables the fence.
  *
- * TODO: Implement full fence point protocol upload. The dronefleet library
- *       has limited fence message support. For now this enables the fence
- *       and logs the vertices. The visual editor is fully functional.
- *       Full implementation requires sending PARAM_SET for FENCE_TOTAL,
- *       then FENCE_POINT (msg 160) for each vertex.
+ * For polygon fences, runs the FENCE_POINT protocol via
+ * [com.altnautica.gcs.data.mavlink.MavLinkCommandSender.sendFencePoints]:
+ *   1. Disable fence (MAV_CMD_DO_FENCE_ENABLE param1=0).
+ *   2. PARAM_SET FENCE_TOTAL = vertex count.
+ *   3. FENCE_POINT for each vertex (fire-and-forget, idx 0..count-1).
+ *   4. Re-enable fence (MAV_CMD_DO_FENCE_ENABLE param1=1).
+ *
+ * In both cases FENCE_ACTION is set to 1 (RTL).
  */
 suspend fun uploadGeofence(
     vertices: List<GeoPoint>,
@@ -398,25 +398,20 @@ suspend fun uploadGeofence(
 ) {
     android.util.Log.i("GeofenceEditor", "Upload fence: ${vertices.size} vertices, radius=$radiusM")
 
-    // Enable geofence: MAV_CMD_DO_FENCE_ENABLE = 207
-    commandSender.sendCommandLongRaw(
-        commandId = 207,
-        param1 = 1f, // 1 = enable
-    )
+    // Action on breach: RTL.
+    commandSender.sendParamSet("FENCE_ACTION", 1f, 9) // 9 = MAV_PARAM_TYPE_REAL32, 1 = RTL
 
-    // If circular fence, set FENCE_RADIUS parameter
     if (radiusM != null) {
-        commandSender.sendParamSet("FENCE_RADIUS", radiusM, 9) // 9 = MAV_PARAM_TYPE_REAL32
+        // Circular fence: store radius parameter and re-enable.
+        commandSender.sendParamSet("FENCE_RADIUS", radiusM, 9)
+        commandSender.sendCommandLongRaw(commandId = 207, param1 = 1f)
         android.util.Log.i("GeofenceEditor", "Set FENCE_RADIUS=$radiusM")
+        return
     }
 
-    // Set fence action to RTL (configurable later)
-    commandSender.sendParamSet("FENCE_ACTION", 1f, 9) // 1 = RTL
-
-    // TODO: Upload polygon fence points via FENCE_POINT protocol.
-    // This requires custom message encoding not available in dronefleet.
-    // For polygon fences, the visual overlay is accurate and vertices are
-    // logged here for manual verification.
+    // Polygon fence: run the FENCE_POINT upload protocol.
+    val points = vertices.map { it.latitude to it.longitude }
+    commandSender.sendFencePoints(points)
     for ((i, pt) in vertices.withIndex()) {
         android.util.Log.i(
             "GeofenceEditor",

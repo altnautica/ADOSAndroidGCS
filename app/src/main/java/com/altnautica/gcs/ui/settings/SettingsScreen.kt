@@ -13,6 +13,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -22,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -31,10 +34,12 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.altnautica.gcs.data.settings.BaseUrlProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -57,6 +62,7 @@ fun SettingsScreen(
     val speedLadderEnabled by viewModel.speedLadderEnabled.collectAsStateWithLifecycle()
     val wfbChannel by viewModel.wfbChannel.collectAsStateWithLifecycle()
     val wfbBandwidth by viewModel.wfbBandwidth.collectAsStateWithLifecycle()
+    val groundStationBaseUrl by viewModel.groundStationBaseUrl.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -141,6 +147,14 @@ fun SettingsScreen(
             ToggleRow("Compass Tape", compassEnabled) { viewModel.setCompassEnabled(it) }
             ToggleRow("Altitude Ladder", altLadderEnabled) { viewModel.setAltLadderEnabled(it) }
             ToggleRow("Speed Ladder", speedLadderEnabled) { viewModel.setSpeedLadderEnabled(it) }
+        }
+
+        // Ground Station base URL
+        SettingsSection(title = "Ground Station") {
+            GroundStationUrlField(
+                current = groundStationBaseUrl,
+                onSave = { url, callback -> viewModel.setGroundStationBaseUrl(url, callback) },
+            )
         }
 
         // WFB-ng Video Link
@@ -254,6 +268,83 @@ private fun InfoRow(label: String, value: String) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+@Composable
+private fun GroundStationUrlField(
+    current: String,
+    onSave: (String, (Boolean) -> Unit) -> Unit,
+) {
+    var draft by remember(current) { mutableStateOf(current) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var saved by remember { mutableStateOf(false) }
+
+    LaunchedEffect(draft) {
+        // Clear status whenever the user types again.
+        if (saved) saved = false
+    }
+
+    Text(
+        text = "Base URL",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(4.dp))
+    OutlinedTextField(
+        value = draft,
+        onValueChange = {
+            draft = it
+            error = null
+        },
+        singleLine = true,
+        isError = error != null,
+        modifier = Modifier.fillMaxWidth(),
+        placeholder = { Text(BaseUrlProvider.DEFAULT_BASE_URL) },
+    )
+    val message = error ?: if (saved) "Saved. Reconnecting..." else null
+    if (message != null) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = if (error != null) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+    }
+    Spacer(Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = {
+                if (!BaseUrlProvider.isValidBaseUrl(draft)) {
+                    error = "Must be http(s)://host[:port]/ ending in /"
+                    return@Button
+                }
+                onSave(draft) { ok ->
+                    if (ok) {
+                        saved = true
+                        error = null
+                    } else {
+                        error = "Could not save URL"
+                    }
+                }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = ElectricBlue),
+        ) {
+            Text("Save")
+        }
+        OutlinedButton(
+            onClick = {
+                draft = BaseUrlProvider.DEFAULT_BASE_URL
+                error = null
+                saved = false
+            },
+        ) {
+            Text("Reset")
+        }
     }
 }
 

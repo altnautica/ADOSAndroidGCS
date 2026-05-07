@@ -47,6 +47,7 @@ fun HudOverlay(
     altLadderEnabled: Boolean = true,
     speedLadderEnabled: Boolean = true,
     recording: Boolean = false,
+    linkLatencyMs: Int = 0,
 ) {
     val distanceToHome = if (homePosition != null &&
         (homePosition.lat != 0.0 || homePosition.lon != 0.0)
@@ -86,6 +87,7 @@ fun HudOverlay(
         if (recording) {
             drawRecordingIndicator()
         }
+        drawLinkLatency(linkLatencyMs, bottomInsetDp)
     }
 }
 
@@ -459,6 +461,38 @@ private fun DrawScope.drawFlightModeBadge(flightMode: FlightMode?, armed: Boolea
     val armedText = if (armed) "ARMED" else "DISARMED"
     val armedColor = if (armed) HudGreen else HudDim
     canvas.drawText(armedText, x, y + 20.dp.toPx(), hudTextPaint(armedColor, 12f))
+}
+
+// -- Link Latency Badge (bottom-right, above GPS row) --
+
+private fun DrawScope.drawLinkLatency(latencyMs: Int, bottomInsetDp: Float) {
+    if (latencyMs <= 0) return
+    val canvas = drawContext.canvas.nativeCanvas
+    val x = size.width - 16.dp.toPx()
+    val y = size.height - bottomInsetDp.dp.toPx() - 18.dp.toPx()
+
+    val color = when {
+        latencyMs < 100 -> HudGreen
+        latencyMs < 250 -> HudAmber
+        else -> HudRed
+    }
+
+    canvas.drawText(
+        "${latencyMs} ms",
+        x,
+        y,
+        hudTextPaint(color, 11f).apply {
+            textAlign = android.graphics.Paint.Align.RIGHT
+        },
+    )
+    canvas.drawText(
+        "LINK",
+        x,
+        y - 12.dp.toPx(),
+        hudTextPaint(HudDim, 9f).apply {
+            textAlign = android.graphics.Paint.Align.RIGHT
+        },
+    )
 }
 
 // -- Recording Indicator (top-right, below mode badge area) --

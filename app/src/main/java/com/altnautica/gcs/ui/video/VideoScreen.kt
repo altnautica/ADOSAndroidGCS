@@ -54,6 +54,7 @@ fun FlyScreen(
     val armed by viewModel.armed.collectAsStateWithLifecycle()
     val videoMode by viewModel.videoMode.collectAsStateWithLifecycle()
     val isStreaming by viewModel.isStreaming.collectAsStateWithLifecycle()
+    val linkLatency by viewModel.linkLatency.collectAsStateWithLifecycle()
 
     val compassEnabled by settingsViewModel.compassEnabled.collectAsStateWithLifecycle()
     val altLadderEnabled by settingsViewModel.altLadderEnabled.collectAsStateWithLifecycle()
@@ -114,6 +115,7 @@ fun FlyScreen(
             altLadderEnabled = altLadderEnabled,
             speedLadderEnabled = speedLadderEnabled,
             recording = recording,
+            linkLatencyMs = linkLatency.latencyMs,
         )
 
         // Layer 4: Floating controls (ARM/DISARM, RTL, Record, Takeoff, Land, Pause/Resume)

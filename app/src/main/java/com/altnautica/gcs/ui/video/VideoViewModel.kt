@@ -6,6 +6,7 @@ import com.altnautica.gcs.data.telemetry.AttitudeState
 import com.altnautica.gcs.data.telemetry.BatteryState
 import com.altnautica.gcs.data.telemetry.FlightMode
 import com.altnautica.gcs.data.telemetry.GpsState
+import com.altnautica.gcs.data.telemetry.LinkLatencyState
 import com.altnautica.gcs.data.telemetry.PositionState
 import com.altnautica.gcs.data.telemetry.TelemetryStore
 import com.altnautica.gcs.data.telemetry.VfrState
@@ -31,6 +32,7 @@ class VideoViewModel @Inject constructor(
     val vfr: StateFlow<VfrState> = telemetryStore.vfr
     val flightMode: StateFlow<FlightMode?> = telemetryStore.flightMode
     val armed: StateFlow<Boolean> = telemetryStore.armed
+    val linkLatency: StateFlow<LinkLatencyState> = telemetryStore.linkLatency
 
     val videoMode: StateFlow<VideoMode> = videoStreamManager.activeMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), VideoMode.NoConnection)
