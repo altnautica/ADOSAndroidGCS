@@ -4,20 +4,27 @@ import android.content.Context
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.net.ConnectivityManager
+import android.net.LinkAddress
+import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import com.altnautica.gcs.data.discovery.NsdAgentDiscovery
 import com.altnautica.gcs.data.serial.UsbSerialManager
+import com.altnautica.gcs.data.settings.BaseUrlProvider
 import com.altnautica.gcs.data.video.ModeDetector
 import com.altnautica.gcs.data.video.VideoMode
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.net.InetAddress
 
 class ModeDetectorTest {
 
@@ -27,6 +34,7 @@ class ModeDetectorTest {
     private lateinit var connectivityManager: ConnectivityManager
     private lateinit var usbSerialManager: UsbSerialManager
     private lateinit var nsdAgentDiscovery: NsdAgentDiscovery
+    private lateinit var baseUrlProvider: BaseUrlProvider
     private lateinit var detector: ModeDetector
 
     @Before
@@ -37,16 +45,39 @@ class ModeDetectorTest {
         connectivityManager = mockk(relaxed = true)
         usbSerialManager = mockk(relaxed = true)
         nsdAgentDiscovery = mockk(relaxed = true)
+        baseUrlProvider = mockk(relaxed = true)
+        coEvery { baseUrlProvider.setBaseUrl(any()) } returns true
 
         every { context.getSystemService(Context.USB_SERVICE) } returns usbManager
         every { context.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
         every { context.applicationContext.getSystemService(Context.WIFI_SERVICE) } returns wifiManager
         every { context.getSystemService(Context.CONNECTIVITY_SERVICE) } returns connectivityManager
+        // Default: no networks at all unless a test wires them up. This
+        // keeps the USB-tether check a no-op for legacy tests.
+        every { connectivityManager.allNetworks } returns emptyArray()
         // Default: NSD has not yet resolved anything, so detect() falls
         // back to the hardcoded AP IP.
         every { nsdAgentDiscovery.lastResolved } returns MutableStateFlow(null)
 
-        detector = ModeDetector(context, usbSerialManager, nsdAgentDiscovery)
+        detector = ModeDetector(context, usbSerialManager, nsdAgentDiscovery, baseUrlProvider)
+    }
+
+    private fun mockEthernetNetwork(addressString: String): Network {
+        val network = mockk<Network>()
+        val caps = mockk<NetworkCapabilities>()
+        every { caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) } returns true
+        every { caps.hasTransport(NetworkCapabilities.TRANSPORT_USB) } returns false
+        every { caps.hasTransport(any()) } returns false
+        every { caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) } returns true
+        every { connectivityManager.getNetworkCapabilities(network) } returns caps
+
+        val link = mockk<LinkProperties>()
+        val inet = InetAddress.getByName(addressString)
+        val la = mockk<LinkAddress>()
+        every { la.address } returns inet
+        every { link.linkAddresses } returns listOf(la)
+        every { connectivityManager.getLinkProperties(network) } returns link
+        return network
     }
 
     @Test
@@ -194,6 +225,77 @@ class ModeDetectorTest {
             "Expected discovered host in WHEP URL, got ${gs.whepUrl}",
             gs.whepUrl == "http://192.168.4.42:8081/whep",
         )
+    }
+
+    @Test
+    fun `usb tether subnet matcher accepts in-range addresses`() {
+        assertTrue(ModeDetector.isInUsbTetherSubnet("192.168.7.1"))
+        assertTrue(ModeDetector.isInUsbTetherSubnet("192.168.7.42"))
+        assertTrue(ModeDetector.isInUsbTetherSubnet("192.168.7.255"))
+    }
+
+    @Test
+    fun `usb tether subnet matcher rejects out-of-range addresses`() {
+        assertFalse(ModeDetector.isInUsbTetherSubnet(null))
+        assertFalse(ModeDetector.isInUsbTetherSubnet(""))
+        assertFalse(ModeDetector.isInUsbTetherSubnet("192.168.4.1"))
+        assertFalse(ModeDetector.isInUsbTetherSubnet("10.0.0.1"))
+        assertFalse(ModeDetector.isInUsbTetherSubnet("192.168.71.1"))
+    }
+
+    @Test
+    fun `usb tether returns GroundStation with tether whep url`() {
+        every { usbManager.deviceList } returns hashMapOf()
+        val tether = mockEthernetNetwork("192.168.7.42")
+        every { connectivityManager.allNetworks } returns arrayOf(tether)
+
+        val mode = detector.detect()
+        assertTrue("Expected GroundStation, got $mode", mode is VideoMode.GroundStation)
+        val gs = mode as VideoMode.GroundStation
+        assertEquals("http://192.168.7.1:8080/whep", gs.whepUrl)
+    }
+
+    @Test
+    fun `usb tether takes priority over WiFi AP when both present`() {
+        // No WFB-ng USB adapter
+        every { usbManager.deviceList } returns hashMapOf()
+
+        // USB-C tether brings up an ethernet transport in the agent's
+        // gadget subnet.
+        val tether = mockEthernetNetwork("192.168.7.42")
+        every { connectivityManager.allNetworks } returns arrayOf(tether)
+
+        // Phone is also associated with a ground-station SSID.
+        val wifiInfo = mockk<WifiInfo>()
+        every { wifiInfo.ssid } returns "\"ADOS-GS-001\""
+        @Suppress("DEPRECATION")
+        every { wifiManager.connectionInfo } returns wifiInfo
+
+        val mode = detector.detect()
+        assertTrue("Expected GroundStation via tether, got $mode", mode is VideoMode.GroundStation)
+        val gs = mode as VideoMode.GroundStation
+        assertEquals("http://192.168.7.1:8080/whep", gs.whepUrl)
+    }
+
+    @Test
+    fun `non-tether ethernet address is ignored`() {
+        every { usbManager.deviceList } returns hashMapOf()
+        // An ethernet network on a different subnet (e.g. office LAN)
+        // must not be mistaken for the agent gadget interface.
+        val notTether = mockEthernetNetwork("10.0.0.5")
+        every { connectivityManager.allNetworks } returns arrayOf(notTether)
+
+        val wifiInfo = mockk<WifiInfo>()
+        every { wifiInfo.ssid } returns "\"ADOS-GS-001\""
+        @Suppress("DEPRECATION")
+        every { wifiManager.connectionInfo } returns wifiInfo
+
+        val mode = detector.detect()
+        // WiFi AP should still win because the ethernet subnet does not
+        // match the agent gadget range.
+        assertTrue("Expected WiFi-AP GroundStation, got $mode", mode is VideoMode.GroundStation)
+        val gs = mode as VideoMode.GroundStation
+        assertEquals("http://192.168.4.1:8080/whep", gs.whepUrl)
     }
 
     @Test
