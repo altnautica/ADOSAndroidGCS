@@ -34,7 +34,7 @@ import javax.inject.Singleton
  * them into the TelemetryStore, so the rest of the app works identically to
  * direct MAVLink mode.
  *
- * Topics (per DEC-070):
+ * Topics:
  *   ados/{deviceId}/status    -- heartbeat + mode + armed + battery (2Hz)
  *   ados/{deviceId}/telemetry -- attitude, position, GPS, VFR (2Hz)
  */
@@ -75,7 +75,7 @@ class MqttTelemetryClient @Inject constructor(
 
                     // Send MQTT SUBSCRIBE for this device's topics.
                     // The MQTT broker at mqtt.altnautica.com supports MQTT-over-WebSocket.
-                    // For Phase 5 we send raw MQTT CONNECT + SUBSCRIBE packets.
+                    // A later revision sends raw MQTT CONNECT + SUBSCRIBE packets.
                     // For now we rely on the MQTT-to-Convex bridge pattern where
                     // the broker publishes JSON text frames to WebSocket subscribers.
                     val subscribeTopic = """{"subscribe":["ados/$deviceId/status","ados/$deviceId/telemetry"]}"""

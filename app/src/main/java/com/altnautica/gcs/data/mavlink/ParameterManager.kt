@@ -28,7 +28,7 @@ import javax.inject.Singleton
 /**
  * Manages FC parameter download, caching, read, and write.
  *
- * ArduPilot auto-saves params to EEPROM on PARAM_SET (per DEC-047),
+ * ArduPilot auto-saves params to EEPROM on PARAM_SET,
  * so writeParam() is sufficient for persistence. commitToFlash() is
  * belt-and-suspenders for non-ArduPilot firmware.
  */
@@ -228,7 +228,7 @@ class ParameterManager @Inject constructor(
 
     /**
      * Write a parameter value to the FC.
-     * ArduPilot auto-saves to EEPROM on PARAM_SET (DEC-047).
+     * ArduPilot auto-saves to EEPROM on PARAM_SET.
      */
     suspend fun writeParam(name: String, value: Float, type: Int) {
         Log.d(TAG, "Writing param $name = $value (type=$type)")
@@ -254,7 +254,7 @@ class ParameterManager @Inject constructor(
 
     /**
      * Belt-and-suspenders flash commit via MAV_CMD_PREFLIGHT_STORAGE.
-     * Fire-and-forget: ArduPilot doesn't reliably ACK this command (DEC-047).
+     * Fire-and-forget: ArduPilot doesn't reliably ACK this command.
      */
     suspend fun commitToFlash() {
         Log.d(TAG, "Sending PREFLIGHT_STORAGE (flash commit)")

@@ -23,7 +23,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Cloud video client for Mode C relay (DEC-070/071, DEC-080).
+ * Cloud video client for Mode C relay.
  *
  * Connects to the ADOS video relay at video.altnautica.com over WebSocket.
  * Receives fragmented MP4 (fMP4) binary frames containing H.264 video.
