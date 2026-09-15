@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.util.Log
 import com.altnautica.gcs.data.discovery.NsdAgentDiscovery
+import com.altnautica.gcs.data.pairing.AgentCredentialStore
 import com.altnautica.gcs.data.serial.UsbSerialManager
 import com.altnautica.gcs.data.settings.BaseUrlProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -24,7 +25,8 @@ class ModeDetector @Inject constructor(
     private val usbSerialManager: UsbSerialManager,
     private val nsdAgentDiscovery: NsdAgentDiscovery,
     private val baseUrlProvider: BaseUrlProvider,
-) {
+    private val credentials: AgentCredentialStore,
+) : VideoEnvironment {
 
     companion object {
         private const val TAG = "ModeDetector"
@@ -69,22 +71,28 @@ class ModeDetector @Inject constructor(
             val device = usbManager.deviceList.values.firstOrNull { isWfbAdapter(it.vendorId, it.productId) }
             return VideoMode.DirectUsb(device?.deviceId ?: 0)
         }
+        localAgentMode()?.let { return it }
+        cloudRelayMode()?.let { return it }
+        Log.d(TAG, "No video connection available")
+        return VideoMode.NoConnection
+    }
 
-        // Priority 2: USB-C tether to the agent over CDC-NCM / RNDIS.
-        // Lower latency than WiFi AP and survives RF outages, so it wins
-        // over WiFi when both are present.
+    /**
+     * The local agent path: the USB-C tether first, then the ground-station
+     * Wi-Fi AP.
+     *
+     * The tether is lower latency than the AP and survives RF outages, so it
+     * wins when both are present. On the AP, the most recently resolved mDNS
+     * endpoint beats the fixed AP address; [detectSuspending] is what primes
+     * that resolution.
+     */
+    override fun localAgentMode(): VideoMode.GroundStation? {
         if (isUsbTetherConnected()) {
             val whepUrl = "$USB_TETHER_BASE_URL/whep"
             Log.d(TAG, "Mode A: USB-C tether detected whep=$whepUrl")
             persistBaseUrl("$USB_TETHER_BASE_URL/")
             return VideoMode.GroundStation(whepUrl)
         }
-
-        // Priority 3: Ground station WiFi AP. Use the most recently
-        // resolved NSD endpoint when available; fall back to the
-        // hardcoded AP IP otherwise. The async discovery is kicked off
-        // by detectSuspending() so non-suspending callers still pick
-        // up a discovered host as soon as one round has completed.
         if (isGroundStationWifi()) {
             val whepUrl = nsdAgentDiscovery.lastResolved.value
                 ?.let { "http://${it.host}:${it.port}/whep" }
@@ -92,16 +100,29 @@ class ModeDetector @Inject constructor(
             Log.d(TAG, "Mode A: Ground station WiFi detected whep=$whepUrl")
             return VideoMode.GroundStation(whepUrl)
         }
-
-        // Priority 4: Internet available for cloud relay
-        if (hasInternetConnection()) {
-            Log.d(TAG, "Mode C: Cloud relay fallback")
-            return VideoMode.CloudRelay(CLOUD_RELAY_URL)
-        }
-
-        Log.d(TAG, "No video connection available")
-        return VideoMode.NoConnection
+        return null
     }
+
+    /**
+     * The cloud relay, for a node this device is paired with only.
+     *
+     * The relay keys both the video stream and the MQTT telemetry topic on the
+     * agent's device id, and pairing is its only source. With no id there is
+     * nothing to subscribe to, so this returns null and the caller reports a
+     * pairing gap instead of connecting to a placeholder.
+     */
+    override fun cloudRelayMode(): VideoMode.CloudRelay? {
+        if (!hasInternet()) return null
+        val deviceId = pairedDeviceId()
+        if (deviceId == null) {
+            Log.d(TAG, "Cloud relay unavailable: no paired device id")
+            return null
+        }
+        Log.d(TAG, "Mode C: Cloud relay fallback device=$deviceId")
+        return VideoMode.CloudRelay(CLOUD_RELAY_URL, deviceId)
+    }
+
+    override fun pairedDeviceId(): String? = credentials.currentPairedDeviceId()
 
     /**
      * Same as [detect] but kicks off an mDNS lookup before the
@@ -174,7 +195,7 @@ class ModeDetector @Inject constructor(
         return ssid.startsWith(GS_SSID_PREFIX)
     }
 
-    private fun hasInternetConnection(): Boolean {
+    override fun hasInternet(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
             ?: return false
         val network = cm.activeNetwork ?: return false

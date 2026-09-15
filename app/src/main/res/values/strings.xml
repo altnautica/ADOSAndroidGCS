@@ -197,9 +197,9 @@
     <string name="settings_recording_format">Format</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
-    <string name="settings_license">License: GPL-3.0</string>
-    <string name="settings_website">altnautica.com</string>
-    <string name="settings_source">Source Code</string>
+    <string name="settings_license">License</string>
+    <string name="settings_website">Website</string>
+    <string name="settings_source">Source</string>
     <string name="settings_github">GitHub</string>
     <string name="settings_discord">Discord</string>
 
@@ -265,4 +265,132 @@
     <string name="volts">V</string>
     <string name="amps">A</string>
     <string name="milliamps_hour">mAh</string>
+
+    <!-- Pairing -->
+    <string name="pairing_section_title">Pairing</string>
+    <string name="pairing_status_paired">This node is paired with this device</string>
+    <string name="pairing_status_paired_elsewhere">This node is paired with another device</string>
+    <string name="pairing_status_unpaired">This node is not paired</string>
+    <string name="pairing_status_unknown">Node not reached yet</string>
+    <string name="pairing_device_id">Device ID</string>
+    <string name="pairing_device_name">Name</string>
+    <string name="pairing_profile">Profile</string>
+    <string name="pairing_reach">Reach</string>
+    <string name="pairing_action_probe">Check node</string>
+    <string name="pairing_action_pair">Pair this device</string>
+    <string name="pairing_action_unpair">Unpair node</string>
+    <string name="pairing_action_forget">Forget stored key</string>
+    <string name="pairing_action_use_reach">Use this address</string>
+    <string name="pairing_claimed">Paired. This device now holds the node\'s key.</string>
+    <string name="pairing_already_paired">This node is already paired. Unpair it from the client that holds it, then pair again.</string>
+    <string name="pairing_failed">Pairing failed. Check the address and try again.</string>
+    <string name="pairing_unreachable">Could not reach the node at this address.</string>
+    <string name="pairing_unpaired_ok">Node unpaired.</string>
+    <string name="pairing_forgotten">Stored key cleared.</string>
+    <string name="pairing_key_absent">No key stored — authenticated requests will be refused.</string>
+    <string name="pairing_explainer">A paired node refuses every request that carries no key. Pair on the same network as the node; nothing leaves the LAN.</string>
+
+    <!-- Ground station access point -->
+    <string name="station_ap_title">Ground Station Wi-Fi</string>
+    <string name="station_ap_passphrase_label">AP passphrase</string>
+    <string name="station_ap_prompt">Enter the passphrase from the installer summary or the on-box QR code. It is generated for each unit, so there is no default.</string>
+    <string name="station_ap_qr_label">Or paste the QR join string</string>
+    <string name="station_ap_saved">Passphrase saved.</string>
+    <string name="station_ap_invalid_qr">That is not a Wi-Fi join string with a passphrase.</string>
+    <string name="station_ap_join">Join</string>
+    <string name="station_ap_forget">Forget</string>
+    <string name="station_ap_join_needs_passphrase">Enter this unit\'s passphrase before joining.</string>
+    <string name="station_ap_join_requested">Joining the ground station network…</string>
+
+    <!-- Ground station notices -->
+    <string name="station_title">Ground Station</string>
+    <string name="station_connected">Connected</string>
+    <string name="station_disconnected">Disconnected</string>
+    <string name="station_packet_loss">Packet Loss</string>
+    <string name="station_fec_recovered">FEC Recovered</string>
+    <string name="station_bitrate">Bitrate</string>
+    <string name="station_recording">Recording</string>
+    <string name="station_recording_start">Start recording</string>
+    <string name="station_recording_stop">Stop recording</string>
+    <string name="station_system_info">System Info</string>
+    <string name="station_hostname">Hostname</string>
+    <string name="station_ip_address">IP Address</string>
+    <string name="station_soc_temp">SoC Temp</string>
+    <string name="station_uptime">Uptime</string>
+    <string name="station_agent_version">Agent Version</string>
+    <string name="station_update_available">Update Available</string>
+    <string name="station_restart_action">Restart agent services</string>
+    <string name="station_restart_confirm_title">Restart agent services?</string>
+    <string name="station_restart_confirm_body">The node\'s radio, video and MAVLink services stop and come back. Telemetry and video drop for a few seconds. The machine does not reboot.</string>
+    <string name="station_restart_requested">Restart requested. Services come back in a few seconds.</string>
+    <string name="station_restart_failed">Could not restart the agent services.</string>
+    <string name="station_recording_start_failed">Could not start recording on the ground station.</string>
+    <string name="station_recording_stop_failed">Could not stop recording on the ground station.</string>
+    <string name="station_camera_unsupported">This drone does not advertise multi-camera support.</string>
+    <string name="station_camera_switch_failed">Could not switch the camera source.</string>
+    <string name="station_not_paired">This node is paired. Pair this device in Settings.</string>
+
+    <!-- Video fallback -->
+    <string name="video_usb_failed_trying_alternate">Direct USB video failed (%1$s). Trying an alternate mode.</string>
+    <string name="video_no_source_all_failed">No video source responded. Check the radio link and the ground station.</string>
+    <string name="video_no_source_needs_pairing">Cloud relay needs a paired node. Pair this device in Settings.</string>
+    <string name="video_no_source_no_network">No network. Connect the radio, the USB tether, or the ground station Wi-Fi.</string>
+
+    <!-- Firmware -->
+    <string name="firmware_update_available">Update Available</string>
+    <string name="firmware_check_failed">Update Check Failed</string>
+    <string name="firmware_size_mb">Size: %1$s MB</string>
+    <string name="firmware_apply_on_node">Apply this update on the node itself — the installer or the agent\'s own update command. The agent serves no remote update endpoint, so it cannot be pushed from here.</string>
+
+    <!-- Home -->
+    <string name="home_title">ADOS Ground Control</string>
+    <string name="home_fly_label">FLY</string>
+    <string name="home_fly_description">Live video feed and flight controls</string>
+    <string name="home_map_label">MAP</string>
+    <string name="home_map_description">Full-screen map with drone tracking</string>
+    <string name="home_plan_label">PLAN</string>
+    <string name="home_plan_description">Mission planning and waypoints</string>
+    <string name="home_agriculture_label">AGRICULTURE</string>
+    <string name="home_agriculture_description">Spray missions and field mapping</string>
+    <string name="home_configure_label">CONFIGURE</string>
+    <string name="home_configure_description">FC parameters and calibration</string>
+    <string name="home_logs_label">LOGS</string>
+    <string name="home_logs_description">Flight history and tlog recordings</string>
+    <string name="home_station_label">STATION</string>
+    <string name="home_station_description">Radio link, recording and node services</string>
+
+    <!-- USB serial link -->
+    <string name="usb_serial_title">USB Serial Link</string>
+    <string name="usb_serial_connected_to">Connected to %1$s</string>
+    <string name="usb_serial_disconnected">Not connected</string>
+    <string name="usb_serial_connect">Connect</string>
+    <string name="usb_serial_disconnect">Disconnect</string>
+    <string name="usb_serial_no_device">No USB serial device detected</string>
+    <string name="usb_serial_baud">Baud rate</string>
+
+    <!-- Safety confirmations -->
+    <string name="takeoff_title">Takeoff</string>
+    <string name="takeoff_select_altitude">Select takeoff altitude</string>
+    <string name="takeoff_confirm">Takeoff</string>
+    <string name="disarm_confirm_title">Confirm Disarm</string>
+    <string name="disarm_confirm_body">Disarm motors? The drone will stop all motors immediately.</string>
+    <string name="disarm_confirm_action">Disarm</string>
+    <string name="geofence_draw">Draw Geofence</string>
+    <string name="geofence_clear">Clear</string>
+    <string name="geofence_upload">Upload</string>
+    <string name="param_editor_new_value">New value</string>
+    <string name="param_editor_invalid_number">Enter a valid number</string>
+    <string name="param_editor_write">Write</string>
+
+    <!-- Settings sections -->
+    <string name="settings_back">Back to home</string>
+    <string name="settings_hud_overlay">HUD Overlay</string>
+    <string name="settings_ground_station">Ground Station</string>
+    <string name="settings_base_url">Base URL</string>
+    <string name="settings_wfb_link">WFB-ng Video Link</string>
+    <string name="settings_bandwidth">Bandwidth</string>
+    <string name="settings_wifi_channel">WiFi Channel</string>
+    <string name="settings_base_url_saved">Saved. Reconnecting…</string>
+    <string name="settings_base_url_invalid">Must be http(s)://host[:port]/ ending in /</string>
+    <string name="settings_base_url_save_failed">Could not save the address</string>
 </resources>

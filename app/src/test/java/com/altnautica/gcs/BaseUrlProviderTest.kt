@@ -34,7 +34,7 @@ class BaseUrlProviderTest {
 
     @Test
     fun `default url is the AP fallback`() {
-        assertEquals("http://192.168.4.1:8080/", provider.getBaseUrlBlocking())
+        assertEquals("http://192.168.4.1:8080/", provider.currentBaseUrl())
     }
 
     @Test
@@ -42,14 +42,14 @@ class BaseUrlProviderTest {
         val updated = "http://10.0.0.5:8080/"
         val ok = provider.setBaseUrl(updated)
         assertTrue(ok)
-        assertEquals(updated, provider.getBaseUrlBlocking())
+        assertEquals(updated, provider.currentBaseUrl())
     }
 
     @Test
     fun `setBaseUrl rejects invalid scheme`() = runTest {
         val ok = provider.setBaseUrl("ftp://example.com/")
         assertFalse(ok)
-        assertEquals(BaseUrlProvider.DEFAULT_BASE_URL, provider.getBaseUrlBlocking())
+        assertEquals(BaseUrlProvider.DEFAULT_BASE_URL, provider.currentBaseUrl())
     }
 
     @Test
@@ -65,21 +65,22 @@ class BaseUrlProviderTest {
     }
 
     @Test
-    fun `toMavlinkWsUrl swaps http to ws`() {
+    fun `toMavlinkWsUrl moves to the mavlink listener port at the host root`() {
+        // The control-surface port in the base URL is deliberately discarded:
+        // the MAVLink proxy is a separate listener, not a path under :8080.
         val ws = BaseUrlProvider.toMavlinkWsUrl("http://10.0.0.5:8080/")
-        assertEquals("ws://10.0.0.5:8080/api/v1/ground-station/ws/mavlink", ws)
+        assertEquals("ws://10.0.0.5:8765/", ws)
     }
 
     @Test
     fun `toMavlinkWsUrl swaps https to wss`() {
         val ws = BaseUrlProvider.toMavlinkWsUrl("https://gs.example.com/")
-        assertEquals("wss://gs.example.com/api/v1/ground-station/ws/mavlink", ws)
+        assertEquals("wss://gs.example.com:8765/", ws)
     }
 
     @Test
-    fun `toMavlinkWsUrl appends trailing slash if missing`() {
-        // The function tolerates a missing trailing slash though setBaseUrl does not.
+    fun `toMavlinkWsUrl tolerates a missing trailing slash`() {
         val ws = BaseUrlProvider.toMavlinkWsUrl("http://10.0.0.5:8080")
-        assertEquals("ws://10.0.0.5:8080/api/v1/ground-station/ws/mavlink", ws)
+        assertEquals("ws://10.0.0.5:8765/", ws)
     }
 }

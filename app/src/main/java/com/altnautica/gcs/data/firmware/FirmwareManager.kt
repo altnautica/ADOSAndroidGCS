@@ -1,7 +1,8 @@
 package com.altnautica.gcs.data.firmware
 
 import android.util.Log
-import com.altnautica.gcs.data.groundstation.GroundStationRepository
+import androidx.annotation.StringRes
+import com.altnautica.gcs.R
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,26 +20,26 @@ data class FirmwareUpdate(
 enum class FirmwareState {
     IDLE,
     CHECKING,
-    DOWNLOADING,
-    PUSHING,
-    REBOOTING,
     COMPLETE,
     ERROR,
 }
 
 /**
- * Manages firmware update checking and OTA push to the ADOS Ground Station.
+ * Checks whether a newer ground-station release exists and reports it.
  *
- * Flow: check for update -> download firmware -> push to the agent OTA
- * endpoint -> reboot. The ground station handles the actual flashing
- * internally. The OTA push channel is currently stubbed at the repository
- * layer; downloadAndPush() will surface a "not supported yet" error until
- * the agent exposes the OTA endpoint on this profile.
+ * **Applying it is a named gap, not a feature of this app.** The agent serves
+ * no OTA route on any profile — not a drone one, not a ground-station one — so
+ * there is nothing here to push an image to. What this used to do instead was
+ * animate a fabricated download bar for two seconds and then call a repository
+ * stub that always failed, which reports a state that is known to be false.
+ *
+ * To close the gap the agent needs `GET /api/ota` plus
+ * `POST /api/ota/{check,install,restart}` driving the same path as the `ados
+ * update` CLI; this class then gains a push call against it. Until then the
+ * update is applied on the node and this surface says so.
  */
 @Singleton
-class FirmwareManager @Inject constructor(
-    private val repository: GroundStationRepository,
-) {
+class FirmwareManager @Inject constructor() {
 
     companion object {
         private const val TAG = "FirmwareManager"
@@ -47,9 +48,6 @@ class FirmwareManager @Inject constructor(
 
     private val _state = MutableStateFlow(FirmwareState.IDLE)
     val state: StateFlow<FirmwareState> = _state.asStateFlow()
-
-    private val _progress = MutableStateFlow(0f)
-    val progress: StateFlow<Float> = _progress.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -112,59 +110,16 @@ class FirmwareManager @Inject constructor(
     }
 
     /**
-     * Download firmware and push to the ground station via OTA API.
+     * Where an available update is applied.
+     *
+     * Not a no-op install button: offering one that cannot work is worse than
+     * saying plainly that the image is applied on the node.
      */
-    suspend fun downloadAndPush(update: FirmwareUpdate, onProgress: (Float) -> Unit) {
-        _error.value = null
-
-        try {
-            // Phase 1: Download (0-50%)
-            _state.value = FirmwareState.DOWNLOADING
-            _progress.value = 0f
-
-            // Simulate download progress (actual download happens on ground station side)
-            for (i in 1..10) {
-                kotlinx.coroutines.delay(200)
-                val prog = i / 20f // 0 to 0.5
-                _progress.value = prog
-                onProgress(prog)
-            }
-
-            // Phase 2: Push to ground station (50-90%)
-            _state.value = FirmwareState.PUSHING
-            _progress.value = 0.5f
-            onProgress(0.5f)
-
-            val result = repository.pushOta(update.downloadUrl, update.newVersion)
-            result.onFailure { e ->
-                _state.value = FirmwareState.ERROR
-                _error.value = "OTA push failed: ${e.message}"
-                return
-            }
-
-            _progress.value = 0.9f
-            onProgress(0.9f)
-
-            // Phase 3: Reboot (90-100%)
-            _state.value = FirmwareState.REBOOTING
-            repository.reboot()
-
-            _progress.value = 1f
-            onProgress(1f)
-
-            _state.value = FirmwareState.COMPLETE
-            _availableUpdate.value = null
-            Log.i(TAG, "OTA complete: ${update.newVersion}")
-        } catch (e: Exception) {
-            _state.value = FirmwareState.ERROR
-            _error.value = "OTA failed: ${e.message}"
-            Log.e(TAG, "OTA failed: ${e.message}", e)
-        }
-    }
+    @StringRes
+    fun applyInstructionRes(): Int = R.string.firmware_apply_on_node
 
     fun reset() {
         _state.value = FirmwareState.IDLE
-        _progress.value = 0f
         _error.value = null
     }
 

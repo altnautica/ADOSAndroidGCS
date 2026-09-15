@@ -42,9 +42,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.data.followme.FollowAlgorithm
-import com.altnautica.gcs.data.followme.FollowMeEngine
-import com.altnautica.gcs.data.video.ModeDetector
-import com.altnautica.gcs.data.video.VideoMode
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.altnautica.gcs.ui.theme.DeepBlack
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.ErrorRed
@@ -64,12 +62,11 @@ private enum class AlgoOption(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FollowMePanel(
-    engine: FollowMeEngine,
-    modeDetector: ModeDetector,
     onDismiss: () -> Unit,
+    viewModel: FollowMeViewModel = hiltViewModel(),
 ) {
-    val isActive by engine.isActive.collectAsStateWithLifecycle()
-    val gpsAccuracy by engine.gpsAccuracy.collectAsStateWithLifecycle()
+    val isActive by viewModel.isActive.collectAsStateWithLifecycle()
+    val gpsAccuracy by viewModel.gpsAccuracy.collectAsStateWithLifecycle()
 
     var selectedAlgo by remember { mutableStateOf(AlgoOption.LEASH) }
     var altitudeOffset by remember { mutableFloatStateOf(15f) }
@@ -78,11 +75,12 @@ fun FollowMePanel(
 
     // Request a GPS fix when the panel opens so the accuracy indicator is live
     LaunchedEffect(Unit) {
-        engine.requestSingleFix()
+        viewModel.requestSingleFix()
     }
 
-    val currentVideoMode = modeDetector.detect()
-    val isDirectUsb = currentVideoMode is VideoMode.DirectUsb
+    // No local agent and no relay means the only link is the direct USB radio,
+    // which carries no MAVLink uplink for guided targets.
+    val isDirectUsb = viewModel.directUsbOnly
     val gpsOk = gpsAccuracy <= 10f && gpsAccuracy != Float.MAX_VALUE
 
     ModalBottomSheet(
@@ -187,7 +185,7 @@ fun FollowMePanel(
             Button(
                 onClick = {
                     if (isActive) {
-                        engine.stop()
+                        viewModel.stop()
                     } else {
                         val algo = when (selectedAlgo) {
                             AlgoOption.LEASH -> FollowAlgorithm.Leash()
@@ -195,7 +193,7 @@ fun FollowMePanel(
                             AlgoOption.ORBIT -> FollowAlgorithm.Orbit()
                             AlgoOption.ABOVE -> FollowAlgorithm.Above
                         }
-                        engine.start(algo, altitudeOffset)
+                        viewModel.start(algo, altitudeOffset)
                     }
                 },
                 enabled = isActive || (gpsOk && !isDirectUsb),

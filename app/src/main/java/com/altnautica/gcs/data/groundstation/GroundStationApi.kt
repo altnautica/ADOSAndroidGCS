@@ -8,12 +8,9 @@ import retrofit2.http.PUT
 
 /**
  * Retrofit binding for the ground-station REST surface served by the
- * ADOS Drone Agent under /api/v1/ground-station. The base URL is set in
- * DataModule; each path here is relative to that root.
- *
- * System reboot and OTA push have no agent counterpart on this profile
- * yet. Repository surfaces a "not implemented" Result.failure for those
- * callers until the endpoints land.
+ * ADOS Drone Agent under /api/v1/ground-station, plus the agent-wide
+ * supervisor restart. The request host is supplied per call by
+ * AgentHostInterceptor; each path here is the full agent path.
  */
 interface GroundStationApi {
 
@@ -40,6 +37,14 @@ interface GroundStationApi {
 
     @GET("api/v1/ground-station/recording/list")
     suspend fun listRecordings(): RecordingListResponse
+
+    /**
+     * Cycle the agent's own service tree (`ados-*` units). Not a machine
+     * reboot — the agent serves no OS-reboot route, so this is the strongest
+     * recovery action reachable over HTTP.
+     */
+    @POST("api/v1/system/restart-supervisor")
+    suspend fun restartSupervisor(): Response<Unit>
 
     @POST("api/v1/ground-station/camera/switch")
     suspend fun switchCamera(@Body body: CameraSwitchRequest): Response<CameraSwitchResponse>

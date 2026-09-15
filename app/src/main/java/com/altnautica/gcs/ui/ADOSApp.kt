@@ -12,6 +12,7 @@ import com.altnautica.gcs.ui.flightlog.FlightDetailScreen
 import com.altnautica.gcs.ui.flightlog.FlightHistoryScreen
 import com.altnautica.gcs.ui.gallery.VideoGalleryScreen
 import com.altnautica.gcs.ui.gcs.MapScreen
+import com.altnautica.gcs.ui.groundstation.GroundStationScreen
 import com.altnautica.gcs.ui.home.HomeScreen
 import com.altnautica.gcs.ui.maps.TileDownloadScreen
 import com.altnautica.gcs.ui.mission.MissionPlannerScreen
@@ -58,6 +59,9 @@ fun ADOSApp() {
         }
         composable(NavRoutes.Configure.route) {
             ConfigureScreen(onBack = { navController.navigateUp() })
+        }
+        composable(NavRoutes.GroundStation.route) {
+            GroundStationScreen(onBack = { navController.navigateUp() })
         }
         composable(NavRoutes.Logs.route) {
             FlightHistoryScreen(

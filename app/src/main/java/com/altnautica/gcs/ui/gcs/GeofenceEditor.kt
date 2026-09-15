@@ -51,6 +51,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
+import androidx.compose.ui.res.stringResource
+import com.altnautica.gcs.R
 
 /**
  * Mode for the geofence drawing tool.
@@ -163,7 +165,7 @@ fun GeofenceEditorToolbar(
                 ) {
                     Icon(Icons.Filled.Draw, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Draw Geofence")
+                    Text(stringResource(R.string.geofence_draw))
                 }
             }
 
@@ -221,7 +223,7 @@ fun GeofenceEditorToolbar(
                     ) {
                         Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Clear")
+                        Text(stringResource(R.string.geofence_clear))
                     }
                     Button(
                         onClick = {
@@ -238,7 +240,7 @@ fun GeofenceEditorToolbar(
                     ) {
                         Icon(Icons.Filled.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Upload")
+                        Text(stringResource(R.string.geofence_upload))
                     }
                 }
             }
@@ -253,7 +255,7 @@ fun GeofenceEditorToolbar(
                 ) {
                     Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         }
@@ -377,45 +379,3 @@ private fun generateCirclePoints(
     return points
 }
 
-/**
- * Upload fence vertices to the flight controller via MAVLink.
- *
- * For circular fences, sets FENCE_RADIUS and re-enables the fence.
- *
- * For polygon fences, runs the FENCE_POINT protocol via
- * [com.altnautica.gcs.data.mavlink.MavLinkCommandSender.sendFencePoints]:
- *   1. Disable fence (MAV_CMD_DO_FENCE_ENABLE param1=0).
- *   2. PARAM_SET FENCE_TOTAL = vertex count.
- *   3. FENCE_POINT for each vertex (fire-and-forget, idx 0..count-1).
- *   4. Re-enable fence (MAV_CMD_DO_FENCE_ENABLE param1=1).
- *
- * In both cases FENCE_ACTION is set to 1 (RTL).
- */
-suspend fun uploadGeofence(
-    vertices: List<GeoPoint>,
-    radiusM: Float?,
-    commandSender: com.altnautica.gcs.data.mavlink.MavLinkCommandSender,
-) {
-    android.util.Log.i("GeofenceEditor", "Upload fence: ${vertices.size} vertices, radius=$radiusM")
-
-    // Action on breach: RTL.
-    commandSender.sendParamSet("FENCE_ACTION", 1f, 9) // 9 = MAV_PARAM_TYPE_REAL32, 1 = RTL
-
-    if (radiusM != null) {
-        // Circular fence: store radius parameter and re-enable.
-        commandSender.sendParamSet("FENCE_RADIUS", radiusM, 9)
-        commandSender.sendCommandLongRaw(commandId = 207, param1 = 1f)
-        android.util.Log.i("GeofenceEditor", "Set FENCE_RADIUS=$radiusM")
-        return
-    }
-
-    // Polygon fence: run the FENCE_POINT upload protocol.
-    val points = vertices.map { it.latitude to it.longitude }
-    commandSender.sendFencePoints(points)
-    for ((i, pt) in vertices.withIndex()) {
-        android.util.Log.i(
-            "GeofenceEditor",
-            "Fence vertex $i: lat=${pt.latitude}, lon=${pt.longitude}"
-        )
-    }
-}

@@ -1,12 +1,15 @@
 package com.altnautica.gcs.ui.groundstation
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.R
 import com.altnautica.gcs.data.firmware.FirmwareManager
 import com.altnautica.gcs.data.firmware.FirmwareState
 import com.altnautica.gcs.data.firmware.FirmwareUpdate
 import com.altnautica.gcs.data.groundstation.CameraNotSupportedError
 import com.altnautica.gcs.data.groundstation.GroundStationRepository
+import com.altnautica.gcs.data.pairing.NotPairedError
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,17 +56,28 @@ class GroundStationViewModel @Inject constructor(
     private val _systemInfo = MutableStateFlow(SystemInfo())
     val systemInfo: StateFlow<SystemInfo> = _systemInfo.asStateFlow()
 
-    private val _notice = MutableStateFlow<String?>(null)
-    val notice: StateFlow<String?> = _notice.asStateFlow()
+    /**
+     * Transient operator notice as a string resource id.
+     *
+     * A resource id rather than a formatted string so the message is
+     * translatable — the app ships localized resources, and a message built
+     * here would stay English for every one of them.
+     */
+    private val _notice = MutableStateFlow<Int?>(null)
+    val notice: StateFlow<Int?> = _notice.asStateFlow()
 
-    // Firmware state
+    // Firmware advisory. There is no push path — the agent serves no OTA
+    // route — so there is no progress to report and none is invented.
     val firmwareUpdate: StateFlow<FirmwareUpdate?> = firmwareManager.availableUpdate
     val firmwareState: StateFlow<FirmwareState> = firmwareManager.state
-    val firmwareProgress: StateFlow<Float> = firmwareManager.progress
     val firmwareError: StateFlow<String?> = firmwareManager.error
+    val firmwareApplyInstructionRes: Int = firmwareManager.applyInstructionRes()
 
     private val _showFirmwareDialog = MutableStateFlow(false)
     val showFirmwareDialog: StateFlow<Boolean> = _showFirmwareDialog.asStateFlow()
+
+    private val _restarting = MutableStateFlow(false)
+    val restarting: StateFlow<Boolean> = _restarting.asStateFlow()
 
     init {
         repository.startPolling()
@@ -89,10 +103,21 @@ class GroundStationViewModel @Inject constructor(
         firmwareManager.reset()
     }
 
-    fun startFirmwareUpdate() {
-        val update = firmwareUpdate.value ?: return
+    /**
+     * Cycle the agent's service tree on the node.
+     *
+     * The recovery action for a wedged radio, video or MAVLink service that
+     * would otherwise need an SSH session. Not an OS reboot: the agent serves
+     * no route for that.
+     */
+    fun restartAgentServices() {
+        if (_restarting.value) return
         viewModelScope.launch {
-            firmwareManager.downloadAndPush(update) {}
+            _restarting.value = true
+            repository.restartAgentServices()
+                .onSuccess { _notice.value = R.string.station_restart_requested }
+                .onFailure { err -> _notice.value = noticeFor(err, R.string.station_restart_failed) }
+            _restarting.value = false
         }
     }
 
@@ -130,8 +155,8 @@ class GroundStationViewModel @Inject constructor(
                     _recording.value = true
                     _recordingStartTime.value = System.currentTimeMillis()
                 }
-                .onFailure {
-                    _notice.value = "Could not start recording on the ground station"
+                .onFailure { err ->
+                    _notice.value = noticeFor(err, R.string.station_recording_start_failed)
                 }
         }
     }
@@ -143,10 +168,9 @@ class GroundStationViewModel @Inject constructor(
                     _activeCamera.value = cameraId
                 }
                 .onFailure { err ->
-                    _notice.value = if (err is CameraNotSupportedError) {
-                        "This drone does not advertise multi-camera support"
-                    } else {
-                        "Could not switch the camera source"
+                    _notice.value = when {
+                        err is CameraNotSupportedError -> R.string.station_camera_unsupported
+                        else -> noticeFor(err, R.string.station_camera_switch_failed)
                     }
                 }
         }
@@ -159,11 +183,22 @@ class GroundStationViewModel @Inject constructor(
                     _recording.value = false
                     _recordingStartTime.value = 0L
                 }
-                .onFailure {
-                    _notice.value = "Could not stop recording on the ground station"
+                .onFailure { err ->
+                    _notice.value = noticeFor(err, R.string.station_recording_stop_failed)
                 }
         }
     }
+
+    /**
+     * Map a failure to a notice, promoting the pairing case.
+     *
+     * A 401 from a paired node is not a broken ground station: it means this
+     * handset holds no key. Reported as the generic failure it used to be, the
+     * operator had no way to reach the one action that fixes it.
+     */
+    @StringRes
+    private fun noticeFor(error: Throwable, @StringRes fallback: Int): Int =
+        if (error is NotPairedError) R.string.station_not_paired else fallback
 
     private fun formatUptime(seconds: Long): String {
         if (seconds <= 0) return "--"

@@ -1,6 +1,7 @@
 package com.altnautica.gcs.data.groundstation
 
 import android.util.Log
+import com.altnautica.gcs.data.pairing.NotPairedError
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,10 +31,10 @@ class CameraNotSupportedError(message: String) : Exception(message)
  * system, and role views warm for the UI. The wfb radio config and the
  * full network view are fetched on demand via fetchWfb()/fetchNetwork().
  *
- * Recording (start/stop/list) and camera switch hit the agent's REST
- * surface directly. System reboot and OTA push are still stubs and
- * return Result.failure with a stable NotImplementedError marker so the
- * UI can surface a friendly hint without crashing.
+ * Recording (start/stop/list), camera switch and the supervisor restart
+ * hit the agent's REST surface directly. A 401 from any of them means
+ * this device is not paired with the node, and is surfaced as
+ * [NotPairedError] rather than as a transport failure.
  *
  * Camera switch returns HTTP 501 on single-camera drones; the
  * repository swallows that as a [CameraNotSupportedError] result and
@@ -48,10 +49,6 @@ class GroundStationRepository @Inject constructor(
     companion object {
         private const val TAG = "GroundStationRepo"
         private const val POLL_INTERVAL_MS = 2000L
-
-        private val NOT_IMPLEMENTED = UnsupportedOperationException(
-            "endpoint not implemented in this agent profile"
-        )
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -186,18 +183,42 @@ class GroundStationRepository @Inject constructor(
         }
     }
 
-    /** Stub: no system reboot endpoint on this agent profile yet. */
-    suspend fun reboot(): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
+    /**
+     * Cycle the agent's service tree on the node.
+     *
+     * The agent serves no OS-reboot route, so this is the strongest recovery
+     * action reachable over HTTP; it restarts the `ados-*` units, which clears
+     * a wedged radio, video or MAVLink service without an SSH session.
+     */
+    suspend fun restartAgentServices(): Result<Unit> = runApi {
+        val response = api.restartSupervisor()
+        if (!response.isSuccessful) {
+            throw HttpException(response)
+        }
+    }
 
-    /** Stub: no OTA push endpoint on this agent profile yet. */
-    suspend fun pushOta(
-        @Suppress("UNUSED_PARAMETER") firmwareUrl: String,
-        @Suppress("UNUSED_PARAMETER") version: String,
-    ): Result<Unit> = Result.failure(NOT_IMPLEMENTED)
-
+    /**
+     * Run an agent call, distinguishing "the node refused this credential" from
+     * "the node could not be reached".
+     *
+     * A paired agent answers 401 on every data route without a valid
+     * `X-ADOS-Key`. Folded into a generic failure that reads to the operator as
+     * a dead ground station, so it is mapped to [NotPairedError] and the UI
+     * points at the pairing step instead.
+     */
     private suspend fun <T> runApi(call: suspend () -> T): Result<T> {
         return try {
             Result.success(call())
+        } catch (e: HttpException) {
+            if (e.code() == 401) {
+                Log.w(TAG, "agent refused the request: not paired with this device")
+                Result.failure(
+                    NotPairedError("this node is paired; pair this device in Settings"),
+                )
+            } else {
+                Log.w(TAG, "API call failed: ${e.message}")
+                Result.failure(e)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "API call failed: ${e.message}")
             Result.failure(e)

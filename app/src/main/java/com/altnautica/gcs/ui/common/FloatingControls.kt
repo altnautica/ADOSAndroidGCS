@@ -275,16 +275,16 @@ fun FloatingControls(
     if (showDisarmDialog) {
         AlertDialog(
             onDismissRequest = { showDisarmDialog = false },
-            title = { Text("Confirm Disarm") },
-            text = { Text("Disarm motors? The drone will stop all motors immediately.") },
+            title = { Text(stringResource(R.string.disarm_confirm_title)) },
+            text = { Text(stringResource(R.string.disarm_confirm_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     onDisarm()
                     showDisarmDialog = false
-                }) { Text("Disarm", color = ErrorRed) }
+                }) { Text(stringResource(R.string.disarm_confirm_action), color = ErrorRed) }
             },
             dismissButton = {
-                TextButton(onClick = { showDisarmDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showDisarmDialog = false }) { Text(stringResource(R.string.cancel)) }
             },
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,

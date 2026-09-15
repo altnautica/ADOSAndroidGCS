@@ -38,8 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.data.serial.UsbSerialManager
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.ErrorRed
 import com.altnautica.gcs.ui.theme.OnSurfaceMedium
@@ -53,19 +53,19 @@ import com.altnautica.gcs.ui.theme.SurfaceVariant
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UsbSerialSettings(
-    usbSerialManager: UsbSerialManager,
     modifier: Modifier = Modifier,
+    viewModel: UsbSerialViewModel = hiltViewModel(),
 ) {
-    val isConnected by usbSerialManager.isConnected.collectAsStateWithLifecycle()
-    val connectedDevice by usbSerialManager.connectedDevice.collectAsStateWithLifecycle()
-    val detectedDevices by usbSerialManager.detectedDevices.collectAsStateWithLifecycle()
-    val baudRate by usbSerialManager.baudRate.collectAsStateWithLifecycle()
+    val isConnected by viewModel.isConnected.collectAsStateWithLifecycle()
+    val connectedDevice by viewModel.connectedDevice.collectAsStateWithLifecycle()
+    val detectedDevices by viewModel.detectedDevices.collectAsStateWithLifecycle()
+    val baudRate by viewModel.baudRate.collectAsStateWithLifecycle()
 
     var baudDropdownExpanded by remember { mutableStateOf(false) }
 
     // Scan on first composition
     LaunchedEffect(Unit) {
-        usbSerialManager.scanDevices()
+        viewModel.scan()
     }
 
     Surface(
@@ -141,11 +141,11 @@ fun UsbSerialSettings(
                     expanded = baudDropdownExpanded,
                     onDismissRequest = { baudDropdownExpanded = false },
                 ) {
-                    UsbSerialManager.BAUD_RATES.forEach { rate ->
+                    viewModel.baudRates.forEach { rate ->
                         DropdownMenuItem(
                             text = { Text(rate.toString()) },
                             onClick = {
-                                usbSerialManager.setBaudRate(rate)
+                                viewModel.setBaudRate(rate)
                                 baudDropdownExpanded = false
                             },
                         )
@@ -169,7 +169,7 @@ fun UsbSerialSettings(
                 )
                 Spacer(Modifier.weight(1f))
                 IconButton(
-                    onClick = { usbSerialManager.scanDevices() },
+                    onClick = { viewModel.scan() },
                     modifier = Modifier.size(32.dp),
                 ) {
                     Icon(
@@ -198,9 +198,9 @@ fun UsbSerialSettings(
                         isConnected = isConnected && connectedDevice == device.name,
                         onConnect = {
                             if (isConnected) {
-                                usbSerialManager.disconnect()
+                                viewModel.disconnect()
                             } else {
-                                usbSerialManager.connect(device)
+                                viewModel.connect(device)
                             }
                         },
                     )
@@ -212,7 +212,7 @@ fun UsbSerialSettings(
             if (isConnected) {
                 Spacer(Modifier.height(12.dp))
                 OutlinedButton(
-                    onClick = { usbSerialManager.disconnect() },
+                    onClick = { viewModel.disconnect() },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
                 ) {

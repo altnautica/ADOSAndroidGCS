@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.view.SurfaceView
 import android.widget.Toast
+import com.altnautica.gcs.R
 import com.altnautica.gcs.data.video.wfb.WfbMavlinkBridge
 import com.altnautica.gcs.data.video.wfb.WfbUsbManager
 import com.altnautica.gcs.data.video.wfb.WfbVideoManager
@@ -46,6 +47,7 @@ import javax.inject.Singleton
 class VideoStreamManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val modeDetector: ModeDetector,
+    private val modeSelector: VideoModeSelector,
     private val cloudVideoClient: CloudVideoClient,
     private val mqttTelemetryClient: MqttTelemetryClient,
     private val wfbVideoManager: WfbVideoManager,
@@ -87,7 +89,7 @@ class VideoStreamManager @Inject constructor(
         when (mode) {
             is VideoMode.GroundStation -> startWhep(mode.whepUrl, renderer)
             is VideoMode.DirectUsb -> startDirectUsb(mode.deviceId, renderer)
-            is VideoMode.CloudRelay -> startCloudRelay(mode.turnUrl, renderer)
+            is VideoMode.CloudRelay -> startCloudRelay(mode, renderer)
             is VideoMode.NoConnection -> {
                 Log.w(TAG, "No video mode available")
                 _isStreaming.value = false
@@ -275,60 +277,58 @@ class VideoStreamManager @Inject constructor(
     }
 
     /**
-     * Fallback from Mode B failure to Mode A or C.
+     * Fallback from a Mode B failure, in the order [VideoModeSelector] defines.
+     *
+     * The ordering and its terminal state live in that class so they can be
+     * exercised on the JVM: this path only runs when the USB radio has already
+     * failed on real hardware, which is why a placeholder in it survived.
      */
     private fun fallbackFromModeB(renderer: SurfaceViewRenderer, reason: String) {
         scope.launch {
             withContext(Dispatchers.Main) {
                 Toast.makeText(
                     context,
-                    "Direct USB video failed ($reason). Trying alternate mode.",
+                    context.getString(R.string.video_usb_failed_trying_alternate, reason),
                     Toast.LENGTH_LONG,
                 ).show()
             }
 
-            // Try Mode A (ground station WiFi)
-            val gsMode = VideoMode.GroundStation("http://192.168.4.1:8080/whep")
-            _activeMode.value = gsMode
-            startWhep(gsMode.whepUrl, renderer)
-
-            // If WHEP also fails (no ground station), try cloud relay
-            if (!_isStreaming.value) {
-                val cloudMode = VideoMode.CloudRelay("turn:turn.altnautica.com:3478")
-                _activeMode.value = cloudMode
-                startCloudRelay(cloudMode.turnUrl, renderer)
+            for (candidate in modeSelector.fallbacksAfterDirectUsb()) {
+                _activeMode.value = candidate
+                when (candidate) {
+                    is VideoMode.GroundStation -> startWhep(candidate.whepUrl, renderer)
+                    is VideoMode.CloudRelay -> startCloudRelay(candidate, renderer)
+                    else -> Unit
+                }
+                if (_isStreaming.value) return@launch
             }
 
-            if (!_isStreaming.value) {
-                _activeMode.value = VideoMode.NoConnection
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        context,
-                        "No video source available.",
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                }
+            _activeMode.value = VideoMode.NoConnection
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    context,
+                    context.getString(modeSelector.noSourceReason()),
+                    Toast.LENGTH_LONG,
+                ).show()
             }
         }
     }
 
-    private fun startCloudRelay(turnUrl: String, renderer: SurfaceViewRenderer) {
-        Log.i(TAG, "Starting cloud relay mode")
-        _activeMode.value = VideoMode.CloudRelay(turnUrl)
+    private fun startCloudRelay(mode: VideoMode.CloudRelay, renderer: SurfaceViewRenderer) {
+        Log.i(TAG, "Starting cloud relay mode device=${mode.deviceId}")
+        _activeMode.value = mode
 
-        // Use fMP4 WebSocket relay (existing infrastructure at video.altnautica.com)
-        // instead of WebRTC+TURN (TURN server not yet deployed).
-        // Device ID extracted from the TURN URL or defaults to "default".
-        val deviceId = extractDeviceId(turnUrl)
-
+        // fMP4 WebSocket relay rather than WebRTC+TURN (no TURN deployment).
+        // The device id comes from the pairing record; the mode cannot be
+        // constructed without one.
         scope.launch {
             try {
                 // 1. Connect MQTT for telemetry (2Hz status + position from agent)
-                mqttTelemetryClient.connect(deviceId)
+                mqttTelemetryClient.connect(mode.deviceId)
 
                 // 2. Connect cloud video client for fMP4 stream with Surface rendering
                 val surface = renderer.holder.surface
-                cloudVideoClient.connect(deviceId, surface)
+                cloudVideoClient.connect(mode.deviceId, surface)
 
                 _isStreaming.value = true
                 Log.i(TAG, "Cloud relay connected via video relay WebSocket")
@@ -337,12 +337,6 @@ class VideoStreamManager @Inject constructor(
                 _isStreaming.value = false
             }
         }
-    }
-
-    private fun extractDeviceId(turnUrl: String): String {
-        // turnUrl format: "turn:turn.altnautica.com:3478" or may contain query params
-        // Default device ID when not specified
-        return "default"
     }
 
     private fun initWebRtc(renderer: SurfaceViewRenderer) {

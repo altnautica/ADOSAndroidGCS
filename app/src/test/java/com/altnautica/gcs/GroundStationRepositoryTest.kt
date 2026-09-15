@@ -28,6 +28,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
+import com.altnautica.gcs.data.pairing.NotPairedError
+import retrofit2.HttpException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GroundStationRepositoryTest {
@@ -192,15 +194,26 @@ class GroundStationRepositoryTest {
     }
 
     @Test
-    fun `reboot and pushOta remain stubs`() = runTest {
-        val reboot = repository.reboot()
-        val ota = repository.pushOta("https://example.com/fw.bin", "1.0.0")
+    fun `restartAgentServices hits the supervisor restart route`() = runTest {
+        coEvery { api.restartSupervisor() } returns Response.success(Unit)
 
-        for (r in listOf(reboot, ota)) {
-            assertTrue(r.isFailure)
-            assertNotNull(r.exceptionOrNull())
-            assertTrue(r.exceptionOrNull() is UnsupportedOperationException)
-        }
+        val result = repository.restartAgentServices()
+
+        assertTrue(result.isSuccess)
+    }
+
+    @Test
+    fun `a 401 on any route is reported as a pairing failure, not a transport failure`() = runTest {
+        // A paired agent refuses every data route without the key. Folded into
+        // a generic failure, the operator reads it as a dead ground station and
+        // never reaches the pairing step that fixes it.
+        coEvery { api.getWfb() } throws
+            HttpException(Response.error<WfbConfig>(401, okhttp3.ResponseBody.create(null, "")))
+
+        val result = repository.fetchWfb()
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is NotPairedError)
     }
 
     @Test

@@ -11,6 +11,7 @@ sealed class NavRoutes(val route: String) {
     data object TileDownload : NavRoutes("tile_download")
     data object Configure : NavRoutes("configure")
     data object Logs : NavRoutes("logs")
+    data object GroundStation : NavRoutes("groundstation")
     data object FlightDetail : NavRoutes("flight_detail/{sessionId}") {
         fun createRoute(sessionId: Long) = "flight_detail/$sessionId"
     }

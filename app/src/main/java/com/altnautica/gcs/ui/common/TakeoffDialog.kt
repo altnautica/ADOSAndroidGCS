@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.SurfaceVariant
+import androidx.compose.ui.res.stringResource
+import com.altnautica.gcs.R
 
 @Composable
 fun TakeoffDialog(
@@ -35,17 +37,15 @@ fun TakeoffDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            // TODO: i18n - move to strings.xml
-            Text("Takeoff")
+            Text(stringResource(R.string.takeoff_title))
         },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // TODO: i18n - move to strings.xml
                 Text(
-                    text = "Select takeoff altitude",
+                    text = stringResource(R.string.takeoff_select_altitude),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -90,14 +90,12 @@ fun TakeoffDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(altitude) }) {
-                // TODO: i18n - move to strings.xml
-                Text("Takeoff", color = ElectricBlue)
+                Text(stringResource(R.string.takeoff_confirm), color = ElectricBlue)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                // TODO: i18n - move to strings.xml
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         },
         containerColor = MaterialTheme.colorScheme.surface,

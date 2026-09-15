@@ -19,7 +19,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-import com.altnautica.gcs.data.mavlink.MavLinkCommandSender
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import kotlinx.coroutines.delay
 import kotlin.math.sqrt
@@ -28,10 +27,15 @@ import kotlin.math.sqrt
  * Virtual joystick overlay for gimbal pitch/yaw control.
  * Vertical axis controls gimbal pitch, horizontal axis controls yaw.
  * Springs back to center on release and sends commands at 10Hz while active.
+ *
+ * Takes [onMove] rather than the MAVLink command sender: with the sender in
+ * scope, a recomposition could fire a vehicle command from inside the
+ * composition, and the control could be neither previewed nor tested. The
+ * owning ViewModel decides what a move means.
  */
 @Composable
 fun GimbalJoystick(
-    commandSender: MavLinkCommandSender,
+    onMove: (pitchDeg: Float, yawDeg: Float) -> Unit,
     modifier: Modifier = Modifier,
     sensitivity: Float = 1.0f,
     enabled: Boolean = true,
@@ -63,7 +67,7 @@ fun GimbalJoystick(
             val pitch = -normalizedY * 45f * sensitivity // Up = negative Y = pitch up
             val yaw = normalizedX * 45f * sensitivity
             if (pitch != 0f || yaw != 0f) {
-                commandSender.sendGimbalPitchYaw(pitch, yaw)
+                onMove(pitch, yaw)
             }
             delay(100) // 10Hz
         }

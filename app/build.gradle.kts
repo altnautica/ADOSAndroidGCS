@@ -20,6 +20,17 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Mapbox access token, read from local.properties (gitignored) rather
+        // than from a tracked resource file. The tracked file held a
+        // placeholder, so the natural way to fix a broken map was to edit it
+        // and commit a live secret to a public repository. Empty is a
+        // supported build: MapProviderFactory falls back to OSMdroid.
+        resValue(
+            "string",
+            "mapbox_access_token",
+            providers.gradleProperty("MAPBOX_ACCESS_TOKEN").getOrElse(""),
+        )
+
         ndk {
             abiFilters += listOf("arm64-v8a")
         }

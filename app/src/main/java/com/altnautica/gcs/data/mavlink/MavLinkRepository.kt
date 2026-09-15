@@ -2,12 +2,15 @@ package com.altnautica.gcs.data.mavlink
 
 import android.util.Log
 import com.altnautica.gcs.data.flightlog.TlogRecorder
+import com.altnautica.gcs.data.pairing.AgentAuthInterceptor
+import com.altnautica.gcs.data.pairing.AgentCredentialStore
 import com.altnautica.gcs.data.telemetry.ConnectionState
 import com.altnautica.gcs.data.telemetry.ConnectionStatus
 import com.altnautica.gcs.data.telemetry.TelemetryStore
 import io.dronefleet.mavlink.MavlinkConnection
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.webSocketSession
+import io.ktor.client.request.header
 import io.ktor.websocket.Frame
 import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
@@ -29,7 +32,6 @@ import java.io.PipedInputStream
 import java.io.PipedOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.min
 
 @Singleton
 class MavLinkRepository @Inject constructor(
@@ -37,21 +39,33 @@ class MavLinkRepository @Inject constructor(
     private val parser: MavLinkParser,
     private val telemetryStore: TelemetryStore,
     private val tlogRecorder: TlogRecorder,
+    private val credentials: AgentCredentialStore,
 ) {
 
     companion object {
         private const val TAG = "MavLinkRepository"
-        // Default ADOS Ground Station AP address. Configurable at runtime via setUrl().
-        private const val DEFAULT_WS_URL =
-            "ws://192.168.4.1:8080/api/v1/ground-station/ws/mavlink"
-        private const val INITIAL_BACKOFF_MS = 1000L
-        private const val MAX_BACKOFF_MS = 30000L
+
+        /**
+         * Default agent MAVLink WebSocket. The agent's MAVLink router owns this
+         * listener and serves it at the host root — the path this client used
+         * to dial on the control port is served by nothing, so every handshake
+         * 404'd and every MAVLink-backed screen stayed dark. Configurable at
+         * runtime via [setUrl].
+         */
+        private const val DEFAULT_WS_URL = "ws://192.168.4.1:8765/"
+
+        /**
+         * Fixed reconnect interval. Deliberately not exponential and with no
+         * attempt cap: a radio outage or an agent restart must heal on its own
+         * within seconds, and a backoff that grows to half a minute turns a
+         * two-second blip into an operator reaching for a reload.
+         */
+        private const val RETRY_INTERVAL_MS = 3000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var connectionJob: Job? = null
     private var session: WebSocketSession? = null
-    private var currentBackoff = INITIAL_BACKOFF_MS
 
     private val _wsUrl = MutableStateFlow(DEFAULT_WS_URL)
     val wsUrl: StateFlow<String> = _wsUrl.asStateFlow()
@@ -97,9 +111,19 @@ class MavLinkRepository @Inject constructor(
             )
 
             try {
-                val ws = httpClient.webSocketSession(_wsUrl.value)
+                // A paired agent's MAVLink proxy refuses an off-box handshake
+                // without the pairing key, and the key channel it reads is the
+                // same `X-ADOS-Key` header the HTTP control surface uses. A
+                // browser cannot set a header on a WebSocket handshake and has
+                // to exchange the key for a short-lived ticket first; this is a
+                // native client, so it presents the header directly and has
+                // nothing to re-mint on each reconnect.
+                val ws = httpClient.webSocketSession(_wsUrl.value) {
+                    credentials.currentApiKey()?.let { key ->
+                        header(AgentAuthInterceptor.KEY_HEADER, key)
+                    }
+                }
                 session = ws
-                currentBackoff = INITIAL_BACKOFF_MS
 
                 telemetryStore.updateConnection(
                     ConnectionState(ConnectionStatus.CONNECTED, "Connected")
@@ -130,10 +154,9 @@ class MavLinkRepository @Inject constructor(
             session = null
             mavlinkConnection = null
 
-            // Exponential backoff
-            Log.d(TAG, "Reconnecting in ${currentBackoff}ms")
-            delay(currentBackoff)
-            currentBackoff = min(currentBackoff * 2, MAX_BACKOFF_MS)
+            // Fixed interval, forever. See RETRY_INTERVAL_MS.
+            Log.d(TAG, "Reconnecting in ${RETRY_INTERVAL_MS}ms")
+            delay(RETRY_INTERVAL_MS)
         }
     }
 

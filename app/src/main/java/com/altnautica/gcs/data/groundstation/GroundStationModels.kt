@@ -9,7 +9,10 @@ import com.google.gson.annotations.SerializedName
  * recording flag, role, and mesh.
  */
 data class StationStatus(
-    val profile: String = "ground_station",
+    // Hyphenated, matching the canonical node-profile vocabulary the rest of
+    // the product compares against. The underscore spelling the status route
+    // once emitted matched nothing that reads a profile.
+    val profile: String = "ground-station",
     @SerializedName("paired_drone") val pairedDrone: PairedDrone = PairedDrone(),
     val link: LinkStats = LinkStats(),
     val gcs: GcsClients = GcsClients(),

@@ -35,6 +35,8 @@ import com.altnautica.gcs.data.mavlink.ParameterManager.ParamEntry
 import com.altnautica.gcs.ui.theme.ElectricBlue
 import com.altnautica.gcs.ui.theme.NeonLime
 import com.altnautica.gcs.ui.theme.SurfaceVariant
+import androidx.compose.ui.res.stringResource
+import com.altnautica.gcs.R
 
 /**
  * Bottom sheet for editing a single parameter value.
@@ -100,11 +102,11 @@ fun ParameterEditorSheet(
                     editValue = newValue
                     isError = newValue.toFloatOrNull() == null && newValue.isNotBlank()
                 },
-                label = { Text("New value") },
+                label = { Text(stringResource(R.string.param_editor_new_value)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 isError = isError,
                 supportingText = if (isError) {
-                    { Text("Enter a valid number") }
+                    { Text(stringResource(R.string.param_editor_invalid_number)) }
                 } else {
                     null
                 },
@@ -131,7 +133,7 @@ fun ParameterEditorSheet(
                     onClick = onDismiss,
                     modifier = Modifier.height(48.dp),
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
 
                 Spacer(Modifier.width(12.dp))
@@ -152,7 +154,7 @@ fun ParameterEditorSheet(
                     ),
                     modifier = Modifier.height(48.dp),
                 ) {
-                    Text("Write")
+                    Text(stringResource(R.string.param_editor_write))
                 }
             }
         }

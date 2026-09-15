@@ -25,10 +25,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.net.InetAddress
+import com.altnautica.gcs.data.pairing.AgentCredentialStore
 
 class ModeDetectorTest {
 
     private lateinit var context: Context
+    private lateinit var credentials: AgentCredentialStore
     private lateinit var usbManager: UsbManager
     private lateinit var wifiManager: WifiManager
     private lateinit var connectivityManager: ConnectivityManager
@@ -40,6 +42,8 @@ class ModeDetectorTest {
     @Before
     fun setup() {
         context = mockk(relaxed = true)
+        credentials = mockk(relaxed = true)
+        every { credentials.currentPairedDeviceId() } returns null
         usbManager = mockk(relaxed = true)
         wifiManager = mockk(relaxed = true)
         connectivityManager = mockk(relaxed = true)
@@ -59,7 +63,13 @@ class ModeDetectorTest {
         // back to the hardcoded AP IP.
         every { nsdAgentDiscovery.lastResolved } returns MutableStateFlow(null)
 
-        detector = ModeDetector(context, usbSerialManager, nsdAgentDiscovery, baseUrlProvider)
+        detector = ModeDetector(
+            context,
+            usbSerialManager,
+            nsdAgentDiscovery,
+            baseUrlProvider,
+            credentials,
+        )
     }
 
     private fun mockEthernetNetwork(addressString: String): Network {
@@ -109,7 +119,7 @@ class ModeDetectorTest {
     }
 
     @Test
-    fun `internet available returns CloudRelay when no USB and no GS WiFi`() {
+    fun `internet alone does not enter cloud relay without a paired node`() {
         // No USB adapter
         every { usbManager.deviceList } returns hashMapOf()
 
@@ -128,7 +138,32 @@ class ModeDetectorTest {
         every { caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) } returns true
 
         val mode = detector.detect()
+        // Internet alone is not enough. The relay keys the stream and the MQTT
+        // topic on the paired node's device id; with none, subscribing was to a
+        // placeholder device that exists for nobody.
+        assertTrue("Expected NoConnection but got $mode", mode is VideoMode.NoConnection)
+    }
+
+    @Test
+    fun `cloud relay carries the paired device id`() {
+        every { usbManager.deviceList } returns hashMapOf()
+
+        val wifiInfo = mockk<WifiInfo>()
+        every { wifiInfo.ssid } returns "\"HomeNetwork\""
+        @Suppress("DEPRECATION")
+        every { wifiManager.connectionInfo } returns wifiInfo
+
+        val network = mockk<Network>()
+        val caps = mockk<NetworkCapabilities>()
+        every { connectivityManager.activeNetwork } returns network
+        every { connectivityManager.getNetworkCapabilities(network) } returns caps
+        every { caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) } returns true
+        every { caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) } returns true
+        every { credentials.currentPairedDeviceId() } returns "node-1"
+
+        val mode = detector.detect()
         assertTrue("Expected CloudRelay but got $mode", mode is VideoMode.CloudRelay)
+        assertEquals("node-1", (mode as VideoMode.CloudRelay).deviceId)
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.altnautica.gcs.ui.gcs
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.data.mavlink.FenceVertex
+import com.altnautica.gcs.data.mavlink.GeofenceUploader
 import com.altnautica.gcs.data.mavlink.MavLinkCommandSender
 import com.altnautica.gcs.data.telemetry.BatteryState
 import com.altnautica.gcs.data.telemetry.ConnectionState
@@ -30,6 +32,7 @@ class GcsViewModel @Inject constructor(
     private val telemetryStore: TelemetryStore,
     private val commandSender: MavLinkCommandSender,
     private val gamepadManager: GamepadManager,
+    private val geofenceUploader: GeofenceUploader,
 ) : ViewModel() {
 
     companion object {
@@ -155,6 +158,22 @@ class GcsViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         gamepadJob?.cancel()
+    }
+
+    /**
+     * Aim the gimbal. Called from the joystick overlay, which now hands over
+     * angles instead of holding the MAVLink command sender itself.
+     */
+    fun gimbalPitchYaw(pitchDeg: Float, yawDeg: Float) {
+        viewModelScope.launch { commandSender.sendGimbalPitchYaw(pitchDeg, yawDeg) }
+    }
+
+    /**
+     * Upload a geofence. [radiusM] non-null means a circular fence centred on
+     * the single vertex; otherwise the vertices are a polygon.
+     */
+    fun uploadFence(vertices: List<FenceVertex>, radiusM: Float?) {
+        viewModelScope.launch { geofenceUploader.upload(vertices, radiusM) }
     }
 
     // --- Private send helpers ---
