@@ -1,0 +1,6 @@
+# Copy to local.properties and fill in. local.properties is gitignored, so a
+# real token never lands in the repository.
+#
+# Mapbox access token. Leave empty to build without Mapbox: the app falls back
+# to the OSMdroid tile provider automatically.
+MAPBOX_ACCESS_TOKEN=
