@@ -86,7 +86,6 @@ private val WIDGET_ZONES = listOf("top-left", "top-right", "bottom-left", "botto
 @Composable
 internal fun CockpitScreen(
     vm: CockpitViewModel,
-    band: BandState,
     width: WidthClass,
     connecting: Boolean,
     onExit: () -> Unit,
@@ -96,18 +95,7 @@ internal fun CockpitScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val portrait = maxHeight > maxWidth
-        val bandBar: @Composable (Modifier) -> Unit = { m ->
-            SafetyBand(
-                state = band,
-                onExit = onExit,
-                onToggleStick = vm::toggleStickControl,
-                onOpenPreflight = { vm.setPreflight(true) },
-                onOpenQuickSettings = { vm.setQuickSettings(true) },
-                onOpenModes = vm::openModePicker,
-                onKill = { vm.activate("kill") },
-                modifier = m,
-            )
-        }
+        val bandBar: @Composable (Modifier) -> Unit = { m -> Band(vm, onExit, m) }
         when {
             portrait -> PortraitLayout(vm, width, bandBar)
             width == WidthClass.Compact -> CompactLayout(vm, width, settings.density, bandBar)
@@ -123,6 +111,22 @@ internal fun CockpitScreen(
         // Above the sheets, so the result of an action taken in a sheet stays readable.
         Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp).zIndex(Z.SHEETS + 1)) { snackbar() }
     }
+}
+
+/** The safety band; it alone collects the band state, so a band change recomposes only the band. */
+@Composable
+private fun Band(vm: CockpitViewModel, onExit: () -> Unit, modifier: Modifier) {
+    val band by vm.band.collectAsStateWithLifecycle()
+    SafetyBand(
+        state = band,
+        onExit = onExit,
+        onToggleStick = vm::toggleStickControl,
+        onOpenPreflight = { vm.setPreflight(true) },
+        onOpenQuickSettings = { vm.setQuickSettings(true) },
+        onOpenModes = vm::openModePicker,
+        onKill = { vm.activate("kill") },
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -370,7 +374,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val maxBrightness by vm.maxBrightness.collectAsStateWithLifecycle()
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
-    val band by vm.band.collectAsStateWithLifecycle()
+    val recording by vm.recordingActive.collectAsStateWithLifecycle()
     val video by vm.video.collectAsStateWithLifecycle()
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
 
@@ -381,7 +385,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
             maxBrightness = maxBrightness,
             showTelemetryPaneToggle = width == WidthClass.Expanded,
             canRecord = canRecord,
-            recording = band.recordingStartedAtMs != null,
+            recording = recording,
             pipAvailable = video.streams.count { it.live && it.switchKind == com.altnautica.gcs.core.model.StreamSwitchKind.Concurrent } > 1,
             pipOn = video.pip != null,
             onDismiss = { vm.setQuickSettings(false) },

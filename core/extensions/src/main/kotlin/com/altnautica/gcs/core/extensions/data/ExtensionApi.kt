@@ -12,8 +12,6 @@ import com.altnautica.gcs.core.agent.ws.WsFrame
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -115,16 +113,7 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
     override suspend fun catalog() = p.catalog().toApi()
 
     override suspend fun installFromCatalog(url: String, sha256: String?, jobId: String) =
-        client.requestJson(
-            "POST",
-            "api/plugins/install_from_url",
-            buildJsonObject {
-                put("url", url)
-                if (sha256 != null) put("expected_sha256", sha256)
-                put("from_catalog", true)
-                put("job_id", jobId)
-            },
-        ).toApi()
+        p.installFromCatalog(url, sha256, jobId).toApi()
 
     override suspend fun designate(body: JsonObject) =
         client.requestJson("POST", "api/vision/designate", body).toApi()

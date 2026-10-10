@@ -32,10 +32,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -169,7 +170,12 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
         Surface(
             modifier = Modifier
                 .size(size)
-                .alpha(if (enabled) 1f else 0.5f)
+                // Dims each draw op; a plain alpha() renders the whole slot offscreen on every
+                // cockpit frame (one extra render pass per HUD redraw).
+                .graphicsLayer {
+                    alpha = if (enabled) 1f else 0.5f
+                    compositingStrategy = CompositingStrategy.ModulateAlpha
+                }
                 .semantics {
                     contentDescription = label
                     if (reason != null) stateDescription = reason

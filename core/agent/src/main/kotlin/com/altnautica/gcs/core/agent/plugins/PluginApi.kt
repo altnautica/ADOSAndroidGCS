@@ -75,6 +75,25 @@ class PluginApi internal constructor(private val client: AgentClient) {
             slow = true,
         )
 
+    /**
+     * `POST /api/plugins/install_from_url {url, expected_sha256, from_catalog, job_id}` for a catalog entry.
+     * The agent downloads and installs inside this request and aborts if the caller hangs up, so it
+     * gets the slow budget; progress streams on [installJobPath].
+     */
+    suspend fun installFromCatalog(url: String, sha256: String?, jobId: String): AgentResult<JsonElement> =
+        client.sendJson(
+            "POST",
+            "api/plugins/install_from_url",
+            buildJsonObject {
+                put("url", url)
+                if (sha256 != null) put("expected_sha256", sha256)
+                put("from_catalog", true)
+                put("job_id", jobId)
+            },
+            JsonElement.serializer(),
+            slow = true,
+        )
+
     private suspend fun post(path: String): AgentResult<JsonElement> =
         client.sendJson("POST", path, null, JsonElement.serializer())
 

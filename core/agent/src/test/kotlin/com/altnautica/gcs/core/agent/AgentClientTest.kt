@@ -166,5 +166,22 @@ class AgentClientTest {
         assertEquals("/api/plugins/follow-me/gcs/dist/panel%20main.js", server.takeRequest().url.encodedPath)
     }
 
+    @Test
+    fun `catalog install outlasts the LAN budget and pins the entry`() = runBlocking {
+        // The agent downloads and installs inside the request and aborts when the caller hangs up.
+        server.enqueue(
+            MockResponse.Builder().code(200).body("""{"plugin_id":"follow-me"}""")
+                .headersDelay(AgentHttp.LAN_TIMEOUT_S + 1, java.util.concurrent.TimeUnit.SECONDS).build(),
+        )
+        val result = client().plugins.installFromCatalog("https://example.com/f.adosplug", "ab", "job-1")
+        assertTrue(result is AgentResult.Ok)
+        val request = server.takeRequest()
+        assertEquals("/api/plugins/install_from_url", request.url.encodedPath)
+        assertEquals(
+            """{"url":"https://example.com/f.adosplug","expected_sha256":"ab","from_catalog":true,"job_id":"job-1"}""",
+            request.text(),
+        )
+    }
+
     private fun endpointsUnused(): AgentEndpoints = io.mockk.mockk(relaxed = true)
 }

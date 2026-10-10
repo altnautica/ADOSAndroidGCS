@@ -27,6 +27,13 @@ sealed interface VideoOutput {
     /** A decoder that renders into one surface at a time; null detaches it. */
     interface SurfaceTarget : VideoOutput {
         fun setSurface(surface: Surface?)
+
+        /**
+         * Fraction of the view's size the surface buffer is allocated at; the compositor
+         * scales it up. A decoder sizes its own buffers and keeps 1; a producer that draws
+         * with a software canvas asks for less, so each frame fills and copies fewer pixels.
+         */
+        val bufferScale: Float get() = 1f
     }
 }
 

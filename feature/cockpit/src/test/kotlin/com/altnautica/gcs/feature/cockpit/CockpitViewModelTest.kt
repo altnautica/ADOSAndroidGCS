@@ -15,10 +15,12 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant
 import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.HeartbeatState
+import com.altnautica.gcs.core.model.HomePosition
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
+import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.model.VehicleProvider
@@ -44,9 +46,11 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -86,6 +90,7 @@ class CockpitViewModelTest {
         vehicle: FakeVehicle?,
         open: String = "drone-1",
         services: VehicleServices? = null,
+        vehicleDelayMs: Long = 0,
     ): CockpitViewModel {
         val clock = MonotonicClock { testScheduler.currentTime }
         val dataStore = MemoryPreferences()
@@ -98,7 +103,9 @@ class CockpitViewModelTest {
             nodeIdValue = open,
             nodeSources = setOf(object : NodeSource { override val nodes = flowOf(nodes) }),
             vehicles = object : VehicleProvider {
-                override fun vehicle(id: DeviceId) = flowOf(vehicle?.takeIf { it.id == id })
+                override fun vehicle(id: DeviceId) = vehicle?.takeIf { it.id == id }.let { v ->
+                    if (vehicleDelayMs == 0L) flowOf(v) else flow { delay(vehicleDelayMs); emit(v) }
+                }
             },
             services = object : VehicleServicesProvider {
                 override fun services(id: DeviceId) = flowOf(services)
@@ -137,6 +144,40 @@ class CockpitViewModelTest {
         assertNull(vm.band.value.batteryPct)
         assertEquals(BatteryBand.Unknown, vm.band.value.batteryLevel)
         assertTrue(vm.alerts.value.none { it.id == AlertId.BATT_LOW || it.id == AlertId.BATT_CRIT })
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the strip and minimap sample on the band's tick, not on a clock of their own`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        advanceTimeBy(5_000)
+        val t0 = testScheduler.currentTime
+        vehicle.beat(armed = false, now = t0)
+        vehicle.telemetry.home.value = HomePosition(47.0, 8.0, 400f, t0)
+        vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 400f, 0f, 0f, 0f, 0f, t0)
+        // Telemetry arrives 250 ms after the cockpit's 2 Hz clock started, half a period out of phase.
+        val vm = vm(listOf(node("drone-1")), vehicle, vehicleDelayMs = 250)
+        advanceTimeBy(600)
+        runCurrent()
+        assertEquals(0f, vm.strip.value.homeDistanceM!!, 0.5f)
+        assertFalse(vm.recordingActive.value)
+
+        // About 100 m north of home.
+        val moved = testScheduler.currentTime
+        vehicle.telemetry.position.value = PositionFix(47.0009, 8.0, 400f, 0f, 0f, 0f, 0f, moved)
+        advanceTimeBy(250)
+        runCurrent()
+        // 500 ms after the telemetry arrived, but the shared tick has not come round yet.
+        assertEquals(0f, vm.strip.value.homeDistanceM!!, 0.5f)
+        assertEquals(47.0, vm.minimap.value.vehicle!!.position.latDeg, 1e-9)
+        val ageBefore = vm.band.value.linkAgeDeciS
+
+        advanceTimeBy(200)
+        runCurrent()
+        // One tick moves the strip, the minimap and the band's link age together.
+        assertEquals(100f, vm.strip.value.homeDistanceM!!, 1f)
+        assertEquals(47.0009, vm.minimap.value.vehicle!!.position.latDeg, 1e-9)
+        assertTrue(vm.band.value.linkAgeDeciS != ageBefore)
         vm.viewModelScope.cancel()
     }
 

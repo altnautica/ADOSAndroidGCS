@@ -70,7 +70,6 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
         creationCallback = { factory -> factory.create(nodeId.value) },
     )
     val status by vm.status.collectAsStateWithLifecycle()
-    val band by vm.band.collectAsStateWithLifecycle()
     val maxBrightness by vm.maxBrightness.collectAsStateWithLifecycle()
     val extensionNode by vm.extensionNodeId.collectAsStateWithLifecycle()
     val currentExit by rememberUpdatedState(onExit)
@@ -142,7 +141,6 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
             )
             CockpitStatus.Connecting, CockpitStatus.Ready -> CockpitScreen(
                 vm = vm,
-                band = band,
                 width = width,
                 connecting = status == CockpitStatus.Connecting,
                 onExit = ::requestExit,

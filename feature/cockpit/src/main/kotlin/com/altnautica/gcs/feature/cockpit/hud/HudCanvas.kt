@@ -8,9 +8,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -58,7 +58,9 @@ fun HudCanvas(
             telemetry.attitude, telemetry.position, telemetry.vfr, telemetry.wind,
             telemetry.home, telemetry.heartbeat, staleTicks,
         ).conflate().collect {
-            withFrameNanos { }
+            // A plain snapshot write: the draw pass that reads it is invalidated once per
+            // frame however many samples land before the vsync, and no composition frame
+            // (frame-clock awaiter, recomposer pass) runs for a telemetry tick.
             frame.longValue++
             invalidationProbe?.invoke()
         }
@@ -75,6 +77,8 @@ fun HudCanvas(
         modifier
             .fillMaxSize()
             .semantics { contentDescription = summary }
+            // Its own render node: a telemetry redraw re-records only the HUD, not the cockpit around it.
+            .graphicsLayer()
             .drawBehind {
                 // Reading the counter subscribes the draw pass, not composition.
                 frame.longValue

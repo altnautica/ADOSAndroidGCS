@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.BufferedInputStream
 import java.io.InputStream
 import java.util.zip.GZIPInputStream
 import javax.inject.Inject
@@ -36,8 +37,9 @@ object ParamMetadataKey {
 class ParamMetadataRepository internal constructor(
     private val open: (String) -> InputStream,
 ) {
+    // The build packs `param-metadata/<key>.json.gz` gunzipped, under the name without `.gz`.
     @Inject constructor(@ApplicationContext context: Context) :
-        this({ key: String -> context.assets.open("param-metadata/$key.json.gz") })
+        this({ key: String -> context.assets.open("param-metadata/$key.json") })
 
     private val mutex = Mutex()
     private val cache = mutableMapOf<String, ParamMetadataSet>()
@@ -46,8 +48,17 @@ class ParamMetadataRepository internal constructor(
     suspend fun load(key: String): ParamMetadataSet? = mutex.withLock {
         cache[key] ?: withContext(Dispatchers.IO) {
             runCatching {
-                GZIPInputStream(open(key)).bufferedReader().use { ParamMetadataParser.parse(it.readText()) }
+                gunzipIfNeeded(open(key)).bufferedReader().use { ParamMetadataParser.parse(it.readText()) }
             }.getOrNull()
         }?.also { cache[key] = it }
     }
+}
+
+/** Reads [input] as gzip when it starts with the gzip magic, else as plain bytes. */
+private fun gunzipIfNeeded(input: InputStream): InputStream {
+    val buffered = BufferedInputStream(input)
+    buffered.mark(2)
+    val gzip = buffered.read() == 0x1f && buffered.read() == 0x8b
+    buffered.reset()
+    return if (gzip) GZIPInputStream(buffered) else buffered
 }

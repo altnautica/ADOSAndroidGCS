@@ -216,9 +216,11 @@ class CockpitViewModel @AssistedInject constructor(
     }
 
     /**
-     * Re-evaluation trigger for age-based state. Its value is only a trigger: a
-     * combine that also fires on fresh telemetry reads [MonotonicClock.nowMs] itself,
-     * because a heartbeat stamped after the last tick would otherwise get a negative age.
+     * Re-evaluation trigger for age-based state, and the one 2 Hz clock the band, alerts,
+     * telemetry strip and minimap sample on, so their changes land in the same UI frame
+     * instead of one frame each. Its value is only a trigger: a combine that also fires on
+     * fresh telemetry reads [MonotonicClock.nowMs] itself, because a heartbeat stamped after
+     * the last tick would otherwise get a negative age.
      */
     private val tick500: StateFlow<Long> = ticker(500).stateIn(viewModelScope, SharingStarted.Eagerly, clock.nowMs())
 
@@ -344,6 +346,10 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** True when the current feed can record. */
     val canRecord: StateFlow<Boolean> = recording.map { it != null }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /** True while the current feed records; quick settings read this rather than the whole band. */
+    val recordingActive: StateFlow<Boolean> = recording.map { it is RecordingState.Recording }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun toggleRecording() {
         val src = mainSource.value ?: return
@@ -661,7 +667,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     val strip: StateFlow<StripValues> = telemetry.flatMapLatest { t ->
         if (t == null) return@flatMapLatest flowOf(EMPTY_STRIP)
-        ticker(STRIP_PERIOD_MS).map {
+        tick500.map {
             val pos = t.position.value
             val home = t.home.value
             val vfr = t.vfr.value
@@ -685,7 +691,7 @@ class CockpitViewModel @AssistedInject constructor(
     val minimap: StateFlow<MinimapState> = telemetry.flatMapLatest { t ->
         if (t == null) return@flatMapLatest flowOf(MinimapState(null, null, emptyList()))
         val trail = ArrayDeque<GeoPoint>()
-        ticker(STRIP_PERIOD_MS).map { now ->
+        tick500.map { now ->
             val pos = t.position.value
             val point = pos?.let { GeoPoint(it.latDeg, it.lonDeg) }
             if (point != null) {
@@ -870,7 +876,6 @@ class CockpitViewModel @AssistedInject constructor(
         /** Camera id of the agent's primary stream when no stream tab is selected. */
         private const val PRIMARY_CAMERA = "main"
         private const val SWITCH_TIMEOUT_MS = 3_000L
-        private const val STRIP_PERIOD_MS = 500L
         private const val TRAIL_MIN_STEP_M = 2f
         private const val TRAIL_MAX_POINTS = 600
         private val EMPTY_STRIP = StripValues(null, null, null, null, null, null, null, null)

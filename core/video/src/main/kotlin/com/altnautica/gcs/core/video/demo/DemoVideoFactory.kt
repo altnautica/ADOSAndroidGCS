@@ -77,6 +77,10 @@ private class DemoVideoSession(
         override fun setSurface(surface: Surface?) {
             this@DemoVideoSession.surface = surface
         }
+
+        // A software canvas fills and copies every buffer pixel each frame; at full
+        // screen size that cost more than the frame budget, so draw at half size.
+        override val bufferScale: Float = DEMO_BUFFER_SCALE
     }
 
     override fun start() {
@@ -84,6 +88,7 @@ private class DemoVideoSession(
         _state.value = VideoState.Connecting
         job = scope.launch(Dispatchers.Default) {
             val startMs = clock.nowMs()
+            val pacer = FramePacer(startMs, FRAME_PERIOD_MS)
             while (isActive) {
                 val s = surface
                 if (s != null && s.isValid) {
@@ -104,7 +109,7 @@ private class DemoVideoSession(
                     FrameWatchdog.Verdict.Flowing -> VideoState.Live(FRAME_MS.toInt())
                     is FrameWatchdog.Verdict.Frozen -> VideoState.Frozen(v.sinceMs)
                 }
-                delay(FRAME_MS)
+                delay(pacer.delayAfterFrame(clock.nowMs()))
             }
         }
     }
@@ -119,12 +124,12 @@ private class DemoVideoSession(
     private val ground = Paint().apply { color = Color.rgb(0x4A, 0x37, 0x28) }
     private val line = Paint().apply {
         color = Color.WHITE
-        strokeWidth = 4f
+        strokeWidth = 4f * DEMO_BUFFER_SCALE
         isAntiAlias = true
     }
     private val text = Paint().apply {
         color = Color.WHITE
-        textSize = 36f
+        textSize = 36f * DEMO_BUFFER_SCALE
         isAntiAlias = true
     }
 
@@ -138,10 +143,13 @@ private class DemoVideoSession(
             drawRect(-w, h / 2 + pitchPx, 2 * w, 2 * h, ground)
             drawLine(-w, h / 2 + pitchPx, 2 * w, h / 2 + pitchPx, line)
         }
-        canvas.drawText("DEMO", 24f, h - 24f, text)
+        val inset = 24f * DEMO_BUFFER_SCALE
+        canvas.drawText("DEMO", inset, h - inset, text)
     }
 
     private companion object {
         const val FRAME_MS = 33L
+        const val FRAME_PERIOD_MS = 1000.0 / 30
+        const val DEMO_BUFFER_SCALE = 0.5f
     }
 }

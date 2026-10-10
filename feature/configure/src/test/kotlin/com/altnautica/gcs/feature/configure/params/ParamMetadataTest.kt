@@ -45,6 +45,21 @@ class ParamMetadataTest {
     }
 
     @Test
+    fun packagedAssetsAreReadPlainUnderTheNameWithoutGz() = runTest {
+        // The APK carries `param-metadata/<key>.json` gunzipped; the old `.json.gz` lookup found nothing on device.
+        var asked: String? = null
+        val packaged = ParamMetadataRepository { key ->
+            asked = key
+            java.util.zip.GZIPInputStream(File("src/main/assets/param-metadata/$key.json.gz").inputStream())
+        }
+        val key = ParamMetadataKey.forVehicle(FcVariant.MavlinkArdupilot, 20)!! // quadplane tailsitter
+        val set = packaged.load(key)!!
+        assertEquals("ardupilot-plane", asked)
+        assertEquals("ardupilot-plane", set.firmware)
+        assertTrue(set.params.size > 1000)
+    }
+
+    @Test
     fun keySelectsFirmwareByVehicleType() {
         assertEquals("ardupilot-plane", ParamMetadataKey.forVehicle(FcVariant.MavlinkArdupilot, 1))
         assertEquals("ardupilot-rover", ParamMetadataKey.forVehicle(FcVariant.MavlinkArdupilot, 10))

@@ -189,6 +189,12 @@ private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier
                     override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) = Unit
                     override fun surfaceDestroyed(holder: SurfaceHolder) = out.setSurface(null)
                 })
+                if (out.bufferScale < 1f) {
+                    addOnLayoutChangeListener { _, l, t, r, b, _, _, _, _ ->
+                        val (w, h) = scaledBufferSize(r - l, b - t, out.bufferScale)
+                        if (w > 0 && h > 0) holder.setFixedSize(w, h)
+                    }
+                }
             }
         },
         onRelease = { out.setSurface(null) },
@@ -205,10 +211,17 @@ private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier
                     private var surface: Surface? = null
 
                     override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
+                        applyBufferScale(st, w, h)
                         surface = Surface(st).also(out::setSurface)
                     }
 
-                    override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) = Unit
+                    override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) = applyBufferScale(st, w, h)
+
+                    private fun applyBufferScale(st: SurfaceTexture, w: Int, h: Int) {
+                        if (out.bufferScale >= 1f) return
+                        val (bw, bh) = scaledBufferSize(w, h, out.bufferScale)
+                        if (bw > 0 && bh > 0) st.setDefaultBufferSize(bw, bh)
+                    }
 
                     override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
                         out.setSurface(null)
@@ -224,3 +237,7 @@ private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier
         onRelease = { out.setSurface(null) },
     )
 }
+
+/** The view size scaled by [scale], rounded to even pixels (some gralloc paths reject odd sizes). */
+internal fun scaledBufferSize(width: Int, height: Int, scale: Float): Pair<Int, Int> =
+    ((width * scale).toInt() and 1.inv()) to ((height * scale).toInt() and 1.inv())
