@@ -1,0 +1,272 @@
+{
+  "install": {
+    "plugin_id": "com.altnautica.mavlink-gimbal-v2",
+    "version": "1.4.1",
+    "source": "registry",
+    "source_uri": null,
+    "signer_id": null,
+    "manifest_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "enabled",
+    "installed_at": 1760000000,
+    "enabled_at": 1760000001,
+    "permissions": {
+      "mavlink.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.write": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.component.gimbal": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "vision.detection.subscribe": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.extend": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mcp.expose": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-detail-tab": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.settings-section": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.flight-skill": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.subscribe.gimbal": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "command.send": {
+        "granted": true,
+        "granted_at": 1760000001
+      }
+    }
+  },
+  "granted_capabilities": [
+    "mavlink.read",
+    "mavlink.write",
+    "mavlink.component.gimbal",
+    "vision.detection.subscribe",
+    "telemetry.extend",
+    "event.publish",
+    "mcp.expose",
+    "ui.slot.node-detail-tab",
+    "ui.slot.settings-section",
+    "ui.slot.flight-skill",
+    "telemetry.subscribe.gimbal",
+    "command.send"
+  ],
+  "manifest": {
+    "id": "com.altnautica.mavlink-gimbal-v2",
+    "version": "1.4.1",
+    "name": "ADOS MAVLink Gimbal v2 Controller",
+    "risk": "medium",
+    "license": "GPL-3.0-or-later",
+    "halves": [
+      "agent",
+      "gcs"
+    ],
+    "gcs": {
+      "entrypoint": "gcs/plugin.bundle.js",
+      "isolation": "iframe",
+      "contributes": {
+        "tabs": [
+          {
+            "id": "gimbal-control",
+            "slot": "node.detail.tab",
+            "profile": [
+              "drone"
+            ],
+            "title": "Gimbal",
+            "icon": "gimbal",
+            "order": 60
+          }
+        ],
+        "target_actions": [
+          {
+            "id": "aim",
+            "label": "Aim at this target",
+            "icon": "crosshair",
+            "order": 30,
+            "designate": true,
+            "config_key": "aim",
+            "config_value": true,
+            "default_key": "j"
+          }
+        ],
+        "skills": [
+          {
+            "id": "aim",
+            "label": "Aim",
+            "icon": "crosshair",
+            "category": "camera",
+            "toggle": true,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "g"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "aim"
+            },
+            "state": {
+              "via": "event",
+              "topic": "sensor.gimbal.aim"
+            }
+          },
+          {
+            "id": "recenter",
+            "label": "Recenter",
+            "icon": "locate-fixed",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "shift+c"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "recenter"
+            },
+            "state": {
+              "via": "event",
+              "topic": "sensor.gimbal.recenter"
+            }
+          },
+          {
+            "id": "nadir",
+            "label": "Nadir",
+            "icon": "arrow-down-to-line",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "shift+v"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "nadir"
+            },
+            "state": {
+              "via": "event",
+              "topic": "sensor.gimbal.nadir"
+            }
+          },
+          {
+            "id": "rate-mode",
+            "label": "Rate mode",
+            "icon": "move",
+            "category": "camera",
+            "toggle": true,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "shift+g"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "rate_mode"
+            },
+            "state": {
+              "via": "event",
+              "topic": "sensor.gimbal.rate_mode"
+            }
+          }
+        ],
+        "parameters": [
+          {
+            "key": "designate_camera",
+            "control": "camera-selector",
+            "binding": "agent.config",
+            "label": "Camera",
+            "purpose": "detect",
+            "default": "auto",
+            "ui": {
+              "group": "settings.title",
+              "order": 10
+            }
+          }
+        ]
+      },
+      "locales": [
+        "en"
+      ]
+    },
+    "permissions": [
+      {
+        "id": "mavlink.read",
+        "required": true
+      },
+      {
+        "id": "mavlink.write",
+        "required": true
+      },
+      {
+        "id": "mavlink.component.gimbal",
+        "required": true
+      },
+      {
+        "id": "vision.detection.subscribe",
+        "required": true
+      },
+      {
+        "id": "telemetry.extend",
+        "required": true
+      },
+      {
+        "id": "event.publish",
+        "required": true
+      },
+      {
+        "id": "mcp.expose",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-detail-tab",
+        "required": true
+      },
+      {
+        "id": "ui.slot.settings-section",
+        "required": true
+      },
+      {
+        "id": "ui.slot.flight-skill",
+        "required": true
+      },
+      {
+        "id": "telemetry.subscribe.gimbal",
+        "required": true
+      },
+      {
+        "id": "command.send",
+        "required": true
+      }
+    ],
+    "mcp": {
+      "tools": [],
+      "resources": [],
+      "prompts": []
+    }
+  }
+}

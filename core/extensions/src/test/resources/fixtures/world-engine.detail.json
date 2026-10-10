@@ -1,0 +1,270 @@
+{
+  "install": {
+    "plugin_id": "com.altnautica.world-engine",
+    "version": "1.0.1",
+    "source": "registry",
+    "source_uri": null,
+    "signer_id": null,
+    "manifest_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "enabled",
+    "installed_at": 1760000000,
+    "enabled_at": 1760000001,
+    "permissions": {
+      "telemetry.extend": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "node.info.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "vision.frame.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "vision.detection.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "vision.offload.advertise": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "radio.aux_stream": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "network.outbound": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "network.listen": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "hardware.gpu": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "cloud.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "cloud.records": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-agent-page": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-surface": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "perception.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.subscribe.status": {
+        "granted": true,
+        "granted_at": 1760000001
+      }
+    }
+  },
+  "granted_capabilities": [
+    "telemetry.extend",
+    "event.publish",
+    "telemetry.read",
+    "node.info.read",
+    "vision.frame.read",
+    "vision.detection.publish",
+    "vision.offload.advertise",
+    "radio.aux_stream",
+    "network.outbound",
+    "network.listen",
+    "hardware.gpu",
+    "cloud.publish",
+    "cloud.records",
+    "ui.slot.node-agent-page",
+    "ui.slot.node-surface",
+    "cloud.records",
+    "perception.read",
+    "telemetry.subscribe.status"
+  ],
+  "manifest": {
+    "id": "com.altnautica.world-engine",
+    "version": "1.0.1",
+    "name": "ADOS World Engine",
+    "risk": "high",
+    "license": "GPL-3.0-or-later",
+    "halves": [
+      "agent",
+      "gcs"
+    ],
+    "gcs": {
+      "entrypoint": "gcs/world-engine.mjs",
+      "isolation": "inline",
+      "contributes": {
+        "agent_pages": [
+          {
+            "id": "world-model",
+            "title": "World Model",
+            "section": "videoVision",
+            "profile": [
+              "drone"
+            ]
+          },
+          {
+            "id": "world-model-setup",
+            "title": "World Model setup",
+            "setup_for": "world-model",
+            "profile": [
+              "drone"
+            ]
+          },
+          {
+            "id": "live-world",
+            "title": "Live World",
+            "section": "videoVision",
+            "after": "world-model",
+            "profile": [
+              "drone"
+            ]
+          },
+          {
+            "id": "offload",
+            "title": "Perception offload",
+            "section": "videoVision",
+            "after": "vision",
+            "profile": [
+              "drone",
+              "workstation",
+              "compute"
+            ]
+          },
+          {
+            "id": "atlas-relay",
+            "title": "Atlas relay",
+            "section": "radioLink",
+            "profile": [
+              "ground-station"
+            ]
+          }
+        ],
+        "node_surfaces": [
+          {
+            "id": "overview",
+            "title": "Compute",
+            "profile": [
+              "workstation",
+              "compute"
+            ],
+            "group": "status",
+            "order": 10
+          },
+          {
+            "id": "compute",
+            "title": "Jobs & outputs",
+            "profile": [
+              "workstation",
+              "compute"
+            ],
+            "group": "compute",
+            "order": 20
+          }
+        ]
+      },
+      "locales": [
+        "en"
+      ]
+    },
+    "permissions": [
+      {
+        "id": "telemetry.extend",
+        "required": true
+      },
+      {
+        "id": "event.publish",
+        "required": true
+      },
+      {
+        "id": "telemetry.read",
+        "required": true
+      },
+      {
+        "id": "node.info.read",
+        "required": true
+      },
+      {
+        "id": "vision.frame.read",
+        "required": true
+      },
+      {
+        "id": "vision.detection.publish",
+        "required": true
+      },
+      {
+        "id": "vision.offload.advertise",
+        "required": true
+      },
+      {
+        "id": "radio.aux_stream",
+        "required": true
+      },
+      {
+        "id": "network.outbound",
+        "required": true
+      },
+      {
+        "id": "network.listen",
+        "required": true
+      },
+      {
+        "id": "hardware.gpu",
+        "required": true
+      },
+      {
+        "id": "cloud.publish",
+        "required": true
+      },
+      {
+        "id": "cloud.records",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-agent-page",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-surface",
+        "required": true
+      },
+      {
+        "id": "cloud.records",
+        "required": true
+      },
+      {
+        "id": "perception.read",
+        "required": true
+      },
+      {
+        "id": "telemetry.subscribe.status",
+        "required": true
+      }
+    ],
+    "mcp": {
+      "tools": [],
+      "resources": [],
+      "prompts": []
+    }
+  }
+}

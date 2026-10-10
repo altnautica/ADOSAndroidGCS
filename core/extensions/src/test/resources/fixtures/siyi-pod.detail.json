@@ -1,0 +1,469 @@
+{
+  "install": {
+    "plugin_id": "com.altnautica.siyi-pod",
+    "version": "0.5.1",
+    "source": "registry",
+    "source_uri": null,
+    "signer_id": null,
+    "manifest_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "enabled",
+    "installed_at": 1760000000,
+    "enabled_at": 1760000001,
+    "permissions": {
+      "network.outbound": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "hardware.uart": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.write": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.component.gimbal": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.component.camera": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.extend": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "video.source.set": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mcp.expose": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-detail-tab": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.cockpit-panel": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.video-overlay": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.flight-skill": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.settings-section": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.subscribe.siyi": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "command.send": {
+        "granted": true,
+        "granted_at": 1760000001
+      }
+    }
+  },
+  "granted_capabilities": [
+    "network.outbound",
+    "hardware.uart",
+    "mavlink.read",
+    "mavlink.write",
+    "mavlink.component.gimbal",
+    "mavlink.component.camera",
+    "telemetry.extend",
+    "video.source.set",
+    "event.publish",
+    "mcp.expose",
+    "ui.slot.node-detail-tab",
+    "ui.slot.cockpit-panel",
+    "ui.slot.video-overlay",
+    "ui.slot.flight-skill",
+    "ui.slot.settings-section",
+    "telemetry.subscribe.siyi",
+    "command.send"
+  ],
+  "manifest": {
+    "id": "com.altnautica.siyi-pod",
+    "version": "0.5.1",
+    "name": "ADOS SIYI Optical Pod",
+    "risk": "high",
+    "license": "GPL-3.0-or-later",
+    "halves": [
+      "agent",
+      "gcs"
+    ],
+    "gcs": {
+      "entrypoint": "gcs/plugin.bundle.js",
+      "isolation": "iframe",
+      "contributes": {
+        "tabs": [
+          {
+            "id": "siyi-console",
+            "slot": "node.detail.tab",
+            "profile": [
+              "drone"
+            ],
+            "title": "SIYI Pod",
+            "icon": "camera",
+            "order": 55
+          }
+        ],
+        "panels": [
+          {
+            "id": "siyi-cockpit",
+            "slot": "cockpit.panel",
+            "title": "Pod",
+            "icon": "camera",
+            "order": 40
+          },
+          {
+            "id": "siyi-overlay",
+            "slot": "video.overlay",
+            "title": "SIYI pod HUD",
+            "icon": "crosshair"
+          }
+        ],
+        "skills": [
+          {
+            "id": "siyi-record",
+            "label": "skill.record",
+            "icon": "video",
+            "category": "camera",
+            "toggle": true,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "r"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "recording"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.record"
+            }
+          },
+          {
+            "id": "cycle-palette",
+            "label": "skill.cyclePalette",
+            "icon": "palette",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "o"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "palette_cycle"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.palette"
+            }
+          },
+          {
+            "id": "fire-lrf",
+            "label": "skill.fireRangefinder",
+            "icon": "scan-line",
+            "category": "camera",
+            "toggle": false,
+            "confirm": true,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "l"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "laser_fire"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.laser"
+            }
+          },
+          {
+            "id": "center",
+            "label": "skill.centerGimbal",
+            "icon": "locate-fixed",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "c"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "center"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.gimbal"
+            }
+          },
+          {
+            "id": "nadir",
+            "label": "skill.nadir",
+            "icon": "arrow-down-to-line",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "v"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "nadir"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.gimbal"
+            }
+          },
+          {
+            "id": "zoom-in",
+            "label": "skill.zoomIn",
+            "icon": "zoom-in",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "]"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "zoom_in"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.zoom"
+            }
+          },
+          {
+            "id": "zoom-out",
+            "label": "skill.zoomOut",
+            "icon": "zoom-out",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "["
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "zoom_out"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.zoom"
+            }
+          },
+          {
+            "id": "photo",
+            "label": "skill.photo",
+            "icon": "camera",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "k"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "photo"
+            },
+            "state": {
+              "via": "event",
+              "topic": "siyi.pod.photo"
+            }
+          }
+        ],
+        "parameters": [
+          {
+            "key": "zoom",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 180,
+              "step": 0.1,
+              "default": 1
+            },
+            "ui": {
+              "widget": "range",
+              "label": "settings.zoom",
+              "group": "settings.optics",
+              "order": 10
+            }
+          },
+          {
+            "key": "gimbal_mode",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "lock",
+                "follow",
+                "fpv"
+              ],
+              "default": "follow"
+            },
+            "ui": {
+              "widget": "enum",
+              "label": "settings.gimbalMode",
+              "group": "settings.gimbal",
+              "order": 30
+            }
+          },
+          {
+            "key": "palette",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 7,
+              "default": 0
+            },
+            "ui": {
+              "widget": "number",
+              "label": "settings.palette",
+              "group": "settings.thermal",
+              "order": 40
+            }
+          },
+          {
+            "key": "thermal_gain",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "ui": {
+              "widget": "boolean",
+              "label": "settings.gain",
+              "group": "settings.thermal",
+              "order": 50
+            }
+          },
+          {
+            "key": "laser_enabled",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "ui": {
+              "widget": "boolean",
+              "label": "settings.laser",
+              "help": "settings.laserHelp",
+              "group": "settings.laser",
+              "order": 60
+            }
+          }
+        ]
+      },
+      "locales": [
+        "en"
+      ]
+    },
+    "permissions": [
+      {
+        "id": "network.outbound",
+        "required": true
+      },
+      {
+        "id": "hardware.uart",
+        "required": true
+      },
+      {
+        "id": "mavlink.read",
+        "required": true
+      },
+      {
+        "id": "mavlink.write",
+        "required": true
+      },
+      {
+        "id": "mavlink.component.gimbal",
+        "required": true
+      },
+      {
+        "id": "mavlink.component.camera",
+        "required": true
+      },
+      {
+        "id": "telemetry.extend",
+        "required": true
+      },
+      {
+        "id": "video.source.set",
+        "required": true
+      },
+      {
+        "id": "event.publish",
+        "required": true
+      },
+      {
+        "id": "mcp.expose",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-detail-tab",
+        "required": true
+      },
+      {
+        "id": "ui.slot.cockpit-panel",
+        "required": true
+      },
+      {
+        "id": "ui.slot.video-overlay",
+        "required": true
+      },
+      {
+        "id": "ui.slot.flight-skill",
+        "required": true
+      },
+      {
+        "id": "ui.slot.settings-section",
+        "required": true
+      },
+      {
+        "id": "telemetry.subscribe.siyi",
+        "required": true
+      },
+      {
+        "id": "command.send",
+        "required": true
+      }
+    ],
+    "mcp": {
+      "tools": [],
+      "resources": [],
+      "prompts": []
+    }
+  }
+}

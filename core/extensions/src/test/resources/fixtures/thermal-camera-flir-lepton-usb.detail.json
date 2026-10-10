@@ -1,0 +1,211 @@
+{
+  "install": {
+    "plugin_id": "com.altnautica.thermal-flir-lepton-usb",
+    "version": "1.3.2",
+    "source": "registry",
+    "source_uri": null,
+    "signer_id": null,
+    "manifest_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "enabled",
+    "installed_at": 1760000000,
+    "enabled_at": 1760000001,
+    "permissions": {
+      "hardware.usb.uvc": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "video.source.set": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.extend": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.video-overlay": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.settings-section": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.flight-skill": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.subscribe.thermal": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.subscribe.camera.thermal.frame": {
+        "granted": true,
+        "granted_at": 1760000001
+      }
+    }
+  },
+  "granted_capabilities": [
+    "hardware.usb.uvc",
+    "video.source.set",
+    "telemetry.extend",
+    "event.publish",
+    "ui.slot.video-overlay",
+    "ui.slot.settings-section",
+    "ui.slot.flight-skill",
+    "telemetry.subscribe.thermal",
+    "telemetry.subscribe.camera.thermal.frame"
+  ],
+  "manifest": {
+    "id": "com.altnautica.thermal-flir-lepton-usb",
+    "version": "1.3.2",
+    "name": "ADOS Thermal Camera FLIR Lepton USB UVC",
+    "risk": "medium",
+    "license": "GPL-3.0-or-later",
+    "halves": [
+      "agent",
+      "gcs"
+    ],
+    "gcs": {
+      "entrypoint": "gcs/plugin.bundle.js",
+      "isolation": "iframe",
+      "contributes": {
+        "panels": [
+          {
+            "id": "thermal-overlay",
+            "slot": "video.overlay",
+            "title": "Thermal",
+            "icon": "thermometer"
+          }
+        ],
+        "skills": [
+          {
+            "id": "cycle-palette",
+            "label": "Cycle palette",
+            "icon": "palette",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "shift+o"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "palette_cycle"
+            },
+            "state": {
+              "via": "event",
+              "topic": "camera.thermal.palette"
+            }
+          },
+          {
+            "id": "ffc",
+            "label": "Flat field correction",
+            "icon": "refresh-cw",
+            "category": "camera",
+            "toggle": false,
+            "confirm": false,
+            "arm_requirement": "any",
+            "default_binding": {
+              "key": "shift+i"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "ffc"
+            },
+            "state": {
+              "via": "event",
+              "topic": "camera.thermal.ffc"
+            }
+          }
+        ],
+        "parameters": [
+          {
+            "key": "palette",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ironbow",
+                "rainbow",
+                "grayscale"
+              ],
+              "default": "ironbow"
+            },
+            "ui": {
+              "widget": "enum",
+              "label": "settings.palette",
+              "group": "settings.title",
+              "order": 10
+            }
+          },
+          {
+            "key": "gain",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "ui": {
+              "widget": "boolean",
+              "label": "settings.gain",
+              "help": "settings.gainHelp",
+              "group": "settings.title",
+              "order": 20
+            }
+          }
+        ]
+      },
+      "locales": [
+        "en"
+      ]
+    },
+    "permissions": [
+      {
+        "id": "hardware.usb.uvc",
+        "required": true
+      },
+      {
+        "id": "video.source.set",
+        "required": true
+      },
+      {
+        "id": "telemetry.extend",
+        "required": true
+      },
+      {
+        "id": "event.publish",
+        "required": true
+      },
+      {
+        "id": "ui.slot.video-overlay",
+        "required": true
+      },
+      {
+        "id": "ui.slot.settings-section",
+        "required": true
+      },
+      {
+        "id": "ui.slot.flight-skill",
+        "required": true
+      },
+      {
+        "id": "telemetry.subscribe.thermal",
+        "required": true
+      },
+      {
+        "id": "telemetry.subscribe.camera.thermal.frame",
+        "required": true
+      }
+    ],
+    "mcp": {
+      "tools": [],
+      "resources": [],
+      "prompts": []
+    }
+  }
+}

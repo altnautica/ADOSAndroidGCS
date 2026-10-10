@@ -1,0 +1,304 @@
+{
+  "install": {
+    "plugin_id": "com.altnautica.follow-me",
+    "version": "0.2.9",
+    "source": "registry",
+    "source_uri": null,
+    "signer_id": null,
+    "manifest_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "enabled",
+    "installed_at": 1760000000,
+    "enabled_at": 1760000001,
+    "permissions": {
+      "vision.detection.subscribe": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.write": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "flight.guided_setpoint": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mcp.expose": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.flight-skill": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-detail-tab": {
+        "granted": true,
+        "granted_at": 1760000001
+      }
+    }
+  },
+  "granted_capabilities": [
+    "vision.detection.subscribe",
+    "mavlink.read",
+    "mavlink.write",
+    "flight.guided_setpoint",
+    "event.publish",
+    "mcp.expose",
+    "ui.slot.flight-skill",
+    "ui.slot.node-detail-tab"
+  ],
+  "manifest": {
+    "id": "com.altnautica.follow-me",
+    "version": "0.2.9",
+    "name": "ADOS Follow-Me",
+    "risk": "high",
+    "license": "GPL-3.0-or-later",
+    "halves": [
+      "agent",
+      "gcs"
+    ],
+    "gcs": {
+      "entrypoint": "gcs/plugin.bundle.js",
+      "isolation": "iframe",
+      "contributes": {
+        "skills": [
+          {
+            "id": "follow-me",
+            "label": "Follow-Me",
+            "icon": "crosshair",
+            "category": "behavior",
+            "toggle": true,
+            "confirm": true,
+            "arm_requirement": "armed",
+            "default_binding": {
+              "key": "shift+f"
+            },
+            "activation": {
+              "via": "config",
+              "config_key": "active"
+            },
+            "state": {
+              "via": "event",
+              "topic": "follow.state"
+            }
+          }
+        ],
+        "target_actions": [
+          {
+            "id": "follow",
+            "label": "Follow this target",
+            "icon": "crosshair",
+            "order": 20,
+            "applies_to_class": "person",
+            "designate": true,
+            "config_key": "active",
+            "config_value": true,
+            "default_key": "f"
+          },
+          {
+            "id": "stop-follow",
+            "label": "Stop following",
+            "icon": "circle-stop",
+            "order": 21,
+            "applies_to_class": "person",
+            "designate": false,
+            "config_key": "active",
+            "config_value": false,
+            "default_key": "x"
+          }
+        ],
+        "tabs": [
+          {
+            "id": "follow-me-tab",
+            "slot": "node.detail.tab",
+            "profile": [
+              "drone"
+            ],
+            "title": "Follow-Me",
+            "icon": "crosshair",
+            "order": 70
+          }
+        ],
+        "parameters": [
+          {
+            "key": "follow_distance_m",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "number",
+              "minimum": 3,
+              "maximum": 30,
+              "step": 0.5,
+              "default": 8
+            },
+            "ui": {
+              "widget": "range",
+              "label": "settings.followDistance",
+              "group": "settings.title",
+              "order": 10
+            }
+          },
+          {
+            "key": "follow_height_m",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20,
+              "step": 0.5,
+              "default": 4
+            },
+            "ui": {
+              "widget": "range",
+              "label": "settings.followHeight",
+              "group": "settings.title",
+              "order": 20
+            }
+          },
+          {
+            "key": "gimbal_point",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "ui": {
+              "widget": "boolean",
+              "label": "settings.gimbalPoint",
+              "group": "settings.title",
+              "order": 30
+            }
+          },
+          {
+            "key": "camera_hfov_deg",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "number",
+              "minimum": 30,
+              "maximum": 160,
+              "step": 1,
+              "default": 70
+            },
+            "ui": {
+              "widget": "number",
+              "label": "settings.cameraHfov",
+              "group": "settings.title",
+              "order": 40
+            }
+          },
+          {
+            "key": "mount_pitch_deg",
+            "binding": "plugin.config",
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 90,
+              "step": 1,
+              "default": 30
+            },
+            "ui": {
+              "widget": "range",
+              "label": "settings.mountPitch",
+              "group": "settings.title",
+              "order": 42
+            }
+          },
+          {
+            "key": "designate_camera",
+            "control": "camera-selector",
+            "binding": "agent.config",
+            "label": "settings.designateCamera",
+            "purpose": "detect",
+            "default": "auto",
+            "ui": {
+              "group": "settings.title",
+              "order": 45
+            }
+          },
+          {
+            "key": "detector",
+            "binding": "engine.detector",
+            "schema": {
+              "type": "string",
+              "default": "coco-person"
+            },
+            "ui": {
+              "widget": "model",
+              "task": "detection",
+              "label": "settings.detector",
+              "group": "settings.title",
+              "order": 50
+            }
+          }
+        ],
+        "models": [
+          {
+            "id": "coco-person",
+            "task": "detection",
+            "board_variants": [
+              {
+                "board_match": "rk3588",
+                "runtime": "rknn",
+                "input": "640x640",
+                "min_tops": 6
+              },
+              {
+                "board_match": "cpu",
+                "runtime": "onnx",
+                "input": "640x640"
+              }
+            ]
+          }
+        ]
+      },
+      "locales": [
+        "en"
+      ]
+    },
+    "permissions": [
+      {
+        "id": "vision.detection.subscribe",
+        "required": true
+      },
+      {
+        "id": "mavlink.read",
+        "required": true
+      },
+      {
+        "id": "mavlink.write",
+        "required": true
+      },
+      {
+        "id": "flight.guided_setpoint",
+        "required": true
+      },
+      {
+        "id": "event.publish",
+        "required": true
+      },
+      {
+        "id": "mcp.expose",
+        "required": true
+      },
+      {
+        "id": "ui.slot.flight-skill",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-detail-tab",
+        "required": true
+      }
+    ],
+    "mcp": {
+      "tools": [],
+      "resources": [],
+      "prompts": []
+    }
+  }
+}
