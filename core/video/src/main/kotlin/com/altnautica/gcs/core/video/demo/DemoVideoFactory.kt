@@ -87,8 +87,10 @@ private class DemoVideoSession(
             while (isActive) {
                 val s = surface
                 if (s != null && s.isValid) {
+                    // A software canvas: a hardware one would queue on the UI's RenderThread
+                    // and make every cockpit frame wait behind the test pattern.
                     val drawn = runCatching {
-                        val canvas = s.lockHardwareCanvas()
+                        val canvas = s.lockCanvas(null)
                         try {
                             drawPattern(canvas, (clock.nowMs() - startMs) / 1000f)
                         } finally {

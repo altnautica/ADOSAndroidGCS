@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.JsonElement
@@ -206,7 +205,7 @@ class ExtensionRepository @Inject constructor(
 
         internal fun mergeSources(sources: Set<NodeSource>): Flow<Map<DeviceId, NodeSummary>> {
             if (sources.isEmpty()) return flowOf(emptyMap())
-            return combine(sources.map { it.nodes.onStart { emit(emptyList()) } }) { lists ->
+            return combine(sources.map { it.nodes }) { lists ->
                 val out = LinkedHashMap<DeviceId, NodeSummary>()
                 for (list in lists) {
                     for (n in list) {

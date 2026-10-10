@@ -80,7 +80,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -121,10 +120,9 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Node and vehicle -------------------------------------------------------------
 
-    /** Every source starts empty, so one that has not reported yet never hides the others' nodes. */
     private val allNodes: Flow<List<NodeSummary>> =
         if (nodeSources.isEmpty()) flowOf(emptyList())
-        else combine(nodeSources.map { src -> src.nodes.onStart { emit(emptyList()) } }) { lists -> lists.flatMap { it.toList() } }
+        else combine(nodeSources.map { src -> src.nodes }) { lists -> lists.flatMap { it.toList() } }
 
     private fun merged(nodes: List<NodeSummary>, id: DeviceId): NodeSummary? {
         val matches = nodes.filter { it.id == id }

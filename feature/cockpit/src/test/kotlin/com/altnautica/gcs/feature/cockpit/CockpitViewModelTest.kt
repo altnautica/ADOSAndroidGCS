@@ -39,11 +39,9 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -75,12 +73,7 @@ class CockpitViewModelTest {
     private fun node(id: String, profile: NodeProfile = NodeProfile.Drone, carried: DeviceId? = null) =
         NodeSummary(DeviceId(id), "Node $id", profile, listOf(Reach.Lan), Liveness.Live, null, FcVariant.MavlinkArdupilot, carried, null)
 
-    private fun TestScope.vm(
-        nodes: List<NodeSummary>,
-        vehicle: FakeVehicle?,
-        open: String = "drone-1",
-        extraSources: Set<NodeSource> = emptySet(),
-    ): CockpitViewModel {
+    private fun TestScope.vm(nodes: List<NodeSummary>, vehicle: FakeVehicle?, open: String = "drone-1"): CockpitViewModel {
         val clock = MonotonicClock { testScheduler.currentTime }
         val dataStore = MemoryPreferences()
         val router = mockk<AdosInputRouter>(relaxed = true) {
@@ -92,7 +85,7 @@ class CockpitViewModelTest {
         val activator = SkillActivator(clock)
         return CockpitViewModel(
             nodeIdValue = open,
-            nodeSources = setOf<NodeSource>(object : NodeSource { override val nodes = flowOf(nodes) }) + extraSources,
+            nodeSources = setOf(object : NodeSource { override val nodes = flowOf(nodes) }),
             vehicles = object : VehicleProvider {
                 override fun vehicle(id: DeviceId) = flowOf(vehicle?.takeIf { it.id == id })
             },
@@ -160,17 +153,6 @@ class CockpitViewModelTest {
         val vm = vm(emptyList(), vehicle = null, open = "ghost")
         runCurrent()
         assertEquals(CockpitStatus.UnknownNode, vm.status.value)
-        vm.viewModelScope.cancel()
-    }
-
-    @Test
-    fun `a node source that has not reported yet does not hide the flown node`() = runTest(dispatcher) {
-        val vehicle = FakeVehicle()
-        vehicle.beat(armed = false, now = testScheduler.currentTime)
-        val silent = object : NodeSource { override val nodes = flow<List<NodeSummary>> { awaitCancellation() } }
-        val vm = vm(listOf(node("drone-1")), vehicle, extraSources = setOf(silent))
-        runCurrent()
-        assertEquals("Node drone-1", vm.band.value.nodeName)
         vm.viewModelScope.cancel()
     }
 

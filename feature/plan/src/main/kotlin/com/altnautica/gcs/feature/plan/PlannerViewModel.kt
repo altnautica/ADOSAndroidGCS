@@ -50,7 +50,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -97,7 +96,7 @@ class PlannerViewModel @Inject constructor(
 
     private fun allNodes(): Flow<List<NodeSummary>> {
         if (nodeSources.isEmpty()) return flowOf(emptyList())
-        return combine(nodeSources.map { it.nodes.onStart { emit(emptyList()) } }) { lists -> lists.flatMap { it.toList() }.distinctBy { it.id } }
+        return combine(nodeSources.map { it.nodes }) { lists -> lists.flatMap { it.toList() }.distinctBy { it.id } }
     }
 
     // ── Vehicle ──────────────────────────────────────────────
