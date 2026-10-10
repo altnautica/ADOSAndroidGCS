@@ -43,5 +43,9 @@ gradlePlugin {
             id = "ados.jvm.library"
             implementationClass = "JvmLibraryConventionPlugin"
         }
+        register("mavlinkCodegen") {
+            id = "ados.mavlink.codegen"
+            implementationClass = "MavlinkCodegenConventionPlugin"
+        }
     }
 }

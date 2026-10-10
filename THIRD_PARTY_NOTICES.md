@@ -23,8 +23,10 @@ licence declares no Reserved Font Name.
 |---|---|---|---|
 | MAVLink XML message definitions (`minimal`, `standard`, `common`, `ardupilotmega` and their includes) | `20ed9b2760cffec2ac9becb9b8287cb2456d7ee7` | MIT for generator output and message definitions, per the exception in the upstream `COPYING` at that revision | https://github.com/mavlink/mavlink |
 
-The Kotlin codecs in `:core:mavlink` are generated at build time from these
-definitions.
+The XML files and the upstream `COPYING` are vendored in
+`core/mavlink/definitions/`, unchanged except that the per-dialect contact
+comment lines at the top of some files are removed. The Kotlin codecs in
+`:core:mavlink` are generated at build time from these definitions.
 
 ## Libraries
 

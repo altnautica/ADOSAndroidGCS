@@ -109,6 +109,40 @@ data class MissionProgress(
     val total: Int,
 )
 
+/**
+ * Autopilot self-reported health: `HEARTBEAT.system_status` (MAV_STATE) and the
+ * `SYS_STATUS` sensor bitmasks (MAV_SYS_STATUS_SENSOR), which carry RC-receiver health.
+ */
+data class SystemHealth(
+    val systemStatus: Int,
+    val sensorsPresent: Long,
+    val sensorsEnabled: Long,
+    val sensorsHealthy: Long,
+    val tMs: Long,
+)
+
+/** `FENCE_STATUS`: breach state (FENCE_BREACH) and cumulative breach count. */
+data class FenceStatus(
+    val breachStatus: Int,
+    val breachCount: Int,
+    val tMs: Long,
+)
+
+/**
+ * `OBSTACLE_DISTANCE` sectors. Distances are in cm; 0 or a value above [maxCm]
+ * means no reading in that sector. [northAligned] is true for NED frames and
+ * false for the body frame.
+ */
+data class ObstacleSectors(
+    val distancesCm: List<Int>,
+    val incrementDeg: Float,
+    val angleOffsetDeg: Float,
+    val minCm: Int,
+    val maxCm: Int,
+    val northAligned: Boolean,
+    val tMs: Long,
+)
+
 /** One flow per telemetry topic so consumers only observe what they draw. */
 interface VehicleTelemetry {
     val attitude: StateFlow<Attitude?>
@@ -123,5 +157,8 @@ interface VehicleTelemetry {
     val vibration: StateFlow<VibrationState?>
     val linkQuality: StateFlow<LinkQuality?>
     val missionProgress: StateFlow<MissionProgress?>
+    val systemHealth: StateFlow<SystemHealth?>
+    val fence: StateFlow<FenceStatus?>
+    val obstacles: StateFlow<ObstacleSectors?>
     val statusText: SharedFlow<StatusText>
 }
