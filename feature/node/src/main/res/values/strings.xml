@@ -20,6 +20,8 @@
     <string name="node_unpair_failed_title">Could not reach the node</string>
     <string name="node_unpair_failed_message">The node did not confirm the unpair. Forget it on this phone only? Its key stays valid on the node until it is unpaired there.</string>
     <string name="node_forget">Forget on this phone</string>
+    <string name="node_credential_store_title">Could not update this phone\'s keys</string>
+    <string name="node_credential_store_message">This phone\'s credential store could not be read just now, so the node key is still stored here. Nothing was lost. Try again in a moment.</string>
     <string name="node_open_cockpit">Open cockpit</string>
     <string name="node_cockpit_message">The cockpit opens full screen with video, HUD and the Skill Bar.</string>
     <string name="node_cockpit_carried">Flies the drone this ground station carries: %1$s</string>

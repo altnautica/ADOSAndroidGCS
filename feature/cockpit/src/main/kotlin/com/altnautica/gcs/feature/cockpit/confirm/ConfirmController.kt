@@ -35,9 +35,31 @@ data class ConfirmUiState(
     val progress: Float,
     /** Guard window left for `guarded`, else null. */
     val guardRemainingMs: Long?,
+    /** Hold time still needed while a hold runs, else null. */
+    val holdRemainingMs: Long? = null,
 ) {
     val gesture: ConfirmGesture get() = request.policy.gesture
     val gestureEnabled: Boolean get() = failingChecks.isEmpty() || overrideChecklist
+}
+
+/** The guarded tier's countdown line, in seconds to one decimal rounded up so it never reads 0.0 early. */
+sealed interface GuardCountdown {
+    val seconds: Float
+
+    /** No hold yet: time left to start one before the guard lapses. */
+    data class Window(override val seconds: Float) : GuardCountdown
+
+    /** A hold runs: time it still needs before Kill fires. */
+    data class Holding(override val seconds: Float) : GuardCountdown
+}
+
+private fun tenthsUp(ms: Long): Float = ((ms.coerceAtLeast(0) + 99) / 100) / 10f
+
+/** What the guarded sheet's countdown shows now; null for the other tiers. */
+fun ConfirmUiState.guardCountdown(): GuardCountdown? {
+    if (gesture != ConfirmGesture.Guarded) return null
+    holdRemainingMs?.let { return GuardCountdown.Holding(tenthsUp(it)) }
+    return GuardCountdown.Window(tenthsUp(guardRemainingMs ?: 0))
 }
 
 /**
@@ -105,7 +127,9 @@ class ConfirmController(
                 resolve(ConfirmResult.Cancelled)
                 return
             }
-            _state.update { it?.copy(progress = m.progress(now), guardRemainingMs = m.guardRemainingMs(now)) }
+            _state.update {
+                it?.copy(progress = m.progress(now), guardRemainingMs = m.guardRemainingMs(now), holdRemainingMs = m.holdRemainingMs(now))
+            }
             delay(TICK_MS)
         }
     }
@@ -120,8 +144,11 @@ class ConfirmController(
 
     private fun release() {
         machine?.release()
-        _state.update { it?.copy(progress = 0f) }
+        _state.update { it?.copy(progress = 0f, holdRemainingMs = null) }
     }
+
+    /** Drops a hold in progress (the cockpit stopped taking input); the sheet stays open. */
+    fun releaseHold() = release()
 
     fun onGamepadButton(button: Int, pressed: Boolean) {
         if (!isOpen || button != confirmButton) return

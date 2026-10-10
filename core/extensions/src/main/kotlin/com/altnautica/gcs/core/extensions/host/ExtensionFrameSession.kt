@@ -5,6 +5,8 @@ import com.altnautica.gcs.core.extensions.bridge.ExtensionEventBus
 import com.altnautica.gcs.core.extensions.bridge.MountHandlers
 import com.altnautica.gcs.core.extensions.bridge.RpcEnvelope
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -17,33 +19,39 @@ import java.util.UUID
 /**
  * The app side of one relay page: turns relay messages into bridge dispatches and
  * forwards responses, host events and the extension's own agent state into the frame.
- * [send] delivers a JSON string to the relay page (null while no page is attached).
+ *
+ * Bridge handlers live only while a relay page is attached: [attach] builds a fresh
+ * handler set from [newHandlers], and [detach] (the WebView left composition) disposes it
+ * and cancels every in-flight request, so subscriptions, state polls, marks and pending
+ * operator approvals never outlive the frame that asked for them.
  */
 class ExtensionFrameSession(
     val pluginId: String,
-    private val handlers: MountHandlers,
-    granted: () -> Set<String>,
-    private val bus: ExtensionEventBus,
+    private val newHandlers: () -> MountHandlers,
+    private val granted: () -> Set<String>,
+    bus: ExtensionEventBus,
     agentStateOrigin: String,
     private val scope: CoroutineScope,
-    onSecurityEvent: (code: String, method: String?) -> Unit = { _, _ -> },
+    private val onSecurityEvent: (code: String, method: String?) -> Unit = { _, _ -> },
 ) {
+    private class Attachment(
+        val send: (String) -> Unit,
+        val handlers: MountHandlers,
+        val dispatcher: EnvelopeDispatcher,
+        val job: Job,
+    )
+
     @Volatile
-    var send: ((String) -> Unit)? = null
+    private var attachment: Attachment? = null
 
     @Volatile
     var loaded: Boolean = false
         private set
 
-    private val lastHostEvents = LinkedHashMap<String, Pair<String, JsonElement?>>()
+    /** True while a relay page is attached. */
+    val attached: Boolean get() = attachment != null
 
-    private val dispatcher = EnvelopeDispatcher(
-        pluginId = pluginId,
-        granted = granted,
-        handlers = handlers.handlers,
-        post = ::postEnvelope,
-        onSecurityEvent = onSecurityEvent,
-    )
+    private val lastHostEvents = LinkedHashMap<String, Pair<String, JsonElement?>>()
 
     private val stateSub = bus.subscribe("*") { topic, payload, origin ->
         if (origin == agentStateOrigin && !ExtensionEventBus.isReservedTopic(topic)) {
@@ -51,10 +59,38 @@ class ExtensionFrameSession(
         }
     }
 
+    /**
+     * A relay page announced itself: bind [send] to it and create its handlers. A second
+     * attach (the page reloaded) tears the previous handler set down first.
+     */
+    fun attach(send: (String) -> Unit) {
+        detach()
+        val handlers = newHandlers()
+        val job = SupervisorJob(scope.coroutineContext[Job])
+        val dispatcher = EnvelopeDispatcher(
+            pluginId = pluginId,
+            granted = granted,
+            handlers = handlers.handlers,
+            // A late reply from a detached page's handlers never reaches the next page.
+            post = { env -> if (attachment?.job === job) postEnvelope(env) },
+            onSecurityEvent = onSecurityEvent,
+        )
+        attachment = Attachment(send, handlers, dispatcher, job)
+    }
+
+    /** The relay page is gone: dispose its handlers and cancel its in-flight requests. */
+    fun detach() {
+        val a = attachment ?: return
+        attachment = null
+        loaded = false
+        a.job.cancel()
+        a.handlers.dispose()
+    }
+
     /** Mount the frame document in the relay. */
     fun mount(html: String) {
         loaded = false
-        send?.invoke(buildJsonObject {
+        attachment?.send?.invoke(buildJsonObject {
             put("kind", "mount")
             put("html", html)
         }.toString())
@@ -62,6 +98,7 @@ class ExtensionFrameSession(
 
     /** A message from the relay page (already origin-checked by the WebView listener). */
     fun onRelayMessage(text: String) {
+        val a = attachment ?: return
         val msg = runCatching { Json.parseToJsonElement(text) }.getOrNull() as? JsonObject ?: return
         when ((msg["kind"] as? JsonPrimitive)?.content) {
             "loaded" -> {
@@ -70,7 +107,7 @@ class ExtensionFrameSession(
             }
             "envelope" -> {
                 val env = msg["envelope"]
-                scope.launch { dispatcher.dispatch(env) }
+                scope.launch(a.job) { a.dispatcher.dispatch(env) }
             }
         }
     }
@@ -92,15 +129,14 @@ class ExtensionFrameSession(
     }
 
     private fun postEnvelope(envelope: JsonObject) {
-        send?.invoke(buildJsonObject {
+        attachment?.send?.invoke(buildJsonObject {
             put("kind", "envelope")
             put("envelope", envelope)
         }.toString())
     }
 
     fun dispose() {
+        detach()
         stateSub()
-        handlers.dispose()
-        send = null
     }
 }

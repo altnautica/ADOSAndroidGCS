@@ -155,6 +155,7 @@ private fun ErrorBanner(error: ConnectError) {
         ConnectError.Unauthorized -> stringResource(R.string.connect_error_unauthorized)
         ConnectError.Unreachable -> stringResource(R.string.connect_error_unreachable)
         ConnectError.InvalidAnswer -> stringResource(R.string.connect_error_invalid)
+        ConnectError.CredentialStoreUnavailable -> stringResource(R.string.connect_error_credential_store)
         is ConnectError.Other -> error.message ?: stringResource(R.string.connect_error_other)
     }
     StatusChip(StatusLevel.Error, text, modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2))

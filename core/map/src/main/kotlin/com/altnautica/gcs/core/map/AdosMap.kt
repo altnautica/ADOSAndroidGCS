@@ -139,8 +139,9 @@ fun rememberAdosMapState(initialCenter: GeoPoint? = null, initialZoom: Double = 
  *
  * Feature callbacks receive taps, long presses and drags on waypoints, rally
  * points and handles; [onMapClick] / [onMapLongClick] receive the rest. A
- * non-[interactive] map ignores every gesture (camera follows [vehicle] when
- * [followVehicle] is set).
+ * non-[interactive] map ignores every gesture. With [followVehicle] the camera
+ * follows [vehicle], or [home] until the vehicle reports a position; the first
+ * follow move sets [followZoom] (the current zoom when null).
  */
 @Composable
 fun AdosMap(
@@ -154,6 +155,7 @@ fun AdosMap(
     trail: List<GeoPoint> = emptyList(),
     overlays: MapOverlays = MapOverlays.Empty,
     followVehicle: Boolean = mode == AdosMapMode.Minimap,
+    followZoom: Double? = null,
     textureMode: Boolean = mode == AdosMapMode.Minimap,
     onMapClick: ((GeoPoint) -> Unit)? = null,
     onMapLongClick: ((GeoPoint) -> Unit)? = null,
@@ -198,7 +200,7 @@ fun AdosMap(
         controller.setGestures(interactive, mode)
         controller.setStyle(MapStyle.styleJson(basemap, palette), MapIconFactory(density, iconPalette))
         controller.setData(MapData(vehicle, home, trail, overlays, palette))
-        if (followVehicle && vehicle != null) controller.follow(vehicle.position, state.zoom)
+        if (followVehicle) (vehicle?.position ?: home)?.let { controller.follow(it, followZoom ?: state.zoom) }
     }
 
     Box(modifier) {
@@ -235,6 +237,7 @@ fun AdosMinimap(
             home = home,
             trail = trail,
             overlays = overlays,
+            followZoom = zoom,
         )
         if (vehicle == null) {
             Text(
@@ -344,7 +347,7 @@ private class MapController(private val density: Float) {
     private var interactive = true
     private var mode = AdosMapMode.Full
     private var interactivePoints: List<InteractivePoint> = emptyList()
-    private var followedOnce = false
+    private val followCamera = CameraFollow()
 
     private val handler = Handler(Looper.getMainLooper())
     private var downRef: InteractivePoint? = null
@@ -385,13 +388,14 @@ private class MapController(private val density: Float) {
             }
             m.addOnCameraIdleListener { state.onCameraIdle(m) }
             state.attach(m)
+            applyFollow()
             requestedStyle?.let { loadStyle(m, it) }
         }
     }
 
     fun unbind(state: AdosMapState) {
         handler.removeCallbacks(longPress)
-        state.detach()
+        followCamera.reset()
         mapView?.setOnTouchListener(null)
         mapView = null
         map = null
@@ -438,15 +442,18 @@ private class MapController(private val density: Float) {
         applyData()
     }
 
+    /** Follows [position]; applied now when the map is ready, else as soon as it is. */
     fun follow(position: GeoPoint, zoom: Double) {
+        followCamera.request(position, zoom)
+        applyFollow()
+    }
+
+    private fun applyFollow() {
         val m = map ?: return
-        val target = LatLng(position.latDeg, position.lonDeg)
-        if (!followedOnce) {
-            m.moveCamera(CameraUpdateFactory.newLatLngZoom(target, zoom))
-            followedOnce = true
-        } else {
-            m.moveCamera(CameraUpdateFactory.newLatLng(target))
-        }
+        val move = followCamera.next() ?: return
+        val target = LatLng(move.target.latDeg, move.target.lonDeg)
+        val zoom = move.zoom
+        m.moveCamera(if (zoom != null) CameraUpdateFactory.newLatLngZoom(target, zoom) else CameraUpdateFactory.newLatLng(target))
     }
 
     private fun applyData() {

@@ -18,6 +18,8 @@
     <string name="cloud_error_invalid_credentials">Email or password is incorrect.</string>
     <string name="cloud_error_network">Cannot reach the cloud. Check the connection and try again.</string>
     <string name="cloud_error_rate_limited">Too many attempts. Wait a moment and try again.</string>
+    <string name="cloud_error_vault_unavailable">This phone\'s credential store could not be read. Try again.</string>
+    <string name="cloud_retry">Try again</string>
     <string name="cloud_signed_in">Signed in</string>
     <string name="cloud_section_control">Live control</string>
     <string name="cloud_grant_none">No live control</string>
@@ -38,6 +40,9 @@
     <string name="cloud_claim_owned">That node belongs to another account.</string>
     <string name="cloud_claim_rate_limited">Too many attempts. Wait a moment and try again.</string>
     <string name="cloud_claim_failed">Could not claim the node: %1$s</string>
+    <string name="cloud_claim_vault_unavailable">This phone\'s credential store could not be read, so the code was not sent. Try again.</string>
+    <string name="cloud_claim_key_not_saved">Added %1$s, but this phone could not save its local-network key.</string>
+    <string name="cloud_claim_save_again">Save again</string>
     <string name="cloud_section_nodes">Cloud nodes</string>
     <string name="cloud_nodes_empty_title">No cloud nodes</string>
     <string name="cloud_nodes_empty_message">Claim a node with the pairing code it shows.</string>

@@ -25,8 +25,11 @@ dependencies {
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
 
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.okhttp.mockwebserver)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
 // The relay page script is plain JavaScript; its behaviour tests run on Node's built-in

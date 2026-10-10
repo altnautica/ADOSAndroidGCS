@@ -4,10 +4,15 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.video.VideoClock
+import com.altnautica.gcs.core.video.VideoOutput
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -34,17 +39,23 @@ class WhepSessionTest {
     private val signaling = WhepSignaling(OkHttpClient())
     private val node = DeviceId("drone-1")
 
-    private class FakePeer(val sink: VideoSink, val createdAtMs: Long) : WhepPeer {
+    private inner class FakePeer(val sink: VideoSink, val createdAtMs: Long) : WhepPeer {
         override val connection = MutableStateFlow(PeerLinkState.New)
         var answer: String? = null
         var closed = false
+
+        /** Requests the server had received when the peer closed. */
+        var requestsAtClose = -1
         override suspend fun createOffer() = "v=0 offer"
         override suspend fun applyAnswer(sdp: String) {
             answer = sdp
             connection.value = PeerLinkState.Connected
         }
         override suspend fun latencyMs(): Int? = 42
-        override fun close() { closed = true }
+        override fun close() {
+            closed = true
+            requestsAtClose = server.requestCount
+        }
     }
 
     @Before
@@ -104,6 +115,27 @@ class WhepSessionTest {
     }
 
     @Test
+    fun `an offer cancelled mid-POST deletes the session the agent created`() = runBlocking {
+        server.enqueue(
+            MockResponse.Builder().code(201).addHeader("Location", "/whep/late?camera=main").body("v=0 answer")
+                .headersDelay(800, TimeUnit.MILLISECONDS).build(),
+        )
+        server.enqueue(MockResponse.Builder().code(200).build())
+        val dial = launch(Dispatchers.IO) {
+            signaling.offer(server.url("/").toString(), "main", "secret-key", "v=0 offer")
+        }
+        delay(200)
+        dial.cancelAndJoin()
+
+        assertEquals("POST", server.takeRequest(5, TimeUnit.SECONDS)!!.method)
+        val delete = server.takeRequest(5, TimeUnit.SECONDS)!!
+        assertEquals("DELETE", delete.method)
+        assertEquals("/whep/late?camera=main", delete.target)
+        assertEquals("secret-key", delete.headers["X-ADOS-Key"])
+        assertTrue(dial.isCancelled)
+    }
+
+    @Test
     fun `refused offer fails then redials with backoff`() = runTest {
         repeat(3) { server.enqueue(MockResponse.Builder().code(503).build()) }
         server.enqueue(answer())
@@ -130,6 +162,7 @@ class WhepSessionTest {
         val peers = mutableListOf<FakePeer>()
         val s = session(peers)
         s.start()
+        (s.output as VideoOutput.Sinks).addSink(mockk(relaxed = true))
 
         eventually { peers.isNotEmpty() && peers[0].answer != null }
         peers[0].sink.onFrame(mockk<VideoFrame>(relaxed = true))
@@ -150,6 +183,46 @@ class WhepSessionTest {
     }
 
     @Test
+    fun `decoded frames with no renderer on screen are not live`() = runTest {
+        server.enqueue(answer("/whep/only?camera=main"))
+        server.enqueue(MockResponse.Builder().code(200).build())
+        val peers = mutableListOf<FakePeer>()
+        val s = session(peers)
+        val shown = mutableListOf<VideoFrame>()
+        val renderer = VideoSink { shown += it }
+        s.start()
+        eventually { peers.isNotEmpty() && peers[0].answer != null }
+        val sink = peers[0].sink
+
+        // Frames decode but nothing draws them: the band must not say LIVE.
+        repeat(8) {
+            sink.onFrame(mockk(relaxed = true))
+            delay(250)
+        }
+        assertEquals(VideoState.Connecting, s.state.value)
+        assertTrue(shown.isEmpty())
+
+        // A renderer with a surface attaches: the next frames are shown and LIVE.
+        (s.output as VideoOutput.Sinks).addSink(renderer)
+        repeat(4) {
+            sink.onFrame(mockk(relaxed = true))
+            delay(250)
+        }
+        assertEquals(VideoState.Live(42), s.state.value)
+        assertEquals(4, shown.size)
+
+        // Its surface goes away while decoding continues: back to connecting, same peer.
+        (s.output as VideoOutput.Sinks).removeSink(renderer)
+        repeat(16) {
+            sink.onFrame(mockk(relaxed = true))
+            delay(250)
+        }
+        assertEquals(VideoState.Connecting, s.state.value)
+        assertEquals(1, peers.size)
+        s.stop()
+    }
+
+    @Test
     fun `stop deletes the session resource`() = runTest {
         server.enqueue(answer("/whep/only?camera=main"))
         server.enqueue(MockResponse.Builder().code(200).build())
@@ -159,6 +232,8 @@ class WhepSessionTest {
         eventually { peers.isNotEmpty() && peers[0].answer != null }
 
         s.stop()
+        // The DELETE reached the server while the peer was still open.
+        assertEquals(2, peers[0].requestsAtClose)
 
         assertEquals("POST", server.takeRequest(5, TimeUnit.SECONDS)!!.method)
         val delete = server.takeRequest(5, TimeUnit.SECONDS)!!

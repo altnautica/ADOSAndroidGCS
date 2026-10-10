@@ -301,7 +301,7 @@ fun GuardedButton(
 }
 
 @Composable
-private fun ConfirmSheetBody(
+internal fun ConfirmSheetBody(
     title: String,
     message: String,
     danger: Boolean,

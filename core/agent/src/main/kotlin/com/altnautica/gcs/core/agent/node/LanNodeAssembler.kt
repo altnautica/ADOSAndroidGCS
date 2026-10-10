@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.agent.node
 
 import com.altnautica.gcs.core.agent.discovery.DiscoveredAgent
+import com.altnautica.gcs.core.agent.groundstation.PairedDrone
 import com.altnautica.gcs.core.agent.model.StatusFull
 import com.altnautica.gcs.core.data.vault.NodeCredential
 import com.altnautica.gcs.core.model.BlockReason
@@ -19,6 +20,8 @@ data class NodePoll(
     /** The drone a ground station reports as paired to it. */
     val carriedDroneId: String?,
     val agentVersion: String?,
+    /** A ground station's summary of that drone (mode, battery), polled with it; null elsewhere. */
+    val carriedDrone: PairedDrone? = null,
 )
 
 /** Pure merge of stored credentials, discovery, and status polls into [NodeSummary]s. */

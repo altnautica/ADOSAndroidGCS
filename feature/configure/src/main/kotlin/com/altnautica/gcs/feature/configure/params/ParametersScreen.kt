@@ -51,6 +51,7 @@ import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
+import com.altnautica.gcs.core.link.param.MavlinkParamService
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
@@ -112,7 +113,15 @@ fun ParametersRoute(nodeId: DeviceId, modifier: Modifier = Modifier) {
             )
         }
     }
-    review?.let { ImportReviewSheet(it, onApply = viewModel::applyImport, onDismiss = viewModel::dismissImport) }
+    review?.let {
+        ImportReviewSheet(
+            it,
+            armed = (state as? ParametersUiState.Content)?.armed == true,
+            onApply = viewModel::applyImport,
+            onConfirmArmed = viewModel::confirmArmedImport,
+            onDismiss = viewModel::dismissImport,
+        )
+    }
 }
 
 private suspend fun writeUri(context: Context, uri: Uri, text: String) = withContext(Dispatchers.IO) {
@@ -151,7 +160,7 @@ fun ParametersScreen(
                 }
             }
             is ParametersUiState.LoadFailed -> ErrorState(
-                reason = stringResource(R.string.cfg_param_load_failed, state.reason),
+                reason = stringResource(R.string.cfg_param_load_failed, paramLoadReason(state.reason)),
                 retryLabel = stringResource(R.string.cfg_retry),
                 onRetry = onRefresh,
             )
@@ -290,7 +299,13 @@ private fun MessageLine(message: ParamMessage, rows: Map<String, ParamRow>, onDi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ImportReviewSheet(review: ImportReview, onApply: () -> Unit, onDismiss: () -> Unit) {
+private fun ImportReviewSheet(
+    review: ImportReview,
+    armed: Boolean,
+    onApply: () -> Unit,
+    onConfirmArmed: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val colors = AdosTheme.colors
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgSurface, contentColor = colors.fgPrimary) {
         Column(Modifier.fillMaxWidth().padding(AdosSpacing.S6), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
@@ -311,15 +326,36 @@ private fun ImportReviewSheet(review: ImportReview, onApply: () -> Unit, onDismi
             if (review.running || review.applied > 0 || review.failed.isNotEmpty()) {
                 Text(stringResource(R.string.cfg_import_progress, review.applied, review.comparison.changed.size, review.failed.size))
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-                AdosButton(
-                    stringResource(R.string.cfg_import_apply),
-                    onClick = onApply,
-                    enabled = !review.running && review.comparison.changed.isNotEmpty(),
-                )
+            val canWrite = !review.running && review.comparison.changed.isNotEmpty()
+            if (armed) {
+                Text(stringResource(R.string.cfg_import_armed_warning), color = colors.statusWarning)
+                if (canWrite) {
+                    HoldToConfirmButton(
+                        label = stringResource(R.string.cfg_import_apply_armed),
+                        holdMs = 800,
+                        danger = true,
+                        onConfirmed = onConfirmArmed,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 AdosButton(stringResource(R.string.cfg_close), onClick = onDismiss, variant = AdosButtonVariant.Secondary)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                    AdosButton(stringResource(R.string.cfg_import_apply), onClick = onApply, enabled = canWrite)
+                    AdosButton(stringResource(R.string.cfg_close), onClick = onDismiss, variant = AdosButtonVariant.Secondary)
+                }
             }
         }
     }
+}
+
+/** Operator text for a [ParametersUiState.LoadFailed] reason; unknown reasons pass through. */
+@Composable
+internal fun paramLoadReason(reason: String): String = paramLoadReasonRes(reason)?.let { stringResource(it) } ?: reason
+
+internal fun paramLoadReasonRes(reason: String): Int? = when (reason) {
+    MavlinkParamService.REASON_NO_LINK -> R.string.cfg_block_no_vehicle
+    MavlinkParamService.REASON_TIMEOUT -> R.string.cfg_result_timeout
+    else -> null
 }
 

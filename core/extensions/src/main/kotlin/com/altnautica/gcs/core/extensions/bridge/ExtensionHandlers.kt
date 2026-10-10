@@ -371,13 +371,28 @@ class ExtensionHandlersFactory @Inject constructor(
         val before = vehicle() ?: return fail("command.send not supported")
         approve(pluginId, before, "Extension command", "$pluginId wants to send \"$command\" to ${node.value}", rate, vehicle)
             ?.let { return fail(it) }
-        val result = before.control.run(cmd)
-        if (result != CommandResult.Accepted) {
-            notifier.post(pluginId, "approved \"$command\" for ${node.value} was not sent ($result)", NoticeLevel.Error)
-        }
-        return buildJsonObject {
-            put("ok", result == CommandResult.Accepted)
-            put("result", result.toString())
+        return when (val result = before.control.run(cmd)) {
+            CommandResult.Accepted -> buildJsonObject {
+                put("ok", true)
+                put("result", result.toString())
+            }
+            // Cloud-queue reach: the command is waiting for the vehicle, not refused.
+            is CommandResult.Queued -> {
+                notifier.post(pluginId, "approved \"$command\" for ${node.value} is queued", NoticeLevel.Info)
+                buildJsonObject {
+                    put("ok", true)
+                    put("queued", true)
+                    put("receipt", result.receiptId)
+                    put("result", result.toString())
+                }
+            }
+            else -> {
+                notifier.post(pluginId, "approved \"$command\" for ${node.value} was not sent ($result)", NoticeLevel.Error)
+                buildJsonObject {
+                    put("ok", false)
+                    put("result", result.toString())
+                }
+            }
         }
     }
 

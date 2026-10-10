@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.node
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.core.agent.pairing.PairingFailure
 import com.altnautica.gcs.core.agent.pairing.PairingOutcome
 import com.altnautica.gcs.core.agent.pairing.PairingService
 import com.altnautica.gcs.core.model.DeviceId
@@ -40,6 +41,9 @@ sealed interface ForgetState {
     data object Running : ForgetState
     data object Done : ForgetState
     data class Failed(val message: String) : ForgetState
+
+    /** The phone's credential store could not be read, so the node key is still stored; [NodeDetailViewModel.retryForget] repeats the step. */
+    data object CredentialStoreUnavailable : ForgetState
 }
 
 @HiltViewModel(assistedFactory = NodeDetailViewModel.Factory::class)
@@ -74,26 +78,36 @@ class NodeDetailViewModel @AssistedInject constructor(
     private val _forget = MutableStateFlow<ForgetState>(ForgetState.Idle)
     val forget: StateFlow<ForgetState> = _forget.asStateFlow()
 
+    /** The step that last ended on [ForgetState.CredentialStoreUnavailable], for [retryForget]. */
+    private var lastStep: (() -> Unit)? = null
+
     /** Releases the node on the agent, then drops its key here. */
     fun unpair() {
+        lastStep = ::unpair
         _forget.value = ForgetState.Running
-        viewModelScope.launch {
-            _forget.value = when (val r = pairing.unpair(id)) {
-                is PairingOutcome.Success -> ForgetState.Done
-                is PairingOutcome.Failure -> ForgetState.Failed(r.failure.toString())
-            }
-        }
+        viewModelScope.launch { _forget.value = pairing.unpair(id).toForgetState() }
     }
 
     /** Drops the key without contacting the node (it was unpaired elsewhere or is gone). */
     fun forgetLocally() {
-        viewModelScope.launch {
-            pairing.forget(id)
-            _forget.value = ForgetState.Done
-        }
+        lastStep = ::forgetLocally
+        _forget.value = ForgetState.Running
+        viewModelScope.launch { _forget.value = pairing.forget(id).toForgetState() }
+    }
+
+    /** Repeats the unpair or forget that the credential store refused. */
+    fun retryForget() {
+        lastStep?.invoke()
     }
 
     fun clearForget() {
-        if (_forget.value is ForgetState.Failed) _forget.value = ForgetState.Idle
+        val s = _forget.value
+        if (s is ForgetState.Failed || s == ForgetState.CredentialStoreUnavailable) _forget.value = ForgetState.Idle
+    }
+
+    private fun PairingOutcome<Unit>.toForgetState(): ForgetState = when (this) {
+        is PairingOutcome.Success -> ForgetState.Done
+        is PairingOutcome.Failure ->
+            if (failure == PairingFailure.VaultUnavailable) ForgetState.CredentialStoreUnavailable else ForgetState.Failed(failure.toString())
     }
 }

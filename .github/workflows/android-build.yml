@@ -30,6 +30,11 @@ jobs:
       - name: Build, unit test and lint
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug
 
+      # Unsigned, minified release build: proves the R8 keep rules for the
+      # libraries bound through JNI or reflection still hold.
+      - name: Build minified release
+        run: ./gradlew :app:assembleRelease
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

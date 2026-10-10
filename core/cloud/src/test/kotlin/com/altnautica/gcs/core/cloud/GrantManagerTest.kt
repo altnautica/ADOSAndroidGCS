@@ -9,6 +9,7 @@ import com.altnautica.gcs.core.cloud.grant.HeldGrant
 import com.altnautica.gcs.core.cloud.grant.MqttControlAuthority
 import com.altnautica.gcs.core.cloud.auth.CloudSessionState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -105,6 +106,25 @@ class GrantManagerTest {
         auth.state.value = CloudSessionState.SignedOut
         runCurrent()
         assertNull(manager.state.value.grant)
+    }
+
+    @Test
+    fun aMintThatCompletesAfterReleaseIsRevokedNotStored() = runTest {
+        val (gateway, manager, _) = setup()
+        val gate = CompletableDeferred<Unit>()
+        val mint = gateway.onAction
+        gateway.onAction = { name, args -> gate.await(); mint(name, args) }
+        runCurrent()
+        assertTrue("first mint in flight", manager.state.value.minting)
+
+        manager.release()
+        assertTrue("nothing held yet, so release revokes nothing", gateway.calls.none { it.name == "cmdMqttControlGrants:revoke" })
+
+        gate.complete(Unit)
+        runCurrent()
+        assertNull(manager.state.value.grant)
+        val names = gateway.calls.map { it.name }
+        assertEquals(listOf("cmdMqttControlGrants:mint", "cmdMqttControlGrants:revoke"), names)
     }
 
     @Test

@@ -136,7 +136,8 @@ class ParametersViewModel internal constructor(
         val (s, loading) = snap
         when {
             t == null -> ParametersUiState.NoVehicle
-            s.values.isEmpty() && error != null -> ParametersUiState.LoadFailed(error)
+            // Values the FC broadcasts on its own (a changed parameter) are not a loaded list.
+            !s.complete && error != null -> ParametersUiState.LoadFailed(error)
             !s.complete && (loading || s.values.isEmpty()) -> ParametersUiState.Loading(s.received, s.count)
             else -> {
                 val all = s.values.values.map { ParamRow(it.name, it.value, it.type, meta?.get(it.name)) }
@@ -255,13 +256,29 @@ class ParametersViewModel internal constructor(
         _import.value = null
     }
 
-    /** Writes every changed value from the reviewed file, one confirmed write at a time. */
+    /**
+     * Writes every changed value from the reviewed file, one confirmed write at a time.
+     * Refused while the vehicle is armed (that path is [confirmArmedImport], behind the
+     * hold confirm); a vehicle that arms part-way stops the batch at the next value.
+     */
     fun applyImport() {
+        if (isArmed()) return
+        runImport(armedConfirmed = false)
+    }
+
+    /** [applyImport] for an armed vehicle, after the operator held the confirm. */
+    fun confirmArmedImport() = runImport(armedConfirmed = true)
+
+    /** The newest heartbeat's armed flag, read at the moment of each write. */
+    private fun isArmed(): Boolean = target.value?.vehicle?.telemetry?.heartbeat?.value?.armed == true
+
+    private fun runImport(armedConfirmed: Boolean) {
         val review = _import.value ?: return
         if (review.running) return
         viewModelScope.launch {
             _import.update { it?.copy(running = true, applied = 0, failed = emptyList()) }
             for (diff in review.comparison.changed) {
+                if (!armedConfirmed && isArmed()) break
                 val ok = writeOne(diff.name, diff.fromFile) is ParamMessage.Saved
                 _import.update { r ->
                     r?.copy(applied = r.applied + if (ok) 1 else 0, failed = if (ok) r.failed else r.failed + diff.name)

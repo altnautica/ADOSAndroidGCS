@@ -67,6 +67,8 @@
     <string name="cfg_import_summary">%1$d values differ from the vehicle. %2$d names in the file do not exist on it and are skipped.</string>
     <string name="cfg_import_progress">Written %1$d of %2$d, %3$d failed</string>
     <string name="cfg_import_apply">Write changes</string>
+    <string name="cfg_import_armed_warning">The vehicle is armed. Writing these values changes its behaviour in flight.</string>
+    <string name="cfg_import_apply_armed">Hold to write while armed</string>
 
     <!-- Calibration -->
     <string name="cfg_cal_title">Calibration</string>

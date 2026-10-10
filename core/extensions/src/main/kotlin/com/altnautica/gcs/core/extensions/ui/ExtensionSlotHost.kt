@@ -13,12 +13,14 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
@@ -68,8 +70,11 @@ class ExtensionSlotViewModel @Inject constructor(
 
     fun claim(id: String): Boolean = confirm.claim(id, owner)
 
+    /** Drop this host's claims so another host can show the prompt. */
+    fun releaseClaims() = confirm.release(owner)
+
     override fun onCleared() {
-        confirm.release(owner)
+        releaseClaims()
     }
 }
 
@@ -79,15 +84,22 @@ class ExtensionCockpitViewModel @Inject constructor(private val focus: Extension
 }
 
 /**
- * Focus the cockpit's node for extension skills and their state poll while this is in
- * composition. Call once inside the cockpit route.
+ * Focus the cockpit's node for extension skills and their state poll while the cockpit is
+ * started (visible). Backgrounding the app or turning the screen off releases the focus,
+ * which stops the poll. Call once inside the cockpit route.
  */
 @Composable
 fun ExtensionCockpitEffect(node: DeviceId) {
     val vm: ExtensionCockpitViewModel = hiltViewModel()
-    DisposableEffect(vm, node) {
-        val release = vm.attach(node)
-        onDispose { release() }
+    ExtensionCockpitEffect(node, vm::attach)
+}
+
+@Composable
+internal fun ExtensionCockpitEffect(node: DeviceId, attach: (DeviceId) -> () -> Unit) {
+    val currentAttach by rememberUpdatedState(attach)
+    LifecycleStartEffect(node) {
+        val release = currentAttach(node)
+        onStopOrDispose { release() }
     }
 }
 
@@ -150,23 +162,41 @@ private val PANEL_HEIGHT = 320.dp
 
 @Composable
 internal fun ExtensionPromptHost(vm: ExtensionSlotViewModel) {
-    val prompts by vm.prompts.collectAsStateWithLifecycle()
-    val head = prompts.firstOrNull() ?: return
-    if (!vm.claim(head.id)) return
+    ExtensionPromptHost(vm.prompts, vm::claim, vm::releaseClaims, vm::answer)
+}
+
+/**
+ * Shows the head approval prompt when this host owns it. Claims are released when the
+ * host leaves composition, so an unanswered prompt moves to a host still on screen.
+ */
+@Composable
+internal fun ExtensionPromptHost(
+    prompts: StateFlow<List<ConfirmPrompt>>,
+    claim: (String) -> Boolean,
+    releaseClaims: () -> Unit,
+    answer: (String, Boolean) -> Unit,
+) {
+    val currentRelease by rememberUpdatedState(releaseClaims)
+    DisposableEffect(Unit) {
+        onDispose { currentRelease() }
+    }
+    val list by prompts.collectAsStateWithLifecycle()
+    val head = list.firstOrNull() ?: return
+    if (!claim(head.id)) return
     ConfirmSheet(
         title = head.title,
         message = head.body,
-        onDismiss = { vm.answer(head.id, false) },
+        onDismiss = { answer(head.id, false) },
         danger = head.critical,
     ) {
         HoldToConfirmButton(
             label = stringResource(R.string.extensions_confirm_hold),
             holdMs = 800,
-            onConfirmed = { vm.answer(head.id, true) },
+            onConfirmed = { answer(head.id, true) },
             modifier = Modifier.fillMaxWidth(),
             danger = head.critical,
         )
-        TextButton(onClick = { vm.answer(head.id, false) }, modifier = Modifier.fillMaxWidth()) {
+        TextButton(onClick = { answer(head.id, false) }, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.extensions_confirm_decline))
         }
     }

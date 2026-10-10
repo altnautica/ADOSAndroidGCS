@@ -54,6 +54,7 @@ import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.EmptyStateAction
+import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
@@ -77,12 +78,15 @@ fun FleetRoute(
     viewModel: FleetViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val savedNodesUnreadable by viewModel.savedNodesUnreadable.collectAsStateWithLifecycle()
     FleetScreen(
         state = state,
+        savedNodesUnreadable = savedNodesUnreadable,
         thumbnails = viewModel::thumbnails,
         onConnect = onConnect,
         onOpenNode = onOpenNode,
         onFly = onFly,
+        onRetrySavedNodes = viewModel::retrySavedNodes,
         modifier = modifier,
     )
 }
@@ -91,10 +95,12 @@ fun FleetRoute(
 @Composable
 fun FleetScreen(
     state: FleetUiState,
+    savedNodesUnreadable: Boolean,
     thumbnails: (DeviceId) -> Flow<ByteArray?>,
     onConnect: () -> Unit,
     onOpenNode: (DeviceId) -> Unit,
     onFly: (DeviceId) -> Unit,
+    onRetrySavedNodes: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -117,15 +123,28 @@ fun FleetScreen(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
+            val savedNodesError: @Composable (Modifier) -> Unit = { m ->
+                ErrorState(
+                    reason = stringResource(R.string.fleet_saved_nodes_unreadable),
+                    retryLabel = stringResource(R.string.fleet_retry),
+                    onRetry = onRetrySavedNodes,
+                    modifier = m,
+                )
+            }
             when (state) {
                 FleetUiState.Loading -> LoadingState(stringResource(R.string.fleet_loading), Modifier.align(Alignment.Center))
-                FleetUiState.Empty -> EmptyState(
-                    icon = Icons.Outlined.Hub,
-                    title = stringResource(R.string.fleet_empty_title),
-                    message = stringResource(R.string.fleet_empty_message),
-                    action = EmptyStateAction(stringResource(R.string.fleet_connect), onConnect),
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                // No node listed because the saved ones cannot be read is not "no nodes".
+                FleetUiState.Empty -> if (savedNodesUnreadable) {
+                    savedNodesError(Modifier.align(Alignment.Center))
+                } else {
+                    EmptyState(
+                        icon = Icons.Outlined.Hub,
+                        title = stringResource(R.string.fleet_empty_title),
+                        message = stringResource(R.string.fleet_empty_message),
+                        action = EmptyStateAction(stringResource(R.string.fleet_connect), onConnect),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
                 is FleetUiState.Nodes -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 300.dp),
                     modifier = Modifier.fillMaxSize(),
@@ -133,6 +152,9 @@ fun FleetScreen(
                     horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
                     verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
                 ) {
+                    if (savedNodesUnreadable) {
+                        item(key = "saved-nodes-unreadable", span = { GridItemSpan(maxLineSpan) }) { savedNodesError(Modifier) }
+                    }
                     items(state.cards, key = { it.node.id.value }) { card ->
                         NodeCard(card, thumbnails, onOpenNode, onFly)
                     }

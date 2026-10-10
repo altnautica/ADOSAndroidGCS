@@ -30,7 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.InWindowConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.SlideToConfirm
 import com.altnautica.gcs.core.designsystem.component.SwitchSettingRow
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
@@ -39,7 +39,9 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ConfirmGesture
+import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.builtin.TakeoffAltitude
+import com.altnautica.gcs.feature.cockpit.SheetBackHandler
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
 import com.altnautica.gcs.feature.cockpit.skillbar.confirmMessage
@@ -56,15 +58,21 @@ interface ConfirmActions {
     fun cancel()
 }
 
-/** The CS-6 confirm sheet: hold, slide or guarded, with altitude stepper and checklist override when they apply. */
+/**
+ * The CS-6 confirm sheet: hold, slide or guarded, with altitude stepper and checklist
+ * override when they apply. Drawn in the cockpit window so the gamepad button or Enter
+ * that holds the confirm keeps reaching the input router. Place it in a full-size box.
+ */
 @Composable
 fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
     state ?: return
     val policy = state.request.policy
     val skill = state.request.skill
-    ConfirmSheet(
+    val targetMode = state.request.args[SkillArgs.TARGET_MODE] as? String
+    SheetBackHandler(actions::cancel)
+    InWindowConfirmSheet(
         title = confirmTitle(policy.titleKey, skillLabel(skill)),
-        message = confirmMessage(policy.messageKey),
+        message = targetMode?.let { stringResource(R.string.cockpit_confirm_mode_to, it) } ?: confirmMessage(policy.messageKey),
         onDismiss = actions::cancel,
         danger = policy.danger,
     ) {
@@ -99,9 +107,13 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
                 }
             }
             ConfirmGesture.Guarded -> {
-                val left = state.guardRemainingMs ?: 0L
+                val countdown = when (val c = state.guardCountdown()) {
+                    is GuardCountdown.Holding -> stringResource(R.string.cockpit_confirm_guard_holding, c.seconds)
+                    is GuardCountdown.Window -> stringResource(R.string.cockpit_confirm_guard, c.seconds)
+                    null -> ""
+                }
                 Text(
-                    stringResource(R.string.cockpit_confirm_guard, (left / 100f).roundToInt() / 10f),
+                    countdown,
                     style = AdosTypography.numeric.medium,
                     color = AdosTheme.colors.statusError,
                 )

@@ -1,6 +1,10 @@
 package com.altnautica.gcs.core.video.whep
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -25,23 +29,37 @@ class WhepException(message: String, val httpCode: Int? = null) : IOException(me
  */
 class WhepSignaling(private val client: OkHttpClient) {
 
-    suspend fun offer(baseUrl: String, cameraId: String?, apiKey: String?, offerSdp: String): WhepAnswer =
-        withContext(Dispatchers.IO) {
-            val url = whepUrl(baseUrl, cameraId)
-            val request = Request.Builder()
-                .url(url)
-                .post(offerSdp.toRequestBody(SDP))
-                .apply { if (!apiKey.isNullOrEmpty()) header(KEY_HEADER, apiKey) }
-                .build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw WhepException("WHEP ${response.code}", response.code)
-                }
-                val body = response.body.string()
-                if (body.isBlank()) throw WhepException("WHEP answer was empty", response.code)
-                WhepAnswer(body, response.header("Location")?.let { resolveResource(url, it) })
-            }
+    /**
+     * POSTs the offer. The exchange runs to completion even when the caller is
+     * cancelled mid-flight: a 201 that arrives after cancellation has created a
+     * session on the agent, so its Location is DELETEd before the cancellation
+     * is rethrown. Nothing the agent created is left behind.
+     */
+    suspend fun offer(baseUrl: String, cameraId: String?, apiKey: String?, offerSdp: String): WhepAnswer {
+        val answer = withContext(NonCancellable + Dispatchers.IO) { post(baseUrl, cameraId, apiKey, offerSdp) }
+        if (!currentCoroutineContext().isActive) {
+            answer.resourceUrl?.let { withContext(NonCancellable) { delete(it, apiKey) } }
+            currentCoroutineContext().ensureActive()
         }
+        return answer
+    }
+
+    private fun post(baseUrl: String, cameraId: String?, apiKey: String?, offerSdp: String): WhepAnswer {
+        val url = whepUrl(baseUrl, cameraId)
+        val request = Request.Builder()
+            .url(url)
+            .post(offerSdp.toRequestBody(SDP))
+            .apply { if (!apiKey.isNullOrEmpty()) header(KEY_HEADER, apiKey) }
+            .build()
+        return client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw WhepException("WHEP ${response.code}", response.code)
+            }
+            val body = response.body.string()
+            if (body.isBlank()) throw WhepException("WHEP answer was empty", response.code)
+            WhepAnswer(body, response.header("Location")?.let { resolveResource(url, it) })
+        }
+    }
 
     /** Best effort: a teardown proceeds whether or not the DELETE lands. */
     suspend fun delete(resourceUrl: HttpUrl, apiKey: String?) {

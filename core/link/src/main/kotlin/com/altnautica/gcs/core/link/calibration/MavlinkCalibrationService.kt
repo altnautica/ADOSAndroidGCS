@@ -12,6 +12,7 @@ import com.altnautica.gcs.core.mavlink.messages.MagCalProgress
 import com.altnautica.gcs.core.mavlink.messages.MagCalReport
 import com.altnautica.gcs.core.mavlink.messages.RcChannels
 import com.altnautica.gcs.core.mavlink.messages.Statustext
+import com.altnautica.gcs.core.mavlink.modes.FirmwareFamily
 import com.altnautica.gcs.core.model.CommandResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -24,7 +25,8 @@ import kotlinx.coroutines.launch
 /**
  * Calibration over MAVLink, following ArduPilot's protocols:
  *
- * - gyro / level: `MAV_CMD_PREFLIGHT_CALIBRATION` (p1=1 / p5=2), result from the ACK;
+ * - gyro / level: `MAV_CMD_PREFLIGHT_CALIBRATION` (p1=1 / p5=2); ArduPilot's
+ *   result is the ACK, PX4's the `[cal]` status text that follows it;
  * - accelerometer: p5=1, then the autopilot drives the six poses with
  *   `COMMAND_LONG(MAV_CMD_ACCELCAL_VEHICLE_POS)` sent to the GCS; the operator's
  *   confirmation is echoed back with the same command;
@@ -58,16 +60,19 @@ class MavlinkCalibrationService(
     private suspend fun simple(kind: CalibrationKind, vararg p: Float): CommandResult {
         begin(kind)
         val r = commands.long(MavCmd.MAV_CMD_PREFLIGHT_CALIBRATION, *p)
-        if (_state.value is CalibrationState.Running) {
-            _state.value = if (r == CommandResult.Accepted) {
-                CalibrationState.Succeeded(kind, lastText)
-            } else {
-                CalibrationState.Failed(kind, r.reason())
-            }
+        // A status text may already have settled the result while the ACK was awaited.
+        if (_state.value !is CalibrationState.Running) return r
+        when {
+            r != CommandResult.Accepted -> fail(kind, r.reason())
+            // PX4 ACKs the start and runs the calibration afterwards; its `[cal]` texts give the result.
+            isPx4() -> Unit
+            // ArduPilot ACKs gyro and level calibration once they are done.
+            else -> succeed(kind, lastText)
         }
-        stopWatching()
         return r
     }
+
+    private fun isPx4(): Boolean = link.target.value?.family == FirmwareFamily.Px4
 
     override suspend fun startAccel(): CommandResult {
         begin(CalibrationKind.Accel)
@@ -177,7 +182,7 @@ class MavlinkCalibrationService(
                         val lower = m.text.lowercase()
                         when {
                             "calibration done" in lower || "calibration successful" in lower ->
-                                if (kind == CalibrationKind.Accel) succeed(kind, m.text)
+                                if (kind == CalibrationKind.Accel || isPx4()) succeed(kind, m.text)
                             "calibration failed" in lower || "calibration cancelled" in lower -> fail(kind, m.text)
                             else -> _state.value = s.copy(message = m.text)
                         }

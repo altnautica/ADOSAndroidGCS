@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
@@ -13,11 +15,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,10 +27,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -45,9 +46,13 @@ import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.window.core.layout.WindowSizeClass
+import com.altnautica.gcs.core.designsystem.component.AdosButton
+import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.EmptyStateAction
+import com.altnautica.gcs.core.designsystem.component.InWindowConfirmSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
+import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
@@ -81,6 +86,7 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
     ImmersiveBars()
     MaxBrightness(maxBrightness)
     HardwareInput(onAttach = vm::attachInput, onDetach = vm::detachInput)
+    WindowFocusLoss(vm::onWindowFocusLost)
     extensionNode?.let { ExtensionCockpitEffect(it) }
 
     NavigationBackHandler(
@@ -143,21 +149,44 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
                 snackbar = { SnackbarHost(snackbar) },
             )
         }
-    }
 
-    if (confirmLeave) {
-        AlertDialog(
-            onDismissRequest = { confirmLeave = false },
-            title = { Text(stringResource(R.string.cockpit_leave_armed_title)) },
-            text = { Text(stringResource(R.string.cockpit_leave_armed_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmLeave = false
-                    currentExit()
-                }) { Text(stringResource(R.string.cockpit_leave)) }
-            },
-            dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text(stringResource(R.string.cockpit_stay)) } },
-        )
+        if (confirmLeave) {
+            SheetBackHandler { confirmLeave = false }
+            InWindowConfirmSheet(
+                title = stringResource(R.string.cockpit_leave_armed_title),
+                message = stringResource(R.string.cockpit_leave_armed_message),
+                onDismiss = { confirmLeave = false },
+                danger = true,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                    AdosButton(
+                        stringResource(R.string.cockpit_stay),
+                        onClick = { confirmLeave = false },
+                        modifier = Modifier.weight(1f),
+                        variant = AdosButtonVariant.Secondary,
+                    )
+                    AdosButton(
+                        stringResource(R.string.cockpit_leave),
+                        onClick = {
+                            confirmLeave = false
+                            currentExit()
+                        },
+                        modifier = Modifier.weight(1f),
+                        variant = AdosButtonVariant.Danger,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Calls [onLost] whenever the cockpit window loses input focus. */
+@Composable
+private fun WindowFocusLoss(onLost: () -> Unit) {
+    val windowInfo = LocalWindowInfo.current
+    val lost by rememberUpdatedState(onLost)
+    LaunchedEffect(windowInfo) {
+        snapshotFlow { windowInfo.isWindowFocused }.collect { focused -> if (!focused) lost() }
     }
 }
 

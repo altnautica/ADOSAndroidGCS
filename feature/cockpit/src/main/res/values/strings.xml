@@ -148,6 +148,7 @@
     <string name="cockpit_confirm_kill_message">The motors stop at once. In flight the vehicle falls.</string>
     <string name="cockpit_confirm_mode_title">Change flight mode</string>
     <string name="cockpit_confirm_mode_message">The vehicle switches to the selected mode.</string>
+    <string name="cockpit_confirm_mode_to">The vehicle switches to %1$s.</string>
     <string name="cockpit_confirm_fly_here_title">Fly here</string>
     <string name="cockpit_confirm_fly_here_message">The vehicle flies to the selected point.</string>
     <string name="cockpit_confirm_checklist_failing">Preflight checks not passed:</string>
@@ -156,11 +157,20 @@
     <string name="cockpit_confirm_slide_hint">Or hold the gamepad button or Enter for %1$.1f s</string>
     <string name="cockpit_confirm_hold">Hold for %1$.1f s</string>
     <string name="cockpit_confirm_guard">Guard armed: hold within %1$.1f s</string>
+    <string name="cockpit_confirm_guard_holding">Keep holding: %1$.1f s</string>
     <string name="cockpit_confirm_input_hint">Gamepad: hold the same button. Keyboard: hold Enter.</string>
     <string name="cockpit_confirm_altitude">Takeoff altitude</string>
     <string name="cockpit_confirm_altitude_down">Lower altitude</string>
     <string name="cockpit_confirm_altitude_up">Raise altitude</string>
     <string name="cockpit_altitude_m">%1$d m</string>
+
+    <!-- Flight mode picker -->
+    <string name="cockpit_mode_picker_title">Flight mode</string>
+    <string name="cockpit_mode_picker_empty">The vehicle has not reported its flight modes yet.</string>
+    <string name="cockpit_mode_current">Current mode</string>
+    <string name="cockpit_mode_tier_tap">Tap to switch</string>
+    <string name="cockpit_mode_tier_hold">Hold to confirm</string>
+    <string name="cockpit_mode_tier_slide">Slide to confirm</string>
 
     <!-- Quick settings and panels -->
     <string name="cockpit_qs_altitude_reference">Altitude reference</string>

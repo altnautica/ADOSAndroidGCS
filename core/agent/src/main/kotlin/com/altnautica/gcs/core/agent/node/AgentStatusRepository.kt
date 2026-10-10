@@ -44,13 +44,13 @@ class AgentStatusRepository @Inject constructor(
                 when (val r = client.statusFull()) {
                     is AgentResult.Ok -> {
                         val status = r.value
-                        val carried = if (LanNodeAssembler.profile(status.profile) == NodeProfile.GroundStation) {
-                            client.groundStation.status().getOrNull()?.pairedDrone?.deviceId
+                        val paired = if (LanNodeAssembler.profile(status.profile) == NodeProfile.GroundStation) {
+                            client.groundStation.status().getOrNull()?.pairedDrone
                         } else {
                             null
                         }
                         val version = client.version().getOrNull()?.agentVersion
-                        last = NodePoll(status, clock(), carried, version ?: status.version)
+                        last = NodePoll(status, clock(), paired?.deviceId, version ?: status.version, paired)
                     }
                     is AgentResult.Err -> Unit
                 }

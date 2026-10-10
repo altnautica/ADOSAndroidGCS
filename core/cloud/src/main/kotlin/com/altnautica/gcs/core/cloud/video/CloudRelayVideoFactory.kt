@@ -217,15 +217,20 @@ class CloudRelaySession(
                     RelayEvent.Opened -> opened = true
                     is RelayEvent.Bytes -> {
                         opened = true
-                        val wasConfigured = demuxer.track != null
-                        val samples = try {
-                            demuxer.push(ev.data)
-                        } catch (e: Fmp4Exception) {
+                        // Any failure to read or decode the stream ends this socket with a
+                        // visible state; it must never escape into the cloud scope (an
+                        // uncaught exception there kills the app process).
+                        try {
+                            val wasConfigured = demuxer.track != null
+                            val samples = demuxer.push(ev.data)
+                            if (!wasConfigured) demuxer.track?.let { decoder.configure(it.codec) }
+                            for (s in samples) decoder.submit(s)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
                             _state.value = VideoState.Failed(e.message ?: "Unreadable video stream")
                             return
                         }
-                        if (!wasConfigured) demuxer.track?.let { decoder.configure(it.codec) }
-                        for (s in samples) decoder.submit(s)
                     }
                     is RelayEvent.Closed -> {
                         _state.value = VideoState.Failed(

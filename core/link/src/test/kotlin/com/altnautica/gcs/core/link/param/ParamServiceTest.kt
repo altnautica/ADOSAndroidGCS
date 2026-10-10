@@ -9,6 +9,11 @@ import com.altnautica.gcs.core.mavlink.messages.ParamRequestRead
 import com.altnautica.gcs.core.mavlink.messages.ParamSet
 import com.altnautica.gcs.core.mavlink.messages.ParamValue as ParamValueMsg
 import kotlinx.coroutines.test.runTest
+import com.altnautica.gcs.core.link.mavlink.ElapsedClock
+import com.altnautica.gcs.core.link.mavlink.TransportMavlinkLink
+import com.altnautica.gcs.core.link.transport.DemoTransport
+import kotlinx.coroutines.async
+import kotlinx.coroutines.test.runCurrent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +31,25 @@ class ParamServiceTest {
         assertTrue(snap.complete)
         assertEquals(total, snap.values.size)
         assertEquals(1500.0, snap.values.getValue("RTL_ALT").value, 0.0)
+    }
+
+    @Test
+    fun `a load asked for before the first heartbeat waits for the vehicle`() = runTest {
+        // The node screen asks for parameters as soon as the link opens, before the vehicle is identified.
+        val link = TransportMavlinkLink(backgroundScope, ElapsedClock { testScheduler.currentTime })
+        val params = MavlinkParamService(backgroundScope, link)
+        val result = async { params.refresh() }
+        runCurrent()
+        assertTrue(result.isActive)
+        link.attach(DemoTransport(backgroundScope.coroutineContext, DemoOptions()))
+        val total = com.altnautica.gcs.core.link.demo.ArduCopterSimulator.defaultParams().size
+        assertEquals(ParamLoadResult.Complete(total), result.await())
+    }
+
+    @Test
+    fun `a load with no vehicle heartbeat fails as no link`() = runTest {
+        val link = TransportMavlinkLink(backgroundScope, ElapsedClock { testScheduler.currentTime })
+        assertEquals(ParamLoadResult.Failed(MavlinkParamService.REASON_NO_LINK), MavlinkParamService(backgroundScope, link).refresh())
     }
 
     @Test

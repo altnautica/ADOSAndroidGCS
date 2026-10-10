@@ -81,7 +81,7 @@ private fun AgentCard(poll: NodePoll) {
             stringResource(R.string.overview_fc_link),
             status.fcConnected?.let { stringResource(if (it) R.string.overview_connected else R.string.overview_disconnected) },
         )
-        KeyValueRow(stringResource(R.string.overview_fc_port), status.fcPort?.let { p -> status.fcBaud?.let { "$p @ $it" } ?: p })
+        KeyValueRow(stringResource(R.string.overview_fc_port), fcPortLabel(status.fcPort, status.fcBaud))
         KeyValueRow(stringResource(R.string.overview_fc_firmware), status.fcFirmware)
         KeyValueRow(stringResource(R.string.overview_heartbeat_age), status.heartbeatAgeS.fmt(1, " s"))
         KeyValueRow(stringResource(R.string.overview_video), status.video?.state)
@@ -186,4 +186,10 @@ private fun uptime(seconds: Long): String {
     val h = (seconds % 86_400) / 3_600
     val m = (seconds % 3_600) / 60
     return if (d > 0) "${d}d ${h}h ${m}m" else "${h}h ${m}m"
+}
+
+/** FC port with its baud; network ports (agent reports baud 0 or none) show the port alone. */
+internal fun fcPortLabel(port: String?, baud: Int?): String? {
+    if (port == null) return null
+    return baud?.takeIf { it > 0 }?.let { "$port @ $it" } ?: port
 }

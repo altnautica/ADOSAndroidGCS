@@ -71,8 +71,8 @@ private class HevcSurfaceDecoder(private val onFrame: () -> Unit) {
     @Synchronized
     fun submit(sample: Fmp4Sample): Boolean {
         val target = surface ?: return false
-        val c = codec ?: if (sample.keyFrame) open(target) else return false
         return try {
+            val c = codec ?: if (sample.keyFrame) open(target) else return false
             val index = c.dequeueInputBuffer(INPUT_TIMEOUT_US)
             if (index < 0) {
                 drain(c)
@@ -88,7 +88,9 @@ private class HevcSurfaceDecoder(private val onFrame: () -> Unit) {
             c.queueInputBuffer(index, 0, sample.data.size, sample.presentationUs, 0)
             drain(c)
             true
-        } catch (e: IllegalStateException) {
+        } catch (e: Exception) {
+            // Codec creation, configuration or a codec error: drop this decoder and try
+            // again on the next key frame rather than failing the caller.
             Log.w(TAG, "decoder error, reopening on next key frame", e)
             release()
             false
@@ -119,14 +121,19 @@ private class HevcSurfaceDecoder(private val onFrame: () -> Unit) {
         val format = MediaFormat.createVideoFormat(mime, 1280, 720)
         val name = MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format)
         val c = if (name != null) MediaCodec.createByCodecName(name) else MediaCodec.createDecoderByType(mime)
-        val low = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            c.codecInfo.getCapabilitiesForType(mime).isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency)
-        if (low) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
-        c.configure(format, target, null, 0)
-        c.start()
-        codec = c
-        Log.i(TAG, "decoder ${c.name} lowLatency=$low")
-        return c
+        try {
+            val low = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                c.codecInfo.getCapabilitiesForType(mime).isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency)
+            if (low) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+            c.configure(format, target, null, 0)
+            c.start()
+            codec = c
+            Log.i(TAG, "decoder ${c.name} lowLatency=$low")
+            return c
+        } catch (e: Exception) {
+            runCatching { c.release() }
+            throw e
+        }
     }
 
     private companion object {

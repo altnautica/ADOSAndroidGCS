@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,14 +72,27 @@ fun VideoSurface(
         }
     }
     val h = handle ?: return
-    when (val out = h.output) {
-        is VideoOutput.Sinks -> when (role) {
-            VideoSurfaceRole.Main -> SinkSurfaceView(out, modifier)
-            VideoSurfaceRole.Pip -> SinkTextureView(out, modifier)
-        }
-        is VideoOutput.SurfaceTarget -> when (role) {
-            VideoSurfaceRole.Main -> TargetSurfaceView(out, modifier)
-            VideoSurfaceRole.Pip -> TargetTextureView(out, modifier)
+    VideoSessionView(h, role, modifier)
+}
+
+/**
+ * The view for one session. Keyed on [handle]: when the source changes at the
+ * same call site (stream tabs, main/PiP swap) the old renderer is released from
+ * the old session and a new one is built for the new session, so the picture
+ * on screen is always the session whose state the band reports.
+ */
+@Composable
+internal fun VideoSessionView(handle: VideoSessionHandle, role: VideoSurfaceRole, modifier: Modifier) {
+    key(handle) {
+        when (val out = handle.output) {
+            is VideoOutput.Sinks -> when (role) {
+                VideoSurfaceRole.Main -> SinkSurfaceView(out, modifier)
+                VideoSurfaceRole.Pip -> SinkTextureView(out, modifier)
+            }
+            is VideoOutput.SurfaceTarget -> when (role) {
+                VideoSurfaceRole.Main -> TargetSurfaceView(out, modifier)
+                VideoSurfaceRole.Pip -> TargetTextureView(out, modifier)
+            }
         }
     }
 }
@@ -96,6 +110,12 @@ fun rememberVideoState(source: VideoSource?): State<VideoState> {
     return flow.collectAsStateWithLifecycle(VideoState.Idle)
 }
 
+/**
+ * The renderer joins the session only while its surface exists, so the
+ * session reports LIVE only for frames that have somewhere to draw. Our
+ * holder callback runs after the renderer's own (registered in its
+ * constructor), so the EGL surface is ready before the first frame arrives.
+ */
 @Composable
 private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier) {
     AndroidView(
@@ -105,7 +125,12 @@ private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier) {
                 init(out.eglContext, null)
                 setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
                 setEnableHardwareScaler(true)
-                out.addSink(this)
+                val renderer = this
+                holder.addCallback(object : SurfaceHolder.Callback {
+                    override fun surfaceCreated(holder: SurfaceHolder) = out.addSink(renderer)
+                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) = Unit
+                    override fun surfaceDestroyed(holder: SurfaceHolder) = out.removeSink(renderer)
+                })
             }
         },
         onRelease = { view ->

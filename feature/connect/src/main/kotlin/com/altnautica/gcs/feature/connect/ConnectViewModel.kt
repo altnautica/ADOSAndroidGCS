@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.agent.discovery.DiscoveredAgent
 import com.altnautica.gcs.core.agent.discovery.LanDiscovery
+import com.altnautica.gcs.core.agent.discovery.PairingCode
 import com.altnautica.gcs.core.agent.pairing.PairingFailure
 import com.altnautica.gcs.core.agent.pairing.PairingInfo
 import com.altnautica.gcs.core.agent.pairing.PairingOutcome
@@ -28,10 +29,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The connect sheet's pages. */
 enum class ConnectPage { Home, Code, ManualHost, Usb, Network, WifiJoin }
@@ -46,6 +49,9 @@ sealed interface ConnectError {
     data object Unauthorized : ConnectError
     data object Unreachable : ConnectError
     data object InvalidAnswer : ConnectError
+
+    /** The phone's credential store could not be read; nothing was saved and the same step can be retried. */
+    data object CredentialStoreUnavailable : ConnectError
     data class Other(val message: String?) : ConnectError
 }
 
@@ -122,12 +128,27 @@ class ConnectViewModel @Inject constructor(
 
     private data class Extra(val usb: List<UsbFlightController>, val baud: Int, val demo: Boolean, val wifi: Boolean)
 
-    /** Applies a deep link (`adosgcs://pair?code=&host=`): a code starts the code flow, a host the manual one. */
+    /**
+     * Applies a deep link (`adosgcs://pair?code=&host=`): a code starts the code flow, a host the manual one.
+     * A link opened on a cold start arrives before discovery has resolved anything, so a code without a
+     * usable host waits up to [DEEP_LINK_DISCOVERY_MS] for a node to advertise it before reporting it missing.
+     */
     fun applyDeepLink(code: String?, host: String?) {
         when {
             !code.isNullOrBlank() -> {
-                _state.update { it.copy(page = ConnectPage.Code, code = code, host = host.orEmpty()) }
-                submitCode()
+                _state.update { it.copy(page = ConnectPage.Code, code = code.uppercase(), host = host.orEmpty()) }
+                val err = EndpointValidation.code(code)
+                if (err != null) return _state.update { it.copy(codeError = err) }
+                val wanted = PairingCode.normalize(code)
+                val waitForDiscovery = EndpointValidation.host(host.orEmpty()) != null
+                launchBusy {
+                    if (waitForDiscovery) {
+                        withTimeoutOrNull(DEEP_LINK_DISCOVERY_MS) {
+                            discovery.browse().first { found -> found.any { it.code == wanted } }
+                        }
+                    }
+                    resolveAndClaim()
+                }
             }
             !host.isNullOrBlank() -> _state.update { it.copy(page = ConnectPage.ManualHost, host = host) }
         }
@@ -163,16 +184,19 @@ class ConnectViewModel @Inject constructor(
     fun submitCode() {
         val err = EndpointValidation.code(_state.value.code)
         if (err != null) return _state.update { it.copy(codeError = err) }
-        val outcome = pairing.resolveCode(_state.value.code)
-        when (outcome) {
-            is PairingOutcome.Success -> claim(hostPort(outcome.value))
+        launchBusy { resolveAndClaim() }
+    }
+
+    private suspend fun resolveAndClaim() {
+        when (val outcome = pairing.resolveCode(_state.value.code)) {
+            is PairingOutcome.Success -> doClaim(hostPort(outcome.value))
             is PairingOutcome.Failure -> {
                 // The code is not advertised on this network: a host from the deep link still lets the claim go ahead.
                 val host = _state.value.host
                 if (outcome.failure == PairingFailure.CodeNotFound && EndpointValidation.host(host) == null) {
-                    claim(host)
+                    doClaim(host)
                 } else {
-                    _state.update { it.copy(error = outcome.failure.toError()) }
+                    fail(outcome.failure)
                 }
             }
         }
@@ -192,6 +216,9 @@ class ConnectViewModel @Inject constructor(
         if (hostErr != null || keyErr != null) return _state.update { it.copy(hostError = hostErr, apiKeyError = keyErr) }
         val host = s.host.trim()
         if (s.apiKey.isNotBlank()) return addWithKey(host, s.apiKey.trim())
+        // A claim whose key the credential store refused: the node now reports itself
+        // paired, so the retry saves the key it already handed out instead of probing.
+        if (pairing.hasUnsavedClaim(host)) return launchBusy { doClaim(host) }
         launchBusy {
             when (val probe = pairing.probe(host)) {
                 is PairingOutcome.Failure -> fail(probe.failure)
@@ -318,12 +345,15 @@ class ConnectViewModel @Inject constructor(
 
     companion object {
         private const val STOP_GRACE_MS = 5_000L
+        /** How long a deep-linked code waits for LAN discovery to find its node. */
+        const val DEEP_LINK_DISCOVERY_MS = 10_000L
         private const val MIN_WPA = 8
 
         fun PairingFailure.toError(): ConnectError = when (this) {
             PairingFailure.AlreadyPaired -> ConnectError.AlreadyPaired
             PairingFailure.CodeNotFound -> ConnectError.CodeNotFound
             PairingFailure.InvalidCode, PairingFailure.InvalidHost, PairingFailure.IncompleteAnswer -> ConnectError.InvalidAnswer
+            PairingFailure.VaultUnavailable -> ConnectError.CredentialStoreUnavailable
             is PairingFailure.Agent -> when (val e = error) {
                 com.altnautica.gcs.core.agent.http.AgentError.Unauthorized,
                 is com.altnautica.gcs.core.agent.http.AgentError.PinRequired,

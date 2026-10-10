@@ -4,6 +4,8 @@ import com.altnautica.gcs.core.cloud.grant.GrantSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +28,9 @@ class NoGrantException : IllegalStateException("No cloud control grant is held")
  *
  * Reference counted: the first [open] connects and the last [close]
  * disconnects. Subscriptions are owned here, so when a renewed grant brings a
- * new principal the connection is rebuilt and every topic re-subscribed.
+ * new principal the connection is rebuilt and every topic re-subscribed. A
+ * rebuild that fails to connect is retried with backoff
+ * ([RETRY_INITIAL_MS] doubling to [RETRY_MAX_MS]) while the link has users.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CloudMqttLink(
@@ -42,6 +46,7 @@ class CloudMqttLink(
     private var port: MqttPort? = null
     private var users = 0
     private var watcher: Job? = null
+    private var retry: Job? = null
     private val subs = LinkedHashMap<String, Sub>()
     private val portFlow = MutableStateFlow<MqttPort?>(null)
 
@@ -77,6 +82,8 @@ class CloudMqttLink(
         if (users == 0) {
             watcher?.cancel()
             watcher = null
+            retry?.cancel()
+            retry = null
             subs.clear()
             port?.disconnect()
             port = null
@@ -112,15 +119,48 @@ class CloudMqttLink(
             throw e
         }
         port = p
-        portFlow.value = p
+        // Principal before the port is published: observers of [connected] read it.
         principal = grant.principal
+        portFlow.value = p
         for ((topic, sub) in subs) p.subscribe(topic, sub.qos, sub.listener)
     }
 
+    /** Rebuilds the connection for a new principal; a failed connect is retried with backoff. */
     private suspend fun reconnect() {
+        retry?.cancel()
+        retry = null
         port?.disconnect()
         port = null
         portFlow.value = null
-        runCatching { ensureConnected() }
+        if (runCatching { ensureConnected() }.isFailure) scheduleRetry()
+    }
+
+    /** Called under [lock]. Keeps dialling while anyone uses the link and it is down. */
+    private fun scheduleRetry() {
+        if (retry?.isActive == true) return
+        retry = scope.launch {
+            var backoff = RETRY_INITIAL_MS
+            while (true) {
+                delay(backoff)
+                val done = lock.withLock {
+                    if (users == 0 || port != null) return@withLock true
+                    try {
+                        ensureConnected()
+                        true
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+                if (done) break
+                backoff = (backoff * 2).coerceAtMost(RETRY_MAX_MS)
+            }
+        }
+    }
+
+    companion object {
+        const val RETRY_INITIAL_MS = 1_000L
+        const val RETRY_MAX_MS = 30_000L
     }
 }

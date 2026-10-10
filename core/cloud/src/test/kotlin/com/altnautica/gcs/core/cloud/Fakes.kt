@@ -54,6 +54,9 @@ class FakeBroker : MqttPortFactory {
     /** Called after each publish, e.g. to answer an offer. */
     var onPublish: (FakePort, Published) -> Unit = { _, _ -> }
 
+    /** The next this-many connects fail (a broker or network fault). */
+    var failConnects = 0
+
     override fun create(brokerUrl: String, clientId: String, will: WillMessage?): MqttPort =
         FakePort(this, brokerUrl, clientId, will).also { ports += it }
 }
@@ -77,6 +80,10 @@ class FakePort(
         this.username = username
         this.password = password
         keepAlive = keepAliveS
+        if (broker.failConnects > 0) {
+            broker.failConnects--
+            throw java.io.IOException("connect refused")
+        }
         _connected.value = true
     }
 

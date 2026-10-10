@@ -65,6 +65,7 @@
     <string name="connect_error_unauthorized">The node rejected the key.</string>
     <string name="connect_error_unreachable">The node did not answer. Check the address and network.</string>
     <string name="connect_error_invalid">The node gave an answer this app cannot use.</string>
+    <string name="connect_error_credential_store">This phone\'s credential store could not be read just now, so the node key was not saved. Try again; a node that already handed out its key is saved without pairing again.</string>
     <string name="connect_error_other">Could not connect.</string>
 
     <string name="connect_input_required">Required</string>

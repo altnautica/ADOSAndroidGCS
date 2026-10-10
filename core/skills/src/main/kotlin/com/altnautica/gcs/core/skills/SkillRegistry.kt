@@ -50,6 +50,7 @@ class SkillRegistry @Inject constructor(
         fun barSkills(all: List<Skill>, ctx: SkillContext): List<Skill> = all.filter { skill ->
             val traits = skill as? BarTraits
             if (traits?.bindable == false) return@filter false
+            if (traits?.presentFor(ctx) == false) return@filter false
             // Hidden only when autonomous navigation is known to be absent; unknown keeps it.
             !(traits?.requiresAutonomousNav == true && ctx.autonomousNav == false)
         }

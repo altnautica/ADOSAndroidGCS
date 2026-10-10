@@ -38,7 +38,10 @@ import javax.inject.Singleton
  * rx topic. A PUBACK of 135 (not authorised) means the broker has not yet
  * learned this grant: writes answer [WriteResult.NotAuthorized] and the probe
  * is repeated at most every [REPROBE_MS]. The first accepted probe is reported
- * to the grant holder as a confirmed write.
+ * to the grant holder as a confirmed write. Authorization belongs to the
+ * principal the probe ran as: when a renewed grant reconnects the link as a
+ * new principal, the proof is dropped and the new principal is probed (and
+ * confirmed) again.
  */
 class CloudMavlinkTransport(
     private val deviceId: String,
@@ -58,6 +61,10 @@ class CloudMavlinkTransport(
 
     @Volatile
     private var authorized = false
+
+    /** The link principal [authorized] was proven for. */
+    @Volatile
+    private var authorizedPrincipal: String? = null
     private var lastProbeMs = Long.MIN_VALUE
     private var watch: Job? = null
 
@@ -80,19 +87,23 @@ class CloudMavlinkTransport(
                 val s = _state.value
                 if (s is TransportState.Closed || s is TransportState.Failed) return@collect
                 _state.value = if (up) TransportState.Open else TransportState.Connecting
+                // Reconnected as a new principal: prove the new grant now, not on the next write.
+                if (up && authorized && authorizedPrincipal != link.principal) probe()
             }
         }
     }
 
-    /** Whether the broker has accepted a write under the current grant. */
-    val writeAuthorized: Boolean get() = authorized
+    /** Whether the broker has accepted a write under the current connection's principal. */
+    val writeAuthorized: Boolean get() = authorized && authorizedPrincipal == link.principal
 
     private suspend fun probe() = probeLock.withLock {
         lastProbeMs = clock.nowMs()
+        val asPrincipal = link.principal
         when (link.publish(rx, ByteArray(0), CloudTopics.QOS_PROBE)) {
             PublishOutcome.Sent -> {
                 authorized = true
-                val principal = link.principal ?: grants.state.value.grant?.principal
+                authorizedPrincipal = asPrincipal
+                val principal = asPrincipal ?: grants.state.value.grant?.principal
                 if (principal != null) runCatching { grants.confirmWrite(principal) }
             }
             is PublishOutcome.Refused, PublishOutcome.Dropped -> authorized = false
@@ -107,9 +118,14 @@ class CloudMavlinkTransport(
     override suspend fun write(bytes: ByteArray): WriteResult {
         val s = _state.value
         if (s is TransportState.Closed || s is TransportState.Failed) return WriteResult.Failed("Link closed")
-        if (!authorized) {
+        if (!writeAuthorized) {
+            if (authorized) {
+                // Proven for an earlier principal only: probe the current one right away.
+                authorized = false
+                lastProbeMs = Long.MIN_VALUE
+            }
             if (lastProbeMs == Long.MIN_VALUE || clock.nowMs() - lastProbeMs >= REPROBE_MS) probe()
-            if (!authorized) return WriteResult.NotAuthorized
+            if (!writeAuthorized) return WriteResult.NotAuthorized
         }
         return when (val o = link.publish(rx, bytes, CloudTopics.QOS_MAVLINK)) {
             PublishOutcome.Sent -> WriteResult.Sent

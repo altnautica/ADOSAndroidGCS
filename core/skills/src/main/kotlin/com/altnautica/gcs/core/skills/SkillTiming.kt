@@ -26,9 +26,16 @@ object SkillTiming {
     const val GUARD_WINDOW_MS = 3_000L
 }
 
+/**
+ * Heartbeat age at [nowMs], never negative. [tMs] and [nowMs] are both on the
+ * `SystemClock.elapsedRealtime()` clock; a heartbeat stamped after a cached `now`
+ * was read is age 0, not a negative age.
+ */
+fun heartbeatAgeMs(tMs: Long, nowMs: Long): Long = (nowMs - tMs).coerceAtLeast(0)
+
 /** True when the heartbeat is no older than [SkillTiming.LINK_STALE_MS] at [nowMs]. */
 fun isLinkFresh(heartbeat: HeartbeatState?, nowMs: Long): Boolean =
-    heartbeat != null && nowMs - heartbeat.tMs <= SkillTiming.LINK_STALE_MS
+    heartbeat != null && heartbeatAgeMs(heartbeat.tMs, nowMs) <= SkillTiming.LINK_STALE_MS
 
 /** Disabled-reason and notice keys produced by the skill pipeline. */
 object SkillReason {

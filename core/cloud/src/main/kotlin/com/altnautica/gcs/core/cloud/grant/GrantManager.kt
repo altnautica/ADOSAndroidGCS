@@ -53,7 +53,8 @@ interface GrantSource {
  * Mints on sign-in, renews [RENEW_LEAD_MS] before expiry naming the grant it
  * replaces, and after a failed mint or renewal retries every [RETRY_MS]. A
  * grant is unproven until a write under it is accepted ([confirmWrite]).
- * [release] revokes on the server and forgets the secret.
+ * [release] revokes on the server and forgets the secret; a mint still in
+ * flight at release is revoked when it completes instead of being stored.
  */
 @Singleton
 class GrantManager @Inject constructor(
@@ -68,6 +69,7 @@ class GrantManager @Inject constructor(
 
     @Volatile
     private var released = false
+    private val releaseLock = Any()
 
     init {
         scope.launch {
@@ -104,17 +106,30 @@ class GrantManager @Inject constructor(
             val args = previous?.let { mapOf("replaces" to it.principal) } ?: emptyMap()
             val json = gateway.action("cmdMqttControlGrants:mint", args)
             val r = CloudJson.decodeFromJsonElement(MintResult.serializer(), json)
-            _state.value = GrantState(
-                grant = HeldGrant(r.principal, r.secret, r.deviceIds, r.expiresAt.toLong(), writeConfirmed = false),
-            )
-            true
+            val grant = HeldGrant(r.principal, r.secret, r.deviceIds, r.expiresAt.toLong(), writeConfirmed = false)
+            // Store only while still signed in; a mint that lands after [release] is
+            // revoked instead, so no live grant outlives sign-out.
+            val stored = synchronized(releaseLock) {
+                if (released) {
+                    false
+                } else {
+                    _state.value = GrantState(grant = grant)
+                    true
+                }
+            }
+            if (!stored) runCatching { gateway.mutation("cmdMqttControlGrants:revoke") }
+            stored
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             val now = clock.nowMs()
-            _state.update { s ->
-                val live = s.grant?.takeIf { it.expiresAtMs > now }
-                GrantState(grant = live, minting = false, renewalFailed = live != null, error = e.message ?: "Grant unavailable")
+            synchronized(releaseLock) {
+                if (!released) {
+                    _state.update { s ->
+                        val live = s.grant?.takeIf { it.expiresAtMs > now }
+                        GrantState(grant = live, minting = false, renewalFailed = live != null, error = e.message ?: "Grant unavailable")
+                    }
+                }
             }
             false
         }
@@ -130,9 +145,10 @@ class GrantManager @Inject constructor(
 
     /** Revokes every grant on the server (sign-out) and forgets the secret. */
     suspend fun release() {
-        released = true
-        val held = _state.value.grant
-        _state.value = GrantState()
+        val held = synchronized(releaseLock) {
+            released = true
+            _state.value.grant.also { _state.value = GrantState() }
+        }
         if (held != null) {
             runCatching { gateway.mutation("cmdMqttControlGrants:revoke") }
         }

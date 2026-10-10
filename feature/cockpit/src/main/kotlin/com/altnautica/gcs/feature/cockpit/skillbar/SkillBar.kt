@@ -22,10 +22,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import com.altnautica.gcs.core.designsystem.component.InWindowSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +52,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.skills.input.GamepadButton
+import com.altnautica.gcs.feature.cockpit.SheetBackHandler
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.SlotUi
 
@@ -211,13 +211,15 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
     }
 }
 
-/** Every bar-eligible skill (the overflow drawer, also opened by Select and Ctrl+K). */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The flight-mode picker entry and every bar-eligible skill (the overflow drawer, also
+ * opened by Select and Ctrl+K). Drawn in the cockpit window; place it in a full-size box.
+ */
 @Composable
 fun SkillDrawer(skills: List<SlotUi>, width: WidthClass, onActivate: (String) -> Unit, onDismiss: () -> Unit) {
-    val colors = AdosTheme.colors
     val size = slotSize(width)
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgSurface, contentColor = colors.fgPrimary) {
+    SheetBackHandler(onDismiss)
+    InWindowSheet(onDismiss) {
         Text(
             stringResource(R.string.cockpit_skill_drawer),
             style = MaterialTheme.typography.titleMedium,

@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -87,7 +88,10 @@ class MavlinkParamService(
     }
 
     override suspend fun refresh(): ParamLoadResult = listLock.withLock {
-        val target = link.target.value ?: return ParamLoadResult.Failed(REASON_NO_LINK)
+        // A link opened a moment ago has not seen the vehicle heartbeat yet; give it a few beats.
+        val target = link.target.value
+            ?: withTimeoutOrNull(TARGET_WAIT_MS) { link.target.filterNotNull().first() }
+            ?: return ParamLoadResult.Failed(REASON_NO_LINK)
         _loading.value = true
         try {
             values.clear()
@@ -214,6 +218,7 @@ class MavlinkParamService(
         const val REPAIR_ROUNDS = 3
         const val SET_TIMEOUT_MS = 1_500L
         const val SET_RETRIES = 2
+        const val TARGET_WAIT_MS = 5_000L
         const val REASON_NO_LINK = "noFcLink"
         const val REASON_TIMEOUT = "timeout"
         private const val UINT16_MAX = 0xFFFF

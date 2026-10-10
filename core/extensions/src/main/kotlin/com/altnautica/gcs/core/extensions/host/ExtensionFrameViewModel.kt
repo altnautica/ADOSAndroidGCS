@@ -58,10 +58,10 @@ class ExtensionFrameViewModel @Inject constructor(
     fun start(node: DeviceId, pluginId: String) {
         if (started) return
         started = true
-        val mountId = UUID.randomUUID().toString()
         session = ExtensionFrameSession(
             pluginId = pluginId,
-            handlers = handlers.create(pluginId, node, mountId),
+            // A fresh handler set (and mark source) per attached relay page.
+            newHandlers = { handlers.create(pluginId, node, UUID.randomUUID().toString()) },
             granted = { granted },
             bus = bus,
             agentStateOrigin = ExtensionEventBus.agentStateOrigin(pluginId, node),

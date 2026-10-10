@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.ados.android.hilt)
 }
 
+android {
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
 dependencies {
     api(projects.core.model)
     implementation(projects.core.data)
@@ -15,4 +21,9 @@ dependencies {
     implementation(libs.okhttp)
     api(libs.webrtc.android)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

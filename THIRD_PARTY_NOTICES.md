@@ -41,3 +41,21 @@ comment lines at the top of some files are removed. The Kotlin codecs in
 | Dagger / Hilt | Apache-2.0 | https://github.com/google/dagger |
 | HiveMQ MQTT Client | Apache-2.0 | https://github.com/hivemq/hivemq-mqtt-client |
 | Convex Android client (`dev.convex:android-convexmobile`) | Apache-2.0 | https://github.com/get-convex/convex-mobile |
+
+## Phone radio native components
+
+The phone-radio receiver builds the vendored sources below from source with
+the NDK. Each tree keeps its upstream licence file and file headers.
+
+| Component | Version | Licence | Location | Upstream |
+|---|---|---|---|---|
+| devourer (userspace Realtek USB radio driver; `src/` and `hal/` subset: the 11ax Kestrel firmware blobs and vendor baseband/RF trees, which this build does not compile, are omitted) | commit `1c8ae577ea2ea1aaee6d8c56c14a20883f109e4f` | GPL-2.0-only | `radio/usb/src/main/cpp/vendor/devourer/` (licence `LICENSE`) | https://github.com/OpenIPC/devourer |
+| libusb | 1.0.30 (release tarball `libusb-1.0.30.tar.bz2`, SHA-256 `fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf`; `libusb/` sources and `android/config.h`) | LGPL-2.1-or-later | `radio/usb/src/main/cpp/vendor/libusb/` (licence `COPYING`) | https://github.com/libusb/libusb |
+| wfb-ng (receive core: `rx`, `wifibroadcast`, `zfex`, `radiotap` sources) | commit `af6ba85eface27279709477077d3362c69bb2576` | GPL-3.0-only | `radio/rx/src/main/cpp/vendor/wfb-ng/` (licence `LICENSE.txt`) | https://github.com/svpcom/wfb-ng |
+| libsodium | 1.0.22 (release tarball `libsodium-1.0.22.tar.gz`, SHA-256 `adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349`; `src/libsodium/`) | ISC | `radio/rx/src/main/cpp/vendor/libsodium/` (licence `LICENSE`) | https://github.com/jedisct1/libsodium |
+
+The GPL-2.0-only driver and libusb are linked only into `libados_usbradio.so`,
+which is loaded solely by the USB radio service running in its own process
+(`:radio`). The ADOS bridge around it (`radio/usb/src/main/cpp/usbradio_shim.cpp`
+and the `:radio:usb` sources) is GPL-2.0-or-later. The main process talks to
+that service only over Binder and a pipe of frame records.

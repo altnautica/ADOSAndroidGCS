@@ -45,6 +45,7 @@ import com.altnautica.gcs.feature.configure.params.ParamRow
 import com.altnautica.gcs.feature.configure.params.ParamRowItem
 import com.altnautica.gcs.feature.configure.params.ParametersUiState
 import com.altnautica.gcs.feature.configure.params.ParametersViewModel
+import com.altnautica.gcs.feature.configure.params.paramLoadReason
 
 private enum class SetupPage(val label: Int) {
     Calibration(R.string.cfg_setup_calibration),
@@ -141,7 +142,7 @@ private fun CuratedParams(
             if (state.count > 0) LinearProgressIndicator(progress = { state.received / state.count.toFloat() }, modifier = Modifier.fillMaxWidth())
         }
         is ParametersUiState.LoadFailed -> ErrorState(
-            reason = stringResource(R.string.cfg_param_load_failed, state.reason),
+            reason = stringResource(R.string.cfg_param_load_failed, paramLoadReason(state.reason)),
             retryLabel = stringResource(R.string.cfg_retry),
             onRetry = onRefresh,
         )

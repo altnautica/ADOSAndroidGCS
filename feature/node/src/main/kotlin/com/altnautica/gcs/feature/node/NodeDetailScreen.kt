@@ -95,6 +95,7 @@ fun NodeDetailRoute(
         onUnpair = vm::unpair,
         onForget = vm::forgetLocally,
         onClearForget = vm::clearForget,
+        onRetryForget = vm::retryForget,
         modifier = modifier,
     )
 }
@@ -112,6 +113,7 @@ fun NodeDetailScreen(
     onUnpair: () -> Unit,
     onForget: () -> Unit,
     onClearForget: () -> Unit,
+    onRetryForget: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ready = state as? NodeDetailState.Ready
@@ -197,6 +199,15 @@ fun NodeDetailScreen(
             title = { Text(stringResource(R.string.node_unpair_failed_title)) },
             text = { Text(stringResource(R.string.node_unpair_failed_message)) },
             confirmButton = { TextButton(onClick = onForget) { Text(stringResource(R.string.node_forget)) } },
+            dismissButton = { TextButton(onClick = onClearForget) { Text(stringResource(R.string.node_cancel)) } },
+        )
+    }
+    if (forget == ForgetState.CredentialStoreUnavailable) {
+        AlertDialog(
+            onDismissRequest = onClearForget,
+            title = { Text(stringResource(R.string.node_credential_store_title)) },
+            text = { Text(stringResource(R.string.node_credential_store_message)) },
+            confirmButton = { TextButton(onClick = onRetryForget) { Text(stringResource(R.string.node_retry)) } },
             dismissButton = { TextButton(onClick = onClearForget) { Text(stringResource(R.string.node_cancel)) } },
         )
     }

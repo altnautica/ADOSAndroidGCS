@@ -89,8 +89,10 @@ object MissionFlattener {
     }
 
     /**
-     * Folds flat rows back into planner items. A `DO_CHANGE_SPEED` directly followed
-     * by a navigation item becomes that item's speed; other rows map one to one.
+     * Folds flat rows back into planner items. A `DO_CHANGE_SPEED` exactly as [flatten]
+     * writes it (ground speed, throttle unchanged, absolute) directly followed by a
+     * navigation item becomes that item's speed; other rows, including airspeed or
+     * throttle changes, map one to one so a round trip never rewrites them.
      */
     fun collapse(rows: List<FlatItem>, nextId: () -> Long): CollapsedItems {
         val items = ArrayList<PlanItem>(rows.size)
@@ -104,7 +106,7 @@ object MissionFlattener {
             pendingSpeed = null
         }
         for (row in rows) {
-            if (row.command == MavCmd.DO_CHANGE_SPEED && row.param2 > 0f) {
+            if (isFlattenedSpeed(row)) {
                 flushPending()
                 pendingSpeed = row
                 continue
@@ -137,6 +139,14 @@ object MissionFlattener {
     }
 
     private fun jumpTargetOf(item: PlanItem): Long? = item.jumpTarget
+
+    /** A `DO_CHANGE_SPEED` row with the shape [flatten] emits, so folding it loses nothing. */
+    private fun isFlattenedSpeed(row: FlatItem): Boolean =
+        row.command == MavCmd.DO_CHANGE_SPEED &&
+            row.param1 == SPEED_TYPE_GROUND &&
+            row.param2 > 0f &&
+            row.param3 == -1f &&
+            row.param4 == 0f
 
     private fun FlatItem.toPlanItem(id: Long, speedMs: Float?) = PlanItem(
         id = id,

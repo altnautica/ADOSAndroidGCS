@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.GpsState
 import com.altnautica.gcs.core.model.SystemHealth
 import com.altnautica.gcs.core.model.VibrationState
+import com.altnautica.gcs.core.skills.heartbeatAgeMs
 import com.altnautica.gcs.feature.cockpit.settings.BatteryBands
 
 /** A STATUSTEXT line kept with its receive time. */
@@ -89,7 +90,7 @@ class AlertEngine {
 
         fun linkHealth(heartbeatMs: Long?, nowMs: Long): LinkHealth {
             if (heartbeatMs == null) return LinkHealth.None
-            val age = nowMs - heartbeatMs
+            val age = heartbeatAgeMs(heartbeatMs, nowMs)
             return when {
                 age > LINK_LOST_MS -> LinkHealth.Lost
                 age > LINK_STALE_MS -> LinkHealth.Stale

@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -38,7 +40,7 @@ import org.junit.Test
 class ConnectViewModelTest {
 
     private val dispatcher = UnconfinedTestDispatcher()
-    private val pairing = mockk<PairingService>()
+    private val pairing = mockk<PairingService> { every { hasUnsavedClaim(any()) } returns false }
     private val vault = mockk<CredentialVault> {
         every { nodes } returns MutableStateFlow(emptyList())
         every { node(any()) } returns null
@@ -52,8 +54,8 @@ class ConnectViewModelTest {
         paired = false, profile = "drone", role = null, code = "ABCD2345", host = "192.168.1.50", port = 8080, lastSeenMs = 0,
     )
 
-    private fun vm() = ConnectViewModel(
-        discovery = mockk<LanDiscovery> { every { browse() } returns flowOf(listOf(agent)) },
+    private fun vm(found: kotlinx.coroutines.flow.Flow<List<DiscoveredAgent>> = flowOf(listOf(agent))) = ConnectViewModel(
+        discovery = mockk<LanDiscovery> { every { browse() } returns found },
         pairing = pairing,
         vault = vault,
         directSettings = direct,
@@ -114,6 +116,30 @@ class ConnectViewModelTest {
         vm.setHost("192.168.1.50")
         vm.submitHost()
         assertEquals(DeviceId("drone-1"), vm.state.value.connected)
+    }
+
+    @Test
+    fun anUnreadableCredentialStoreIsReportedAndTheRetrySavesWithoutProbing() = runTest(dispatcher) {
+        coEvery { pairing.probe("192.168.1.50") } returns PairingOutcome.Success(PairingInfo(deviceId = "drone-1", paired = false))
+        coEvery { pairing.claim("192.168.1.50", null) } returnsMany listOf(
+            PairingOutcome.Failure(PairingFailure.VaultUnavailable),
+            PairingOutcome.Success(credential("drone-1")),
+        )
+        val vm = vm()
+        backgroundScope.launch { vm.state.collect {} }
+        vm.setHost("192.168.1.50")
+
+        vm.submitHost()
+        assertEquals(ConnectError.CredentialStoreUnavailable, vm.state.value.error)
+        assertEquals(false, vm.state.value.busy)
+        assertEquals(null, vm.state.value.connected)
+
+        // The node now reports itself paired; the retry goes straight to the save.
+        every { pairing.hasUnsavedClaim("192.168.1.50") } returns true
+        vm.submitHost()
+        assertEquals(DeviceId("drone-1"), vm.state.value.connected)
+        coVerify(exactly = 1) { pairing.probe("192.168.1.50") }
+        coVerify(exactly = 2) { pairing.claim("192.168.1.50", null) }
     }
 
     @Test
@@ -192,5 +218,42 @@ class ConnectViewModelTest {
         // The code is not advertised here, so the deep link's host is claimed directly.
         vm.applyDeepLink("ABCD2345", "192.168.1.50")
         assertEquals(DeviceId("drone-1"), vm.state.value.connected)
+    }
+
+    @Test
+    fun deepLinkCodeWaitsForDiscoveryBeforeReportingNotFound() = runTest(dispatcher) {
+        val found = MutableStateFlow<List<DiscoveredAgent>>(emptyList())
+        every { pairing.resolveCode(any()) } answers {
+            if (found.value.isNotEmpty()) PairingOutcome.Success(agent) else PairingOutcome.Failure(PairingFailure.CodeNotFound)
+        }
+        coEvery { pairing.claim("192.168.1.50:8080", null) } returns PairingOutcome.Success(credential("drone-1"))
+        val vm = vm(found)
+        backgroundScope.launch { vm.state.collect {} }
+
+        // Cold start: the link arrives before NSD has resolved the node.
+        vm.applyDeepLink("ABCD2345", null)
+        advanceTimeBy(3_000)
+        assertNull(vm.state.value.error)
+        assertNull(vm.state.value.connected)
+
+        found.value = listOf(agent)
+        runCurrent()
+        assertEquals(DeviceId("drone-1"), vm.state.value.connected)
+        assertNull(vm.state.value.error)
+    }
+
+    @Test
+    fun deepLinkCodeReportsNotFoundAfterTheDiscoveryWait() = runTest(dispatcher) {
+        every { pairing.resolveCode(any()) } returns PairingOutcome.Failure(PairingFailure.CodeNotFound)
+        val vm = vm(MutableStateFlow(emptyList()))
+        backgroundScope.launch { vm.state.collect {} }
+
+        vm.applyDeepLink("ABCD2345", null)
+        advanceTimeBy(ConnectViewModel.DEEP_LINK_DISCOVERY_MS - 1)
+        assertNull(vm.state.value.error)
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(ConnectError.CodeNotFound, vm.state.value.error)
+        coVerify(exactly = 0) { pairing.claim(any(), any()) }
     }
 }

@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.fleet
 
+import com.altnautica.gcs.core.agent.node.LanNodeSource
 import com.altnautica.gcs.core.model.BlockReason
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant
@@ -11,6 +12,8 @@ import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.feature.fleet.data.NodeRepository
 import com.altnautica.gcs.feature.fleet.data.NodeVitals
 import com.altnautica.gcs.feature.fleet.data.NodeVitalsRepository
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -59,10 +62,13 @@ class FleetViewModelTest {
         every { thumbnails(any(), any()) } returns flowOf(null)
     }
 
+    private fun lanNodes(unreadable: MutableStateFlow<Boolean> = MutableStateFlow(false)) =
+        mockk<LanNodeSource> { every { savedNodesUnreadable } returns unreadable }
+
     @Test
     fun emptySourcesGiveEmptyState() = runTest(dispatcher) {
         val repo = NodeRepository(setOf(Source(MutableStateFlow(emptyList()))), backgroundScope)
-        val vm = FleetViewModel(repo, vitals())
+        val vm = FleetViewModel(repo, vitals(), lanNodes())
         backgroundScope.launch { vm.uiState.collect {} }
         assertEquals(FleetUiState.Empty, vm.uiState.first { it !is FleetUiState.Loading })
     }
@@ -80,7 +86,7 @@ class FleetViewModelTest {
             ),
         )
         val repo = NodeRepository(setOf(Source(state)), backgroundScope)
-        val vm = FleetViewModel(repo, vitals(mapOf("drone" to NodeVitals(76, "LOITER", true))))
+        val vm = FleetViewModel(repo, vitals(mapOf("drone" to NodeVitals(76, "LOITER", true))), lanNodes())
         backgroundScope.launch { vm.uiState.collect {} }
 
         val cards = (vm.uiState.first { it is FleetUiState.Nodes && it.cards.any { c -> c.vitals.batteryPct != null } } as FleetUiState.Nodes)
@@ -94,6 +100,20 @@ class FleetViewModelTest {
         assertFalse(cards.getValue("locked").canFly)
         assertTrue(cards.getValue("usb").canFly)
         assertFalse(cards.getValue("usb").showThumbnail)
+    }
+
+    @Test
+    fun unreadableSavedNodesAreReportedAndRetried() = runTest(dispatcher) {
+        val unreadable = MutableStateFlow(true)
+        val lan = lanNodes(unreadable)
+        coEvery { lan.retrySavedNodes() } coAnswers { unreadable.value = false; true }
+        val repo = NodeRepository(setOf(Source(MutableStateFlow(emptyList()))), backgroundScope)
+        val vm = FleetViewModel(repo, vitals(), lan)
+
+        assertTrue(vm.savedNodesUnreadable.value)
+        vm.retrySavedNodes()
+        coVerify(exactly = 1) { lan.retrySavedNodes() }
+        assertFalse(vm.savedNodesUnreadable.value)
     }
 
     @Test

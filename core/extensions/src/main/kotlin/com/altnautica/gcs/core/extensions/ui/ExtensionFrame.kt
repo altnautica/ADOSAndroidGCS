@@ -109,7 +109,9 @@ fun ExtensionFrame(
                 AndroidView(
                     factory = { ctx -> createRelayWebView(ctx, session, s.html) },
                     onRelease = { web ->
-                        session.send = null
+                        // Tear down the bridge handlers with the page: subscriptions,
+                        // polls, marks and pending approvals end with the frame.
+                        session.detach()
                         web.destroy()
                     },
                 )
@@ -154,7 +156,7 @@ private fun createRelayWebView(context: Context, session: ExtensionFrameSession,
             (Json.parseToJsonElement(text) as? JsonObject)?.get("kind")?.let { (it as? JsonPrimitive)?.content }
         }.getOrNull()
         if (kind == "ready") {
-            session.send = { reply.postMessage(it) }
+            session.attach { reply.postMessage(it) }
             session.mount(frameHtml)
         } else {
             session.onRelayMessage(text)

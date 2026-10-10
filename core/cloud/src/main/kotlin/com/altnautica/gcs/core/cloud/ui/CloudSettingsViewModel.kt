@@ -86,9 +86,21 @@ class CloudSettingsViewModel @Inject constructor(
         session.signOut()
     }
 
+    /** Reads the credential vault again and repeats the session step it refused. */
+    fun retrySession() = viewModelScope.launch { session.retry() }
+
     fun claim(code: String) = viewModelScope.launch {
         claim.value = ClaimUi.Working
         claim.value = ClaimUi.Done(pairing.claim(code))
+    }
+
+    /** Stores a claimed node's key the vault refused; the result line updates once it is stored. */
+    fun saveClaimedKey() = viewModelScope.launch {
+        val shown = claim.value as? ClaimUi.Done ?: return@launch
+        val claimed = shown.result as? CloudClaimResult.Claimed ?: return@launch
+        if (pairing.retrySavePending()) {
+            claim.compareAndSet(shown, ClaimUi.Done(claimed.copy(lanKeySaved = true)))
+        }
     }
 
     companion object {

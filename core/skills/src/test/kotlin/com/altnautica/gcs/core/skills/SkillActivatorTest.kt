@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.model.Binding
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.model.ConfirmPolicy
+import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillCategory
 import com.altnautica.gcs.core.model.SkillContext
@@ -152,11 +153,28 @@ class SkillActivatorTest {
     }
 
     @Test
-    fun `confirm arguments reach the skill and a takeoff arms first`() = runTest {
+    fun `confirm arguments reach the skill and a takeoff enters GUIDED then arms first`() = runTest {
         vehicle.heartbeat(armed = false, tMs = now)
         val confirmer = SkillConfirmer { ConfirmResult.Confirmed(mapOf(SkillArgs.ALTITUDE_M to 25f)) }
         activator.activate(TakeoffSkill, ctx(), emptyMap(), confirmer)
-        assertEquals(listOf(VehicleCommand.Arm(), VehicleCommand.Takeoff(25f)), vehicle.control.sent)
+        assertEquals(
+            listOf(VehicleCommand.SetMode(FlightMode(4, "GUIDED")), VehicleCommand.Arm(), VehicleCommand.Takeoff(25f)),
+            vehicle.control.sent,
+        )
+    }
+
+    @Test
+    fun `a takeoff already in GUIDED does not switch mode and stops when the switch is refused`() = runTest {
+        val guided = SkillContext(vehicle, false, FlightMode(4, "GUIDED"), true, true, true)
+        activator.activate(TakeoffSkill, guided, emptyMap(), confirmAll)
+        assertEquals(listOf(VehicleCommand.Arm(), VehicleCommand.Takeoff(10f)), vehicle.control.sent)
+
+        vehicle.control.sent.clear()
+        vehicle.control.result = CommandResult.Rejected(4, "failed")
+        now += 1_000
+        val outcome = activator.activate(TakeoffSkill, ctx(), emptyMap(), confirmAll)
+        assertEquals(ActivationOutcome.Completed(CommandResult.Rejected(4, "failed"), false), outcome)
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.SetMode(FlightMode(4, "GUIDED"))), vehicle.control.sent)
     }
 
     @Test

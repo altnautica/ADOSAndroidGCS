@@ -2,7 +2,9 @@ package com.altnautica.gcs.core.agent.http
 
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
@@ -116,7 +118,9 @@ class AgentHttp @Inject constructor(base: OkHttpClient) {
 
     /**
      * Send one request. [slowCall] selects the 15 s budget used for relayed
-     * calls and for writes that restart a service on the agent.
+     * calls and for writes that restart a service on the agent. The body is
+     * read on the IO pool, so callers on the main thread (a composable's
+     * effect) never touch the socket.
      */
     suspend fun execute(
         endpoint: AgentEndpoint,
@@ -137,12 +141,14 @@ class AgentHttp @Inject constructor(base: OkHttpClient) {
         }.build()
         val client = if (slowCall || endpoint.isRelayed) slow else lan
         return try {
-            client.newCall(request).await().use { response ->
-                val read = AgentResponse(response.code, response.body.bytes(), response.headers)
-                if (read.isSuccessful) {
-                    AgentResult.Ok(read)
-                } else {
-                    AgentResult.Err(AgentErrorParser.parse(read.code, read.text, endpoint.isRelayed))
+            withContext(Dispatchers.IO) {
+                client.newCall(request).await().use { response ->
+                    val read = AgentResponse(response.code, response.body.bytes(), response.headers)
+                    if (read.isSuccessful) {
+                        AgentResult.Ok(read)
+                    } else {
+                        AgentResult.Err(AgentErrorParser.parse(read.code, read.text, endpoint.isRelayed))
+                    }
                 }
             }
         } catch (e: CancellationException) {

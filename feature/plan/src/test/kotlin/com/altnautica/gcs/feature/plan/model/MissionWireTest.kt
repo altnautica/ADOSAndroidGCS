@@ -76,4 +76,37 @@ class MissionWireTest {
         assertEquals(GeoPoint(1.2, 1.3), back.rally.single().position)
         assertEquals(PlanHome(GeoPoint(12.4999, 77.2499), 920f), back.home)
     }
+
+    private fun row(seq: Int, command: Int, p1: Float = 0f, p2: Float = 0f, p3: Float = 0f, p4: Float = 0f) = FlatItem(
+        seq = seq, command = command, frame = if (command == MavCmd.DO_CHANGE_SPEED) MavFrame.MISSION else MavFrame.GLOBAL_RELATIVE_ALT,
+        param1 = p1, param2 = p2, param3 = p3, param4 = p4, x = 12.5, y = 77.25, z = 20f, autoContinue = true,
+    )
+
+    @Test
+    fun `airspeed and throttle speed changes survive a collapse and flatten round trip`() {
+        val rows = listOf(
+            // Airspeed change (param1 = 0), typical of a plane mission.
+            row(1, MavCmd.DO_CHANGE_SPEED, p1 = 0f, p2 = 18f, p3 = -1f),
+            row(2, MavCmd.NAV_WAYPOINT),
+            // Ground speed with a throttle setting.
+            row(3, MavCmd.DO_CHANGE_SPEED, p1 = 1f, p2 = 6f, p3 = 55f),
+            row(4, MavCmd.NAV_WAYPOINT),
+        )
+
+        val collapsed = MissionFlattener.collapse(rows, nextId).items
+
+        assertEquals(4, collapsed.size)
+        assertEquals(listOf(null, null, null, null), collapsed.map { it.speedMs })
+        assertEquals(rows, MissionFlattener.flatten(collapsed))
+    }
+
+    @Test
+    fun `the speed row flatten writes folds back into its item`() {
+        val rows = listOf(row(1, MavCmd.DO_CHANGE_SPEED, p1 = 1f, p2 = 7f, p3 = -1f), row(2, MavCmd.NAV_WAYPOINT))
+
+        val collapsed = MissionFlattener.collapse(rows, nextId).items
+
+        assertEquals(1, collapsed.size)
+        assertEquals(7f, collapsed.single().speedMs)
+    }
 }

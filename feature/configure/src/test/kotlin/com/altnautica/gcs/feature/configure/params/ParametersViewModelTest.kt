@@ -80,6 +80,23 @@ class ParametersViewModelTest {
     }
 
     @Test
+    fun failedLoadStaysFailedWhenTheFcBroadcastsAFewValues() = runTest(dispatcher) {
+        val vm = vm()
+        // ArduPilot sends PARAM_VALUE on its own when a value changes (baro ground pressure); that is no parameter list.
+        val params = FakeParamService(mapOf("BARO1_GND_PRESS" to 101326.0, "BARO2_GND_PRESS" to 101323.0), complete = false)
+            .apply { refreshResult = ParamLoadResult.Failed("noFcLink") }
+        target.value = FakeVehicle().target(params)
+        assertEquals(ParametersUiState.LoadFailed("noFcLink"), vm.state.value)
+    }
+
+    @Test
+    fun loadFailureReasonsHaveOperatorText() {
+        assertEquals(com.altnautica.gcs.feature.configure.R.string.cfg_block_no_vehicle, paramLoadReasonRes("noFcLink"))
+        assertEquals(com.altnautica.gcs.feature.configure.R.string.cfg_result_timeout, paramLoadReasonRes("timeout"))
+        assertNull(paramLoadReasonRes("writeFailed"))
+    }
+
+    @Test
     fun invalidInputNeverWrites() = runTest(dispatcher) {
         val vm = vm()
         val params = FakeParamService(mapOf("RATE" to 5.0))
@@ -137,5 +154,37 @@ class ParametersViewModelTest {
 
         vm.importText("# nothing\n")
         assertTrue(vm.message.value is ParamMessage.FileUnreadable)
+    }
+
+    @Test
+    fun armedImportNeedsTheHoldConfirm() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0, "REBOOT" to 0.0))
+        val vehicle = FakeVehicle()
+        target.value = vehicle.target(params)
+        vehicle.setArmed(true)
+
+        vm.importText("RATE,8\nREBOOT,1\n")
+        vm.applyImport()
+        assertTrue(params.writes.isEmpty())
+        assertEquals(0, vm.importReview.value!!.applied)
+
+        vm.confirmArmedImport()
+        assertEquals(listOf("RATE" to 8.0, "REBOOT" to 1.0), params.writes)
+        assertEquals(2, vm.importReview.value!!.applied)
+    }
+
+    @Test
+    fun aVehicleThatArmsMidImportStopsTheBatch() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0, "REBOOT" to 0.0))
+        val vehicle = FakeVehicle()
+        target.value = vehicle.target(params)
+        params.nextSet = { n, v -> vehicle.setArmed(true); ParamSetResult.Confirmed(ParamValue(n, v, 9, 0)) }
+
+        vm.importText("RATE,8\nREBOOT,1\n")
+        vm.applyImport()
+        assertEquals(listOf("RATE" to 8.0), params.writes)
+        assertEquals(false, vm.importReview.value!!.running)
     }
 }

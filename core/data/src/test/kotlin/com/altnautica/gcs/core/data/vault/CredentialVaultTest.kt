@@ -41,6 +41,18 @@ private class SoftwareCipherEngine(private val key: SecretKey) : AesGcmCipherEng
     override fun key(): SecretKey = key
 }
 
+/** Cipher whose [open] fails with a passing provider fault while [failing] is set. */
+private class FlakyCipherEngine(key: SecretKey) : CipherEngine {
+    private val inner = SoftwareCipherEngine(key)
+
+    @Volatile var failing = false
+    override fun seal(plaintext: ByteArray): ByteArray = inner.seal(plaintext)
+    override fun open(sealed: ByteArray): ByteArray {
+        if (failing) throw java.security.ProviderException("keystore temporarily unavailable")
+        return inner.open(sealed)
+    }
+}
+
 private fun newKey(): SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
 
 class CredentialVaultTest {
@@ -135,5 +147,78 @@ class CredentialVaultTest {
         v.putNode(drone)
         v.removeNode(drone.id)
         assertNull(v.apiKey(drone.id))
+    }
+
+    @Test
+    fun `a passing read fault never overwrites the stored secrets`() = runBlocking {
+        val key = newKey()
+        val (first, _) = vault("e", key)
+        first.putNode(drone)
+        first.putNode(drone.copy(deviceId = "gs01", apiKey = "secret-key-2", name = "Ground"))
+        first.putCloudRefreshToken("refresh-1")
+        scopes.forEach { it.cancel() }
+        scopes.clear()
+
+        val store = stores.getValue("e")
+        val before = store.data.first()[CredentialVault.DOCUMENT_KEY]
+        val flaky = FlakyCipherEngine(key).apply { failing = true }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scopes += it }
+        val v = CredentialVault(store, flaky, scope)
+
+        val thrown = runCatching { v.putNode(drone.copy(deviceId = "new01", apiKey = "secret-key-3")) }.exceptionOrNull()
+        assertTrue(thrown is VaultUnreadableException)
+        // The automatic address hint is skipped, not thrown, and writes nothing.
+        v.updateAddress(drone.id, lastIp = "192.168.1.51", lastPort = null)
+        assertEquals(before, store.data.first()[CredentialVault.DOCUMENT_KEY])
+
+        flaky.failing = false
+        assertEquals("secret-key-1", v.apiKey(drone.id))
+        assertEquals("secret-key-2", v.apiKey(DeviceId("gs01")))
+        assertEquals("refresh-1", v.cloudRefreshToken())
+    }
+
+    @Test
+    fun `an unreadable vault reports itself, refuses strict reads and writes, and recovers on retry`() = runBlocking {
+        val key = newKey()
+        val (first, _) = vault("g", key)
+        first.putNode(drone)
+        first.putCloudRefreshToken("refresh-1")
+        scopes.forEach { it.cancel() }
+        scopes.clear()
+
+        val flaky = FlakyCipherEngine(key).apply { failing = true }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scopes += it }
+        val v = CredentialVault(stores.getValue("g"), flaky, scope)
+
+        assertTrue(v.unreadable.first { it })
+        // A lenient read cannot tell "absent" from "unreadable"; the strict checks can.
+        assertNull(v.cloudRefreshToken())
+        assertTrue(runCatching { v.requireReadable() }.exceptionOrNull() is VaultUnreadableException)
+        assertTrue(runCatching { v.requireWritable() }.exceptionOrNull() is VaultUnreadableException)
+        assertTrue(v.nodes.value.isEmpty())
+        assertFalse(v.retryRead())
+
+        flaky.failing = false
+        assertTrue(v.retryRead())
+        assertFalse(v.unreadable.value)
+        assertEquals(listOf(drone), v.nodes.value)
+        v.requireReadable()
+        v.requireWritable()
+        assertEquals("refresh-1", v.cloudRefreshToken())
+    }
+
+    @Test
+    fun `a lost key resets the vault but keeps the old ciphertext`() = runBlocking {
+        val (first, store) = vault("f", newKey())
+        first.putNode(drone)
+        val old = store.data.first()[CredentialVault.DOCUMENT_KEY]
+        scopes.forEach { it.cancel() }
+        scopes.clear()
+
+        val (second, _) = vault("f", newKey())
+        assertNull(second.apiKey(drone.id))
+        second.putNode(drone.copy(apiKey = "secret-key-9"))
+        assertEquals("secret-key-9", second.apiKey(drone.id))
+        assertEquals(old, store.data.first()[CredentialVault.LOST_DOCUMENT_KEY])
     }
 }

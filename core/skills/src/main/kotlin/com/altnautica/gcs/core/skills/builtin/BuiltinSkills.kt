@@ -29,6 +29,9 @@ interface BarTraits {
 
     /** Hidden from the bar when the firmware is known to lack autonomous navigation. */
     val requiresAutonomousNav: Boolean
+
+    /** False when the vehicle is known to lack what the skill needs; the bar then hides it (CS-9 unsupported). */
+    fun presentFor(ctx: SkillContext): Boolean = true
 }
 
 /** Activation argument keys understood by the built-ins. */
@@ -168,6 +171,12 @@ fun takeoffAltitude(args: Map<String, Any?>): Float {
     }
 }
 
+/**
+ * Arms and climbs. On firmware with a guided mode (ArduPilot) the vehicle enters it
+ * before arming: the mode it rests in after a landing or a recovery (LAND, RTL, BRAKE)
+ * refuses to arm, and the takeoff command needs it anyway. Firmware without one
+ * (PX4) arms where it is and switches itself on the takeoff command.
+ */
 object TakeoffSkill : BuiltinSkill(
     id = "takeoff", labelKey = "skills.takeoff", icon = "flight_takeoff", category = SkillCategory.Flight,
     armRequirement = ArmRequirement.Disarmed,
@@ -176,6 +185,11 @@ object TakeoffSkill : BuiltinSkill(
 ) {
     override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: disabledUnlessDisarmed(ctx) ?: IDLE_STATE
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
+        val guided = ModePreset.Guided.resolve(ctx)
+        if (guided != null && !guided.name.equals(ctx.mode?.name, ignoreCase = true)) {
+            val switched = send(ctx, VehicleCommand.SetMode(guided))
+            if (switched != CommandResult.Accepted && switched !is CommandResult.Queued) return switched
+        }
         val armed = send(ctx, VehicleCommand.Arm())
         if (armed != CommandResult.Accepted && armed !is CommandResult.Queued) return armed
         return send(ctx, VehicleCommand.Takeoff(takeoffAltitude(args)))
@@ -213,7 +227,7 @@ object PauseSkill : BuiltinSkill(
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
         val inMission = ctx.mode?.name?.uppercase() in MISSION_MODES
         if (inMission) return send(ctx, VehicleCommand.PauseMission)
-        val hold = ModePreset.Loiter.resolve(ctxModes(ctx)) ?: return send(ctx, VehicleCommand.PauseMission)
+        val hold = ModePreset.Loiter.resolve(ctx) ?: return send(ctx, VehicleCommand.PauseMission)
         return send(ctx, VehicleCommand.SetMode(hold))
     }
 }
@@ -246,35 +260,75 @@ object KillSkill : BuiltinSkill(
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.Kill)
 }
 
-/** Mode presets; each resolves to the first matching mode the vehicle advertises. */
-enum class ModePreset(val skillId: String, val labelKey: String, val icon: String, val names: List<String>) {
-    Loiter("mode.loiter", "skills.modeLoiter", "my_location", listOf("LOITER", "QLOITER", "POSHOLD")),
-    Brake("mode.brake", "skills.modeBrake", "front_hand", listOf("BRAKE")),
-    AltHold("mode.althold", "skills.modeAltHold", "height", listOf("ALT_HOLD", "QHOVER", "FBWB")),
-    Stabilize("mode.stabilize", "skills.modeStabilize", "center_focus_strong", listOf("STABILIZE", "QSTABILIZE", "MANUAL")),
-    Guided("mode.guided", "skills.modeGuided", "navigation", listOf("GUIDED")),
-    Auto("mode.auto", "skills.modeAuto", "route", listOf("AUTO")),
+/**
+ * Mode presets. A preset names a behaviour, not a firmware mode: each resolves, per
+ * [VehicleClass], to the first listed mode the vehicle advertises (a plane's Loiter is
+ * LOITER, a hovering VTOL's is QLOITER). A preset with no mode for the vehicle is hidden.
+ * [tierMode] fixes the confirm tier (CS-6): Loiter, Brake and Alt hold are tap.
+ */
+enum class ModePreset(val skillId: String, val labelKey: String, val icon: String, val tierMode: String) {
+    Loiter("mode.loiter", "skills.modeLoiter", "my_location", "LOITER"),
+    Brake("mode.brake", "skills.modeBrake", "front_hand", "BRAKE"),
+    AltHold("mode.althold", "skills.modeAltHold", "height", "ALT_HOLD"),
+    Stabilize("mode.stabilize", "skills.modeStabilize", "center_focus_strong", "STABILIZE"),
+    Guided("mode.guided", "skills.modeGuided", "navigation", "GUIDED"),
+    Auto("mode.auto", "skills.modeAuto", "route", "AUTO"),
     ;
 
-    fun resolve(available: List<FlightMode>): FlightMode? =
-        names.firstNotNullOfOrNull { wanted -> available.firstOrNull { it.name.equals(wanted, ignoreCase = true) } }
+    /** Mode names this preset means on [cls], best first; empty when the class has no such mode. */
+    fun candidates(cls: VehicleClass): List<String> = when (this) {
+        Loiter -> when (cls) {
+            VehicleClass.Multirotor -> listOf("LOITER", "POSHOLD")
+            VehicleClass.FixedWing -> listOf("LOITER")
+            VehicleClass.Vtol -> listOf("QLOITER", "LOITER")
+            VehicleClass.Rover -> listOf("LOITER", "HOLD")
+            VehicleClass.Sub -> listOf("POSHOLD")
+            VehicleClass.Unknown -> listOf("LOITER", "POSHOLD")
+        }
+        Brake -> when (cls) {
+            VehicleClass.Multirotor, VehicleClass.Unknown -> listOf("BRAKE")
+            else -> emptyList()
+        }
+        AltHold -> when (cls) {
+            VehicleClass.Multirotor, VehicleClass.Sub, VehicleClass.Unknown -> listOf("ALT_HOLD")
+            VehicleClass.FixedWing -> listOf("FBWB")
+            VehicleClass.Vtol -> listOf("QHOVER", "ALT_HOLD")
+            VehicleClass.Rover -> emptyList()
+        }
+        Stabilize -> when (cls) {
+            VehicleClass.Vtol -> listOf("QSTABILIZE", "STABILIZE")
+            VehicleClass.Rover -> listOf("MANUAL")
+            else -> listOf("STABILIZE")
+        }
+        Guided -> listOf("GUIDED")
+        Auto -> listOf("AUTO")
+    }
+
+    /** The advertised mode this preset means on [cls], or null when the vehicle has none. */
+    fun resolve(available: List<FlightMode>, cls: VehicleClass): FlightMode? =
+        candidates(cls).firstNotNullOfOrNull { wanted -> available.firstOrNull { it.name.equals(wanted, ignoreCase = true) } }
+
+    fun resolve(ctx: SkillContext): FlightMode? = resolve(ctxModes(ctx), ctx.vehicleClass())
 }
 
 class ModeSkill(val preset: ModePreset) : BuiltinSkill(
     id = preset.skillId, labelKey = preset.labelKey, icon = preset.icon, category = SkillCategory.Flight,
     armRequirement = ArmRequirement.Any,
-    confirm = modeChangeConfirm(preset.names.first()),
+    confirm = modeChangeConfirm(preset.tierMode),
 ), ArgumentConfirm {
-    override fun confirmFor(args: Map<String, Any?>): ConfirmPolicy? = modeChangeConfirm(preset.names.first())
+    override fun confirmFor(args: Map<String, Any?>): ConfirmPolicy? = modeChangeConfirm(preset.tierMode)
+
+    /** Shown while the mode list is still unknown; hidden once it is known to lack the preset. */
+    override fun presentFor(ctx: SkillContext): Boolean = ctxModes(ctx).isEmpty() || preset.resolve(ctx) != null
 
     override fun state(ctx: SkillContext): SkillState {
         disabledIfNoLink(ctx)?.let { return it }
-        if (preset.resolve(ctxModes(ctx)) == null) return disabledState(SkillReason.MODE_UNAVAILABLE)
+        if (preset.resolve(ctx) == null) return disabledState(SkillReason.MODE_UNAVAILABLE)
         return IDLE_STATE
     }
 
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
-        val mode = preset.resolve(ctxModes(ctx)) ?: return CommandResult.Rejected(-1, SkillReason.MODE_UNAVAILABLE)
+        val mode = preset.resolve(ctx) ?: return CommandResult.Rejected(-1, SkillReason.MODE_UNAVAILABLE)
         return send(ctx, VehicleCommand.SetMode(mode))
     }
 }

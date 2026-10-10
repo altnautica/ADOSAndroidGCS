@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.video.whep
 
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
+import com.altnautica.gcs.core.video.FrameFanout
 import com.altnautica.gcs.core.video.FrameWatchdog
 import com.altnautica.gcs.core.video.RedialBackoff
 import com.altnautica.gcs.core.video.VideoClock
@@ -21,16 +22,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl
 import org.webrtc.EglBase
-import org.webrtc.VideoFrame
-import org.webrtc.VideoSink
-import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * One WHEP leg with its re-dial policy:
  * - connection `disconnected` gets [DISCONNECT_GRACE_MS] to recover, then re-dial;
  * - `failed` or a refused offer re-dials with 1→10 s backoff;
  * - no frame for 2.5 s marks the picture [VideoState.Frozen] and re-dials once;
- *   a second freeze before frames flow again backs off like a failure.
+ *   a second freeze before frames flow again backs off like a failure;
+ * - [VideoState.Live] only while frames reach a renderer on screen.
  * Every session resource is DELETEd before the next dial and on [stop].
  */
 class WhepSession(
@@ -39,7 +38,7 @@ class WhepSession(
     private val signaling: WhepSignaling,
     private val peerFactory: WhepPeerFactory,
     private val apiKey: suspend () -> String?,
-    private val eglContext: () -> EglBase.Context,
+    eglContext: () -> EglBase.Context,
     private val clock: VideoClock,
     override val recording: VideoRecording?,
 ) : VideoSessionHandle {
@@ -47,19 +46,10 @@ class WhepSession(
     private val _state = MutableStateFlow<VideoState>(VideoState.Idle)
     override val state: StateFlow<VideoState> = _state
 
-    private val watchdog = FrameWatchdog(clock)
+    private val frames = FrameFanout(clock)
     private val backoff = RedialBackoff()
-    private val sinks = CopyOnWriteArraySet<VideoSink>()
-    private val fanout = VideoSink { frame: VideoFrame ->
-        watchdog.onFrame()
-        for (s in sinks) s.onFrame(frame)
-    }
 
-    override val output: VideoOutput = object : VideoOutput.Sinks {
-        override val eglContext: EglBase.Context get() = this@WhepSession.eglContext()
-        override fun addSink(sink: VideoSink) { sinks += sink }
-        override fun removeSink(sink: VideoSink) { sinks -= sink }
-    }
+    override val output: VideoOutput = frames.output(eglContext)
 
     private var job: Job? = null
     private var peer: WhepPeer? = null
@@ -75,7 +65,7 @@ class WhepSession(
         job?.cancelAndJoin()
         job = null
         withContext(NonCancellable) { teardown() }
-        sinks.clear()
+        frames.clear()
         _state.value = VideoState.Idle
     }
 
@@ -112,9 +102,9 @@ class WhepSession(
     }
 
     private suspend fun dial() {
-        watchdog.reset()
+        frames.reset()
         key = apiKey()
-        val p = peerFactory.create(fanout)
+        val p = peerFactory.create(frames)
         peer = p
         val offer = p.createOffer()
         val answer = signaling.offer(source.baseUrl, source.streamId, key, offer)
@@ -143,7 +133,7 @@ class WhepSession(
                 }
                 else -> disconnectedAt = null
             }
-            when (val verdict = watchdog.check()) {
+            when (val verdict = frames.decoded.check()) {
                 is FrameWatchdog.Verdict.Frozen -> {
                     _state.value = VideoState.Frozen(verdict.sinceMs)
                     return Outcome.Frozen
@@ -157,7 +147,7 @@ class WhepSession(
                         lastStatsAt = now
                         latency = p.latencyMs() ?: latency
                     }
-                    _state.value = VideoState.Live(latency)
+                    _state.value = frames.flowingState(latency)
                 }
                 null -> if (now - dialedAt >= FIRST_FRAME_TIMEOUT_MS) {
                     _state.value = VideoState.Failed("No video frames")
@@ -168,11 +158,15 @@ class WhepSession(
         }
     }
 
+    /**
+     * DELETE first, then close: closing the peer ends the server's session,
+     * after which the DELETE finds nothing (404) and the release is unconfirmed.
+     */
     private suspend fun teardown() {
-        peer?.close()
-        peer = null
         resource?.let { signaling.delete(it, key) }
         resource = null
+        peer?.close()
+        peer = null
     }
 
     private enum class Outcome { Flowed, Lost, Failed, Frozen }

@@ -8,8 +8,12 @@ import com.altnautica.gcs.core.cloud.grant.HeldGrant
 import com.altnautica.gcs.core.cloud.node.CloudDroneRow
 import com.altnautica.gcs.core.cloud.node.CloudLiveness
 import com.altnautica.gcs.core.cloud.node.CloudNodeSource
+import com.altnautica.gcs.core.cloud.node.CloudClaimResult
 import com.altnautica.gcs.core.cloud.node.CloudPairing
 import com.altnautica.gcs.core.cloud.node.ClaimError
+import com.altnautica.gcs.core.data.vault.CredentialVault
+import com.altnautica.gcs.core.data.vault.NodeCredential
+import com.altnautica.gcs.core.data.vault.VaultUnreadableException
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant
@@ -18,11 +22,16 @@ import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VehicleCommand
+import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.just
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -117,5 +126,53 @@ class CloudNodesAndCommandsTest {
         assertEquals(ClaimError.AlreadyClaimed, CloudPairing.errorOf("code_already_claimed"))
         assertEquals(ClaimError.OwnedByOther, CloudPairing.errorOf("device_owned_by_other"))
         assertEquals(ClaimError.RateLimited, CloudPairing.errorOf("rate_limited"))
+    }
+
+    @Test
+    fun claimIsNotSentWhileTheVaultRefusesWrites() = runTest {
+        val gateway = FakeGateway()
+        val vault = mockk<CredentialVault> {
+            coEvery { requireWritable() } throws VaultUnreadableException(RuntimeException("keystore busy"))
+        }
+
+        val result = CloudPairing(gateway, vault).claim("abc123")
+
+        assertEquals(CloudClaimResult.Refused(ClaimError.VaultUnavailable), result)
+        assertTrue(gateway.calls.isEmpty())
+    }
+
+    @Test
+    fun claimedKeyTheVaultRefusesIsKeptAndSavedAgain() = runTest {
+        val gateway = FakeGateway().apply {
+            onMutation = { _, _ ->
+                buildJsonObject {
+                    put("deviceId", "d1")
+                    put("apiKey", "k-d1")
+                    put("name", "Quad")
+                    put("localIp", "192.168.1.50")
+                }
+            }
+        }
+        var refuse = true
+        val saved = mutableListOf<NodeCredential>()
+        val vault = mockk<CredentialVault> {
+            coEvery { requireWritable() } just Runs
+            coEvery { putNode(any()) } answers {
+                if (refuse) throw VaultUnreadableException(RuntimeException("keystore busy"))
+                saved += firstArg<NodeCredential>()
+            }
+        }
+        val pairing = CloudPairing(gateway, vault)
+
+        val result = pairing.claim("abc123")
+
+        assertEquals(CloudClaimResult.Claimed(DeviceId("d1"), "Quad", lanKeySaved = false), result)
+        assertFalse(pairing.retrySavePending())
+        refuse = false
+        assertTrue(pairing.retrySavePending())
+        assertEquals(listOf(NodeCredential(deviceId = "d1", apiKey = "k-d1", name = "Quad", lastIp = "192.168.1.50")), saved)
+        assertTrue(pairing.retrySavePending())
+        assertEquals(1, saved.size)
+        assertEquals(1, gateway.calls.size)
     }
 }

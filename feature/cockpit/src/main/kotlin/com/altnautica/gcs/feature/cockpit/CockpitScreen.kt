@@ -22,9 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +54,7 @@ import com.altnautica.gcs.feature.cockpit.panels.QuickSettingsPanel
 import com.altnautica.gcs.feature.cockpit.panels.StreamTabs
 import com.altnautica.gcs.feature.cockpit.panels.TelemetryStrip
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightSheet
+import com.altnautica.gcs.feature.cockpit.modes.ModePickerSheet
 import com.altnautica.gcs.feature.cockpit.settings.CockpitDensity
 import com.altnautica.gcs.feature.cockpit.settings.CockpitSettingsRepository
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillBar
@@ -93,7 +92,6 @@ internal fun CockpitScreen(
     onExit: () -> Unit,
     snackbar: @Composable () -> Unit,
 ) {
-    var preflightOpen by rememberSaveable { mutableStateOf(false) }
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -103,8 +101,9 @@ internal fun CockpitScreen(
                 state = band,
                 onExit = onExit,
                 onToggleStick = vm::toggleStickControl,
-                onOpenPreflight = { preflightOpen = true },
+                onOpenPreflight = { vm.setPreflight(true) },
                 onOpenQuickSettings = { vm.setQuickSettings(true) },
+                onOpenModes = vm::openModePicker,
                 onKill = { vm.activate("kill") },
                 modifier = m,
             )
@@ -120,8 +119,9 @@ internal fun CockpitScreen(
                 LoadingState(stringResource(R.string.cockpit_connecting))
             }
         }
-        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp).zIndex(Z.SHEETS)) { snackbar() }
-        Overlays(vm, width, preflightOpen, onClosePreflight = { preflightOpen = false })
+        Overlays(vm, width)
+        // Above the sheets, so the result of an action taken in a sheet stays readable.
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp).zIndex(Z.SHEETS + 1)) { snackbar() }
     }
 }
 
@@ -287,7 +287,7 @@ private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Un
     val state by vm.minimap.collectAsStateWithLifecycle()
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
     Box(modifier) {
-        AdosMinimap(state.vehicle, state.home, state.trail, Modifier.fillMaxSize(), onClick = onClick)
+        AdosMinimap(state.vehicle, state.home, state.trail, Modifier.fillMaxSize(), zoom = MINIMAP_ZOOM, onClick = onClick)
         extNode?.let { node ->
             val center = state.vehicle?.position
             ExtensionSlotHost(
@@ -360,8 +360,10 @@ private fun WidgetZones(vm: CockpitViewModel, modifier: Modifier) {
     }
 }
 
+/** Quick settings and the sheets, all drawn in the cockpit window above the flight surface (CS-1 z 50). */
 @Composable
-private fun Overlays(vm: CockpitViewModel, width: WidthClass, preflightOpen: Boolean, onClosePreflight: () -> Unit) {
+private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
+    val preflightOpen by vm.preflightOpen.collectAsStateWithLifecycle()
     val quickOpen by vm.quickSettingsOpen.collectAsStateWithLifecycle()
     val drawerOpen by vm.drawerOpen.collectAsStateWithLifecycle()
     val confirm by vm.confirm.state.collectAsStateWithLifecycle()
@@ -394,11 +396,19 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass, preflightOpen: Boo
     }
     if (drawerOpen) {
         val skills by vm.drawerSkills.collectAsStateWithLifecycle()
-        SkillDrawer(skills, width, onActivate = { vm.activate(it) }, onDismiss = { vm.setDrawer(false) })
+        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
+            SkillDrawer(skills, width, onActivate = { vm.activate(it) }, onDismiss = { vm.setDrawer(false) })
+        }
     }
     if (preflightOpen) {
         val result by vm.preflight.collectAsStateWithLifecycle()
-        PreflightSheet(result, onClosePreflight)
+        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) { PreflightSheet(result, onDismiss = { vm.setPreflight(false) }) }
     }
-    ConfirmHost(confirm, vm.confirm)
+    val modePicker by vm.modePicker.collectAsStateWithLifecycle()
+    modePicker?.let { picker ->
+        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) { ModePickerSheet(picker, onPick = vm::selectMode, onDismiss = vm::closeModePicker) }
+    }
+    if (confirm != null) {
+        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) { ConfirmHost(confirm, vm.confirm) }
+    }
 }

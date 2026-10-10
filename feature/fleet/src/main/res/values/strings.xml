@@ -15,6 +15,8 @@
     <string name="fleet_carries">Carries %1$s</string>
     <string name="fleet_thumbnail">Live video still from %1$s</string>
     <string name="fleet_not_paired">Not paired</string>
+    <string name="fleet_saved_nodes_unreadable">The keys of your paired nodes could not be read from this phone\'s credential store just now, so some nodes may be missing. Nothing was deleted.</string>
+    <string name="fleet_retry">Try again</string>
 
     <string name="reach_direct">DIRECT</string>
     <string name="reach_lan">LAN</string>

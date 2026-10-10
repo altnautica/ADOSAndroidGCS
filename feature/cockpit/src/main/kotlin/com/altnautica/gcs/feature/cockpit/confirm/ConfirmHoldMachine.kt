@@ -54,6 +54,13 @@ class ConfirmHoldMachine(
         return ((nowMs - start).toFloat() / holdMs).coerceIn(0f, 1f)
     }
 
+    /** Milliseconds of hold still needed while a hold runs, else null. */
+    fun holdRemainingMs(nowMs: Long): Long? {
+        if (done) return null
+        val start = pressedAt ?: return null
+        return (holdMs - (nowMs - start)).coerceAtLeast(0)
+    }
+
     /** True exactly once, when the hold completes. */
     fun poll(nowMs: Long): Boolean {
         if (done) return false

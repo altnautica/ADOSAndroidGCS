@@ -38,6 +38,7 @@ import com.altnautica.gcs.core.cloud.node.CloudClaimResult
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
+import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.SectionHeader
 import com.altnautica.gcs.core.designsystem.component.StatusChip
@@ -62,7 +63,9 @@ fun CloudSettingsRoute(modifier: Modifier = Modifier, viewModel: CloudSettingsVi
         onSignIn = { e, p -> viewModel.signIn(e, p) },
         onSignUp = { n, e, p -> viewModel.signUp(n, e, p) },
         onSignOut = { viewModel.signOut() },
+        onRetry = { viewModel.retrySession() },
         onClaim = { viewModel.claim(it) },
+        onSaveClaimedKey = { viewModel.saveClaimedKey() },
         modifier = modifier,
     )
 }
@@ -74,7 +77,9 @@ fun CloudSettingsScreen(
     onSignIn: (String, String) -> Unit,
     onSignUp: (String, String, String) -> Unit,
     onSignOut: () -> Unit,
+    onRetry: () -> Unit,
     onClaim: (String) -> Unit,
+    onSaveClaimedKey: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (!state.configured) {
@@ -103,9 +108,17 @@ fun CloudSettingsScreen(
         }
         when (val s = state.session) {
             CloudSessionState.Authenticating -> LoadingState(stringResource(R.string.cloud_signing_in))
-            CloudSessionState.SignedIn -> SignedInContent(state, onSignOut, onClaim)
+            CloudSessionState.SignedIn -> SignedInContent(state, onSignOut, onClaim, onSaveClaimedKey)
             CloudSessionState.SignedOut -> SignInForm(null, onSignIn, onSignUp)
-            is CloudSessionState.Error -> SignInForm(s.failure, onSignIn, onSignUp)
+            is CloudSessionState.Error -> if (s.failure == CloudAuthFailure.VaultUnavailable) {
+                ErrorState(
+                    reason = stringResource(R.string.cloud_error_vault_unavailable),
+                    retryLabel = stringResource(R.string.cloud_retry),
+                    onRetry = onRetry,
+                )
+            } else {
+                SignInForm(s.failure, onSignIn, onSignUp)
+            }
         }
     }
 }
@@ -159,6 +172,7 @@ private fun SignInForm(
                         CloudAuthFailure.InvalidCredentials -> R.string.cloud_error_invalid_credentials
                         CloudAuthFailure.Network -> R.string.cloud_error_network
                         CloudAuthFailure.RateLimited -> R.string.cloud_error_rate_limited
+                        CloudAuthFailure.VaultUnavailable -> R.string.cloud_error_vault_unavailable
                     },
                 ),
             )
@@ -177,7 +191,12 @@ private fun SignInForm(
 }
 
 @Composable
-private fun SignedInContent(state: CloudUiState, onSignOut: () -> Unit, onClaim: (String) -> Unit) {
+private fun SignedInContent(
+    state: CloudUiState,
+    onSignOut: () -> Unit,
+    onClaim: (String) -> Unit,
+    onSaveClaimedKey: () -> Unit,
+) {
     SectionHeader(stringResource(R.string.cloud_section_control))
     Column(Modifier.padding(horizontal = AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         val (level, label) = when (state.grant) {
@@ -202,7 +221,7 @@ private fun SignedInContent(state: CloudUiState, onSignOut: () -> Unit, onClaim:
     }
 
     SectionHeader(stringResource(R.string.cloud_section_claim))
-    ClaimForm(state.claim, onClaim)
+    ClaimForm(state.claim, onClaim, onSaveClaimedKey)
 
     SectionHeader(stringResource(R.string.cloud_section_nodes))
     if (state.nodes.isEmpty()) {
@@ -224,7 +243,7 @@ private fun SignedInContent(state: CloudUiState, onSignOut: () -> Unit, onClaim:
 }
 
 @Composable
-private fun ClaimForm(claim: ClaimUi, onClaim: (String) -> Unit) {
+private fun ClaimForm(claim: ClaimUi, onClaim: (String) -> Unit, onSaveClaimedKey: () -> Unit) {
     var code by rememberSaveable { mutableStateOf("") }
     Column(Modifier.padding(horizontal = AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
@@ -243,8 +262,13 @@ private fun ClaimForm(claim: ClaimUi, onClaim: (String) -> Unit) {
             )
         }
         if (claim is ClaimUi.Done) {
-            val (level, text) = when (val r = claim.result) {
-                is CloudClaimResult.Claimed -> StatusLevel.Success to stringResource(R.string.cloud_claim_done, r.name ?: r.deviceId.value)
+            val r = claim.result
+            val (level, text) = when (r) {
+                is CloudClaimResult.Claimed -> if (r.lanKeySaved) {
+                    StatusLevel.Success to stringResource(R.string.cloud_claim_done, r.name ?: r.deviceId.value)
+                } else {
+                    StatusLevel.Warning to stringResource(R.string.cloud_claim_key_not_saved, r.name ?: r.deviceId.value)
+                }
                 is CloudClaimResult.Refused -> StatusLevel.Error to stringResource(
                     when (r.error) {
                         ClaimError.InvalidCode, ClaimError.Unknown -> R.string.cloud_claim_invalid
@@ -252,11 +276,19 @@ private fun ClaimForm(claim: ClaimUi, onClaim: (String) -> Unit) {
                         ClaimError.AlreadyClaimed -> R.string.cloud_claim_already
                         ClaimError.OwnedByOther -> R.string.cloud_claim_owned
                         ClaimError.RateLimited -> R.string.cloud_claim_rate_limited
+                        ClaimError.VaultUnavailable -> R.string.cloud_claim_vault_unavailable
                     },
                 )
                 is CloudClaimResult.Failed -> StatusLevel.Error to stringResource(R.string.cloud_claim_failed, r.message)
             }
             StatusChip(level = level, label = text)
+            if (r is CloudClaimResult.Claimed && !r.lanKeySaved) {
+                AdosButton(
+                    label = stringResource(R.string.cloud_claim_save_again),
+                    onClick = onSaveClaimedKey,
+                    variant = AdosButtonVariant.Secondary,
+                )
+            }
         }
     }
 }
@@ -295,7 +327,7 @@ private fun CloudSignedInPreview() = AdosTheme {
                 NodeSummary(DeviceId("a1"), "Survey quad", NodeProfile.Drone, listOf(Reach.CloudLive, Reach.CloudQueue), Liveness.Live, "1.0.0", FcVariant.MavlinkArdupilot, null, null),
             ),
         ),
-        onEnabled = {}, onSignIn = { _, _ -> }, onSignUp = { _, _, _ -> }, onSignOut = {}, onClaim = {},
+        onEnabled = {}, onSignIn = { _, _ -> }, onSignUp = { _, _, _ -> }, onSignOut = {}, onRetry = {}, onClaim = {}, onSaveClaimedKey = {},
     )
 }
 
@@ -304,6 +336,15 @@ private fun CloudSignedInPreview() = AdosTheme {
 private fun CloudSignInPreview() = AdosTheme {
     CloudSettingsScreen(
         state = CloudUiState(configured = true, enabled = true, session = CloudSessionState.Error(CloudAuthFailure.InvalidCredentials)),
-        onEnabled = {}, onSignIn = { _, _ -> }, onSignUp = { _, _, _ -> }, onSignOut = {}, onClaim = {},
+        onEnabled = {}, onSignIn = { _, _ -> }, onSignUp = { _, _, _ -> }, onSignOut = {}, onRetry = {}, onClaim = {}, onSaveClaimedKey = {},
+    )
+}
+
+@Preview
+@Composable
+private fun CloudVaultUnavailablePreview() = AdosTheme {
+    CloudSettingsScreen(
+        state = CloudUiState(configured = true, enabled = true, session = CloudSessionState.Error(CloudAuthFailure.VaultUnavailable)),
+        onEnabled = {}, onSignIn = { _, _ -> }, onSignUp = { _, _, _ -> }, onSignOut = {}, onRetry = {}, onClaim = {}, onSaveClaimedKey = {},
     )
 }

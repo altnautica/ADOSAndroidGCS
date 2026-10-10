@@ -53,10 +53,19 @@ object ParamFile {
         }
     }
 
-    /** Whole numbers are written without a fraction; others with full float precision. */
-    fun formatValue(value: Double): String =
-        if (value % 1.0 == 0.0 && kotlin.math.abs(value) < 1e15) value.toLong().toString()
-        else String.format(Locale.ROOT, "%.9g", value).trimEnd('0').trimEnd('.')
+    /**
+     * Whole numbers are written without a fraction; others with full float precision.
+     * Trailing zeros are trimmed from the mantissa only: `%.9g` goes scientific for
+     * small and large magnitudes, and the exponent's digits are part of the value.
+     */
+    fun formatValue(value: Double): String {
+        if (value % 1.0 == 0.0 && kotlin.math.abs(value) < 1e15) return value.toLong().toString()
+        val text = String.format(Locale.ROOT, "%.9g", value)
+        val e = text.indexOfFirst { it == 'e' || it == 'E' }
+        val mantissa = if (e < 0) text else text.substring(0, e)
+        val trimmed = if ('.' in mantissa) mantissa.trimEnd('0').trimEnd('.') else mantissa
+        return if (e < 0) trimmed else trimmed + text.substring(e)
+    }
 
     /** Differences between the vehicle's values and a file; names absent on the vehicle are listed separately. */
     fun compare(vehicle: Map<String, Double>, file: List<ParamFileEntry>): ParamComparison {

@@ -13,8 +13,11 @@ import org.webrtc.VideoSink
  * straight into one [Surface].
  */
 sealed interface VideoOutput {
-
-    /** Frames delivered to [VideoSink]s rendered with [eglContext]. */
+    /**
+     * Frames delivered to [VideoSink]s rendered with [eglContext]. A renderer
+     * is added only while it holds a drawing surface: the session counts a
+     * frame as shown (and reports LIVE) only when some sink received it.
+     */
     interface Sinks : VideoOutput {
         val eglContext: EglBase.Context
         fun addSink(sink: VideoSink)

@@ -14,6 +14,7 @@ import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
@@ -34,12 +35,16 @@ import com.altnautica.gcs.core.skills.SkillNotice
 import com.altnautica.gcs.core.skills.SkillSessionFactory
 import com.altnautica.gcs.core.skills.binding.BindingStore
 import com.altnautica.gcs.core.skills.binding.Loadout
+import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
+import com.altnautica.gcs.core.skills.heartbeatAgeMs
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.InputCapture
 import com.altnautica.gcs.core.skills.input.InputEvent
 import com.altnautica.gcs.core.skills.input.ReservedInputs
 import com.altnautica.gcs.core.skills.isLinkFresh
+import com.altnautica.gcs.feature.cockpit.modes.ModePickerUi
+import com.altnautica.gcs.feature.cockpit.modes.modeChoices
 import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.core.video.RecordingState
@@ -210,6 +215,11 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
+    /**
+     * Re-evaluation trigger for age-based state. Its value is only a trigger: a
+     * combine that also fires on fresh telemetry reads [MonotonicClock.nowMs] itself,
+     * because a heartbeat stamped after the last tick would otherwise get a negative age.
+     */
     private val tick500: StateFlow<Long> = ticker(500).stateIn(viewModelScope, SharingStarted.Eagerly, clock.nowMs())
 
     // ---- STATUSTEXT tracking ----------------------------------------------------------
@@ -348,7 +358,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     val preflight: StateFlow<PreflightResult> = telemetry.flatMapLatest { t ->
         if (t == null) {
-            combine(settings, tick500) { s, now -> PreflightChecklist.evaluate(PreflightInputs(null, null, s.batteryBands, null, null, false, null), now) }
+            combine(settings, tick500) { s, _ -> PreflightChecklist.evaluate(PreflightInputs(null, null, s.batteryBands, null, null, false, null), clock.nowMs()) }
         } else {
             combine(
                 combine(t.gps, t.battery, t.ekf, t.home) { gps, batt, ekf, home -> listOf(gps, batt, ekf, home) },
@@ -356,7 +366,8 @@ class CockpitViewModel @AssistedInject constructor(
                 settings,
                 prearmText,
                 tick500,
-            ) { parts, hb, s, prearm, now ->
+            ) { parts, hb, s, prearm, _ ->
+                val now = clock.nowMs()
                 PreflightChecklist.evaluate(
                     PreflightInputs(
                         gps = parts[0] as com.altnautica.gcs.core.model.GpsState?,
@@ -393,9 +404,10 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    /** Every bar-eligible skill with its state, for the drawer. */
-    val drawerSkills: StateFlow<List<SlotUi>> = combine(session.barSkills, session.states) { bar, states ->
-        bar.mapIndexed { i, s -> SlotUi(i, s, states[s.id], null, null) }
+    /** The flight-mode picker entry, then every bar-eligible skill, with states: the drawer (the cockpit's palette). */
+    val drawerSkills: StateFlow<List<SlotUi>> = combine(session.allSkills, session.barSkills, session.states) { all, bar, states ->
+        val picker = all.firstOrNull { it.id == SetModeSkill.id }
+        (listOfNotNull(picker) + bar).mapIndexed { i, s -> SlotUi(i, s, states[s.id], null, null) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val notices: SharedFlow<SkillNotice> = session.notices
@@ -407,7 +419,12 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
+    /** Runs [skillId]; `set-mode` without a target mode opens the flight-mode picker instead. */
     fun activate(skillId: String, args: Map<String, Any?> = emptyMap()) {
+        if (skillId == SetModeSkill.id && args[SkillArgs.TARGET_MODE] == null) {
+            openModePicker()
+            return
+        }
         viewModelScope.launch {
             val outcome = session.activate(skillId, args, confirm)
             if (outcome is ActivationOutcome.Completed && outcome.checklistOverridden) {
@@ -415,6 +432,39 @@ class CockpitViewModel @AssistedInject constructor(
                 _events.tryEmit(CockpitEvent.ChecklistOverridden)
             }
         }
+    }
+
+    // ---- Flight mode picker -----------------------------------------------------------
+
+    private val _modePickerOpen = MutableStateFlow(false)
+
+    private val modeList: Flow<Pair<List<FlightMode>, String?>> = vehicle.flatMapLatest { v ->
+        if (v == null) {
+            flowOf(emptyList<FlightMode>() to null)
+        } else {
+            combine(v.control.availableModes, v.telemetry.heartbeat.map { it?.mode?.name }.distinctUntilChanged()) { modes, current -> modes to current }
+        }
+    }
+
+    /** The picker while open: every mode the flown vehicle advertises, with the `set-mode` state. */
+    val modePicker: StateFlow<ModePickerUi?> = combine(_modePickerOpen, modeList, session.states) { open, (modes, current), states ->
+        if (!open) return@combine null
+        val state = states[SetModeSkill.id]
+        ModePickerUi(modeChoices(modes, current), enabled = state?.enabled == true, reasonKey = state?.takeIf { !it.enabled }?.reasonKey)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun openModePicker() {
+        _modePickerOpen.value = true
+    }
+
+    fun closeModePicker() {
+        _modePickerOpen.value = false
+    }
+
+    /** Requests [modeName] through the `set-mode` skill; its CS-6 tier decides the confirm. */
+    fun selectMode(modeName: String) {
+        _modePickerOpen.value = false
+        activate(SetModeSkill.id, mapOf(SkillArgs.TARGET_MODE to modeName))
     }
 
     // ---- Target designation -----------------------------------------------------------
@@ -514,8 +564,9 @@ class CockpitViewModel @AssistedInject constructor(
     val band: StateFlow<BandState> = telemetry.flatMapLatest { t ->
         val coarse = if (t == null) flowOf(BandTelemetry.Empty) else combine(
             t.heartbeat, t.battery, t.gps, t.linkQuality, tick500,
-        ) { hb, batt, gps, lq, now ->
-            val age = hb?.let { now - it.tMs }
+        ) { hb, batt, gps, lq, _ ->
+            val now = clock.nowMs()
+            val age = hb?.let { heartbeatAgeMs(it.tMs, now) }
             BandTelemetry(
                 armed = hb?.armed,
                 mode = hb?.mode?.name,
@@ -576,7 +627,8 @@ class CockpitViewModel @AssistedInject constructor(
             combine(t.gps, t.vibration, videoState, criticalText, prearmText) { gps, vib, vs, crit, pre -> AlertParts2(gps, vib, vs is VideoState.Frozen, crit, pre) },
             settings,
             tick500,
-        ) { a, b, s, now ->
+        ) { a, b, s, _ ->
+            val now = clock.nowMs()
             alertEngine.evaluate(
                 AlertInputs(
                     armed = a.hb?.armed,
@@ -667,6 +719,8 @@ class CockpitViewModel @AssistedInject constructor(
     val quickSettingsOpen: StateFlow<Boolean> = _quickSettings.asStateFlow()
     private val _drawer = MutableStateFlow(false)
     val drawerOpen: StateFlow<Boolean> = _drawer.asStateFlow()
+    private val _preflightOpen = MutableStateFlow(false)
+    val preflightOpen: StateFlow<Boolean> = _preflightOpen.asStateFlow()
 
     fun setQuickSettings(open: Boolean) {
         _quickSettings.value = open
@@ -674,6 +728,20 @@ class CockpitViewModel @AssistedInject constructor(
 
     fun setDrawer(open: Boolean) {
         _drawer.value = open
+    }
+
+    fun setPreflight(open: Boolean) {
+        _preflightOpen.value = open
+    }
+
+    /** Closes every open sheet and panel; false when none was open. */
+    private fun closeOverlays(): Boolean {
+        val open = _quickSettings.value || _drawer.value || _preflightOpen.value || _modePickerOpen.value
+        _quickSettings.value = false
+        _drawer.value = false
+        _preflightOpen.value = false
+        _modePickerOpen.value = false
+        return open
     }
 
     private val _events = MutableSharedFlow<CockpitEvent>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -693,10 +761,24 @@ class CockpitViewModel @AssistedInject constructor(
         inputJob = viewModelScope.launch { router.events.collect(::onInput) }
     }
 
+    /**
+     * Stops taking hardware input (the cockpit is no longer visible). The activity gets
+     * no joystick events while stopped, so stick control turns off, the stream stops and
+     * the router drops the last deflection and any held button.
+     */
     fun detachInput() {
         if (router.capture === capture) router.capture = null
         inputJob?.cancel()
         inputJob = null
+        stickOn.value = false
+        stopStreamer()
+        confirm.releaseHold()
+        router.neutralize()
+    }
+
+    /** The window lost input focus (a system dialog, the shade): centre the sticks and release buttons. */
+    fun onWindowFocusLost() {
+        router.neutralize()
     }
 
     private fun onInput(event: InputEvent) {
@@ -727,7 +809,7 @@ class CockpitViewModel @AssistedInject constructor(
             )
             CockpitAction.ToggleQuickSettings -> _quickSettings.update { !it }
             CockpitAction.ToggleSkillDrawer -> _drawer.update { !it }
-            CockpitAction.Exit -> _events.tryEmit(CockpitEvent.ExitRequested)
+            CockpitAction.Exit -> if (!closeOverlays()) _events.tryEmit(CockpitEvent.ExitRequested)
             is CockpitAction.CycleStream -> cycleStream(action.delta)
             is CockpitAction.SelectStream -> selectStreamIndex(action.index)
             CockpitAction.TogglePip -> togglePip()

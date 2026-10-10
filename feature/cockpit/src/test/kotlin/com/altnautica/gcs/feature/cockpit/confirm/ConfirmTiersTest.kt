@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.skills.ConfirmRequest
 import com.altnautica.gcs.core.skills.ConfirmResult
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.core.skills.SkillTiming
 import com.altnautica.gcs.core.skills.builtin.ArmSkill
 import com.altnautica.gcs.core.skills.builtin.KillSkill
 import com.altnautica.gcs.core.skills.builtin.LandSkill
@@ -167,5 +168,41 @@ class ConfirmTiersTest {
         c.setOverride(true)
         c.onSlideCompleted()
         assertEquals(ConfirmResult.Confirmed(checklistOverridden = true), result.await())
+    }
+
+    @Test
+    fun `guarded kill fires only after a full 1500 ms hold inside the guard window and the countdown tracks it`() = runTest {
+        // The sheet's "Hold for" label reads the policy; the controller times the same hold.
+        assertEquals(SkillTiming.GUARDED_HOLD_MS, KillSkill.confirm!!.holdMs)
+        val c = controller()
+        val result = async { c.confirm(request(KillSkill)) }
+        runCurrent()
+        assertEquals(GuardCountdown.Window(3.0f), c.state.value!!.guardCountdown())
+
+        advanceTimeBy(480)
+        runCurrent()
+        assertEquals(GuardCountdown.Window(2.6f), c.state.value!!.guardCountdown())
+
+        // First hold: released after 1400 ms, short of 1500. Nothing fires.
+        c.onTouchHold(true)
+        advanceTimeBy(800)
+        runCurrent()
+        assertEquals(GuardCountdown.Holding(0.7f), c.state.value!!.guardCountdown())
+        advanceTimeBy(600)
+        runCurrent()
+        c.onTouchHold(false)
+        advanceTimeBy(8)
+        runCurrent()
+        assertTrue("a 1400 ms hold must not fire Kill", c.isOpen)
+        assertEquals(GuardCountdown.Window(1.2f), c.state.value!!.guardCountdown())
+
+        // Second hold, started inside the 3 s window: fires at 1500 ms, not before.
+        c.onTouchHold(true)
+        advanceTimeBy(1_488)
+        runCurrent()
+        assertTrue(c.isOpen)
+        advanceTimeBy(16)
+        runCurrent()
+        assertEquals(ConfirmResult.Confirmed(), result.await())
     }
 }

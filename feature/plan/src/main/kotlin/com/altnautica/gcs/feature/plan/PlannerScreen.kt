@@ -233,18 +233,7 @@ private fun PlannerTopBar(
     GlassSurface(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             Box(Modifier.clickable(onClick = onVehicle)) { VehicleChip(state) }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    state.name.ifBlank { untitled },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = colors.hudInk,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (state.dirty) {
-                    Text(stringResource(R.string.plan_unsaved), style = MaterialTheme.typography.labelSmall, color = colors.hudInk2)
-                }
-            }
+            PlanTitle(name = state.name.ifBlank { untitled }, dirty = state.dirty, modifier = Modifier.weight(1f))
             IconButton(onClick = onFit) {
                 Icon(Icons.Outlined.CenterFocusWeak, contentDescription = stringResource(R.string.plan_action_fit), tint = colors.hudInk)
             }
@@ -256,6 +245,30 @@ private fun PlannerTopBar(
             }
             BasemapMenu(state, actions)
             OverflowMenu(state, actions)
+        }
+    }
+}
+
+/** Plan name and unsaved marker; both stay on one line however narrow the bar gets. */
+@Composable
+internal fun PlanTitle(name: String, dirty: Boolean, modifier: Modifier = Modifier) {
+    val colors = AdosTheme.colors
+    Column(modifier) {
+        Text(
+            name,
+            style = MaterialTheme.typography.titleSmall,
+            color = colors.hudInk,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (dirty) {
+            Text(
+                stringResource(R.string.plan_unsaved),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.hudInk2,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

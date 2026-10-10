@@ -22,7 +22,9 @@ class Fmp4Exception(message: String) : Exception(message)
  * Fragmented MP4 to coded pictures: reads the init segment (`ftyp` + `moov`)
  * for the codec, timescale and parameter sets, then each `moof` + `mdat`
  * fragment into samples. Bytes may arrive in any chunking; only complete
- * top-level boxes are parsed.
+ * top-level boxes are parsed. Every read is bounds-checked and box sizes are
+ * capped at [MAX_BOX_BYTES]: corrupt or hostile input throws [Fmp4Exception],
+ * never an unchecked runtime exception.
  */
 class Fmp4Demuxer {
 
@@ -32,28 +34,38 @@ class Fmp4Demuxer {
     private val pending = ByteArrayOutputStream()
     private var moof: ByteArray? = null
 
-    /** Feeds bytes; returns the samples of every fragment they completed. Throws on an unusable init segment. */
+    /** Feeds bytes; returns the samples of every fragment they completed. Throws [Fmp4Exception] on unusable input. */
     fun push(bytes: ByteArray): List<Fmp4Sample> {
+        // The unparsed remainder is always one incomplete box, and box sizes are capped at
+        // MAX_BOX_BYTES, so `pending` never grows past that cap.
         pending.write(bytes)
         val buf = pending.toByteArray()
         var pos = 0
         val out = ArrayList<Fmp4Sample>()
-        while (buf.size - pos >= 8) {
-            val size = boxSize(buf, pos, buf.size) ?: break
-            if (size > buf.size - pos) break
-            val type = fourcc(buf, pos + 4)
-            val box = buf.copyOfRange(pos, pos + size.toInt())
-            when (type) {
-                "moov" -> track = parseInit(box)
-                "moof" -> moof = box
-                "mdat" -> {
-                    val m = moof
-                    val t = track
-                    if (m != null && t != null) out += samples(t, m, box)
-                    moof = null
+        try {
+            while (buf.size - pos >= 8) {
+                val size = boxSize(buf, pos, buf.size) ?: break
+                if (size > buf.size - pos) break
+                val type = fourcc(buf, pos + 4)
+                val box = buf.copyOfRange(pos, pos + size.toInt())
+                when (type) {
+                    "moov" -> track = parseInit(box)
+                    "moof" -> moof = box
+                    "mdat" -> {
+                        val m = moof
+                        val t = track
+                        if (m != null && t != null) out += samples(t, m, box)
+                        moof = null
+                    }
                 }
+                pos += size.toInt()
             }
-            pos += size.toInt()
+        } catch (e: IndexOutOfBoundsException) {
+            throw Fmp4Exception("Truncated box: ${e.message}")
+        } catch (e: IllegalArgumentException) {
+            throw Fmp4Exception("Corrupt box: ${e.message}")
+        } catch (e: NegativeArraySizeException) {
+            throw Fmp4Exception("Corrupt box length")
         }
         pending.reset()
         if (pos < buf.size) pending.write(buf, pos, buf.size - pos)
@@ -63,15 +75,38 @@ class Fmp4Demuxer {
     companion object {
         private val START_CODE = byteArrayOf(0, 0, 0, 1)
 
-        internal fun u32(b: ByteArray, p: Int): Long =
-            ((b[p].toLong() and 0xFF) shl 24) or ((b[p + 1].toLong() and 0xFF) shl 16) or
-                ((b[p + 2].toLong() and 0xFF) shl 8) or (b[p + 3].toLong() and 0xFF)
+        /** Largest box accepted (a key frame at relay bitrates is far smaller). */
+        const val MAX_BOX_BYTES = 16L * 1024 * 1024
 
-        internal fun u16(b: ByteArray, p: Int): Int = ((b[p].toInt() and 0xFF) shl 8) or (b[p + 1].toInt() and 0xFF)
+        /** Most samples one `trun` may declare. */
+        const val MAX_SAMPLES_PER_RUN = 4096
+
+        private fun need(b: ByteArray, p: Int, n: Int) {
+            if (p < 0 || n < 0 || p > b.size - n) throw Fmp4Exception("Read of $n bytes at $p past a ${b.size}-byte box")
+        }
+
+        internal fun u32(b: ByteArray, p: Int): Long {
+            need(b, p, 4)
+            return ((b[p].toLong() and 0xFF) shl 24) or ((b[p + 1].toLong() and 0xFF) shl 16) or
+                ((b[p + 2].toLong() and 0xFF) shl 8) or (b[p + 3].toLong() and 0xFF)
+        }
+
+        internal fun u16(b: ByteArray, p: Int): Int {
+            need(b, p, 2)
+            return ((b[p].toInt() and 0xFF) shl 8) or (b[p + 1].toInt() and 0xFF)
+        }
+
+        private fun u8(b: ByteArray, p: Int): Int {
+            need(b, p, 1)
+            return b[p].toInt() and 0xFF
+        }
 
         internal fun u64(b: ByteArray, p: Int): Long = (u32(b, p) shl 32) or u32(b, p + 4)
 
-        internal fun fourcc(b: ByteArray, p: Int) = String(b, p, 4, Charsets.US_ASCII)
+        internal fun fourcc(b: ByteArray, p: Int): String {
+            need(b, p, 4)
+            return String(b, p, 4, Charsets.US_ASCII)
+        }
 
         /** Size of the box at [p], or null when its header is incomplete. */
         private fun boxSize(b: ByteArray, p: Int, end: Int): Long? {
@@ -80,7 +115,9 @@ class Fmp4Demuxer {
                 1L -> if (end - p >= 16) u64(b, p + 8) else null
                 0L -> (end - p).toLong()
                 else -> s
-            }.also { if (it != null && it < 8) throw Fmp4Exception("Corrupt box size") }
+            }.also {
+                if (it != null && (it < 8 || it > MAX_BOX_BYTES)) throw Fmp4Exception("Corrupt box size $it")
+            }
         }
 
         private fun headerSize(b: ByteArray, p: Int) = if (u32(b, p) == 1L) 16 else 8
@@ -109,7 +146,7 @@ class Fmp4Demuxer {
                 val hdlr = child(moov, mdia, "hdlr") ?: continue
                 if (fourcc(moov, hdlr.first + 16) != "vide") continue
                 val mdhd = child(moov, mdia, "mdhd") ?: continue
-                val v = moov[mdhd.first + 8].toInt()
+                val v = u8(moov, mdhd.first + 8)
                 val timescale = if (v == 1) u32(moov, mdhd.first + 28) else u32(moov, mdhd.first + 20)
                 val stsd = child(moov, mdia, "minf")?.let { child(moov, it, "stbl") }?.let { child(moov, it, "stsd") } ?: continue
                 val entries = children(moov, stsd.first + 16, stsd.last + 1)
@@ -131,22 +168,22 @@ class Fmp4Demuxer {
         }
 
         private fun avcTrack(b: ByteArray, p0: Int, timescale: Long): Fmp4Track {
-            val lengthSize = (b[p0 + 4].toInt() and 0x03) + 1
+            val lengthSize = (u8(b, p0 + 4) and 0x03) + 1
             val ps = ByteArrayOutputStream()
             var p = p0 + 5
-            val numSps = b[p].toInt() and 0x1F
+            val numSps = u8(b, p) and 0x1F
             p += 1
             repeat(numSps) { p = copyNal(b, p, ps) }
-            val numPps = b[p].toInt() and 0xFF
+            val numPps = u8(b, p)
             p += 1
             repeat(numPps) { p = copyNal(b, p, ps) }
             return Fmp4Track(VideoCodec.Avc, timescale, ps.toByteArray(), lengthSize)
         }
 
         private fun hevcTrack(b: ByteArray, p0: Int, timescale: Long): Fmp4Track {
-            val lengthSize = (b[p0 + 21].toInt() and 0x03) + 1
+            val lengthSize = (u8(b, p0 + 21) and 0x03) + 1
             val ps = ByteArrayOutputStream()
-            val arrays = b[p0 + 22].toInt() and 0xFF
+            val arrays = u8(b, p0 + 22)
             var p = p0 + 23
             repeat(arrays) {
                 val count = u16(b, p + 1)
@@ -159,6 +196,7 @@ class Fmp4Demuxer {
         /** Copies one u16-length-prefixed NAL as Annex-B; returns the next position. */
         private fun copyNal(b: ByteArray, p: Int, out: ByteArrayOutputStream): Int {
             val len = u16(b, p)
+            need(b, p + 2, len)
             out.write(START_CODE)
             out.write(b, p + 2, len)
             return p + 2 + len
@@ -183,14 +221,15 @@ class Fmp4Demuxer {
                 val tfdt = child(moof, traf, "tfdt")
                 var dts = when {
                     tfdt == null -> 0L
-                    moof[tfdt.first + 8].toInt() == 1 -> u64(moof, tfdt.first + 12)
+                    u8(moof, tfdt.first + 8) == 1 -> u64(moof, tfdt.first + 12)
                     else -> u32(moof, tfdt.first + 12)
                 }
                 val mdatHeader = headerSize(mdat, 0)
                 for ((ctype, trun) in children(moof, traf.first + headerSize(moof, traf.first), traf.last + 1)) {
                     if (ctype != "trun") continue
                     val flags = (u32(moof, trun.first + 8) and 0xFFFFFF).toInt()
-                    val count = u32(moof, trun.first + 12).toInt()
+                    val count = u32(moof, trun.first + 12)
+                    if (count > MAX_SAMPLES_PER_RUN) throw Fmp4Exception("trun declares $count samples")
                     var r = trun.first + 16
                     // Data offsets count from the start of the moof; the mdat follows it directly.
                     var dataPos = if (flags and 0x01 != 0) {
@@ -200,7 +239,7 @@ class Fmp4Demuxer {
                     }
                     var firstFlags: Long? = null
                     if (flags and 0x04 != 0) { firstFlags = u32(moof, r); r += 4 }
-                    for (i in 0 until count) {
+                    for (i in 0 until count.toInt()) {
                         var duration = defDuration
                         var size = defSize
                         var sFlags = if (i == 0 && firstFlags != null) firstFlags else defFlags

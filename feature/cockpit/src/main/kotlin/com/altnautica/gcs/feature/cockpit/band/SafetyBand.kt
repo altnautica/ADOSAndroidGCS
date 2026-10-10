@@ -172,6 +172,7 @@ fun SafetyBand(
     onToggleStick: () -> Unit,
     onOpenPreflight: () -> Unit,
     onOpenQuickSettings: () -> Unit,
+    onOpenModes: () -> Unit,
     onKill: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -214,7 +215,7 @@ fun SafetyBand(
                     if (state.armed == true) ChipTone.Crit else ChipTone.Neutral,
                     Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
-                BandChip(Icons.Outlined.FlightTakeoff, state.modeName ?: DASH, ChipTone.Accent)
+                BandChip(Icons.Outlined.FlightTakeoff, state.modeName ?: DASH, ChipTone.Accent, onClick = onOpenModes)
 
                 val batteryText = state.batteryPct?.let { pct ->
                     val ttr = state.timeToReserveS?.let { " · " + formatDuration(it.toLong()) }.orEmpty()

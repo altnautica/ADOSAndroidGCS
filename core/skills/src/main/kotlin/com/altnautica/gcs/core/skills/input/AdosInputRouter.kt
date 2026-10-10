@@ -55,6 +55,7 @@ class AdosInputRouter @Inject constructor(
     private val _gamepadConnected = MutableStateFlow(false)
     private val _events = MutableSharedFlow<InputEvent>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val pressedAt = LongArray(GamepadButton.HOME + 1)
+    private var enterHeld = false
 
     /** Current stick positions after the dead-zone. */
     val axes: StateFlow<GamepadAxes> = _axes.asStateFlow()
@@ -130,16 +131,21 @@ class AdosInputRouter @Inject constructor(
         val down = event.action == KeyEvent.ACTION_DOWN
         val button = GamepadButton.fromKeyCode(event.keyCode)
         val fromGamepad = event.isFromSource(InputDevice.SOURCE_GAMEPAD) || event.isFromSource(InputDevice.SOURCE_JOYSTICK)
+        // The window swallows the first down of a navigation key (Enter, D-pad) when it
+        // leaves touch mode, so a repeated down that finds the key up starts the press.
         if (button != null && fromGamepad) {
-            if (event.repeatCount == 0) setButton(button, down)
+            setButton(button, down)
             return capture != null
         }
-        val cap = capture ?: return false
         if (event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+            val wasHeld = enterHeld
+            enterHeld = down
+            val cap = capture ?: return false
             if (!cap.capturesEnter) return false
-            if (event.repeatCount == 0) _events.tryEmit(InputEvent.Enter(down))
+            if (down != wasHeld) _events.tryEmit(InputEvent.Enter(down))
             return true
         }
+        val cap = capture ?: return false
         val chord = canonicalChord(event.keyCode, event.metaState, event.getUnicodeChar(event.metaState)) ?: return false
         if (!cap.consumesChord(chord)) return false
         if (down && event.repeatCount == 0) _events.tryEmit(InputEvent.Chord(chord))
@@ -159,6 +165,17 @@ class AdosInputRouter @Inject constructor(
             now - pressedAt[button]
         }
         _events.tryEmit(InputEvent.Button(button, pressed, held))
+    }
+
+    /**
+     * Centres the sticks and releases every held button. Called when the screen taking
+     * input stops or its window loses focus: the activity then receives no further
+     * joystick events, so the last deflection must not linger.
+     */
+    fun neutralize() {
+        _axes.value = GamepadAxes.Neutral
+        enterHeld = false
+        releaseAll()
     }
 
     private fun releaseAll() {

@@ -13,6 +13,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -30,6 +31,10 @@ import javax.inject.Singleton
  * Agent nodes on the local network: every paired node in the vault (polled for
  * liveness) plus every unpaired node discovery sees. Discovery and polling run
  * only while [nodes] is collected.
+ *
+ * Paired nodes come from the credential vault. While it cannot be read they may
+ * be missing (before the first good read) or stale; [savedNodesUnreadable] says
+ * so, so the fleet reports it instead of presenting the nodes as never paired.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
@@ -40,6 +45,12 @@ class LanNodeSource @Inject constructor(
 ) : NodeSource {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** True while the stored node keys cannot be read; [retrySavedNodes] reads them again. */
+    val savedNodesUnreadable: StateFlow<Boolean> = vault.unreadable
+
+    /** Reads the stored node keys again; true when they read now and [nodes] carries them. */
+    suspend fun retrySavedNodes(): Boolean = vault.retryRead()
 
     private val polls: Flow<Map<String, NodePoll>> = vault.nodes.flatMapLatest { stored ->
         if (stored.isEmpty()) {

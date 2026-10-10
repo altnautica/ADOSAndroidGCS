@@ -5,7 +5,12 @@ import com.altnautica.gcs.core.cloud.auth.CloudAuthFailure
 import com.altnautica.gcs.core.cloud.auth.ConvexAuthPasswordProvider
 import com.altnautica.gcs.core.cloud.auth.PasswordFlow
 import com.altnautica.gcs.core.cloud.auth.RefreshTokenStore
+import com.altnautica.gcs.core.cloud.auth.VaultRefreshTokenStore
 import com.altnautica.gcs.core.cloud.convex.AuthBackend
+import com.altnautica.gcs.core.data.vault.CredentialVault
+import com.altnautica.gcs.core.data.vault.VaultUnreadableException
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -16,6 +21,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,8 +30,18 @@ class AuthProviderTest {
 
     private class MemoryTokens(var value: String?) : RefreshTokenStore {
         val writes = mutableListOf<String?>()
-        override suspend fun get() = value
+
+        /** While set, the store behaves like a vault that cannot be read: every call throws. */
+        var unreadable = false
+
+        /** While set, reads serve the last good copy but writes are refused. */
+        var refuseWrites = false
+        override suspend fun get(): String? {
+            if (unreadable) throw VaultUnreadableException(RuntimeException("keystore busy"))
+            return value
+        }
         override suspend fun put(token: String?) {
+            if (unreadable || refuseWrites) throw VaultUnreadableException(RuntimeException("keystore busy"))
             value = token
             writes += token
         }
@@ -93,6 +109,82 @@ class AuthProviderTest {
         assertTrue(provider.loginFromCache { seen += it }.isFailure)
         assertEquals(0, backend.calls.size)
         assertEquals(listOf<String?>(null), seen)
+    }
+
+    private fun unreadableVault() = mockk<CredentialVault> {
+        coEvery { requireReadable() } throws VaultUnreadableException(RuntimeException("keystore busy"))
+        // The lenient read cannot tell "unreadable" from "absent".
+        coEvery { cloudRefreshToken() } returns null
+        coEvery { putCloudRefreshToken(any()) } throws VaultUnreadableException(RuntimeException("keystore busy"))
+    }
+
+    private fun CloudAuthFailure?.of(result: Result<*>) = assertEquals(this, (result.exceptionOrNull() as? CloudAuthException)?.failure)
+
+    @Test
+    fun unreadableVaultFailsRefreshAsVaultUnavailableWithoutCallingTheServer() = runTest {
+        val backend = Backend()
+        val provider = ConvexAuthPasswordProvider(backend, VaultRefreshTokenStore(unreadableVault()), WallClock { testScheduler.currentTime })
+        val seen = mutableListOf<String?>()
+
+        val result = provider.loginFromCache { seen += it }
+
+        CloudAuthFailure.VaultUnavailable.of(result)
+        assertEquals(0, backend.calls.size)
+        assertEquals(listOf<String?>(null), seen)
+    }
+
+    @Test
+    fun rotatedTokenTheVaultRefusedIsSpentOnTheNextRefreshAndStoredOnceItWorks() = runTest {
+        val backend = Backend()
+        val tokens = MemoryTokens("refresh-0").apply { refuseWrites = true }
+        val provider = ConvexAuthPasswordProvider(backend, tokens, WallClock { testScheduler.currentTime })
+
+        // The server rotates the token but the vault refuses the new one.
+        CloudAuthFailure.VaultUnavailable.of(provider.loginFromCache { })
+        assertEquals(mapOf("refreshToken" to "refresh-0"), backend.calls.single())
+        assertEquals("refresh-0", tokens.value)
+        assertTrue(provider.holdsUnsavedToken)
+
+        // Still refused (even reads now): the retry spends the in-memory token, never the spent stored one.
+        tokens.unreadable = true
+        CloudAuthFailure.VaultUnavailable.of(provider.loginFromCache { })
+        assertEquals(mapOf("refreshToken" to "refresh-1"), backend.calls.last())
+
+        tokens.unreadable = false
+        tokens.refuseWrites = false
+        val ok = provider.loginFromCache { }
+        assertEquals("jwt-3", ok.getOrNull()?.token)
+        assertEquals(mapOf("refreshToken" to "refresh-2"), backend.calls.last())
+        assertEquals("refresh-3", tokens.value)
+        assertFalse(provider.holdsUnsavedToken)
+    }
+
+    @Test
+    fun interactiveSignInTheVaultRefusesIsVaultUnavailableNotACredentialError() = runTest {
+        val backend = Backend()
+        val tokens = MemoryTokens(null).apply { refuseWrites = true }
+        val provider = ConvexAuthPasswordProvider(backend, tokens, WallClock { testScheduler.currentTime })
+        provider.pending = PasswordFlow.SignIn("a@b.c", "pw")
+
+        CloudAuthFailure.VaultUnavailable.of(provider.login(mockk(relaxed = true)) { })
+        assertTrue(provider.holdsUnsavedToken)
+
+        tokens.refuseWrites = false
+        assertTrue(provider.loginFromCache { }.isSuccess)
+        assertEquals(mapOf("refreshToken" to "refresh-1"), backend.calls.last())
+        assertEquals("refresh-2", tokens.value)
+    }
+
+    @Test
+    fun logoutTheVaultRefusesReportsVaultUnavailableInsteadOfThrowing() = runTest {
+        val vault = unreadableVault()
+        val provider = ConvexAuthPasswordProvider(Backend(), VaultRefreshTokenStore(vault), WallClock { testScheduler.currentTime })
+
+        val result = provider.logout(mockk(relaxed = true))
+
+        CloudAuthFailure.VaultUnavailable.of(result)
+        coEvery { vault.putCloudRefreshToken(null) } returns Unit
+        assertTrue(provider.logout(mockk(relaxed = true)).isSuccess)
     }
 
     @Test

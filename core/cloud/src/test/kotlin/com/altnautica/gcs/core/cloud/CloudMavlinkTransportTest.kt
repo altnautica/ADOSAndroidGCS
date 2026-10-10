@@ -120,4 +120,67 @@ class CloudMavlinkTransportTest {
         assertEquals(0, broker.ports[1].subscriptions["ados/d1/mavlink/tx"]?.first)
         link.close()
     }
+
+    @Test
+    fun renewedGrantIsProbedAndConfirmedAgainUnderTheNewPrincipal() = runTest {
+        val broker = FakeBroker()
+        var refuse = false
+        broker.publishOutcome = { p ->
+            if (p.qos == 1 && refuse) PublishOutcome.Refused(CloudTopics.REASON_NOT_AUTHORIZED) else PublishOutcome.Sent
+        }
+        val grants = Grants()
+        val link = CloudMqttLink(broker, { "wss://broker.invalid/mqtt" }, grants, backgroundScope)
+        val transport = CloudMavlinkTransport("d1", link, grants, WallClock { testScheduler.currentTime }, backgroundScope)
+        transport.open()
+        runCurrent()
+        assertEquals(listOf("gcs-op-1"), grants.confirmed)
+
+        // Renewal: the broker has not learned the new principal yet.
+        refuse = true
+        grants.state.value = GrantState(grant = HeldGrant("gcs-op-2", "s2", listOf("d1"), Long.MAX_VALUE, false))
+        runCurrent()
+        val renewed = broker.ports.last()
+        assertEquals("gcs-op-2", renewed.username)
+        assertTrue("the new principal is probed", renewed.published.any { it.qos == 1 })
+        assertEquals(false, transport.writeAuthorized)
+        assertEquals(WriteResult.NotAuthorized, transport.write(byteArrayOf(1)))
+        assertTrue("no QoS 0 frame vanishes before the broker learns the grant", renewed.published.none { it.qos == 0 })
+
+        refuse = false
+        advanceTimeBy(CloudMavlinkTransport.REPROBE_MS)
+        assertEquals(WriteResult.Sent, transport.write(byteArrayOf(1)))
+        assertEquals(listOf("gcs-op-1", "gcs-op-2"), grants.confirmed)
+        transport.close()
+    }
+
+    @Test
+    fun failedReconnectAfterRenewalIsRetriedWithBackoff() = runTest {
+        val broker = FakeBroker()
+        val grants = Grants()
+        val link = CloudMqttLink(broker, { "wss://broker.invalid/mqtt" }, grants, backgroundScope)
+        val transport = CloudMavlinkTransport("d1", link, grants, WallClock { testScheduler.currentTime }, backgroundScope)
+        transport.open()
+        runCurrent()
+
+        broker.failConnects = 2
+        grants.state.value = GrantState(grant = HeldGrant("gcs-op-2", "s2", listOf("d1"), Long.MAX_VALUE, false))
+        runCurrent()
+        assertEquals(TransportState.Connecting, transport.state.value)
+        assertEquals(2, broker.ports.size)
+
+        advanceTimeBy(CloudMqttLink.RETRY_INITIAL_MS + 1)
+        runCurrent()
+        assertEquals("second attempt fails too", 3, broker.ports.size)
+        assertEquals(TransportState.Connecting, transport.state.value)
+
+        advanceTimeBy(2 * CloudMqttLink.RETRY_INITIAL_MS + 1)
+        runCurrent()
+        val up = broker.ports.last()
+        assertEquals(4, broker.ports.size)
+        assertEquals("gcs-op-2", up.username)
+        assertEquals(0, up.subscriptions["ados/d1/mavlink/tx"]?.first)
+        assertEquals(TransportState.Open, transport.state.value)
+        assertEquals(WriteResult.Sent, transport.write(byteArrayOf(1)))
+        transport.close()
+    }
 }

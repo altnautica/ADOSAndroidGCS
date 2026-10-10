@@ -6,12 +6,16 @@ import com.altnautica.gcs.core.database.FlightSessionEntity
 import com.altnautica.gcs.core.database.LogFileKind
 import com.altnautica.gcs.core.database.TlogFileDao
 import com.altnautica.gcs.core.database.TlogFileEntity
+import com.altnautica.gcs.core.mavlink.MavlinkFrame
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -30,11 +34,13 @@ import kotlin.math.sqrt
 /**
  * Tracks flight sessions by observing a vehicle's armed state.
  *
- * On arm: starts tlog recording and begins tracking max altitude, speed,
- * distance from home, and total path distance.
+ * On arm: opens a tlog recording fed with every frame the vehicle's link
+ * receives, and begins tracking max altitude, speed, distance from home, and
+ * total path distance.
  *
- * On disarm, or when the tracking job ends while armed: stops tlog recording,
- * finalizes the session stats, and inserts the completed session.
+ * On disarm, or when the tracking job ends while armed: closes the tlog (after
+ * its queued frames are written), finalizes the session stats, and inserts the
+ * completed session with its log file.
  */
 @Singleton
 class FlightSessionTracker @Inject constructor(
@@ -55,7 +61,7 @@ class FlightSessionTracker @Inject constructor(
     }
 
     /** Accumulated stats for one armed period. Only touched by its own collector. */
-    private class Session(val startTime: Long, val batteryStart: Int, val tlogPath: String) {
+    private class Session(val startTime: Long, val batteryStart: Int) {
         var maxAltitude = 0f
         var maxSpeed = 0f
         var maxDistance = 0f
@@ -67,26 +73,33 @@ class FlightSessionTracker @Inject constructor(
 
     /**
      * Track [telemetry] for [vehicleId] until the returned job, or [scope], is cancelled.
+     * [frames] is the link's receive path; null (a vehicle fed from an agent snapshot)
+     * records the session without a tlog.
      */
-    fun track(vehicleId: DeviceId, telemetry: VehicleTelemetry, scope: CoroutineScope): Job =
+    fun track(vehicleId: DeviceId, telemetry: VehicleTelemetry, frames: Flow<MavlinkFrame>?, scope: CoroutineScope): Job =
         scope.launch {
             telemetry.heartbeat
                 .filterNotNull()
                 .map { it.armed }
                 .distinctUntilChanged()
                 .collectLatest { armed ->
-                    if (armed) runSession(vehicleId, telemetry)
+                    if (armed) runSession(vehicleId, telemetry, frames)
                 }
         }
 
     /** Runs for one armed period; cancelled by the next disarm. */
-    private suspend fun runSession(vehicleId: DeviceId, telemetry: VehicleTelemetry) {
+    private suspend fun runSession(vehicleId: DeviceId, telemetry: VehicleTelemetry, frames: Flow<MavlinkFrame>?) = coroutineScope {
         Log.i(TAG, "${vehicleId.value} armed, starting flight session")
         val session = Session(
             startTime = System.currentTimeMillis(),
             batteryStart = telemetry.battery.value?.remainingPct ?: -1,
-            tlogPath = tlogRecorder.start() ?: "",
         )
+        val recording = frames?.let { tlogRecorder.start(vehicleId.value) }
+        val tap = if (recording != null && frames != null) {
+            launch(start = CoroutineStart.UNDISPATCHED) { frames.collect(recording::record) }
+        } else {
+            null
+        }
         try {
             merge(
                 telemetry.position.filterNotNull().map { Sample.Position(it) },
@@ -101,7 +114,9 @@ class FlightSessionTracker @Inject constructor(
             }
         } finally {
             withContext(NonCancellable) {
-                finish(vehicleId, session, telemetry)
+                tap?.cancel()
+                val tlogPath = recording?.close().orEmpty()
+                finish(vehicleId, session, telemetry, tlogPath)
             }
         }
     }
@@ -130,9 +145,8 @@ class FlightSessionTracker @Inject constructor(
         }
     }
 
-    private suspend fun finish(vehicleId: DeviceId, session: Session, telemetry: VehicleTelemetry) {
+    private suspend fun finish(vehicleId: DeviceId, session: Session, telemetry: VehicleTelemetry, tlogPath: String) {
         Log.i(TAG, "${vehicleId.value} ending flight session")
-        tlogRecorder.stop()
 
         val endTime = System.currentTimeMillis()
         val durationSec = ((endTime - session.startTime) / 1000).toInt()
@@ -147,17 +161,17 @@ class FlightSessionTracker @Inject constructor(
             totalDistance = session.totalDistance,
             batteryStart = session.batteryStart,
             batteryEnd = telemetry.battery.value?.remainingPct ?: -1,
-            tlogPath = session.tlogPath,
+            tlogPath = tlogPath,
         )
 
         try {
             val sessionId = flightSessionDao.insert(entity)
-            if (session.tlogPath.isNotEmpty()) {
-                val file = java.io.File(session.tlogPath)
+            if (tlogPath.isNotEmpty()) {
+                val file = java.io.File(tlogPath)
                 tlogFileDao.insert(
                     TlogFileEntity(
                         sessionId = sessionId,
-                        path = session.tlogPath,
+                        path = tlogPath,
                         kind = LogFileKind.Tlog,
                         sizeBytes = if (file.exists()) file.length() else 0,
                         createdAtMs = session.startTime,

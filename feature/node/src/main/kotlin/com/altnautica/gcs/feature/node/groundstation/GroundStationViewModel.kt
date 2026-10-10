@@ -118,10 +118,8 @@ class GroundStationViewModel @AssistedInject constructor(
         _state.update { it.copy(carried = Load.Ready(CarriedDrones.parse(pair.getOrNull() as? JsonObject, relayed, status))) }
     }
 
-    /** Frees the drone's fleet slot on this ground station. */
-    fun releaseSlot(deviceId: String) = write(deviceId) { c, _ ->
-        c.requestJson("DELETE", "api/v1/ground-station/wfb/pair/${java.net.URLEncoder.encode(deviceId, "UTF-8").replace("+", "%20")}")
-    }
+    /** Frees the drone's fleet slot on this ground station; the armed override rides the query (bodiless DELETE). */
+    fun releaseSlot(deviceId: String) = write(deviceId) { c, force -> releaseSlotRequest(c, deviceId, force) }
 
     // ---- radio ---------------------------------------------------------------
 
@@ -278,3 +276,14 @@ class GroundStationViewModel @AssistedInject constructor(
         const val POLL_MS = 3_000L
     }
 }
+
+/**
+ * `DELETE /api/v1/ground-station/wfb/pair/{id}`. The agent's armed guard takes
+ * the override for bodiless methods only as `?force=1`.
+ */
+internal suspend fun releaseSlotRequest(client: AgentClient, deviceId: String, force: Boolean): AgentResult<*> =
+    client.requestJson(
+        "DELETE",
+        "api/v1/ground-station/wfb/pair/${java.net.URLEncoder.encode(deviceId, "UTF-8").replace("+", "%20")}",
+        query = if (force) mapOf("force" to "1") else emptyMap(),
+    )

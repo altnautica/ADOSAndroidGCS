@@ -45,6 +45,8 @@ class ExtensionHandlersTest {
     private val attitude = MutableStateFlow<Attitude?>(null)
     private val heartbeat = MutableStateFlow<HeartbeatState?>(HeartbeatState(true, FlightMode(4, "GUIDED"), 2, 3, 0))
     private val commands = mutableListOf<VehicleCommand>()
+    private var runResult: CommandResult = CommandResult.Accepted
+    private val notifier = ExtensionNotifier()
     private val telemetry = mockk<VehicleTelemetry>(relaxed = true).also {
         every { it.attitude } returns attitude
         every { it.heartbeat } returns heartbeat
@@ -55,7 +57,7 @@ class ExtensionHandlersTest {
             override val availableModes = MutableStateFlow(emptyList<FlightMode>())
             override suspend fun run(command: VehicleCommand): CommandResult {
                 commands += command
-                return CommandResult.Accepted
+                return runResult
             }
         }
     }
@@ -77,7 +79,7 @@ class ExtensionHandlersTest {
             bus = bus,
             marks = CockpitMarksStore(),
             confirm = confirm,
-            notifier = ExtensionNotifier(),
+            notifier = notifier,
             mission = mission,
             appScope = backgroundScope,
         )
@@ -113,6 +115,28 @@ class ExtensionHandlersTest {
         approved.join()
         assertEquals(listOf<VehicleCommand>(VehicleCommand.Takeoff(120f)), commands)
         assertEquals("true", result!!.jsonObject["ok"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun queuedCommandIsReportedAsQueuedNotFailed() = runTest {
+        runResult = CommandResult.Queued("r-42")
+        val notices = mutableListOf<ExtensionNotice>()
+        backgroundScope.launch { notifier.notices.collect { notices += it } }
+        val h = factory().create("com.example.ext", NODE, "m1")
+        runCurrent()
+        var result: JsonElement? = null
+        val job = backgroundScope.launch { result = h.call("command.send", """{"command":"land"}""") }
+        runCurrent()
+        confirm.answer(confirm.pending.value.single().id, true)
+        runCurrent()
+        job.join()
+        val r = result!!.jsonObject
+        assertEquals("true", r["ok"]!!.jsonPrimitive.content)
+        assertEquals("true", r["queued"]!!.jsonPrimitive.content)
+        assertEquals("r-42", r["receipt"]!!.jsonPrimitive.content)
+        runCurrent()
+        assertEquals(NoticeLevel.Info, notices.single().level)
+        assertTrue(notices.single().message.contains("queued"))
     }
 
     @Test

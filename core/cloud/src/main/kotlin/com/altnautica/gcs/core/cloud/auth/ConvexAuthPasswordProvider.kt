@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.cloud.WallClock
 import com.altnautica.gcs.core.cloud.convex.AuthBackend
 import com.altnautica.gcs.core.cloud.convex.CloudJson
 import com.altnautica.gcs.core.data.vault.CredentialVault
+import com.altnautica.gcs.core.data.vault.VaultUnreadableException
 import dev.convex.android.AuthProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -23,19 +24,34 @@ sealed interface PasswordFlow {
     data class SignUp(val fullName: String, val email: String, val password: String) : PasswordFlow
 }
 
-/** Where the long-lived refresh token is kept between launches. */
+/**
+ * Where the long-lived refresh token is kept between launches. Both calls
+ * throw [VaultUnreadableException] while the store cannot be read; [get]
+ * returns null only when no token is stored.
+ */
 interface RefreshTokenStore {
     suspend fun get(): String?
     suspend fun put(token: String?)
 }
 
 class VaultRefreshTokenStore(private val vault: CredentialVault) : RefreshTokenStore {
-    override suspend fun get(): String? = vault.cloudRefreshToken()
+    override suspend fun get(): String? {
+        vault.requireReadable()
+        return vault.cloudRefreshToken()
+    }
+
     override suspend fun put(token: String?) = vault.putCloudRefreshToken(token)
 }
 
 /** Why a sign-in failed, for the operator. */
-enum class CloudAuthFailure { InvalidCredentials, Network, RateLimited }
+enum class CloudAuthFailure {
+    InvalidCredentials,
+    Network,
+    RateLimited,
+
+    /** This phone's credential store could not be read; trying again may succeed. */
+    VaultUnavailable,
+}
 
 class CloudAuthException(val failure: CloudAuthFailure, message: String) : Exception(message)
 
@@ -54,7 +70,11 @@ class CloudAuthException(val failure: CloudAuthFailure, message: String) : Excep
  *   happen in [CloudSession] before the client calls this.
  *
  * The identity token is held in memory only; the refresh token is sealed in
- * the credential vault.
+ * the credential vault. When the vault cannot be read or written, every call
+ * fails with [CloudAuthFailure.VaultUnavailable] instead of throwing. A
+ * rotated refresh token the vault refused is kept in memory, so the next
+ * [loginFromCache] spends it (the stored one is already spent) and tries to
+ * store its successor.
  */
 class ConvexAuthPasswordProvider(
     private val backend: AuthBackend,
@@ -68,6 +88,13 @@ class ConvexAuthPasswordProvider(
     private val lock = Mutex()
     private var last: ConvexAuthSession? = null
     private var lastAtMs = Long.MIN_VALUE
+
+    /** A refresh token the server issued that the vault refused to store. */
+    @Volatile
+    private var unsaved: String? = null
+
+    /** True while a rotated refresh token is held in memory only, waiting to be stored. */
+    val holdsUnsavedToken: Boolean get() = unsaved != null
 
     override suspend fun login(context: Context, onIdToken: (String?) -> Unit): Result<ConvexAuthSession> {
         val flow = pending ?: return Result.failure(IllegalStateException("No credentials to sign in with"))
@@ -86,7 +113,8 @@ class ConvexAuthPasswordProvider(
                 Result.success(reuse)
             } else {
                 attempt {
-                    val refresh = tokens.get()
+                    val refresh = unsaved
+                        ?: tokens.get()
                         ?: throw CloudAuthException(CloudAuthFailure.InvalidCredentials, "Not signed in")
                     exchange(mapOf("refreshToken" to refresh))
                 }
@@ -96,20 +124,32 @@ class ConvexAuthPasswordProvider(
         return result
     }
 
-    override suspend fun logout(context: Context): Result<Void?> {
-        lock.withLock {
-            last = null
-            lastAtMs = Long.MIN_VALUE
+    override suspend fun logout(context: Context): Result<Void?> = lock.withLock {
+        last = null
+        lastAtMs = Long.MIN_VALUE
+        unsaved = null
+        try {
             tokens.put(null)
+            Result.success(null)
+        } catch (e: VaultUnreadableException) {
+            // The stored token is still there; say so rather than report a sign-out.
+            Result.failure(vaultUnavailable())
         }
-        return Result.success(null)
     }
 
     override fun extractIdToken(authResult: ConvexAuthSession): String = authResult.token
 
     private suspend fun exchange(args: Map<String, Any?>): ConvexAuthSession {
         val session = parseTokens(backend.signIn(args))
-        tokens.put(session.refreshToken)
+        // Convex Auth has already rotated the refresh token: if it cannot be stored,
+        // keep it for the next attempt rather than fall back to the spent stored one.
+        unsaved = session.refreshToken
+        try {
+            tokens.put(session.refreshToken)
+        } catch (e: VaultUnreadableException) {
+            throw vaultUnavailable()
+        }
+        unsaved = null
         last = session
         lastAtMs = clock.nowMs()
         return session
@@ -159,9 +199,13 @@ class ConvexAuthPasswordProvider(
             return ConvexAuthSession(tokens.token, tokens.refreshToken)
         }
 
-        /** Maps a server or transport error onto what the operator can act on. */
+        internal fun vaultUnavailable() =
+            CloudAuthException(CloudAuthFailure.VaultUnavailable, "This phone's credential store could not be read; try again")
+
+        /** Maps a server, transport or credential-store error onto what the operator can act on. */
         fun classify(e: Throwable): CloudAuthException {
             if (e is CloudAuthException) return e
+            if (e is VaultUnreadableException) return vaultUnavailable()
             val text = buildString {
                 append(e.message.orEmpty())
                 append(' ')

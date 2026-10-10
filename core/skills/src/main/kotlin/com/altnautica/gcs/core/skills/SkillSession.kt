@@ -112,9 +112,10 @@ class SkillSession internal constructor(
             skills.associate { it.id to activator.mergedState(id, it, ctx) }
         }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
-    /** Skills eligible for the Skill Bar for the current vehicle. */
+    /** Skills eligible for the Skill Bar for the current vehicle; re-evaluated when the mode list arrives. */
     val barSkills: StateFlow<List<Skill>> =
-        combine(allSkills, context) { skills, ctx -> SkillRegistry.barSkills(skills, ctx) }
+        combine(allSkills, contextInputs) { skills, ctx -> SkillRegistry.barSkills(skills, ctx) }
+            .distinctUntilChanged()
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     fun recompute() {

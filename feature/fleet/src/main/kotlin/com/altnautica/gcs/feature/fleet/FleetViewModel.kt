@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.fleet
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.core.agent.node.LanNodeSource
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 data class FleetCard(
     val node: NodeSummary,
@@ -43,9 +45,21 @@ sealed interface FleetUiState {
 class FleetViewModel @Inject constructor(
     nodeRepository: NodeRepository,
     private val vitalsRepository: NodeVitalsRepository,
+    private val lanNodes: LanNodeSource,
 ) : ViewModel() {
 
     private val nodes = nodeRepository.nodes
+
+    /**
+     * True while the phone's stored node keys cannot be read: paired nodes may be
+     * missing from the list, so the fleet says so and offers [retrySavedNodes]
+     * rather than presenting them as never paired.
+     */
+    val savedNodesUnreadable: StateFlow<Boolean> = lanNodes.savedNodesUnreadable
+
+    fun retrySavedNodes() {
+        viewModelScope.launch { lanNodes.retrySavedNodes() }
+    }
 
     /** Vitals depend only on a node's id and reaches, so liveness ticks do not restart them. */
     @OptIn(ExperimentalCoroutinesApi::class)

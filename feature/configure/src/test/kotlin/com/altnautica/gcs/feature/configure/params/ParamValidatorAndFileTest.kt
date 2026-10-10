@@ -74,4 +74,15 @@ class ParamValidatorAndFileTest {
         assertEquals(listOf("C"), cmp.unknownNames)
         assertTrue(ParamFile.sameValue(0.1f.toDouble(), 0.1))
     }
+
+    @Test
+    fun scientificValuesKeepTheirExponent() {
+        assertEquals("1e-10", ParamFile.formatValue(1e-10))
+        assertEquals("2e-20", ParamFile.formatValue(2e-20))
+        assertEquals("1.5e-07", ParamFile.formatValue(1.5e-7))
+        assertEquals("0.135", ParamFile.formatValue(0.135))
+        for (v in listOf(1e-10, 2e-20, 1.5e-7, 3.25e-5)) {
+            assertTrue(ParamFile.sameValue(v, ParamFile.formatValue(v).toDouble()))
+        }
+    }
 }
