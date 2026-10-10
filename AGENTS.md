@@ -6,59 +6,78 @@ Agentic coding instructions for the native Android ground control station.
 
 Work in this repository as an engineering agent for the Android GCS app. Keep
 changes idiomatic Kotlin, testable through ViewModels and repositories, and
-optimized for dark, landscape-first operator workflows.
+optimized for operator workflows on phones, tablets and handheld controllers.
 
 ## Read First
 
 - Check `git status --short` before edits and preserve unrelated changes.
 - Inspect the nearest screen, ViewModel, repository, data model, or test before
   adding new structure.
-- Keep MAVLink parsing and command encoding in the data layer.
+- Keep MAVLink parsing and command encoding in `:core:mavlink` / `:core:link`.
 - Keep hardware, networking, video, and protocol integrations behind testable
   interfaces.
 - Prefer focused Gradle tasks before broader builds when they prove the change.
 
 ## Stack and Commands
 
-- Kotlin 2.0, Android Gradle Plugin 8.7, Jetpack Compose, Material 3, Hilt,
-  StateFlow, Navigation Compose.
-- Min SDK 29, target SDK 34, compile SDK 35, JDK 17.
+- Gradle 9.6, Android Gradle Plugin 9.4 with built-in Kotlin, Kotlin 2.4, KSP,
+  Hilt, Jetpack Compose (BOM), Material 3 + material3-adaptive, Navigation 3,
+  Room, DataStore, OkHttp 5 + kotlinx.serialization, MapLibre Native, WebRTC
+  Android SDK, usb-serial-for-android.
+- Min SDK 29, target SDK 36, compile SDK 37.0 (`platforms;android-37.0`),
+  JDK 17, NDK 26.3.11579264 for modules with native code.
+- Versions live only in `gradle/libs.versions.toml`. SDK levels, toolchain and
+  common dependencies come from the `build-logic/` convention plugins
+  (`ados.android.application`, `ados.android.library`, `ados.android.compose`,
+  `ados.android.hilt`, `ados.jvm.library`); module build files do not repeat them.
 - Common commands:
 
 ```bash
-./gradlew assembleDebug
-./gradlew test
-./gradlew lint
+./gradlew assembleDebug testDebugUnitTest lintDebug
 ```
 
-- Useful focused commands:
+- Useful focused commands (replace the module path):
 
 ```bash
-./gradlew :app:testDebugUnitTest
-./gradlew :app:lintDebug
+./gradlew :core:link:testDebugUnitTest
+./gradlew :core:model:test
+./gradlew :feature:cockpit:lintDebug
 ./gradlew :app:assembleDebug
 ```
 
-Run the focused app task first when it covers the touched surface. Use
-`assembleDebug` for navigation, manifest, DI, resource, and build-config
+Run the focused module task first when it covers the touched surface. Use
+`:app:assembleDebug` for navigation, manifest, DI, resource, and build-config
 changes.
 
 ## Architecture Map
 
-- App code: `app/src/main/`
-- Unit tests: `app/src/test/`
-- Instrumented tests: `app/src/androidTest/`
-- Gradle app config: `app/build.gradle.kts`
-- Root Gradle versions: `build.gradle.kts`
-- MAVLink Java package input: `io/dronefleet/mavlink/`
+Multi-module Gradle build; module `:a:b` uses package `com.altnautica.gcs.a.b`.
+Sources live in `<module>/src/main/kotlin/`, unit tests in
+`<module>/src/test/kotlin/`.
 
-Within app code, keep the architecture split into UI, domain, and data layers.
-Screens render state. ViewModels coordinate use cases. Repositories and data
+- `:app`: activity, application, navigation graph, DI root.
+- `:core:model`: pure Kotlin contracts every other module compiles against
+  (nodes and reaches, `MavlinkByteTransport`, per-topic `VehicleTelemetry`,
+  `VehicleCommand`/`CommandResult`, skills, video, alerts). Change it only
+  deliberately; every module depends on it.
+- `:core:designsystem`: `AdosTheme`, tokens, fonts, base components.
+- `:core:mavlink`, `:core:link`: codecs, framing, transports, vehicle, protocols.
+- `:core:data`: settings and the credential vault. `:core:database`: Room.
+- `:core:agent`: ADOS agent client, discovery, pairing, Wi-Fi join.
+- `:core:video`, `:core:map`, `:core:skills`, `:core:extensions`, `:core:cloud`.
+- `:radio:rx`, `:radio:usb`: phone radio receive path and USB radio service.
+- `:feature:{connect,fleet,node,settings,cockpit,plan,configure,logs}`: screens.
+- `:baselineprofile`: baseline profile generator.
+
+Link families plug in through Hilt set multibindings of `NodeSource`,
+`TransportProvider`, `VideoSourceFactory` and `SkillContributor`, wired in
+`:app`. Screens render state. ViewModels coordinate. Repositories and data
 sources own protocol, persistence, and network details.
 
 ## Coding Rules
 
-- Architecture is MVVM with UI, domain, and data layers.
+- Architecture is MVVM: feature modules hold screens and ViewModels; core
+  modules hold data sources, protocols and repositories.
 - ViewModels expose `StateFlow`. Composables collect with
   `collectAsStateWithLifecycle()`.
 - Prefer stateless composables. Hoist state to ViewModels.
@@ -73,10 +92,14 @@ sources own protocol, persistence, and network details.
 ## UI Rules
 
 - User-visible strings belong in resources, not inline Compose text.
-- The app is dark-theme and landscape-first. Layouts must work in sensor
-  landscape on tablets and controller displays.
+- The app supports portrait and landscape on phones, tablets and controller
+  displays; adapt with `currentWindowAdaptiveInfo()` width classes.
 - Keep command, telemetry, video, and map surfaces stable under live updates.
-- Use Material 3 components and existing theme tokens before adding custom UI.
+- Colours, radius, spacing and motion come from `AdosTheme` and the generated
+  `AdosTokens.kt` (`core/designsystem/.../tokens/AdosTokens.kt`). That file is
+  generated from the shared ADOS design tokens: never edit it by hand. No
+  dynamic colour. Icons are Material Symbols Outlined.
+- Status is never colour-only: pair colour with an icon and a label.
 - Provide explicit disconnected, loading, denied-permission, and no-data states.
 - Guard flight-affecting actions with disabled states or confirmation flows that
   match nearby UI.
@@ -112,10 +135,10 @@ contains before committing.
 
 ## Verification
 
-- ViewModel or domain behavior: add or update unit tests and run
-  `./gradlew :app:testDebugUnitTest`.
+- ViewModel or domain behavior: add or update unit tests and run the owning
+  module's `testDebugUnitTest` (`test` for `:core:model` and `:core:mavlink`).
 - Compose UI, resources, manifest, navigation, Hilt, or build config: run
-  `./gradlew :app:assembleDebug`; add `./gradlew :app:lintDebug` when lintable
+  `./gradlew :app:assembleDebug`; add the module's `lintDebug` when lintable
   UI or Android API behavior changed.
 - Data-layer protocol, network, video, or hardware abstraction: test the
   interface behavior and fallback states.

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ADOS অ্যান্ড্রয়েড GCS</string>
+    <string name="fleet_empty_title">এখনও কোনো নোড নেই</string>
+    <string name="fleet_empty_message">আপনি যে ড্রোন, গ্রাউন্ড স্টেশন এবং ফ্লাইট কন্ট্রোলারের সাথে সংযোগ করবেন সেগুলো এখানে দেখা যাবে।</string>
 
     <!-- Navigation -->
     <string name="nav_video">ভিডিও</string>

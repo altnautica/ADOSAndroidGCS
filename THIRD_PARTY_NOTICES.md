@@ -1,0 +1,41 @@
+# Third-party notices
+
+ADOS Android GCS is licensed under GPL-3.0-only (see `LICENSE`). It bundles or
+links the third-party components below under their own licences. Library
+versions are pinned in `gradle/libs.versions.toml`.
+
+## Bundled assets
+
+| Component | Version | Licence | Location | Upstream |
+|---|---|---|---|---|
+| Inter (Regular, Medium, SemiBold) | 4.1 | SIL Open Font License 1.1 | `core/designsystem/src/main/res/font/inter_*.ttf`; licence `core/designsystem/src/main/assets/licenses/inter-OFL.txt` | https://github.com/rsms/inter |
+| JetBrains Mono (Regular, Medium, SemiBold) | 2.304 | SIL Open Font License 1.1 | `core/designsystem/src/main/res/font/jetbrains_mono_*.ttf`; licence `core/designsystem/src/main/assets/licenses/jetbrains-mono-OFL.txt` | https://github.com/JetBrains/JetBrainsMono |
+| Space Grotesk (Regular, Medium, SemiBold) | 2.0.0 | SIL Open Font License 1.1 | `core/designsystem/src/main/res/font/space_grotesk_*.ttf`; licence `core/designsystem/src/main/assets/licenses/space-grotesk-OFL.txt` | https://github.com/floriankarsten/space-grotesk |
+
+The Space Grotesk SemiBold file is a static instance (weight 600) of the
+upstream variable font `SpaceGrotesk[wght].ttf` from the 2.0.0 release, made
+with `fontTools varLib.instancer`; upstream publishes no static SemiBold. The
+licence declares no Reserved Font Name.
+
+## MAVLink message definitions
+
+| Component | Revision | Licence | Upstream |
+|---|---|---|---|
+| MAVLink XML message definitions (`minimal`, `standard`, `common`, `ardupilotmega` and their includes) | `20ed9b2760cffec2ac9becb9b8287cb2456d7ee7` | MIT for generator output and message definitions, per the exception in the upstream `COPYING` at that revision | https://github.com/mavlink/mavlink |
+
+The Kotlin codecs in `:core:mavlink` are generated at build time from these
+definitions.
+
+## Libraries
+
+| Library | Licence | Upstream |
+|---|---|---|
+| WebRTC Android SDK (`io.github.webrtc-sdk:android`) | BSD-3-Clause (WebRTC), MIT (packaging) | https://github.com/webrtc-sdk/android |
+| MapLibre Native for Android (`org.maplibre.gl:android-sdk`) | BSD-2-Clause | https://github.com/maplibre/maplibre-native |
+| usb-serial-for-android (`com.github.mik3y:usb-serial-for-android`) | MIT | https://github.com/mik3y/usb-serial-for-android |
+| OkHttp, Okio | Apache-2.0 | https://github.com/square/okhttp |
+| Kotlin standard library, kotlinx.coroutines, kotlinx.serialization | Apache-2.0 | https://github.com/JetBrains/kotlin |
+| AndroidX (Compose, Material 3, Navigation 3, Lifecycle, Room, DataStore, WebKit, Hilt integration) | Apache-2.0 | https://developer.android.com/jetpack/androidx |
+| Dagger / Hilt | Apache-2.0 | https://github.com/google/dagger |
+| HiveMQ MQTT Client | Apache-2.0 | https://github.com/hivemq/hivemq-mqtt-client |
+| Convex Android client (`dev.convex:android-convexmobile`) | Apache-2.0 | https://github.com/get-convex/convex-mobile |

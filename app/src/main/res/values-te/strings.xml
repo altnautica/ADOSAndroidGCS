@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ADOS ఆండ్రాయిడ్ GCS</string>
+    <string name="fleet_empty_title">ఇంకా నోడ్‌లు లేవు</string>
+    <string name="fleet_empty_message">మీరు కనెక్ట్ చేసే డ్రోన్‌లు, గ్రౌండ్ స్టేషన్‌లు మరియు ఫ్లైట్ కంట్రోలర్‌లు ఇక్కడ కనిపిస్తాయి.</string>
 
     <!-- Navigation -->
     <string name="nav_video">వీడియో</string>

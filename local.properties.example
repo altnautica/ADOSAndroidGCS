@@ -1,6 +1,13 @@
 # Copy to local.properties and fill in. local.properties is gitignored, so a
-# real token never lands in the repository.
+# real endpoint or token never lands in the repository. Both keys are
+# optional: an empty value builds an app with that feature switched off.
 #
-# Mapbox access token. Leave empty to build without Mapbox: the app falls back
-# to the OSMdroid tile provider automatically.
-MAPBOX_ACCESS_TOKEN=
+# Android SDK location (Android Studio writes this line for you).
+# sdk.dir=/path/to/Android/Sdk
+#
+# Convex deployment URL used by the opt-in cloud features.
+ados.convexUrl=https://example-deployment.convex.cloud
+#
+# Access token for a map tile provider that requires one. The default
+# providers (OpenStreetMap, Esri World Imagery, OpenTopoMap) need none.
+ados.mapToken=

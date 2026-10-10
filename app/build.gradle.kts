@@ -1,46 +1,35 @@
+import java.util.Properties
+
 plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.dagger.hilt.android")
-    id("com.google.devtools.ksp")
+    alias(libs.plugins.ados.android.application)
+    alias(libs.plugins.ados.android.compose)
+    alias(libs.plugins.ados.android.hilt)
+    alias(libs.plugins.baselineprofile)
 }
+
+// Build-time endpoints come from local.properties (gitignored) so that no
+// deployment URL or token lands in the repository. Both are optional: an
+// empty value builds an app with the matching feature switched off.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
+
+fun localProperty(key: String): String =
+    (localProperties.getProperty(key) ?: providers.gradleProperty(key).orNull ?: "")
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
 
 android {
     namespace = "com.altnautica.gcs"
-    compileSdk = 35
-    ndkVersion = "26.3.11579264"
 
     defaultConfig {
         applicationId = "com.altnautica.gcs"
-        minSdk = 29
-        targetSdk = 34
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.2.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Mapbox access token, read from local.properties (gitignored) rather
-        // than from a tracked resource file. The tracked file held a
-        // placeholder, so the natural way to fix a broken map was to edit it
-        // and commit a live secret to a public repository. Empty is a
-        // supported build: MapProviderFactory falls back to OSMdroid.
-        resValue(
-            "string",
-            "mapbox_access_token",
-            providers.gradleProperty("MAPBOX_ACCESS_TOKEN").getOrElse(""),
-        )
-
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
+        buildConfigField("String", "CONVEX_URL", "\"${localProperty("ados.convexUrl")}\"")
+        buildConfigField("String", "MAP_TOKEN", "\"${localProperty("ados.mapToken")}\"")
     }
 
     buildTypes {
@@ -49,28 +38,13 @@ android {
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
         debug {
-            isMinifyEnabled = false
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    buildFeatures {
-        compose = true
-        buildConfig = true
     }
 
     packaging {
@@ -81,93 +55,59 @@ android {
         }
     }
 
-    testOptions {
-        unitTests.isReturnDefaultValues = true
+    lint {
+        // The seven non-English locales cover a subset of the keys; Android
+        // falls back to the default English string for the rest.
+        warning += "MissingTranslation"
     }
 }
 
+baselineProfile {
+    // The profile is generated on demand by :baselineprofile and committed.
+    automaticGenerationDuringBuild = false
+}
+
 dependencies {
-    // Compose BOM
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
-    implementation(composeBom)
-    androidTestImplementation(composeBom)
+    implementation(projects.core.model)
+    implementation(projects.core.designsystem)
+    implementation(projects.core.mavlink)
+    implementation(projects.core.link)
+    implementation(projects.core.data)
+    implementation(projects.core.database)
+    implementation(projects.core.agent)
+    implementation(projects.core.video)
+    implementation(projects.core.map)
+    implementation(projects.core.skills)
+    implementation(projects.core.extensions)
+    implementation(projects.core.cloud)
+    implementation(projects.radio.rx)
+    implementation(projects.radio.usb)
+    implementation(projects.feature.connect)
+    implementation(projects.feature.fleet)
+    implementation(projects.feature.node)
+    implementation(projects.feature.settings)
+    implementation(projects.feature.cockpit)
+    implementation(projects.feature.plan)
+    implementation(projects.feature.configure)
+    implementation(projects.feature.logs)
 
-    // Compose
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material3:material3-window-size-class")
-    implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.navigation:navigation-compose:2.8.5")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
+    implementation(libs.androidx.material3.adaptive)
+    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.profileinstaller)
+    implementation(libs.kotlinx.coroutines.android)
 
-    // Core
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+    baselineProfile(projects.baselineprofile)
 
-    // Hilt
-    implementation("com.google.dagger:hilt-android:2.51.1")
-    ksp("com.google.dagger:hilt-android-compiler:2.51.1")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
-
-    // MAVLink
-    implementation("io.dronefleet.mavlink:mavlink:1.1.11")
-
-    // Networking — Retrofit + OkHttp
-    implementation("com.squareup.retrofit2:retrofit:2.11.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // Ktor (WebSocket client)
-    implementation("io.ktor:ktor-client-core:2.3.12")
-    implementation("io.ktor:ktor-client-okhttp:2.3.12")
-    implementation("io.ktor:ktor-client-websockets:2.3.12")
-    implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
-    implementation("io.ktor:ktor-serialization-gson:2.3.12")
-
-    // Maps — Mapbox
-    implementation("com.mapbox.maps:android:11.8.0")
-
-    // Maps — OSMDroid (offline fallback)
-    implementation("org.osmdroid:osmdroid-android:6.1.18")
-
-    // WebRTC for Mode A video
-    implementation("io.github.webrtc-sdk:android:125.6422.06")
-
-    // Location services for agriculture GPS
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-
-    // MQTT (HiveMQ client for cloud relay Mode C)
-    implementation("com.hivemq:hivemq-mqtt-client:1.3.3")
-
-    // USB Serial (Mode D: direct FC connection via USB OTG)
-    implementation("com.github.mik3y:usb-serial-for-android:3.8.0")
-
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-
-    // DataStore (preferences)
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    // Room (flight log database)
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
-
-    // Unit tests
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("io.mockk:mockk:1.13.12")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
-
-    // Android instrumented tests
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

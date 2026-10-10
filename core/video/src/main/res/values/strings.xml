@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="video_no_source_all_failed">No video source responded. Check the radio link and the ground station.</string>
+    <string name="video_no_source_needs_pairing">Cloud relay needs a paired node. Pair this device in Settings.</string>
+    <string name="video_no_source_no_network">No network. Connect the radio, the USB tether, or the ground station Wi-Fi.</string>
+</resources>

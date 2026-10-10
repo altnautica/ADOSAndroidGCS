@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ADOSAndroidGCS" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
+    <!-- Window theme shown before Compose draws; matches the brand-dark canvas. -->
+    <style name="Theme.Ados" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ados_window_background</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ADOS ਐਂਡਰਾਇਡ GCS</string>
+    <string name="fleet_empty_title">ਹਾਲੇ ਕੋਈ ਨੋਡ ਨਹੀਂ</string>
+    <string name="fleet_empty_message">ਜਿਨ੍ਹਾਂ ਡਰੋਨਾਂ, ਗਰਾਊਂਡ ਸਟੇਸ਼ਨਾਂ ਅਤੇ ਫਲਾਈਟ ਕੰਟਰੋਲਰਾਂ ਨਾਲ ਤੁਸੀਂ ਜੁੜਦੇ ਹੋ, ਉਹ ਇੱਥੇ ਦਿਖਾਈ ਦੇਣਗੇ।</string>
 
     <!-- Navigation -->
     <string name="nav_video">ਵੀਡੀਓ</string>

@@ -1,0 +1,6 @@
+# Windows batch scripts need CRLF in the working tree; the repository stores LF.
+*.bat text eol=crlf
+gradlew text eol=lf
+*.jar binary
+*.ttf binary
+*.png binary

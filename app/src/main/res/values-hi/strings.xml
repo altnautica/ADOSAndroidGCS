@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ADOS एंड्रॉइड GCS</string>
+    <string name="fleet_empty_title">अभी कोई नोड नहीं</string>
+    <string name="fleet_empty_message">जिन ड्रोन, ग्राउंड स्टेशन और फ्लाइट कंट्रोलर से आप जुड़ते हैं, वे यहाँ दिखेंगे।</string>
 
     <!-- Navigation -->
     <string name="nav_video">वीडियो</string>
