@@ -8,9 +8,18 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
+android {
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
 dependencies {
     api(projects.core.model)
     api(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

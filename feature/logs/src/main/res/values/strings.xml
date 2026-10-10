@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="logs_title">Flight history</string>
+    <string name="logs_loading">Loading flight history</string>
+    <string name="logs_empty_title">No flights yet</string>
+    <string name="logs_empty_message">Flights are recorded automatically from arm to disarm while a vehicle is connected.</string>
+    <string name="logs_error">Flight history could not be read: %1$s</string>
+    <string name="logs_retry">Retry</string>
+    <string name="logs_section_flights">Flights</string>
+    <string name="logs_section_dataflash">Downloaded flight-controller logs</string>
+    <string name="logs_duration">%1$d min %2$02d s</string>
+    <string name="logs_max_alt">Max alt %1$.0f m</string>
+    <string name="logs_distance">Distance %1$.0f m</string>
+    <string name="logs_battery">Battery %1$d%% → %2$d%%</string>
+    <string name="logs_battery_unknown">Battery —</string>
+    <string name="logs_has_tlog">Telemetry log</string>
+    <string name="logs_delete">Delete</string>
+    <string name="logs_share">Share</string>
+    <string name="logs_delete_title">Delete this flight?</string>
+    <string name="logs_delete_message">The flight record and its telemetry log are removed from this device.</string>
+    <string name="logs_delete_confirm">Hold to delete</string>
+    <string name="logs_file_size">%1$s · %2$s</string>
+    <string name="logs_detail_title">Flight detail</string>
+    <string name="logs_detail_not_found">This flight no longer exists.</string>
+    <string name="logs_detail_no_tlog">No telemetry log was recorded for this flight, so there is no track or chart.</string>
+    <string name="logs_detail_loading_tlog">Reading telemetry log</string>
+    <string name="logs_detail_tlog_failed">The telemetry log could not be read: %1$s</string>
+    <string name="logs_chart_altitude">Altitude (m)</string>
+    <string name="logs_chart_speed">Ground speed (m/s)</string>
+    <string name="logs_chart_battery">Battery (%)</string>
+    <string name="logs_chart_no_data">No samples</string>
+    <string name="logs_replay">Replay in cockpit</string>
+    <string name="logs_back">Back</string>
+    <string name="logs_df_title">Flight-controller logs</string>
+    <string name="logs_df_refresh">Refresh log list</string>
+    <string name="logs_df_no_vehicle_title">No flight controller</string>
+    <string name="logs_df_no_vehicle">Connect to a MAVLink flight controller to list its onboard logs.</string>
+    <string name="logs_df_listing">Asking the flight controller for its logs</string>
+    <string name="logs_df_list_failed">The log list could not be read: %1$s</string>
+    <string name="logs_df_empty_title">No onboard logs</string>
+    <string name="logs_df_empty">The flight controller has no logs stored.</string>
+    <string name="logs_df_entry">Log %1$d</string>
+    <string name="logs_df_download">Download</string>
+    <string name="logs_df_cancel">Stop</string>
+    <string name="logs_df_failed">Download stopped: %1$s. Download again to resume.</string>
+    <string name="logs_share_chooser">Share log file</string>
+</resources>

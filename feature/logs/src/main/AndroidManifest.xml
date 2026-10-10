@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Shares telemetry and flight-controller logs from app-specific storage. -->
+        <provider
+            android:name="com.altnautica.gcs.feature.logs.share.LogFileProvider"
+            android:authorities="${applicationId}.logs.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/log_file_paths" />
+        </provider>
+    </application>
+</manifest>

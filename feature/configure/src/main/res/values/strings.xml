@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared -->
+    <string name="cfg_block_no_vehicle">No flight controller is connected.</string>
+    <string name="cfg_block_link_stale">The link is stale. Waiting for the flight controller.</string>
+    <string name="cfg_block_armed">Disarm the vehicle first.</string>
+    <string name="cfg_result_accepted">Accepted by the flight controller.</string>
+    <string name="cfg_result_rejected">Rejected: %1$s</string>
+    <string name="cfg_result_unsupported">This flight controller does not support that command.</string>
+    <string name="cfg_result_timeout">No reply from the flight controller.</string>
+    <string name="cfg_result_denied">Not allowed: %1$s</string>
+    <string name="cfg_result_queued">Queued for delivery.</string>
+    <string name="cfg_retry">Retry</string>
+    <string name="cfg_cancel">Cancel</string>
+    <string name="cfg_back">Back</string>
+
+    <!-- Motor test -->
+    <string name="cfg_motor_title">Motor test</string>
+    <string name="cfg_motor_props_off">I have removed all propellers.</string>
+    <string name="cfg_motor_throttle">Throttle %1$.0f%%</string>
+    <string name="cfg_motor_duration">Duration %1$.1f s</string>
+    <string name="cfg_motor_block_ack">Confirm the propellers are removed to enable the motor buttons.</string>
+    <string name="cfg_motor_block_running">A motor test is running.</string>
+    <string name="cfg_motor_n">Motor %1$d</string>
+    <string name="cfg_close">Close</string>
+    <string name="cfg_dismiss">Dismiss</string>
+    <string name="cfg_no_vehicle_title">No flight controller</string>
+
+    <!-- Parameters -->
+    <string name="cfg_param_loading">Loading parameters %1$d of %2$d</string>
+    <string name="cfg_param_load_failed">Parameters could not be loaded: %1$s</string>
+    <string name="cfg_param_search">Search parameters</string>
+    <string name="cfg_param_refresh">Reload parameters</string>
+    <string name="cfg_param_save_file">Save to file</string>
+    <string name="cfg_param_load_file">Load from file</string>
+    <string name="cfg_param_modified_only">Modified</string>
+    <string name="cfg_param_advanced">Advanced</string>
+    <string name="cfg_param_modified">Modified</string>
+    <string name="cfg_param_no_docs">No parameter documentation is bundled for this flight controller.</string>
+    <string name="cfg_param_count">%1$d of %2$d parameters</string>
+    <string name="cfg_param_write">Write to vehicle</string>
+    <string name="cfg_param_value">Value %1$s</string>
+    <string name="cfg_param_min">min %1$s</string>
+    <string name="cfg_param_max">max %1$s</string>
+    <string name="cfg_param_default">default %1$s</string>
+    <string name="cfg_param_reboot">Takes effect after the flight controller reboots.</string>
+    <string name="cfg_param_read_only">Read-only parameter.</string>
+    <string name="cfg_param_invalid_number">Enter a number.</string>
+    <string name="cfg_param_invalid_integer">Enter a whole number.</string>
+    <string name="cfg_param_invalid_min">Must be at least %1$s.</string>
+    <string name="cfg_param_invalid_max">Must be at most %1$s.</string>
+    <string name="cfg_param_invalid_option">Choose one of the listed values.</string>
+    <string name="cfg_param_invalid_bits">Sets bits this parameter does not define.</string>
+    <string name="cfg_param_armed_title">Change a parameter while armed?</string>
+    <string name="cfg_param_armed_message">The vehicle is armed. Writing %1$s = %2$s changes its behaviour in flight.</string>
+    <string name="cfg_param_armed_confirm">Hold to write</string>
+    <string name="cfg_param_saved">%1$s set to %2$s</string>
+    <string name="cfg_param_saved_reboot">%1$s set to %2$s. Reboot to apply.</string>
+    <string name="cfg_param_clamped">%1$s: asked %2$s, the vehicle kept %3$s</string>
+    <string name="cfg_param_write_timeout">%1$s: no confirmation from the vehicle</string>
+    <string name="cfg_param_write_unknown">%1$s does not exist on this vehicle</string>
+    <string name="cfg_param_write_nolink">%1$s: no link to the vehicle</string>
+    <string name="cfg_param_write_failed">%1$s could not be written</string>
+    <string name="cfg_param_incomplete">%1$d parameters did not arrive. Reload to try again.</string>
+    <string name="cfg_param_file_unreadable">That file has no parameters in a known format.</string>
+    <string name="cfg_import_title">Load parameter file</string>
+    <string name="cfg_import_summary">%1$d values differ from the vehicle. %2$d names in the file do not exist on it and are skipped.</string>
+    <string name="cfg_import_progress">Written %1$d of %2$d, %3$d failed</string>
+    <string name="cfg_import_apply">Write changes</string>
+
+    <!-- Calibration -->
+    <string name="cfg_cal_title">Calibration</string>
+    <string name="cfg_cal_gyro">Gyroscope</string>
+    <string name="cfg_cal_level">Level horizon</string>
+    <string name="cfg_cal_accel">Accelerometer</string>
+    <string name="cfg_cal_compass">Compass</string>
+    <string name="cfg_cal_radio">Radio</string>
+    <string name="cfg_cal_idle">Choose a calibration. The vehicle must be disarmed.</string>
+    <string name="cfg_cal_running">%1$s calibration running</string>
+    <string name="cfg_cal_keep_still">Keep the vehicle still and level.</string>
+    <string name="cfg_cal_done">%1$s calibration complete</string>
+    <string name="cfg_cal_failed">%1$s calibration failed: %2$s</string>
+    <string name="cfg_pose_step">Position %1$d of %2$d</string>
+    <string name="cfg_pose_level">Place the vehicle level</string>
+    <string name="cfg_pose_left">Place the vehicle on its left side</string>
+    <string name="cfg_pose_right">Place the vehicle on its right side</string>
+    <string name="cfg_pose_nose_down">Point the nose straight down</string>
+    <string name="cfg_pose_nose_up">Point the nose straight up</string>
+    <string name="cfg_pose_back">Place the vehicle on its back</string>
+    <string name="cfg_pose_confirm">Vehicle is in position</string>
+    <string name="cfg_compass_rotate">Rotate the vehicle slowly through every orientation until each compass reaches 100%.</string>
+    <string name="cfg_compass_progress">Compass %1$d: %2$d%%</string>
+    <string name="cfg_compass_report_ok">Compass %1$d calibrated (fitness %2$.1f)</string>
+    <string name="cfg_compass_report_failed">Compass %1$d failed (fitness %2$.1f)</string>
+    <string name="cfg_compass_accept">Accept and save</string>
+    <string name="cfg_radio_move">Move every stick and switch to both ends of its travel, then centre the sticks and save.</string>
+    <string name="cfg_radio_channel">CH %1$d</string>
+    <string name="cfg_radio_range">%1$d · %2$d · %3$d</string>
+    <string name="cfg_radio_save">Save radio calibration</string>
+
+    <!-- Setup -->
+    <string name="cfg_setup_calibration">Calibration</string>
+    <string name="cfg_setup_modes">Flight modes</string>
+    <string name="cfg_setup_failsafe">Failsafe</string>
+    <string name="cfg_setup_frame">Frame and motors</string>
+    <string name="cfg_setup_none">This flight controller reports none of these parameters.</string>
+    <string name="cfg_msp_title">Configure this flight controller in Mission Control</string>
+    <string name="cfg_msp_message">Betaflight and iNav flight controllers are set up from the desktop app. Status and flying work here.</string>
+</resources>

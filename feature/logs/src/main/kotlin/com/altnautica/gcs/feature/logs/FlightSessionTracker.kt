@@ -3,6 +3,9 @@ package com.altnautica.gcs.feature.logs
 import android.util.Log
 import com.altnautica.gcs.core.database.FlightSessionDao
 import com.altnautica.gcs.core.database.FlightSessionEntity
+import com.altnautica.gcs.core.database.LogFileKind
+import com.altnautica.gcs.core.database.TlogFileDao
+import com.altnautica.gcs.core.database.TlogFileEntity
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.VehicleTelemetry
@@ -37,6 +40,7 @@ import kotlin.math.sqrt
 class FlightSessionTracker @Inject constructor(
     private val tlogRecorder: TlogRecorder,
     private val flightSessionDao: FlightSessionDao,
+    private val tlogFileDao: TlogFileDao,
 ) {
 
     private companion object {
@@ -147,7 +151,20 @@ class FlightSessionTracker @Inject constructor(
         )
 
         try {
-            flightSessionDao.insert(entity)
+            val sessionId = flightSessionDao.insert(entity)
+            if (session.tlogPath.isNotEmpty()) {
+                val file = java.io.File(session.tlogPath)
+                tlogFileDao.insert(
+                    TlogFileEntity(
+                        sessionId = sessionId,
+                        path = session.tlogPath,
+                        kind = LogFileKind.Tlog,
+                        sizeBytes = if (file.exists()) file.length() else 0,
+                        createdAtMs = session.startTime,
+                        deviceId = vehicleId.value,
+                    ),
+                )
+            }
             Log.i(TAG, "Flight session saved: ${durationSec}s, maxAlt=${session.maxAltitude}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save flight session: ${e.message}", e)

@@ -24,7 +24,7 @@ import javax.inject.Singleton
 /**
  * Records raw MAVLink bytes to .tlog format.
  *
- * Tlog format: sequential records of [8-byte timestamp (microseconds since epoch)] + [raw MAVLink bytes].
+ * Tlog format: sequential records of [8-byte big-endian timestamp (microseconds since epoch)] + [raw MAVLink bytes].
  * This matches the common ground-station tlog layout for replay and analysis.
  *
  * Feed [recordFrame] with every raw frame on the receive path, before parsing.
@@ -48,7 +48,7 @@ class TlogRecorder @Inject constructor(
 
     private var outputStream: BufferedOutputStream? = null
     private var currentFile: File? = null
-    private val timestampBuffer = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN)
+    private val timestampBuffer = ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
 
     val tlogDir: File
         get() = File(context.filesDir, "tlogs").also { it.mkdirs() }

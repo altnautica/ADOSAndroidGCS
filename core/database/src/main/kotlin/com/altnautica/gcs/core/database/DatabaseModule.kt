@@ -16,9 +16,17 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AdosDatabase =
-        Room.databaseBuilder(context, AdosDatabase::class.java, "ados.db").build()
+        Room.databaseBuilder(context, AdosDatabase::class.java, AdosDatabase.NAME)
+            .addMigrations(*AdosDatabase.MIGRATIONS)
+            .build()
 
     @Provides
     fun provideFlightSessionDao(database: AdosDatabase): FlightSessionDao =
         database.flightSessionDao()
+
+    @Provides
+    fun provideTlogFileDao(database: AdosDatabase): TlogFileDao = database.tlogFileDao()
+
+    @Provides
+    fun provideSavedPlanDao(database: AdosDatabase): SavedPlanDao = database.savedPlanDao()
 }
