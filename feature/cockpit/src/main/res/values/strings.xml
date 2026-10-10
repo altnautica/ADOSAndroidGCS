@@ -1,0 +1,199 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Route and states -->
+    <string name="cockpit_exit">Exit cockpit</string>
+    <string name="cockpit_back">Back</string>
+    <string name="cockpit_close">Close</string>
+    <string name="cockpit_connecting">Connecting to the vehicle…</string>
+    <string name="cockpit_unknown_node_title">Node not found</string>
+    <string name="cockpit_unknown_node_message">This node is not reachable through any link. Connect to it from the fleet first.</string>
+    <string name="cockpit_no_carried_title">No drone linked to this ground station</string>
+    <string name="cockpit_no_carried_message">Pair a drone with this ground station on its Carried drones tab, then open the cockpit again.</string>
+    <string name="cockpit_leave_armed_title">Leave the cockpit?</string>
+    <string name="cockpit_leave_armed_message">The vehicle is armed. Leaving the cockpit does not disarm it.</string>
+    <string name="cockpit_leave">Leave</string>
+    <string name="cockpit_stay">Stay</string>
+    <string name="cockpit_stream_switch_failed">Could not switch to that camera</string>
+    <string name="cockpit_recording_failed">Recording command failed</string>
+    <string name="cockpit_checklist_overridden">Preflight checklist overridden</string>
+    <string name="cockpit_swap_video_map">Swap video and map</string>
+    <string name="cockpit_split_divider">Resize video and map</string>
+    <string name="cockpit_hud_description">Flight instruments</string>
+    <string name="cockpit_radar_description">Proximity radar</string>
+    <string name="cockpit_target_actions">Target actions</string>
+    <string name="cockpit_tts_mode">Mode %1$s</string>
+
+    <!-- Safety band -->
+    <string name="cockpit_reach_direct">DIRECT</string>
+    <string name="cockpit_reach_lan">LAN</string>
+    <string name="cockpit_reach_via_ground">VIA GROUND</string>
+    <string name="cockpit_reach_cloud">CLOUD</string>
+    <string name="cockpit_reach_phone_radio">PHONE RADIO</string>
+    <string name="cockpit_reach_blocked">NO LINK</string>
+    <string name="cockpit_armed">ARMED</string>
+    <string name="cockpit_disarmed">DISARMED</string>
+    <string name="cockpit_gps_unknown">GPS —</string>
+    <string name="cockpit_gps_none">NO GPS</string>
+    <string name="cockpit_gps_no_fix">NO FIX</string>
+    <string name="cockpit_gps_2d">2D</string>
+    <string name="cockpit_gps_3d">3D</string>
+    <string name="cockpit_gps_dgps">DGPS</string>
+    <string name="cockpit_gps_rtk_float">RTK FLOAT</string>
+    <string name="cockpit_gps_rtk_fixed">RTK FIXED</string>
+    <string name="cockpit_link_none">NO LINK</string>
+    <string name="cockpit_video_live">LIVE</string>
+    <string name="cockpit_video_frozen">FROZEN</string>
+    <string name="cockpit_video_connecting">VIDEO…</string>
+    <string name="cockpit_video_none">NO VIDEO</string>
+    <string name="cockpit_video_connecting_long">Connecting to video…</string>
+    <string name="cockpit_video_frozen_long">Picture frozen</string>
+    <string name="cockpit_video_failed">Video failed: %1$s</string>
+    <string name="cockpit_video_none_long">No video</string>
+    <string name="cockpit_stick_blocked">STICKS N/A</string>
+    <string name="cockpit_stick_on">STICKS ON</string>
+    <string name="cockpit_stick_off">STICKS OFF</string>
+    <string name="cockpit_preflight_chip">PREFLIGHT %1$d/%2$d</string>
+    <string name="cockpit_rec">REC</string>
+    <string name="cockpit_flight_time">FLT</string>
+    <string name="cockpit_kill">KILL</string>
+    <string name="cockpit_quick_settings">Quick settings</string>
+
+    <!-- Alerts -->
+    <string name="cockpit_alert_level_critical">CRITICAL</string>
+    <string name="cockpit_alert_level_warning">WARNING</string>
+    <string name="cockpit_alert_level_advisory">ADVISORY</string>
+    <string name="cockpit_alert_link_lost">Link lost</string>
+    <string name="cockpit_alert_link_stale">Link stale</string>
+    <string name="cockpit_alert_battery_critical">Battery critical</string>
+    <string name="cockpit_alert_battery_low">Battery low</string>
+    <string name="cockpit_alert_fc_state">Flight controller</string>
+    <string name="cockpit_alert_fc_critical">critical state</string>
+    <string name="cockpit_alert_fc_emergency">emergency</string>
+    <string name="cockpit_alert_fc_termination">flight termination</string>
+    <string name="cockpit_alert_ekf_failsafe">EKF failsafe</string>
+    <string name="cockpit_alert_fence_breach">Geofence breach</string>
+    <string name="cockpit_alert_status_text">Flight controller message</string>
+    <string name="cockpit_alert_gps_no_3d">No 3D GPS fix</string>
+    <string name="cockpit_alert_video_frozen">Video frozen</string>
+    <string name="cockpit_alert_rc_failsafe">RC failsafe</string>
+    <string name="cockpit_alert_prearm">Pre-arm check</string>
+    <string name="cockpit_alert_high_vibration">High vibration</string>
+
+    <!-- Preflight -->
+    <string name="cockpit_preflight_title">Preflight %1$d of %2$d</string>
+    <string name="cockpit_preflight_gps">GPS 3D fix</string>
+    <string name="cockpit_preflight_battery">Battery above the low band</string>
+    <string name="cockpit_preflight_ekf">EKF healthy</string>
+    <string name="cockpit_preflight_home">Home position set</string>
+    <string name="cockpit_preflight_link">Link fresh</string>
+    <string name="cockpit_preflight_prearm">No pre-arm failures</string>
+    <string name="cockpit_preflight_not_reported">%1$s (not reported)</string>
+    <string name="cockpit_preflight_pass">PASS</string>
+    <string name="cockpit_preflight_fail">FAIL</string>
+
+    <!-- Skills -->
+    <string name="cockpit_skill_arm">Arm</string>
+    <string name="cockpit_skill_disarm">Disarm</string>
+    <string name="cockpit_skill_takeoff">Take off</string>
+    <string name="cockpit_skill_land">Land</string>
+    <string name="cockpit_skill_rth">Return home</string>
+    <string name="cockpit_skill_pause">Pause</string>
+    <string name="cockpit_skill_resume">Resume</string>
+    <string name="cockpit_skill_abort">Abort</string>
+    <string name="cockpit_skill_kill">Kill</string>
+    <string name="cockpit_skill_mode_loiter">Loiter</string>
+    <string name="cockpit_skill_mode_brake">Brake</string>
+    <string name="cockpit_skill_mode_althold">Alt hold</string>
+    <string name="cockpit_skill_mode_stabilize">Stabilize</string>
+    <string name="cockpit_skill_mode_guided">Guided</string>
+    <string name="cockpit_skill_mode_auto">Start mission</string>
+    <string name="cockpit_skill_set_mode">Set mode</string>
+    <string name="cockpit_skill_fly_here">Fly here</string>
+    <string name="cockpit_skill_drawer">All skills</string>
+
+    <!-- Skill reasons -->
+    <string name="cockpit_reason_no_fc_link">No flight controller link</string>
+    <string name="cockpit_reason_receive_only">Receive-only link</string>
+    <string name="cockpit_reason_already_armed">Already armed</string>
+    <string name="cockpit_reason_not_armed">Not armed</string>
+    <string name="cockpit_reason_already_disarmed">Already disarmed</string>
+    <string name="cockpit_reason_mode_unavailable">Mode not available on this vehicle</string>
+    <string name="cockpit_reason_no_autonomous_nav">Needs autonomous navigation</string>
+    <string name="cockpit_reason_no_charges">No charges left</string>
+    <string name="cockpit_reason_command_rejected">Command rejected</string>
+    <string name="cockpit_reason_command_timeout">No answer from the vehicle</string>
+    <string name="cockpit_reason_command_unsupported">Not supported on this link</string>
+    <string name="cockpit_reason_command_denied">Command not sent</string>
+    <string name="cockpit_reason_command_queued">Command queued</string>
+    <string name="cockpit_reason_command_failed">Command failed</string>
+    <string name="cockpit_reason_state_error">Skill state unavailable</string>
+    <string name="cockpit_reason_fly_here_target">Fly here needs a point and an altitude of 2 to 120 m</string>
+
+    <!-- Confirm sheet -->
+    <string name="cockpit_confirm_arm_title">Arm motors</string>
+    <string name="cockpit_confirm_arm_message">The propellers can spin as soon as the vehicle arms. Keep clear.</string>
+    <string name="cockpit_confirm_disarm_title">Disarm motors</string>
+    <string name="cockpit_confirm_disarm_message">Disarming in flight stops the motors.</string>
+    <string name="cockpit_confirm_takeoff_title">Take off</string>
+    <string name="cockpit_confirm_takeoff_message">The vehicle arms and climbs to the altitude below.</string>
+    <string name="cockpit_confirm_land_title">Land</string>
+    <string name="cockpit_confirm_land_message">The vehicle descends and lands where it is.</string>
+    <string name="cockpit_confirm_rth_title">Return home</string>
+    <string name="cockpit_confirm_rth_message">The vehicle flies back to its home position.</string>
+    <string name="cockpit_confirm_resume_title">Resume mission</string>
+    <string name="cockpit_confirm_resume_message">The vehicle continues its mission.</string>
+    <string name="cockpit_confirm_abort_title">Abort</string>
+    <string name="cockpit_confirm_abort_message">The vehicle stops what it is doing and lands.</string>
+    <string name="cockpit_confirm_kill_title">Kill motors</string>
+    <string name="cockpit_confirm_kill_message">The motors stop at once. In flight the vehicle falls.</string>
+    <string name="cockpit_confirm_mode_title">Change flight mode</string>
+    <string name="cockpit_confirm_mode_message">The vehicle switches to the selected mode.</string>
+    <string name="cockpit_confirm_fly_here_title">Fly here</string>
+    <string name="cockpit_confirm_fly_here_message">The vehicle flies to the selected point.</string>
+    <string name="cockpit_confirm_checklist_failing">Preflight checks not passed:</string>
+    <string name="cockpit_confirm_override">Override checklist</string>
+    <string name="cockpit_confirm_slide">Slide to confirm</string>
+    <string name="cockpit_confirm_slide_hint">Or hold the gamepad button or Enter for %1$.1f s</string>
+    <string name="cockpit_confirm_hold">Hold for %1$.1f s</string>
+    <string name="cockpit_confirm_guard">Guard armed: hold within %1$.1f s</string>
+    <string name="cockpit_confirm_input_hint">Gamepad: hold the same button. Keyboard: hold Enter.</string>
+    <string name="cockpit_confirm_altitude">Takeoff altitude</string>
+    <string name="cockpit_confirm_altitude_down">Lower altitude</string>
+    <string name="cockpit_confirm_altitude_up">Raise altitude</string>
+    <string name="cockpit_altitude_m">%1$d m</string>
+
+    <!-- Quick settings and panels -->
+    <string name="cockpit_qs_altitude_reference">Altitude reference</string>
+    <string name="cockpit_alt_rel">Home-relative (REL)</string>
+    <string name="cockpit_alt_msl">Sea level (MSL)</string>
+    <string name="cockpit_qs_density">Density</string>
+    <string name="cockpit_density_min">Minimal</string>
+    <string name="cockpit_density_std">Standard</string>
+    <string name="cockpit_density_full">Full</string>
+    <string name="cockpit_qs_max_brightness">Maximum brightness</string>
+    <string name="cockpit_qs_telemetry_pane">Telemetry pane</string>
+    <string name="cockpit_qs_pip">Picture-in-picture</string>
+    <string name="cockpit_qs_start_recording">Start recording</string>
+    <string name="cockpit_qs_stop_recording">Stop recording</string>
+    <string name="cockpit_strip_dist">DIST</string>
+    <string name="cockpit_strip_home">HOME</string>
+    <string name="cockpit_strip_vs">V/S</string>
+    <string name="cockpit_strip_thr">THR</string>
+    <string name="cockpit_strip_wp">WP</string>
+    <string name="cockpit_strip_sats">SATS · HDOP</string>
+
+    <!-- Skill bindings -->
+    <string name="cockpit_bindings_title">Skill bindings</string>
+    <string name="cockpit_bindings_hint">Each Skill Bar slot holds one skill, a keyboard chord and a gamepad button. Cockpit controls (L1+R1, Select, Start, D-pad, digits, P, backtick) cannot be bound.</string>
+    <string name="cockpit_bindings_loading">Loading bindings…</string>
+    <string name="cockpit_bindings_reset">Reset</string>
+    <string name="cockpit_bindings_slot">Slot %1$d</string>
+    <string name="cockpit_bindings_empty">Empty</string>
+    <string name="cockpit_bindings_set_key">Set key</string>
+    <string name="cockpit_bindings_set_button">Set button</string>
+    <string name="cockpit_bindings_press_key">Press a key…</string>
+    <string name="cockpit_bindings_press_button">Press a button…</string>
+    <string name="cockpit_bindings_clear">Clear</string>
+    <string name="cockpit_bindings_reserved">That input is reserved by the cockpit</string>
+    <string name="cockpit_bindings_out_of_range">That gamepad button cannot be bound</string>
+</resources>
