@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="plan_untitled">Untitled plan</string>
+    <string name="plan_pair_label">%1$s · %2$s</string>
+    <string name="plan_unsaved">Unsaved changes</string>
+    <string name="plan_map_description">Mission map. Tap to add, drag to move, long-press a waypoint for more actions.</string>
+
+    <!-- Tools -->
+    <string name="plan_tool_waypoint">Waypoints</string>
+    <string name="plan_tool_survey">Survey</string>
+    <string name="plan_tool_fence_polygon">Fence area</string>
+    <string name="plan_tool_fence_circle">Fence circle</string>
+    <string name="plan_tool_rally">Rally</string>
+    <string name="plan_tool_hint_waypoint">Tap the map to add a waypoint. The first one is the takeoff.</string>
+    <string name="plan_tool_hint_survey">Tap the map to outline the survey area.</string>
+    <string name="plan_tool_hint_fence_polygon">Tap the map to outline the fence, then close it.</string>
+    <string name="plan_tool_hint_fence_circle">Tap the map to place a circular fence.</string>
+    <string name="plan_tool_hint_rally">Tap the map to place a rally point.</string>
+
+    <!-- Toolbar -->
+    <string name="plan_action_new">New plan</string>
+    <string name="plan_action_save">Save</string>
+    <string name="plan_action_library">Plan library</string>
+    <string name="plan_action_import">Import</string>
+    <string name="plan_action_export_plan">Export .plan</string>
+    <string name="plan_action_export_waypoints">Export .waypoints</string>
+    <string name="plan_action_more">More actions</string>
+    <string name="plan_action_basemap">Basemap</string>
+    <string name="plan_action_fit">Show whole plan</string>
+    <string name="plan_name">Plan name</string>
+
+    <!-- Vehicle -->
+    <string name="plan_vehicle_choose">Choose vehicle</string>
+    <string name="plan_vehicle_none">No vehicle</string>
+    <string name="plan_liveness_live">Live</string>
+    <string name="plan_liveness_stale">Stale</string>
+    <string name="plan_liveness_offline">Offline</string>
+    <string name="plan_vehicle_connecting">Connecting</string>
+    <string name="plan_vehicle_unsupported">No MAVLink link</string>
+    <string name="plan_vehicle_live">Live</string>
+    <string name="plan_vehicle_stale">Link stale</string>
+    <string name="plan_vehicle_picker_title">Plan for vehicle</string>
+    <string name="plan_vehicle_picker_empty_title">No vehicles</string>
+    <string name="plan_vehicle_picker_empty_message">Connect a drone or flight controller from the Fleet screen to upload plans.</string>
+    <string name="plan_vehicle_picker_detach">Plan without a vehicle</string>
+    <string name="plan_vehicle_needed">Choose a vehicle to upload, download or start a mission.</string>
+    <string name="plan_vehicle_unsupported_detail">This vehicle is not reachable over MAVLink, so missions cannot be transferred from here.</string>
+    <string name="plan_vehicle_connecting_detail">Waiting for the vehicle link.</string>
+    <string name="plan_vehicle_stale_detail">No heartbeat from the vehicle for more than 3 seconds.</string>
+
+    <!-- Transfer -->
+    <string name="plan_upload">Upload</string>
+    <string name="plan_download">Download</string>
+    <string name="plan_in_sync">On vehicle</string>
+    <string name="plan_not_in_sync">Not on vehicle</string>
+    <string name="plan_transfer_mission">mission</string>
+    <string name="plan_transfer_fence">fence</string>
+    <string name="plan_transfer_rally">rally points</string>
+    <string name="plan_transfer_uploading">Uploading %1$s %2$d/%3$d</string>
+    <string name="plan_transfer_downloading">Downloading %1$s %2$d/%3$d</string>
+    <string name="plan_transfer_clearing">Clearing %1$s</string>
+    <plurals name="plan_transfer_upload_done">
+        <item quantity="one">Uploaded %1$d item</item>
+        <item quantity="other">Uploaded %1$d items</item>
+    </plurals>
+    <plurals name="plan_transfer_download_done">
+        <item quantity="one">Downloaded %1$d item</item>
+        <item quantity="other">Downloaded %1$d items</item>
+    </plurals>
+    <string name="plan_transfer_failed">%1$s %2$s failed: %3$s</string>
+    <string name="plan_transfer_upload_word">Upload of</string>
+    <string name="plan_transfer_download_word">Download of</string>
+    <string name="plan_transfer_clear_word">Clearing of</string>
+    <string name="plan_transfer_dismiss">Dismiss</string>
+    <string name="plan_error_no_link">no link to the vehicle</string>
+    <string name="plan_error_busy">another transfer is running</string>
+    <string name="plan_error_timeout">the vehicle stopped answering</string>
+    <string name="plan_error_write">%1$s</string>
+    <string name="plan_error_rejected">the vehicle rejected it (code %1$d)</string>
+    <string name="plan_download_replace_title">Replace the open plan?</string>
+    <string name="plan_download_replace_message">The open plan has unsaved changes. Downloading replaces it with the vehicle\'s mission.</string>
+    <string name="plan_download_replace_confirm">Replace</string>
+    <string name="plan_cancel">Cancel</string>
+
+    <!-- Start mission -->
+    <string name="plan_start_mission">Start mission</string>
+    <string name="plan_start_title">Start mission</string>
+    <string name="plan_start_message_disarmed">Arms the vehicle and flies the mission stored on it. The cockpit opens once it starts.</string>
+    <string name="plan_start_message_armed">Flies the mission stored on the vehicle. The cockpit opens once it starts.</string>
+    <string name="plan_start_slide">Slide to start mission</string>
+    <string name="plan_start_running">Starting</string>
+    <string name="plan_start_check_link">Vehicle link fresh</string>
+    <string name="plan_start_check_plan">This plan is on the vehicle</string>
+    <string name="plan_start_check_gps">GPS 3D fix</string>
+    <string name="plan_start_check_home">Home position set</string>
+    <string name="plan_start_check_ok">OK</string>
+    <string name="plan_start_check_failed">Not ready</string>
+    <string name="plan_start_override">Override checklist</string>
+    <string name="plan_start_override_summary">Start with the items above not ready</string>
+    <string name="plan_start_error_arm">Arming refused: %1$s</string>
+    <string name="plan_start_error_start">Mission start refused: %1$s</string>
+    <string name="plan_result_rejected">%1$s (code %2$d)</string>
+    <string name="plan_result_unsupported">not supported by this vehicle</string>
+    <string name="plan_result_timeout">no answer from the vehicle</string>
+    <string name="plan_result_denied">%1$s</string>
+    <string name="plan_result_queued">queued, not confirmed</string>
+
+    <!-- Item editor -->
+    <string name="plan_item_title">Item %1$d</string>
+    <string name="plan_item_command">Command</string>
+    <string name="plan_item_command_other">Command %1$d</string>
+    <string name="plan_item_altitude">Altitude</string>
+    <string name="plan_item_altitude_ref">Altitude reference</string>
+    <string name="plan_item_speed">Leg speed</string>
+    <string name="plan_item_speed_none">Unchanged</string>
+    <string name="plan_item_hold">Hold</string>
+    <string name="plan_item_loiter_time">Loiter time</string>
+    <string name="plan_item_turns">Turns</string>
+    <string name="plan_item_new_speed">New speed</string>
+    <string name="plan_item_position">%1$.6f, %2$.6f</string>
+    <string name="plan_item_no_position">No position</string>
+    <string name="plan_item_delete">Delete item</string>
+    <string name="plan_item_insert_before">Insert waypoint before</string>
+    <string name="plan_item_insert_after">Insert waypoint after</string>
+    <string name="plan_item_insert_command">Insert after: %1$s</string>
+    <string name="plan_item_actions">Item actions</string>
+    <string name="plan_decrease">Decrease</string>
+    <string name="plan_increase">Increase</string>
+    <string name="plan_unit_m">%1$d m</string>
+    <string name="plan_unit_ms">%1$d m/s</string>
+    <string name="plan_unit_s">%1$d s</string>
+    <string name="plan_close_editor">Close editor</string>
+    <string name="plan_defaults_altitude">New item altitude</string>
+
+    <string name="plan_ref_rel">REL</string>
+    <string name="plan_ref_msl">MSL</string>
+    <string name="plan_ref_terrain">TERRAIN</string>
+
+    <string name="plan_cmd_waypoint">Waypoint</string>
+    <string name="plan_cmd_takeoff">Takeoff</string>
+    <string name="plan_cmd_land">Land</string>
+    <string name="plan_cmd_rtl">Return to launch</string>
+    <string name="plan_cmd_loiter_time">Loiter (time)</string>
+    <string name="plan_cmd_loiter_turns">Loiter (turns)</string>
+    <string name="plan_cmd_change_speed">Change speed</string>
+    <string name="plan_cmd_roi">Region of interest</string>
+    <string name="plan_cmd_digicam">Take photo</string>
+
+    <!-- Survey -->
+    <string name="plan_survey_title">Survey</string>
+    <string name="plan_survey_mode">Spacing from</string>
+    <string name="plan_survey_mode_camera">Camera</string>
+    <string name="plan_survey_mode_spray">Spray swath</string>
+    <string name="plan_survey_altitude">Altitude</string>
+    <string name="plan_survey_speed">Speed</string>
+    <string name="plan_survey_overlap">Front overlap</string>
+    <string name="plan_survey_sidelap">Side overlap</string>
+    <string name="plan_survey_fov">Camera field of view</string>
+    <string name="plan_survey_angle">Grid angle</string>
+    <string name="plan_survey_swath">Swath width</string>
+    <plurals name="plan_survey_lines">
+        <item quantity="one">%1$d line</item>
+        <item quantity="other">%1$d lines</item>
+    </plurals>
+    <plurals name="plan_survey_waypoints">
+        <item quantity="one">%1$d waypoint</item>
+        <item quantity="other">%1$d waypoints</item>
+    </plurals>
+    <string name="plan_survey_stats_camera">%1$s · photo every %2$.1f m · %3$.2f ha · about %4$d min</string>
+    <string name="plan_survey_need_points">Add at least 3 corners to lay out the survey.</string>
+    <string name="plan_survey_apply">Add to mission</string>
+    <string name="plan_survey_clear">Clear outline</string>
+    <string name="plan_unit_pct">%1$d %%</string>
+    <string name="plan_unit_deg">%1$d°</string>
+
+    <!-- Fence and rally -->
+    <string name="plan_fence_title">Fence</string>
+    <string name="plan_fence_inclusion">Keep inside</string>
+    <string name="plan_fence_exclusion">Keep out</string>
+    <string name="plan_fence_type">Fence type</string>
+    <string name="plan_fence_close">Close fence</string>
+    <string name="plan_fence_discard">Discard outline</string>
+    <plurals name="plan_fence_corners">
+        <item quantity="one">%1$d corner</item>
+        <item quantity="other">%1$d corners</item>
+    </plurals>
+    <string name="plan_fence_radius">Radius</string>
+    <string name="plan_fence_delete">Delete fence</string>
+    <string name="plan_fence_polygon_summary">Area · %1$s</string>
+    <string name="plan_fence_circle_summary">Circle</string>
+    <string name="plan_rally_title">Rally point</string>
+    <string name="plan_rally_altitude">Altitude above home</string>
+    <string name="plan_rally_delete">Delete rally point</string>
+
+    <!-- Profile -->
+    <plurals name="plan_profile_description">
+        <item quantity="one">Altitude profile: %1$d item, highest %2$d m, lowest %3$d m</item>
+        <item quantity="other">Altitude profile: %1$d items, highest %2$d m, lowest %3$d m</item>
+    </plurals>
+    <string name="plan_profile_empty">Add waypoints to see the altitude profile.</string>
+
+    <!-- Library -->
+    <string name="plan_library_title">Plan library</string>
+    <string name="plan_library_empty_title">No saved plans</string>
+    <string name="plan_library_empty_message">Saved plans appear here and stay on this device.</string>
+    <plurals name="plan_library_item_summary">
+        <item quantity="one">%1$d item · %2$s</item>
+        <item quantity="other">%1$d items · %2$s</item>
+    </plurals>
+    <string name="plan_library_open">Open %1$s</string>
+    <string name="plan_library_delete">Delete %1$s</string>
+
+    <!-- Messages -->
+    <string name="plan_msg_saved">Saved %1$s</string>
+    <string name="plan_msg_loaded">Opened %1$s</string>
+    <string name="plan_msg_deleted">Plan deleted</string>
+    <string name="plan_msg_imported">Imported %1$s</string>
+    <plurals name="plan_msg_imported_warnings">
+        <item quantity="one">Imported %1$s with %2$d item dropped</item>
+        <item quantity="other">Imported %1$s with %2$d items dropped</item>
+    </plurals>
+    <string name="plan_msg_import_failed">Could not import: %1$s</string>
+    <string name="plan_msg_import_not_waypoints">the file is not a QGC WPL waypoint list</string>
+    <string name="plan_msg_import_not_plan">the file is not a QGroundControl plan</string>
+    <string name="plan_msg_import_malformed">the file is not valid JSON</string>
+    <string name="plan_msg_import_complex_geometry">a survey item has no waypoints or coordinates</string>
+    <string name="plan_msg_import_complex_altitude">a survey item does not say how high to fly</string>
+    <string name="plan_msg_exported">Exported .%1$s</string>
+    <string name="plan_msg_export_failed">Could not export: %1$s</string>
+    <string name="plan_msg_survey_empty">The survey outline produced no waypoints.</string>
+    <string name="plan_msg_vehicle_empty">The vehicle has no mission stored.</string>
+    <string name="plan_msg_download_partial">Mission downloaded; the %1$s could not be read.</string>
+</resources>

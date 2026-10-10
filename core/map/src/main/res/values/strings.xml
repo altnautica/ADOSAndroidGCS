@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="map_minimap_description">Map inset showing the vehicle, home and flight trail</string>
+    <string name="map_no_position">No position</string>
+
+    <string name="offline_maps_title">Offline maps</string>
+    <string name="offline_maps_back">Back</string>
+    <string name="offline_maps_loading">Loading offline maps</string>
+    <string name="offline_maps_load_failed">Could not read offline maps: %1$s</string>
+    <string name="offline_maps_retry">Retry</string>
+    <string name="offline_maps_empty_title">No offline maps</string>
+    <string name="offline_maps_empty_message">Download an area or import a raster PMTiles pack to fly without a data connection.</string>
+    <string name="offline_maps_download_area">Download area</string>
+    <string name="offline_maps_import">Import PMTiles</string>
+    <string name="offline_maps_importing">Importing pack</string>
+    <string name="offline_maps_section_downloads">Downloaded areas</string>
+    <string name="offline_maps_section_packs">Imported packs</string>
+    <string name="offline_maps_pack_zoom">%1$s · zoom %2$d–%3$d</string>
+    <string name="offline_maps_status_complete">Complete · %1$s</string>
+    <string name="offline_maps_status_downloading">Downloading %1$d%% · %2$s</string>
+    <string name="offline_maps_status_downloading_unknown">Downloading · %1$s</string>
+    <string name="offline_maps_status_paused">Paused · %1$s</string>
+    <string name="offline_maps_status_error">Error: %1$s</string>
+    <string name="offline_maps_pause">Pause</string>
+    <string name="offline_maps_resume">Resume</string>
+    <string name="offline_maps_delete">Delete</string>
+    <string name="offline_maps_delete_named">Delete %1$s</string>
+    <string name="offline_maps_pack_details">Raster · zoom %1$d–%2$d · %3$s</string>
+
+    <string name="offline_maps_draft_hint">Pan and zoom the map to frame the area to download.</string>
+    <string name="offline_maps_draft_name">Name</string>
+    <string name="offline_maps_draft_name_placeholder">Field north</string>
+    <string name="offline_maps_draft_provider">Basemap</string>
+    <string name="offline_maps_draft_min_zoom">Minimum zoom</string>
+    <string name="offline_maps_draft_max_zoom">Maximum zoom</string>
+    <string name="offline_maps_draft_decrease">Decrease</string>
+    <string name="offline_maps_draft_increase">Increase</string>
+    <string name="offline_maps_draft_estimate">%1$s tiles · about %2$s</string>
+    <string name="offline_maps_draft_estimate_pending">Move the map to estimate the download size.</string>
+    <string name="offline_maps_draft_too_large">Too large for one pack. Zoom in or lower the maximum zoom.</string>
+    <string name="offline_maps_draft_download">Download</string>
+    <string name="offline_maps_draft_cancel">Cancel</string>
+
+    <string name="offline_maps_msg_download_failed">Download failed: %1$s</string>
+    <string name="offline_maps_msg_delete_failed">Delete failed: %1$s</string>
+    <string name="offline_maps_msg_imported">Imported %1$s</string>
+    <string name="offline_maps_msg_import_not_pmtiles">The file is not a PMTiles v3 archive.</string>
+    <string name="offline_maps_msg_import_vector">Vector PMTiles packs are not supported. Import a raster pack (PNG, JPEG or WebP tiles).</string>
+    <string name="offline_maps_msg_import_io">Import failed: %1$s</string>
+
+    <string name="map_provider_osm">OpenStreetMap</string>
+    <string name="map_provider_satellite">Satellite imagery</string>
+    <string name="map_provider_terrain">Topographic</string>
+</resources>
