@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<!-- USB radios the phone-radio receiver drives. RTL8812BU parts (0xB812,
+     0xB832) are a different chipset and are deliberately absent. -->
+<resources>
+    <!-- RTL8812EU -->
+    <usb-device vendor-id="3034" product-id="43034" />
+    <!-- RTL8812AU -->
+    <usb-device vendor-id="3034" product-id="34834" />
+    <usb-device vendor-id="3034" product-id="34842" />
+    <usb-device vendor-id="3034" product-id="34843" />
+</resources>

@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_radio_title">Phone radio</string>
+    <string name="phone_radio_summary">Receive a drone\'s video and telemetry directly with a USB radio plugged into this phone. Receive only: commands still go over the ground station or the network.</string>
+
+    <!-- Radio (USB dongle) -->
+    <string name="phone_radio_section_dongle">USB radio</string>
+    <string name="phone_radio_dongle_none_title">No USB radio attached</string>
+    <string name="phone_radio_dongle_none_message">Plug an RTL8812EU or RTL8812AU USB radio into this phone with a USB OTG adapter. A powered hub keeps the radio stable.</string>
+    <string name="phone_radio_dongle_unsupported">This radio (0bda:%1$04x) is an RTL8812BU, a different chipset that cannot be used. Use an RTL8812EU or RTL8812AU radio.</string>
+    <string name="phone_radio_dongle_permission">%1$s attached. Allow USB access to use it.</string>
+    <string name="phone_radio_dongle_allow">Allow USB access</string>
+    <string name="phone_radio_dongle_ready">%1$s ready</string>
+
+    <!-- Radio keys (invite) -->
+    <string name="phone_radio_section_keys">Radio keys</string>
+    <string name="phone_radio_keys_none">The phone needs the fleet\'s radio keys from a ground station. Choose a ground station paired on this network; its operator approves the request.</string>
+    <string name="phone_radio_keys_no_ground_title">No ground station paired</string>
+    <string name="phone_radio_keys_no_ground_message">Pair a ground station on the local network first, then request its radio keys here.</string>
+    <string name="phone_radio_keys_request">Request keys</string>
+    <string name="phone_radio_keys_offline">Offline</string>
+    <string name="phone_radio_keys_requesting">Sending the request…</string>
+    <string name="phone_radio_keys_awaiting_title">Waiting for approval</string>
+    <string name="phone_radio_keys_awaiting_message">On the ground station, open Radio → Phone receivers and approve the request showing this code. Approve only if the codes match.</string>
+    <string name="phone_radio_keys_expires">Expires in %1$d s</string>
+    <string name="phone_radio_keys_cancel">Cancel</string>
+    <string name="phone_radio_keys_rejected">The ground station operator rejected this phone.</string>
+    <string name="phone_radio_keys_expired">The request expired before it was approved. Request again.</string>
+    <string name="phone_radio_keys_unsupported">This ground station does not issue phone radio keys. Update its agent.</string>
+    <string name="phone_radio_keys_invalid">The keys could not be used: %1$s</string>
+    <string name="phone_radio_keys_stored">Keys from %1$s</string>
+    <string name="phone_radio_keys_detail">Fleet %1$d · drones: %2$d · channel %3$d · phone code %4$s</string>
+    <string name="phone_radio_keys_forget">Forget radio keys</string>
+    <string name="phone_radio_keys_forget_confirm">Forget the radio keys? This phone stops receiving until a ground station approves it again.</string>
+    <string name="phone_radio_keys_forget_yes">Forget</string>
+    <string name="phone_radio_keys_unreadable">The radio keys could not be read from this phone\'s secure storage just now. Nothing was deleted. Try again in a moment.</string>
+    <string name="phone_radio_keys_retry">Try again</string>
+    <string name="phone_radio_keys_not_saved">The ground station approved this phone, but its secure storage could not save the keys just now. Keep this screen open and save them again.</string>
+    <string name="phone_radio_keys_save_again">Save again</string>
+    <string name="phone_radio_keys_not_forgotten">The radio keys could not be removed from secure storage just now. They are still stored.</string>
+    <string name="phone_radio_keys_forget_again">Forget again</string>
+
+    <string name="phone_radio_failure_not_paired">This ground station is not paired with the phone.</string>
+    <string name="phone_radio_failure_unauthorized">The ground station refused the phone\'s key. Pair it again.</string>
+    <string name="phone_radio_failure_ground_not_linked">The ground station has no drone linked yet, so it has no radio keys to share.</string>
+    <string name="phone_radio_failure_too_many">Too many phones are waiting on this ground station. Approve or reject them first.</string>
+    <string name="phone_radio_failure_invalid_key">The ground station rejected the phone\'s key.</string>
+    <string name="phone_radio_failure_network">The ground station could not be reached.</string>
+    <string name="phone_radio_failure_server">The ground station returned an error.</string>
+
+    <!-- Receiver -->
+    <string name="phone_radio_section_receiver">Receiver</string>
+    <string name="phone_radio_start">Start receiving</string>
+    <string name="phone_radio_stop">Stop receiving</string>
+    <string name="phone_radio_state_stopped">Stopped</string>
+    <string name="phone_radio_state_starting">Starting the radio…</string>
+    <string name="phone_radio_state_receiving">Receiving on channel %1$d</string>
+    <string name="phone_radio_state_failed">Stopped: %1$s</string>
+    <string name="phone_radio_failed_no_invite">no radio keys</string>
+    <string name="phone_radio_failed_keys_unreadable">radio keys could not be read just now; start again</string>
+    <string name="phone_radio_failed_no_dongle">no USB radio</string>
+    <string name="phone_radio_failed_no_permission">USB access not allowed</string>
+    <string name="phone_radio_failed_open">the radio did not start</string>
+    <string name="phone_radio_failed_service">the radio service stopped</string>
+    <string name="phone_radio_failed_radio">the radio stopped delivering frames</string>
+    <string name="phone_radio_needs">Needs a USB radio and radio keys.</string>
+
+    <string name="phone_radio_stat_channel">Channel</string>
+    <string name="phone_radio_stat_channel_value">%1$d (%2$d MHz)</string>
+    <string name="phone_radio_stat_rssi">Signal</string>
+    <string name="phone_radio_stat_rssi_value">%1$d dBm</string>
+    <string name="phone_radio_stat_snr">SNR</string>
+    <string name="phone_radio_stat_snr_value">%1$d dB</string>
+    <string name="phone_radio_stat_video">Video packets</string>
+    <string name="phone_radio_stat_telemetry">Telemetry packets</string>
+    <string name="phone_radio_stat_fec">FEC recovered</string>
+    <string name="phone_radio_stat_lost">Lost</string>
+    <string name="phone_radio_stat_decrypt">Decrypt errors</string>
+    <string name="phone_radio_stat_usb">USB frames</string>
+    <string name="phone_radio_stat_dropped">Dropped (phone busy)</string>
+    <string name="phone_radio_stat_hops">Channel hops followed</string>
+    <string name="phone_radio_per_second">%1$d/s</string>
+    <string name="phone_radio_no_value">—</string>
+    <string name="phone_radio_drones">Drones</string>
+    <string name="phone_radio_drone_slot">Slot %1$d</string>
+    <string name="phone_radio_drone_live">Live</string>
+    <string name="phone_radio_drone_stale">Stale</string>
+    <string name="phone_radio_drone_silent">Not heard</string>
+
+    <!-- Ground station side: approving phone receivers -->
+    <string name="phone_receivers_title">Phone receivers</string>
+    <string name="phone_receivers_empty">No phones are waiting. A phone asks from Settings → Phone radio.</string>
+    <string name="phone_receivers_hint">Approve only a request whose code matches the one on the phone. An approved phone receives this fleet\'s video and telemetry.</string>
+    <string name="phone_receivers_unnamed">Phone</string>
+    <string name="phone_receivers_code">Code %1$s</string>
+    <string name="phone_receivers_expires">Expires in %1$d s</string>
+    <string name="phone_receivers_approve">Approve</string>
+    <string name="phone_receivers_reject">Reject</string>
+    <string name="phone_receivers_loading">Checking for phones…</string>
+    <string name="phone_receivers_error">Could not read pending phones.</string>
+    <string name="phone_receivers_retry">Retry</string>
+    <string name="phone_receivers_action_failed">The ground station did not accept that.</string>
+</resources>

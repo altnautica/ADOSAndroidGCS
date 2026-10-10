@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<resources>
+    <string name="radio_service_channel">Phone radio</string>
+    <string name="radio_service_channel_description">Shown while the USB radio is receiving</string>
+    <string name="radio_service_title">Phone radio receiving</string>
+    <string name="radio_service_text">USB radio is listening for the drone link</string>
+</resources>

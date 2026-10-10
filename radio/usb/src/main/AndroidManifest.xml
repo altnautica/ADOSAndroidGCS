@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
+    <application>
+        <!-- The USB radio driver runs in its own process, isolated from the
+             app's main process. -->
+        <service
+            android:name="com.altnautica.gcs.radio.usb.UsbRadioService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"
+            android:process=":radio" />
+    </application>
+</manifest>
