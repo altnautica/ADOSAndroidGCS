@@ -1,45 +1,40 @@
 package com.altnautica.gcs.core.agent.di
 
-import com.altnautica.gcs.core.agent.http.AgentHostInterceptor
-import com.altnautica.gcs.core.agent.pairing.AgentAuthInterceptor
+import com.altnautica.gcs.core.agent.mavlink.AgentMavlinkTransportProvider
+import com.altnautica.gcs.core.agent.node.LanNodeSource
+import com.altnautica.gcs.core.model.NodeSource
+import com.altnautica.gcs.core.model.TransportProvider
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.serialization.json.Json
+import dagger.multibindings.IntoSet
 import okhttp3.OkHttpClient
-import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
-object AgentModule {
-
-    private const val TIMEOUT_SECONDS = 6L
+object AgentHttpModule {
 
     /**
-     * The one HTTP client for agent traffic. Requests are retargeted at the
-     * configured agent and carry the pairing key when one is stored. Nothing
-     * logs bodies or headers: they carry AP passphrases and the agent's
-     * full-authority key.
+     * The base client every agent call derives from (one connection pool).
+     * Nothing logs bodies or headers: they carry passphrases and node keys.
      */
     @Provides
     @Singleton
-    fun provideOkHttpClient(
-        hostInterceptor: AgentHostInterceptor,
-        authInterceptor: AgentAuthInterceptor,
-    ): OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(hostInterceptor)
-        .addInterceptor(authInterceptor)
-        .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        .build()
+    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder().build()
+}
 
-    /** Tolerant of fields an agent adds later; omits nulls from request bodies. */
-    @Provides
-    @Singleton
-    fun provideJson(): Json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-    }
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class AgentBindingsModule {
+
+    @Binds
+    @IntoSet
+    abstract fun bindLanNodeSource(source: LanNodeSource): NodeSource
+
+    @Binds
+    @IntoSet
+    abstract fun bindAgentMavlinkTransport(provider: AgentMavlinkTransportProvider): TransportProvider
 }

@@ -46,14 +46,3 @@ data class UnpairResponse(
     val status: String? = null,
     @SerialName("new_code") val newCode: String? = null,
 )
-
-/**
- * Raised when a request reached a paired agent without a usable key.
- *
- * Distinct from a transport failure so the UI can say "pair this device" rather
- * than "the ground station is unreachable" — the node answered, it refused.
- */
-class NotPairedError(message: String) : Exception(message)
-
-/** Raised when the agent is already claimed by another operator (HTTP 409). */
-class AlreadyPairedError(message: String) : Exception(message)

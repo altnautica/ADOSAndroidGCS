@@ -279,10 +279,3 @@ data class CameraSwitchResponse(
     val accepted: Boolean? = null,
     val reason: String? = null,
 )
-
-/**
- * Raised when the drone does not advertise multi-camera support (HTTP 501
- * from the camera-switch route), so the UI can show a capability notice
- * instead of a network error.
- */
-class CameraNotSupportedError(message: String) : Exception(message)

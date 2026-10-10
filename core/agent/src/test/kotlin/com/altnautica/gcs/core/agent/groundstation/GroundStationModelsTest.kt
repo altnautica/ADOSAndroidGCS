@@ -1,6 +1,6 @@
 package com.altnautica.gcs.core.agent.groundstation
 
-import com.altnautica.gcs.core.agent.di.AgentModule
+import com.altnautica.gcs.core.agent.http.AgentJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -8,7 +8,7 @@ import org.junit.Test
 
 class GroundStationModelsTest {
 
-    private val json = AgentModule.provideJson()
+    private val json = AgentJson.json
 
     @Test
     fun `status with missing optional fields and unknown extras decodes`() {
