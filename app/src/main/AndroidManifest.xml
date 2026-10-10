@@ -35,21 +35,40 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Ados">
+        android:theme="@style/Theme.Ados"
+        tools:targetApi="33">
 
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Pairing deep link: adosgcs://pair?code=<code>&host=<host> -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="pair"
+                    android:scheme="adosgcs" />
+            </intent-filter>
         </activity>
+
+        <!-- Keeps vehicle links alive in the background while any link is open. -->
+        <service
+            android:name=".link.LinkService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
         <!-- Shares tlog and recording files from app-specific storage -->
         <provider

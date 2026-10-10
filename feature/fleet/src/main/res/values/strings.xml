@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fleet_title">Fleet</string>
+    <string name="fleet_loading">Looking for nodes…</string>
+    <string name="fleet_empty_title">No nodes yet</string>
+    <string name="fleet_empty_message">Drones, ground stations and flight controllers you connect to appear here.</string>
+    <string name="fleet_connect">Connect</string>
+    <string name="fleet_fly">Fly</string>
+    <string name="fleet_open">Details</string>
+    <string name="fleet_battery">Battery %1$d%%</string>
+    <string name="fleet_battery_unknown">Battery —</string>
+    <string name="fleet_mode_unknown">Mode —</string>
+    <string name="fleet_armed">Armed</string>
+    <string name="fleet_disarmed">Disarmed</string>
+    <string name="fleet_carries">Carries %1$s</string>
+    <string name="fleet_thumbnail">Live video still from %1$s</string>
+    <string name="fleet_not_paired">Not paired</string>
+
+    <string name="reach_direct">DIRECT</string>
+    <string name="reach_lan">LAN</string>
+    <string name="reach_via_ground">VIA GROUND</string>
+    <string name="reach_cloud">CLOUD</string>
+    <string name="reach_cloud_queue">CLOUD QUEUE</string>
+    <string name="reach_phone_radio">PHONE RADIO</string>
+    <string name="reach_blocked_not_paired">NOT PAIRED</string>
+    <string name="reach_blocked_cloud_disabled">CLOUD OFF</string>
+    <string name="reach_blocked_signed_out">SIGNED OUT</string>
+    <string name="reach_blocked_no_grant">NO ACCESS</string>
+    <string name="reach_blocked_grant_expired">ACCESS EXPIRED</string>
+    <string name="reach_blocked_offline">OFFLINE</string>
+    <string name="reach_blocked_receive_only">RECEIVE ONLY</string>
+    <string name="reach_none">NO LINK</string>
+
+    <string name="liveness_live">Live</string>
+    <string name="liveness_stale">Stale</string>
+    <string name="liveness_offline">Offline</string>
+
+    <string name="profile_drone">Drone</string>
+    <string name="profile_ground_station">Ground station</string>
+    <string name="profile_workstation">Workstation</string>
+    <string name="profile_unknown">Node</string>
+</resources>

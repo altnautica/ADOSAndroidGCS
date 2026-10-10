@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.ados.android.compose)
     alias(libs.plugins.ados.android.hilt)
     alias(libs.plugins.baselineprofile)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // Build-time endpoints come from local.properties (gitignored) so that no
@@ -63,8 +64,41 @@ android {
 }
 
 baselineProfile {
-    // The profile is generated on demand by :baselineprofile and committed.
+    // The profile is generated on demand by :baselineprofile and committed under
+    // src/main/generated/baselineProfiles so every build type ships it.
     automaticGenerationDuringBuild = false
+    mergeIntoMain = true
+}
+
+/**
+ * Copies the repository's THIRD_PARTY_NOTICES.md into generated assets so the
+ * in-app licences screen always shows the committed file, never a hand copy.
+ */
+abstract class CopyThirdPartyNotices : DefaultTask() {
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val notices: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        notices.get().asFile.copyTo(out.resolve("THIRD_PARTY_NOTICES.md"), overwrite = true)
+    }
+}
+
+val copyThirdPartyNotices = tasks.register<CopyThirdPartyNotices>("copyThirdPartyNotices") {
+    notices.set(rootProject.layout.projectDirectory.file("THIRD_PARTY_NOTICES.md"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(copyThirdPartyNotices, CopyThirdPartyNotices::outputDir)
+    }
 }
 
 dependencies {
@@ -104,6 +138,8 @@ dependencies {
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.androidx.profileinstaller)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.lifecycle.service)
 
     baselineProfile(projects.baselineprofile)
 

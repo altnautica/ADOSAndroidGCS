@@ -8,10 +8,17 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.designsystem)
     implementation(projects.core.agent)
+    implementation(projects.core.link)
     implementation(projects.core.extensions)
-    implementation(projects.core.video)
+    implementation(projects.radio.rx)
+    implementation(projects.feature.fleet)
+    implementation(projects.feature.configure)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+
+    testImplementation(libs.kotlinx.serialization.json)
 }

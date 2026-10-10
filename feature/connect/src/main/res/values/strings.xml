@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connect_title">Connect</string>
+    <string name="connect_back">Back</string>
+    <string name="connect_discovered">On this network</string>
+    <string name="connect_searching">Searching for ADOS nodes…</string>
+    <string name="connect_paired_here">Paired</string>
+    <string name="connect_paired_elsewhere">Paired elsewhere, needs its API key</string>
+    <string name="connect_ready_to_pair">Ready to pair</string>
+    <string name="connect_other_ways">Other ways to connect</string>
+
+    <string name="connect_code">Enter pairing code</string>
+    <string name="connect_code_summary">The code shown on the node\'s screen or dashboard</string>
+    <string name="connect_code_help">Enter the pairing code the node shows. The phone and the node must be on the same network.</string>
+    <string name="connect_code_field">Pairing code</string>
+    <string name="connect_pair">Pair</string>
+
+    <string name="connect_manual_host">Manual host</string>
+    <string name="connect_manual_host_summary">Address of an agent, with its API key if it is already paired</string>
+    <string name="connect_host_help">Enter the node\'s address. An unpaired node is paired to this phone; a node paired elsewhere needs its API key.</string>
+    <string name="connect_host_field">Host or IP address</string>
+    <string name="connect_key_field">API key (optional)</string>
+    <string name="connect_key_help">Only for a node already paired with another GCS</string>
+    <string name="connect_needs_key">%1$s is already paired. Enter its API key to add it here.</string>
+    <string name="connect_add_with_key">Add with key</string>
+
+    <string name="connect_usb">USB flight controller</string>
+    <string name="connect_usb_summary">A flight controller plugged into this phone</string>
+    <string name="connect_usb_none">No USB serial device is attached. Plug in the flight controller with an OTG cable.</string>
+    <string name="connect_usb_ready">Ready</string>
+    <string name="connect_usb_permission">Tap to allow USB access</string>
+    <string name="connect_baud">Baud rate</string>
+
+    <string name="connect_network">UDP / TCP</string>
+    <string name="connect_network_summary">MAVLink over the network, from a radio bridge or simulator</string>
+    <string name="connect_udp_help">Listens for MAVLink on this phone and replies to the last sender.</string>
+    <string name="connect_tcp_help">Connects to a MAVLink TCP server.</string>
+    <string name="connect_listen_port">Listen port</string>
+    <string name="connect_port">Port</string>
+    <string name="connect_add">Add</string>
+
+    <string name="connect_wifi">Ground station Wi-Fi</string>
+    <string name="connect_wifi_summary">Join a ground station\'s access point</string>
+    <string name="connect_wifi_help">Paste the ground station\'s Wi-Fi join string (the code its screen shows) or type its passphrase.</string>
+    <string name="connect_wifi_field">Join string or passphrase</string>
+    <string name="connect_wifi_join">Join</string>
+    <string name="connect_wifi_joined">Joined the ground station network</string>
+    <string name="connect_wifi_find">Find the ground station</string>
+    <string name="connect_wifi_rationale_nearby">Joining asks for the nearby Wi-Fi devices permission. It is used only to join this network, never for location.</string>
+    <string name="connect_wifi_rationale_location">Android requires the location permission to join a Wi-Fi network. It is used only to join this network.</string>
+    <string name="connect_wifi_denied">Permission denied. Allow it in system settings to join from the app.</string>
+
+    <string name="connect_cloud">Cloud sign-in</string>
+    <string name="connect_cloud_summary">Reach your drones over the internet with your account</string>
+
+    <string name="connect_phone_radio">Phone radio</string>
+    <string name="connect_phone_radio_summary">Receive video and telemetry with a radio adapter plugged into this phone</string>
+
+    <string name="connect_demo">Demo</string>
+    <string name="connect_demo_summary">A simulated drone to try the app</string>
+    <string name="connect_demo_on">Demo drone is on</string>
+
+    <string name="connect_error_code_not_found">No node on this network shows that code. Try the manual host.</string>
+    <string name="connect_error_already_paired">This node is already paired. Enter its API key.</string>
+    <string name="connect_error_unauthorized">The node rejected the key.</string>
+    <string name="connect_error_unreachable">The node did not answer. Check the address and network.</string>
+    <string name="connect_error_invalid">The node gave an answer this app cannot use.</string>
+    <string name="connect_error_other">Could not connect.</string>
+
+    <string name="connect_input_required">Required</string>
+    <string name="connect_input_port">Port must be 1 to 65535</string>
+    <string name="connect_input_host">Not a valid host</string>
+    <string name="connect_input_code">Codes use letters and digits, without I, O, 0 or 1</string>
+    <string name="connect_input_key">Too short</string>
+</resources>
