@@ -289,11 +289,11 @@ private fun AdosColorRoles.mapPalette() = MapPalette(
     background = bgCanvas.toArgb(),
     missionPath = accentPrimary.toArgb(),
     trail = hudPrimary.toArgb(),
-    track = accentSecondary.toArgb(),
-    surveyPreview = accentSecondary.toArgb(),
+    track = fgPrimary.toArgb(),
+    surveyPreview = accentPrimaryHover.toArgb(),
     fenceInclusion = statusSuccess.toArgb(),
     fenceExclusion = statusError.toArgb(),
-    survey = accentSecondary.toArgb(),
+    survey = accentPrimaryHover.toArgb(),
     draft = fgSecondary.toArgb(),
 )
 
@@ -304,7 +304,7 @@ private fun AdosColorRoles.iconPalette() = IconPalette(
     returnHome = statusSerious.toArgb(),
     loiter = hudDim.toArgb(),
     roi = hudMuted.toArgb(),
-    selected = accentSecondary.toArgb(),
+    selected = fgPrimary.toArgb(),
     home = statusSuccess.toArgb(),
     rally = statusWarning.toArgb(),
     vehicle = hudPrimary.toArgb(),

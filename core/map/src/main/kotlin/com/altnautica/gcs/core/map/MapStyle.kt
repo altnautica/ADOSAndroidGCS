@@ -65,7 +65,7 @@ object MapStyle {
                 buildJsonObject {
                     put("id", "background")
                     put("type", "background")
-                    putJsonObject("paint") { put("background-color", cssColor(palette?.background ?: 0xFF0A0A0F.toInt())) }
+                    putJsonObject("paint") { put("background-color", cssColor(palette?.background ?: 0xFF000000.toInt())) }
                 },
             )
             add(

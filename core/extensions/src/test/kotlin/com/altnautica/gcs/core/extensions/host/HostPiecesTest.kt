@@ -59,12 +59,12 @@ class HostPiecesTest {
     @Test
     fun themeVariablesMatchTheExtensionContract() {
         val dark = ExtensionTheme.cssVariables(AdosColors.BrandDark)
-        assertEquals(33, dark.size)
-        assertEquals("#0A0A0F", dark["--bg-primary"])
-        assertEquals("#121A2E", dark["--bg-tertiary"])
+        assertEquals(32, dark.size)
+        assertEquals("#000000", dark["--bg-primary"])
+        assertEquals("#141414", dark["--bg-tertiary"])
         assertEquals("#5B9AFF", dark["--hud-primary"])
-        assertEquals("rgba(9, 15, 28, 0.58)", dark["--hud-glass"])
-        assertEquals("rgba(120, 160, 210, 0.22)", dark["--hud-hair"])
+        assertEquals("rgba(0, 0, 0, 0.58)", dark["--hud-glass"])
+        assertEquals("rgba(255, 255, 255, 0.16)", dark["--hud-hair"])
         val nvg = ExtensionTheme.cssVariables(AdosColors.Nvg)
         assertEquals("#000000", nvg["--bg-primary"])
         assertEquals("rgba(0, 17, 0, 0.8)", nvg["--hud-glass"])

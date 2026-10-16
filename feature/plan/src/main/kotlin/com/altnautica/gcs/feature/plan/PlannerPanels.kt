@@ -575,7 +575,7 @@ private fun AltitudeProfile(state: PlannerUiState) {
     val selected = (state.selection as? Selection.Item)?.id
     val line = colors.accentPrimary
     val grid = colors.hudHair
-    val mark = colors.accentSecondary
+    val mark = colors.fgPrimary
     Canvas(
         Modifier
             .fillMaxWidth()

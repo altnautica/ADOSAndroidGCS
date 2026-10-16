@@ -13,14 +13,14 @@ import org.junit.Test
 class MapStyleTest {
 
     private val palette = MapPalette(
-        background = 0xFF0A0A0F.toInt(),
+        background = 0xFF000000.toInt(),
         missionPath = 0xFF3A82FF.toInt(),
         trail = 0xFF5B9AFF.toInt(),
-        track = 0xFFDFF140.toInt(),
-        surveyPreview = 0xFFDFF140.toInt(),
+        track = 0xFF3A82FF.toInt(),
+        surveyPreview = 0xFF3A82FF.toInt(),
         fenceInclusion = 0xFF22C55E.toInt(),
         fenceExclusion = 0xFFEF4444.toInt(),
-        survey = 0xFFDFF140.toInt(),
+        survey = 0xFF3A82FF.toInt(),
         draft = 0xFF94A3B8.toInt(),
     )
 

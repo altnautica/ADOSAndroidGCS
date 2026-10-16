@@ -22,7 +22,6 @@ object ExtensionTheme {
         "--text-tertiary" to css(roles.fgTertiary),
         "--accent-primary" to css(roles.accentPrimary),
         "--accent-primary-hover" to css(roles.accentPrimaryHover),
-        "--accent-secondary" to css(roles.accentSecondary),
         "--accent-foreground" to css(roles.accentForeground),
         "--border-default" to css(roles.borderDefault),
         "--border-strong" to css(roles.borderStrong),

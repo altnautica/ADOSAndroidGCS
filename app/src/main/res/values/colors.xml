@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Same value as the brand-dark bg.canvas token. -->
-    <color name="ados_window_background">#FF0A0A0F</color>
+    <color name="ados_window_background">#FF000000</color>
 </resources>
