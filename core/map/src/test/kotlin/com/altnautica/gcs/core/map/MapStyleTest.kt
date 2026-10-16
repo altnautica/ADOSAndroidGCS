@@ -21,7 +21,7 @@ class MapStyleTest {
         fenceInclusion = 0xFF22C55E.toInt(),
         fenceExclusion = 0xFFEF4444.toInt(),
         survey = 0xFF3A82FF.toInt(),
-        draft = 0xFF94A3B8.toInt(),
+        draft = 0xFFB4B4B4.toInt(),
     )
 
     @Test
