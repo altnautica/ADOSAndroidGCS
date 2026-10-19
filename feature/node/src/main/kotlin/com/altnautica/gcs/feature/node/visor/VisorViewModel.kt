@@ -124,12 +124,11 @@ class VisorViewModel @AssistedInject constructor(
 
     /** The preview cameras come from the session; before one runs, from the rig's camera sensors. */
     internal suspend fun resolvePreview() {
-        if (id == DemoNode.VISOR_ID) {
-            _state.update { it.copy(preview = DemoVideoFactory.SOURCE) }
-            return
+        // The extension serves each capture camera at `atlas/capture/whep?camera=<id>` under its plugin mount;
+        // the demo Visor draws a labelled test pattern per camera instead.
+        if (id != DemoNode.VISOR_ID) {
+            whepBase = endpoints.endpointFor(id)?.url(AgentCaptureApi.route("atlas/capture/"))?.toString()
         }
-        // The extension serves each capture camera at `atlas/capture/whep?camera=<id>` under its plugin mount.
-        whepBase = endpoints.endpointFor(id)?.url(AgentCaptureApi.route("atlas/capture/"))?.toString()
         if (_state.value.cameras.isEmpty()) {
             val rig = apis.sensors(id)?.sensors()?.getOrNull()?.takeIf { it.present }
             rig?.sensors?.filter { it.kind == "camera" }?.map { it.id }?.takeIf { it.isNotEmpty() }?.let(::setCameras)
@@ -152,11 +151,16 @@ class VisorViewModel @AssistedInject constructor(
     }
 
     private fun updatePreview() {
-        if (id == DemoNode.VISOR_ID) return
         _state.update { s ->
             val base = whepBase
             val camera = s.previewCamera
-            s.copy(preview = if (base != null && camera != null) VideoSource.AgentWhep(id, base, camera) else null)
+            s.copy(
+                preview = when {
+                    id == DemoNode.VISOR_ID -> DemoVideoFactory.source(camera)
+                    base != null && camera != null -> VideoSource.AgentWhep(id, base, camera)
+                    else -> null
+                },
+            )
         }
     }
 

@@ -31,6 +31,26 @@ class GroundStationModelsTest {
     }
 
     @Test
+    fun adaptersAcceptNullFecAndAbsentReceivePlane() {
+        val multi = RadioAdapters.parse(
+            obj("""{"present":true,"adapters":[{"iface":"wlan1","role":"rxtx","tx_active":true,"rssi_dbm":[-48,-51],"packets":100,"lost":3,"fec_rec":null},
+                {"iface":"wlan2","role":"rx","rssi_dbm":[-50],"packets":90,"lost":4,"fec_rec":null}],
+                "diversity":{"rx_adapters":2,"combined_loss_pct":0.1,"best_single_loss_pct":1.2}}"""),
+        )
+        assertEquals(listOf("wlan1", "wlan2"), multi.adapters.map { it.iface })
+        assertNull(multi.adapters[0].fecRec)
+        assertEquals(listOf(-48.0, -51.0), multi.adapters[0].rssiDbm)
+        assertEquals(2, multi.diversity!!.rxAdapters)
+
+        val absent = RadioAdapters.parse(obj("""{"present":false,"adapters":[],"diversity":null}"""))
+        assertEquals(false, absent.present)
+        assertTrue(absent.adapters.isEmpty())
+        assertNull(absent.diversity)
+
+        assertEquals(540L, RadioAdapters.parse(obj("""{"present":true,"adapters":[{"iface":"wlan1","fec_rec":540}]}""")).adapters[0].fecRec)
+    }
+
+    @Test
     fun radioPrefersLiveWfbChannelAndPower() {
         val r = RadioLink.parse(
             obj("""{"link":{"channel":36,"rssi_dbm":-52,"fec_recovered":3,"link_diag":"healthy"},"role":{"current":"direct"}}"""),

@@ -7,7 +7,10 @@ import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.feature.node.common.PageProblem
 
 /** Exposure state as the capture tab edits it. */
-data class ExposureUi(val locked: Boolean, val exposureUs: Long?, val gain: Double?, val mode: String?) {
+data class ExposureUi(val locked: Boolean, val exposureUs: Long?, val gain: Double?, val mode: String?, val applied: Boolean = false) {
+    /** The lock was requested but the agent has not set it on the sensor yet. */
+    val pendingApply: Boolean get() = locked && !applied
+
     fun toWire() = CaptureExposure(locked = locked, exposureUs = exposureUs, gain = gain, mode = mode)
 }
 
@@ -73,7 +76,7 @@ data class CaptureUi(
                 .filter { it.id in CHIP_ORDER }
                 .sortedBy { CHIP_ORDER.indexOf(it.id) }
                 .map { HealthChip(it.id, level(it.level), it.value) },
-            exposure = s.exposure?.let { ExposureUi(it.locked, it.exposureUs, it.gain, it.mode) },
+            exposure = s.exposure?.let { ExposureUi(it.locked, it.exposureUs, it.gain, it.mode, it.applied) },
             freeBytes = s.storage?.freeBytes,
             estRemainingS = s.storage?.estRemainingS,
             cameraIds = s.frames?.perCamera.orEmpty().map { it.id },

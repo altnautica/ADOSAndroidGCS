@@ -161,8 +161,9 @@ class GroundStationViewModel @AssistedInject constructor(
         val status = client.requestJson("GET", "api/v1/ground-station/status")
         if (status is AgentResult.Err) return fail(NodeTab.Radio, PageProblem.from(status.error))
         val wfb = client.requestJson("GET", "api/v1/ground-station/wfb").getOrNull() as? JsonObject
+        val adapters = (client.requestJson("GET", "api/v1/radio/adapters").getOrNull() as? JsonObject)?.let(RadioAdapters::parse)
         val obj = status.getOrNull() as? JsonObject ?: JsonObject(emptyMap())
-        _state.update { it.copy(radio = Load.Ready(RadioLink.parse(obj, wfb))) }
+        _state.update { it.copy(radio = Load.Ready(RadioLink.parse(obj, wfb).copy(adapters = adapters))) }
     }
 
     fun setChannel(channel: Int) = write("channel") { c, force -> c.groundStation.putWfb(channel, force) }

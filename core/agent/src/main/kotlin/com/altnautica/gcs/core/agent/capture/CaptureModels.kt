@@ -64,6 +64,8 @@ data class CaptureExposure(
     val gain: Double? = null,
     /** `walking` | `slow` | `short`. */
     val mode: String? = null,
+    /** False until the agent has set the sensor's exposure/gain; [locked] is the operator's request. */
+    val applied: Boolean = false,
 )
 
 @Serializable

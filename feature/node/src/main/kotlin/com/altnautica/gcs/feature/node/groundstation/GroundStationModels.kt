@@ -75,6 +75,8 @@ data class RadioLink(
     val txPowerDbm: Double?,
     val mcsIndex: Int?,
     val role: String?,
+    /** `GET /api/v1/radio/adapters`; null when the agent does not serve it. */
+    val adapters: RadioAdapters? = null,
 ) {
     companion object {
         fun parse(status: JsonObject, wfb: JsonObject?): RadioLink {

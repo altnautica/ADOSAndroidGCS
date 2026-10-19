@@ -2,6 +2,9 @@ package com.altnautica.gcs.feature.node.visor
 
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.capture.CaptureApi
+import com.altnautica.gcs.core.agent.capture.CaptureExposure
+import com.altnautica.gcs.core.link.direct.DemoNode
+import com.altnautica.gcs.feature.node.demo.DemoVisorSensors
 import com.altnautica.gcs.core.agent.capture.CaptureMarkResponse
 import com.altnautica.gcs.core.agent.capture.CaptureSessions
 import com.altnautica.gcs.core.agent.capture.CaptureState
@@ -222,5 +225,44 @@ class VisorViewModelTest {
         assertEquals("http://192.168.1.50:8080/api/plugins/com.altnautica.world-engine/x/atlas/capture", preview.baseUrl)
         assertEquals("cam_fl", preview.streamId)
         assertEquals(listOf("cam_fl"), vm.state.value.cameras)
+    }
+
+    @Test
+    fun aLockNotYetAppliedIsPending() {
+        val pending = CaptureUi.from(recording)
+        assertTrue(pending.exposure!!.pendingApply)
+        val applied = recording.copy(exposure = recording.exposure!!.copy(applied = true))
+        assertEquals(false, CaptureUi.from(applied).exposure!!.pendingApply)
+        // The request body never carries the agent-owned flag.
+        assertEquals(false, AgentJson.json.encodeToString(CaptureExposure.serializer(), pending.exposure!!.toWire()).contains("applied"))
+    }
+
+    @Test
+    fun aNullExpectedRateGivesNoVerdict() {
+        val s = AgentJson.json.decodeFromString(
+            SensorsStatus.serializer(),
+            """{"present":true,"sensors":[{"id":"cam_fl","kind":"camera","rate_hz":3.0,"expected_hz":null},
+               {"id":"imu0","kind":"imu","rate_hz":500.0,"expected_hz":1000.0}]}""",
+        )
+        val rows = VisorOverviewMapper.sensors(s).sensors
+        assertNull(rows[0].expectedHz)
+        assertEquals(false, rows[0].slow)
+        assertTrue(rows[1].slow)
+    }
+
+    @Test
+    fun demoCameraChipsSwitchThePreview() = runTest(dispatcher) {
+        val demo = DemoNode.VISOR_ID
+        val demoApis = mockk<NodeApis> {
+            coEvery { capture(demo) } returns null
+            coEvery { sensors(demo) } returns DemoVisorSensors()
+        }
+        val vm = VisorViewModel(demo.value, demoApis, mockk<AgentEndpoints>(relaxed = true))
+        vm.resolvePreview()
+        assertEquals(listOf("cam_fl", "cam_fr"), vm.state.value.cameras)
+        assertEquals("cam_fl", (vm.state.value.preview as VideoSource.AgentWhep).streamId)
+
+        vm.selectCamera("cam_fr")
+        assertEquals("cam_fr", (vm.state.value.preview as VideoSource.AgentWhep).streamId)
     }
 }

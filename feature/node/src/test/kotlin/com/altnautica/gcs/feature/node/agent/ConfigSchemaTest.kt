@@ -19,7 +19,8 @@ class ConfigSchemaTest {
           "properties": {
             "agent": {"${'$'}ref": "#/${'$'}defs/AgentConfig"},
             "video": {"${'$'}ref": "#/${'$'}defs/VideoConfig"},
-            "network": {"${'$'}ref": "#/${'$'}defs/NetworkConfig"}
+            "network": {"${'$'}ref": "#/${'$'}defs/NetworkConfig"},
+            "cameras": {"type": "array", "items": {"type": "object"}}
           },
           "${'$'}defs": {
             "AgentConfig": {"title": "AgentConfig", "type": "object", "properties": {
@@ -27,8 +28,7 @@ class ConfigSchemaTest {
             }},
             "VideoConfig": {"title": "VideoConfig", "type": "object", "properties": {
               "camera": {"${'$'}ref": "#/${'$'}defs/CameraConfig"},
-              "lcd_fps_cap": {"type": "integer", "minimum": 1, "maximum": 60},
-              "cameras": {"type": "array", "items": {"type": "object"}}
+              "lcd_fps_cap": {"type": "integer", "minimum": 1, "maximum": 60}
             }},
             "CameraConfig": {"title": "CameraConfig", "type": "object", "properties": {
               "encoder": {"type": "string", "enum": ["auto", "omx", "v4l2m2m", "software"]},
@@ -54,7 +54,7 @@ class ConfigSchemaTest {
         assertNotNull(camera)
         assertEquals("Camera", camera!!.title)
         assertEquals("Name", schema.leaf("agent.name")!!.title)
-        assertEquals(listOf("agent", "video", "network"), schema.root.children.map { it.key })
+        assertEquals(listOf("agent", "video", "network", "cameras"), schema.root.children.map { it.key })
     }
 
     @Test
@@ -64,7 +64,7 @@ class ConfigSchemaTest {
         assertEquals(FieldType.Integer(0, null), schema.leaf("video.camera.fps")!!.type)
         assertEquals(FieldType.Integer(1, 60), schema.leaf("video.lcd_fps_cap")!!.type)
         assertEquals(FieldType.Bool, schema.leaf("video.camera.hflip")!!.type)
-        assertEquals(FieldType.Json, schema.leaf("video.cameras")!!.type)
+        assertEquals(FieldType.Json, schema.leaf("cameras")!!.type)
         assertTrue(schema.leaf("video.camera.source")!!.nullable)
         assertTrue(schema.leaf("network.hotspot.password")!!.secret)
         assertEquals(FieldType.Decimal(0.5, null), schema.leaf("network.hotspot.threshold")!!.type)
@@ -83,7 +83,7 @@ class ConfigSchemaTest {
         val source = schema.leaf("video.camera.source")!!
         assertEquals(ConfigValueCodec.Parsed.Ok(JsonNull), ConfigValueCodec.encode(source, ""))
 
-        val cameras = schema.leaf("video.cameras")!!
+        val cameras = schema.leaf("cameras")!!
         assertTrue(ConfigValueCodec.encode(cameras, "[{\"id\":\"cam0\"}]") is ConfigValueCodec.Parsed.Ok)
         assertEquals(ConfigValueCodec.Parsed.Invalid(ConfigValueCodec.Reason.NotJson), ConfigValueCodec.encode(cameras, "[{"))
     }

@@ -66,6 +66,7 @@
     <string name="visor_exposure">Exposure</string>
     <string name="visor_exposure_lock">Lock exposure</string>
     <string name="visor_exposure_lock_summary">Keeps brightness constant within a room segment.</string>
+    <string name="visor_exposure_not_applied">Requested, not applied yet on the sensor.</string>
     <string name="visor_exposure_mode">Mode</string>
     <string name="visor_exposure_mode_walking">Walking</string>
     <string name="visor_exposure_mode_slow">Slow</string>

@@ -48,7 +48,10 @@ class DemoVideoFactory @Inject constructor(
         val DEMO_NODE = DeviceId("demo-copter")
 
         /** The source the selector offers for the demo node. */
-        val SOURCE: VideoSource = VideoSource.AgentWhep(DEMO_NODE, "http://127.0.0.1/", null)
+        val SOURCE: VideoSource = source(null)
+
+        /** A demo source for one named stream; the pattern is labelled with it so a switch is visible. */
+        fun source(stream: String?): VideoSource = VideoSource.AgentWhep(DEMO_NODE, "http://127.0.0.1/", stream)
     }
 }
 
@@ -144,7 +147,8 @@ private class DemoVideoSession(
             drawLine(-w, h / 2 + pitchPx, 2 * w, h / 2 + pitchPx, line)
         }
         val inset = 24f * DEMO_BUFFER_SCALE
-        canvas.drawText("DEMO", inset, h - inset, text)
+        val label = (source as? VideoSource.AgentWhep)?.streamId?.let { "DEMO · $it" } ?: "DEMO"
+        canvas.drawText(label, inset, h - inset, text)
     }
 
     private companion object {

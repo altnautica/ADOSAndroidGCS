@@ -38,7 +38,7 @@ class DemoCaptureApi(private val now: () -> Long = System::currentTimeMillis) : 
     private var floor = 0
     private var room: String? = null
     private var segment = 0
-    private var exposure = CaptureExposure(locked = true, exposureUs = 4_000, gain = 2.0, mode = "walking")
+    private var exposure = CaptureExposure(locked = true, exposureUs = 4_000, gain = 2.0, mode = "walking", applied = true)
     private val sessions = mutableListOf(
         session("demo-visor-20261019T091200Z-1a2b", 412.0, listOf("Lobby", "Hall"), uploaded = true, state = "committed"),
         session("demo-visor-20261019T094500Z-7c3d", 268.5, listOf("Dock", "Aisle 1", "Aisle 2"), uploaded = false, state = "idle"),
@@ -141,8 +141,9 @@ class DemoCaptureApi(private val now: () -> Long = System::currentTimeMillis) : 
     }
 
     override suspend fun exposure(exposure: CaptureExposure): AgentResult<CaptureExposure> {
-        this.exposure = exposure
-        return AgentResult.Ok(exposure)
+        // The demo sensor takes every request at once.
+        this.exposure = exposure.copy(applied = true)
+        return AgentResult.Ok(this.exposure)
     }
 
     override suspend fun sessions(): AgentResult<CaptureSessions> {

@@ -1,6 +1,13 @@
+* text=auto eol=lf
 # Windows batch scripts need CRLF in the working tree; the repository stores LF.
 *.bat text eol=crlf
 gradlew text eol=lf
 *.jar binary
 *.ttf binary
 *.png binary
+*.webp binary
+*.jpg binary
+*.so binary
+*.keystore binary
+# Stored with CRLF upstream; kept byte-identical.
+core/designsystem/src/main/assets/licenses/space-grotesk-OFL.txt -text

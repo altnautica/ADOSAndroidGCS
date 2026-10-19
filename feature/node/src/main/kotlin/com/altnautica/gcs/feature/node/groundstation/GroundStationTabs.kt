@@ -117,6 +117,7 @@ private fun RadioView(r: RadioLink, busy: Boolean, onChannel: (Int) -> Unit, onT
         KeyValueRow(stringResource(R.string.agent_wfb_loss), r.lossPercent.fmt(1, " %"))
         KeyValueRow(stringResource(R.string.gs_radio_mcs), r.mcsIndex.fmtInt())
     }
+    r.adapters?.let { RadioAdaptersView(it) }
     NodeCard(stringResource(R.string.gs_radio_settings)) {
         val channel = r.channel
         SelectSettingRow(

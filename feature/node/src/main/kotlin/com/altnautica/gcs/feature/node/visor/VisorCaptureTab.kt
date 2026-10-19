@@ -254,7 +254,7 @@ private fun ExposureCard(exposure: ExposureUi?, busy: Boolean, onChange: (Exposu
             checked = exposure.locked,
             onCheckedChange = { onChange(exposure.copy(locked = it)) },
             enabled = !busy,
-            summary = stringResource(R.string.visor_exposure_lock_summary),
+            summary = stringResource(if (exposure.pendingApply) R.string.visor_exposure_not_applied else R.string.visor_exposure_lock_summary),
         )
         val modeLabels = EXPOSURE_MODES.associateWith { exposureModeLabel(it) }
         SelectSettingRow(

@@ -187,6 +187,17 @@
     <string name="gs_radio_mcs">MCS</string>
     <string name="gs_radio_settings">Radio settings</string>
     <string name="gs_radio_channel_unknown">Current channel unknown</string>
+    <string name="gs_adapter_role">Role</string>
+    <string name="gs_adapter_tx">transmitting</string>
+    <string name="gs_adapter_antenna">Antenna</string>
+    <string name="gs_adapter_rssi">RSSI per chain</string>
+    <string name="gs_adapter_packets">Packets / lost</string>
+    <string name="gs_adapter_fec">FEC recovered</string>
+    <string name="gs_adapter_fec_per_stream">Per stream, not per adapter</string>
+    <string name="gs_adapter_diversity">Receive diversity</string>
+    <string name="gs_adapter_rx_count">Receiving adapters</string>
+    <string name="gs_adapter_combined_loss">Combined loss</string>
+    <string name="gs_adapter_best_loss">Best single adapter loss</string>
 
     <string name="gs_net_uplink">Uplink</string>
     <string name="gs_net_active_uplink">Active uplink</string>
