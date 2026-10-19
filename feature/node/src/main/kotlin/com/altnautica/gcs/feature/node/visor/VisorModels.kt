@@ -4,10 +4,12 @@ import com.altnautica.gcs.core.agent.capture.CaptureExposure
 import com.altnautica.gcs.core.agent.capture.CaptureSession
 import com.altnautica.gcs.core.agent.capture.CaptureState
 import com.altnautica.gcs.core.agent.http.AgentError
-import com.altnautica.gcs.core.agent.sensors.ClockStatus
-import com.altnautica.gcs.core.agent.sensors.SensorsStatus
-import com.altnautica.gcs.core.agent.sensors.StorageStatus
 import com.altnautica.gcs.feature.node.common.PageProblem
+
+/** Exposure state as the capture tab edits it. */
+data class ExposureUi(val locked: Boolean, val exposureUs: Long?, val gain: Double?, val mode: String?) {
+    fun toWire() = CaptureExposure(locked = locked, exposureUs = exposureUs, gain = gain, mode = mode)
+}
 
 enum class CaptureMode { Idle, Recording, Paused, Closing }
 
@@ -35,9 +37,11 @@ data class CaptureUi(
     val loopClosed: Boolean?,
     val distanceFromStartM: Double?,
     val chips: List<HealthChip>,
-    val exposure: CaptureExposure?,
+    val exposure: ExposureUi?,
     val freeBytes: Long?,
     val estRemainingS: Long?,
+    /** Capture cameras the session reports, in agent order; the preview picks from these. */
+    val cameraIds: List<String>,
 ) {
     companion object {
         /** Chip order is fixed so the row does not reshuffle between polls. */
@@ -69,9 +73,10 @@ data class CaptureUi(
                 .filter { it.id in CHIP_ORDER }
                 .sortedBy { CHIP_ORDER.indexOf(it.id) }
                 .map { HealthChip(it.id, level(it.level), it.value) },
-            exposure = s.exposure,
+            exposure = s.exposure?.let { ExposureUi(it.locked, it.exposureUs, it.gain, it.mode) },
             freeBytes = s.storage?.freeBytes,
             estRemainingS = s.storage?.estRemainingS,
+            cameraIds = s.frames?.perCamera.orEmpty().map { it.id },
         )
 
         /** An unknown level is shown as a warning, never as OK. */
@@ -129,20 +134,6 @@ data class SessionUi(
 
 /** Reconstruction presets offered on the sessions tab. */
 enum class ReconstructPreset(val wire: String) { Preview("preview"), Hq("hq"), Tour("tour"), Warehouse("warehouse") }
-
-/** The Visor rows on the overview tab; each block is null when its service is not fitted. */
-data class VisorOverview(
-    val clock: ClockStatus?,
-    val storage: StorageStatus?,
-    val sensors: SensorsStatus?,
-) {
-    /** Rig sensors running below 90 % of their expected rate (or silent). */
-    val slowSensors: Int get() = sensors?.sensors.orEmpty().count { s ->
-        val expected = s.expectedHz ?: return@count false
-        val rate = s.rateHz ?: return@count true
-        expected > 0 && rate < expected * 0.9
-    }
-}
 
 enum class CaptureAction { Start, Stop, Pause, Resume, Mark, Exposure, Upload, Reconstruct, Delete }
 

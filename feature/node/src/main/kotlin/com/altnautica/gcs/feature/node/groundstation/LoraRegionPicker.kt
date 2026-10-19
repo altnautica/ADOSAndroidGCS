@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.altnautica.gcs.core.agent.sensors.LoraRegionPlan
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
@@ -152,9 +151,9 @@ private fun OptionRow(selected: Boolean, title: String, detail: String?, onClick
 }
 
 @Composable
-private fun planDetail(plan: LoraRegionPlan): String {
+private fun planDetail(plan: RegionOptionUi): String {
     val rules = if (plan.rules.isEmpty()) stringResource(R.string.gs_lora_picker_unverified) else plan.rules.map { ruleName(it) }.joinToString(", ")
-    val module = stringResource(if (plan.supportedByModule) R.string.gs_lora_picker_module_ok else R.string.gs_lora_picker_module_no)
+    val module = stringResource(if (plan.moduleOk) R.string.gs_lora_picker_module_ok else R.string.gs_lora_picker_module_no)
     return listOfNotNull(band(plan.bandMhz), rules, module).joinToString(" · ")
 }
 

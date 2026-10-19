@@ -115,4 +115,9 @@
     <string name="gs_lora_picker_apply">Apply</string>
     <string name="gs_lora_confirm_title">Change region?</string>
     <string name="gs_lora_confirm_message">Change the LoRa region from %1$s to %2$s? The governor applies the new band plan at once.</string>
+    <string name="gs_lora_now">Now</string>
+    <string name="gs_lora_dwell_value">%1$d / %2$d ms</string>
+    <string name="gs_lora_dwell_value_per">%1$d / %2$d ms per %3$d s</string>
+    <string name="gs_lora_mismatch_elrs">ELRS module %1$s is %2$s, region expects %3$s</string>
+    <string name="gs_lora_mismatch_meshtastic">Meshtastic preset %1$s differs from region %2$s</string>
 </resources>

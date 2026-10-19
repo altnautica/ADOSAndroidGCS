@@ -6,6 +6,13 @@ import com.altnautica.gcs.core.agent.http.AgentJson
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.sensors.LoraRule
 import com.altnautica.gcs.core.agent.sensors.LoraStatus
+import com.altnautica.gcs.core.agent.sensors.BaseModeRequest
+import com.altnautica.gcs.core.agent.sensors.CrsfModule
+import com.altnautica.gcs.core.agent.sensors.CrsfStatus
+import com.altnautica.gcs.core.agent.sensors.GnssStatus
+import com.altnautica.gcs.core.agent.sensors.LoraBeacons
+import com.altnautica.gcs.core.agent.sensors.LoraRegionPlan
+import com.altnautica.gcs.core.agent.sensors.LoraRegions
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -151,7 +158,7 @@ class LoraGovernorTest {
     fun absentServiceIsNotFittedNotZero() = runTest(UnconfinedTestDispatcher()) {
         val api = mockk<SensorsApi> { coEvery { lora() } returns AgentResult.Ok(LoraStatus(present = false)) }
         val lanes = StationLanes(backgroundScope, { api })
-        lanes.loadLora(withBeacons = true)
+        lanes.loadLora(withLinks = true)
         assertEquals(Load.Ready(null), lanes.state.value.lora)
         coVerify(exactly = 0) { api.loraBeacons() }
     }
@@ -183,5 +190,95 @@ class LoraGovernorTest {
         lanes.setRegion(null)
         assertEquals(RegionWrite.Done(null), lanes.state.value.regionWrite)
         assertEquals("IN", (lanes.state.value.lora as Load.Ready).value!!.regionCode)
+    }
+
+    @Test
+    fun nextTxShowsOnlyWhenAllowedOrCountingDown() {
+        assertTrue(LoraGovernor.map(india).showNextTx)
+        fun blocked(reason: String) = LoraGovernor.map(
+            india.copy(txAllowed = false, blockedReason = reason),
+        )
+        // A configuration block with next_tx_allowed_ms 0 must not read "next TX now".
+        assertFalse(blocked("region_unset").showNextTx)
+        assertFalse(blocked("module_band_mismatch").showNextTx)
+        assertFalse(blocked("power_over_limit").showNextTx)
+        assertTrue(blocked("duty_exhausted").showNextTx)
+        assertTrue(blocked("dwell_time").showNextTx)
+    }
+
+    private val plans = listOf(
+        LoraRegionPlan("IN", "India", "IN865", listOf(865.0, 867.0), listOf("duty_cycle", "max_power"), true, mapOf("2g4" to "ISM2G4", "900" to "IN866")),
+        LoraRegionPlan("JP", "Japan", "AS923-1-JP", listOf(920.5, 923.5), listOf("lbt"), false, mapOf("2g4" to "ISM2G4", "900" to null)),
+    )
+
+    @Test
+    fun elrsDomainMismatchPerBand() {
+        val modules = listOf(
+            CrsfModule("m0", "pilot", true, "CE_LBT"),
+            CrsfModule("m1", "autonomy", true, "ISM2G4"),
+            CrsfModule("m2", "autonomy", true, "FCC915"),
+            CrsfModule("m3", "autonomy", true, null),
+        )
+        assertEquals(
+            listOf(LoraMismatch.ElrsDomain("m0", "CE_LBT", "ISM2G4"), LoraMismatch.ElrsDomain("m2", "FCC915", "IN866")),
+            LoraLinks.mismatches("IN", plans, modules, null),
+        )
+        // An unverified expected domain raises nothing.
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("JP", plans, listOf(CrsfModule("m2", null, true, "FCC915")), null))
+        // No region, no comparison.
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches(null, plans, modules, null))
+        assertEquals("2g4", LoraLinks.elrsBand("CE_LBT"))
+        assertEquals("900", LoraLinks.elrsBand("AU433"))
+    }
+
+    @Test
+    fun meshtasticPresetMismatch() {
+        assertEquals(
+            listOf(LoraMismatch.MeshtasticPreset("EU_868", "IN")),
+            LoraLinks.mismatches("IN", plans, emptyList(), MeshtasticUi(true, "/dev/ttyACM2", "EU_868")),
+        )
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("IN", plans, emptyList(), MeshtasticUi(true, null, "IN")))
+    }
+
+    @Test
+    fun lanesComputeMismatchesFromRegionsAndModules() = runTest(UnconfinedTestDispatcher()) {
+        val api = mockk<SensorsApi> {
+            coEvery { lora() } returns AgentResult.Ok(india)
+            coEvery { loraBeacons() } returns AgentResult.Ok(LoraBeacons())
+            coEvery { loraRegions() } returns AgentResult.Ok(LoraRegions(plans))
+            coEvery { elrsModules() } returns AgentResult.Ok(CrsfStatus(listOf(CrsfModule("m0", "pilot", true, "CE_LBT"))))
+        }
+        val lanes = StationLanes(backgroundScope, { api })
+        lanes.loadRegions()
+        lanes.loadLora(withLinks = true)
+        assertEquals(listOf(LoraMismatch.ElrsDomain("m0", "CE_LBT", "ISM2G4")), lanes.state.value.mismatches)
+        assertEquals(listOf("IN", "JP"), (lanes.state.value.regions as Load.Ready).value.map { it.code })
+    }
+
+    @Test
+    fun baseWriteCarriesTheConfirmedOverride() = runTest(UnconfinedTestDispatcher()) {
+        val api = mockk<SensorsApi> { coEvery { putGnssBase(any(), any()) } returns AgentResult.Err(AgentError.Armed(canForce = true)) }
+        val lanes = StationLanes(backgroundScope, { api })
+        lanes.setBase(BaseModeRequest.Off, force = true)
+        coVerify { api.putGnssBase(BaseModeRequest.Off, true) }
+    }
+
+    @Test
+    fun gnssMapsToScreenModelAndAbsentIsNull() {
+        assertNull(GnssMapper.map(GnssStatus(present = false)))
+        val ui = GnssMapper.map(
+            AgentJson.json.decodeFromString(
+                GnssStatus.serializer(),
+                """{"present":true,"receivers":[{"id":"gnss0","source":"hub","model":"u-blox M10","fix":"3d","sats":14,"hdop":0.8,
+                   "lat_deg":12.9716,"lon_deg":77.5946,"h_ellipsoid_m":920.4,"rtk":"none","pps_locked":true}],
+                   "base":{"mode":"survey","state":"surveying","elapsed_s":120,"min_dur_s":300,"accuracy_m":3.1,"target_accuracy_m":2.0,"fixed":null,
+                   "rtcm_out":{"msgs_per_s":0.0,"bytes_total":0,"targets":0}},
+                   "heading":{"available":false}}""",
+            ),
+        )!!
+        assertEquals(GnssFixKind.Fix3d, ui.receivers.single().fix)
+        assertEquals(PositionUi(12.9716, 77.5946, 920.4), ui.receivers.single().position)
+        assertEquals(BaseState.Surveying, ui.base!!.state)
+        assertNull(ui.heading)
     }
 }

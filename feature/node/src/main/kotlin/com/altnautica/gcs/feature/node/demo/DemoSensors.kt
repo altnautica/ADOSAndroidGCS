@@ -5,6 +5,8 @@ import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.sensors.BaseModeRequest
 import com.altnautica.gcs.core.agent.sensors.CaptureStorage
 import com.altnautica.gcs.core.agent.sensors.ClockSource
+import com.altnautica.gcs.core.agent.sensors.CrsfModule
+import com.altnautica.gcs.core.agent.sensors.CrsfStatus
 import com.altnautica.gcs.core.agent.sensors.ClockStatus
 import com.altnautica.gcs.core.agent.sensors.GnssBase
 import com.altnautica.gcs.core.agent.sensors.GnssHeading
@@ -40,11 +42,12 @@ open class DemoSensorsBase : SensorsApi {
     override suspend fun sensors(): AgentResult<SensorsStatus> = AgentResult.Ok(SensorsStatus(present = false))
     override suspend fun storage(): AgentResult<StorageStatus> = AgentResult.Ok(StorageStatus(present = false))
     override suspend fun gnss(): AgentResult<GnssStatus> = AgentResult.Ok(GnssStatus(present = false))
-    override suspend fun putGnssBase(request: BaseModeRequest): AgentResult<GnssBase> = AgentResult.Err(AgentError.FeatureAbsent)
+    override suspend fun putGnssBase(request: BaseModeRequest, force: Boolean): AgentResult<GnssBase> = AgentResult.Err(AgentError.FeatureAbsent)
     override suspend fun lora(): AgentResult<LoraStatus> = AgentResult.Ok(LoraStatus(present = false))
     override suspend fun loraRegions(): AgentResult<LoraRegions> = AgentResult.Ok(LoraRegions())
     override suspend fun loraBeacons(): AgentResult<LoraBeacons> = AgentResult.Ok(LoraBeacons())
     override suspend fun putLoraRegion(code: String?): AgentResult<LoraStatus> = AgentResult.Err(AgentError.FeatureAbsent)
+    override suspend fun elrsModules(): AgentResult<CrsfStatus> = AgentResult.Ok(CrsfStatus())
 }
 
 /** Demo Visor: hub IMU 1000 Hz, two cameras at 20 Hz, clock sigma 0.42 ms, NVMe capture volume. */
@@ -112,7 +115,7 @@ class DemoGroundSensors(private val now: () -> Long = System::currentTimeMillis)
         )
     }
 
-    override suspend fun putGnssBase(request: BaseModeRequest): AgentResult<GnssBase> {
+    override suspend fun putGnssBase(request: BaseModeRequest, force: Boolean): AgentResult<GnssBase> {
         baseStartMs = now()
         base = when (request) {
             BaseModeRequest.Off -> GnssBase("off", "off", null, null, null, null, null, RtcmOut(0.0, 0, 0))
@@ -150,10 +153,10 @@ class DemoGroundSensors(private val now: () -> Long = System::currentTimeMillis)
     override suspend fun loraRegions() = AgentResult.Ok(
         LoraRegions(
             listOf(
-                LoraRegionPlan("IN", "India", "IN865", listOf(865.0, 867.0), listOf("duty_cycle", "max_power"), true),
-                LoraRegionPlan("EU", "European Union (ETSI)", "EU868", listOf(863.0, 870.0), listOf("duty_cycle", "max_power"), true),
-                LoraRegionPlan("US", "United States", "US915", listOf(902.0, 928.0), listOf("dwell_time", "max_power"), true),
-                LoraRegionPlan("JP", "Japan", "AS923-1-JP", listOf(920.5, 923.5), listOf("lbt", "dwell_time", "max_power"), false),
+                LoraRegionPlan("IN", "India", "IN865", listOf(865.0, 867.0), listOf("duty_cycle", "max_power"), true, mapOf("2g4" to "ISM2G4", "900" to "IN866")),
+                LoraRegionPlan("EU", "European Union (ETSI)", "EU868", listOf(863.0, 870.0), listOf("duty_cycle", "max_power"), true, mapOf("2g4" to "CE_LBT", "900" to "EU868")),
+                LoraRegionPlan("US", "United States", "US915", listOf(902.0, 928.0), listOf("dwell_time", "max_power"), true, mapOf("2g4" to "ISM2G4", "900" to "FCC915")),
+                LoraRegionPlan("JP", "Japan", "AS923-1-JP", listOf(920.5, 923.5), listOf("lbt", "dwell_time", "max_power"), false, mapOf("2g4" to "ISM2G4", "900" to null)),
             ),
         ),
     )
@@ -169,6 +172,9 @@ class DemoGroundSensors(private val now: () -> Long = System::currentTimeMillis)
             ),
         )
     }
+
+    /** The demo pilot module reports the EU 2.4 GHz domain, so the domain-mismatch chip shows in the India plan. */
+    override suspend fun elrsModules() = AgentResult.Ok(CrsfStatus(listOf(CrsfModule("m0", "pilot", true, "CE_LBT"))))
 
     /** Demo of the picker: India keeps the seeded plan; any other choice shows the receive-only state. */
     override suspend fun putLoraRegion(code: String?): AgentResult<LoraStatus> {

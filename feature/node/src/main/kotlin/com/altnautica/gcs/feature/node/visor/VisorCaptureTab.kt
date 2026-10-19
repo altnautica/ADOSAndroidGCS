@@ -19,6 +19,7 @@ import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.agent.capture.CaptureExposure
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.LoadingState
@@ -74,7 +74,7 @@ fun VisorCaptureTab(nodeId: String, modifier: Modifier = Modifier) {
             contentPadding = PaddingValues(AdosSpacing.S4),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
         ) {
-            item { PreviewCard(state.preview) }
+            item { PreviewCard(state.preview, state.cameras, state.previewCamera, vm::selectCamera) }
             when (val load = state.capture) {
                 Load.Loading -> item { LoadingState(stringResource(R.string.node_loading)) }
                 is Load.Failed -> item { ProblemState(load.problem, onRetry = { vm.show(NodeTab.Capture) }) }
@@ -93,9 +93,16 @@ fun VisorCaptureTab(nodeId: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun PreviewCard(source: VideoSource?) {
+private fun PreviewCard(source: VideoSource?, cameras: List<String>, selected: String?, onSelect: (String) -> Unit) {
     val video by rememberVideoState(source)
     NodeCard(stringResource(R.string.visor_preview)) {
+        if (cameras.size > 1) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                cameras.forEach { cam ->
+                    FilterChip(selected = cam == selected, onClick = { onSelect(cam) }, label = { Text(cam) })
+                }
+            }
+        }
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f), contentAlignment = Alignment.Center) {
             VideoSurface(source, Modifier.fillMaxSize())
             val note = when (video) {
@@ -236,7 +243,7 @@ private fun ControlsCard(c: CaptureUi, busy: Boolean, vm: VisorViewModel) {
 }
 
 @Composable
-private fun ExposureCard(exposure: CaptureExposure?, busy: Boolean, onChange: (CaptureExposure) -> Unit) {
+private fun ExposureCard(exposure: ExposureUi?, busy: Boolean, onChange: (ExposureUi) -> Unit) {
     NodeCard(stringResource(R.string.visor_exposure)) {
         if (exposure == null) {
             KeyValueRow(stringResource(R.string.visor_exposure), null)

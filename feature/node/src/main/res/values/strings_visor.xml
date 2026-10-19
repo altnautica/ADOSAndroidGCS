@@ -124,5 +124,10 @@
     <string name="visor_connected">Connected</string>
     <string name="visor_disconnected">Disconnected</string>
     <string name="visor_not_fitted">Not fitted</string>
+    <string name="visor_stale">Last reading; the latest read failed</string>
+    <plurals name="visor_sensors_sats">
+        <item quantity="one">%1$d satellite</item>
+        <item quantity="other">%1$d satellites</item>
+    </plurals>
     <string name="visor_sensors_slow">Below expected rate: %1$d</string>
 </resources>

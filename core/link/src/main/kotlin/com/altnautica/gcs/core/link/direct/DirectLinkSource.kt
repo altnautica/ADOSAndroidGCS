@@ -30,8 +30,6 @@ object DemoNode {
     /** Demo ground station with GNSS and LoRa demo data. */
     val GROUND_ID: DeviceId = DeviceId("demo-ground")
     const val GROUND_NAME: String = "Demo ground station"
-
-    fun isDemo(id: DeviceId): Boolean = id == ID || id == VISOR_ID || id == GROUND_ID
 }
 
 /**

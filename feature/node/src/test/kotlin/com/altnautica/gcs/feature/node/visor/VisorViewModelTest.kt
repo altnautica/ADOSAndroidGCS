@@ -27,6 +27,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import com.altnautica.gcs.core.agent.http.AgentEndpoint
+import com.altnautica.gcs.core.agent.http.AgentError
+import com.altnautica.gcs.core.agent.sensors.ClockStatus
+import com.altnautica.gcs.core.agent.sensors.SensorsApi
+import com.altnautica.gcs.core.agent.sensors.SensorsStatus
+import com.altnautica.gcs.core.agent.sensors.StorageStatus
+import com.altnautica.gcs.core.model.VideoSource
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -160,5 +167,60 @@ class VisorViewModelTest {
         assertEquals(0.25f, s.progress!!, 0.0001f)
         assertEquals(listOf("Dock", "Aisle 1"), s.rooms)
         assertNull(s.uploadError)
+    }
+
+    private val sensorsApi = mockk<SensorsApi>()
+
+    private fun overviewVm(): VisorViewModel {
+        coEvery { apis.sensors(DeviceId("v1")) } returns sensorsApi
+        return vm()
+    }
+
+    @Test
+    fun absentServiceIsNotFittedAndAFailedReadIsNot() = runTest(dispatcher) {
+        coEvery { sensorsApi.clock() } returns AgentResult.Ok(ClockStatus(present = true, timebase = "hub_freerun", locked = true, sigmaNs = 420_000))
+        coEvery { sensorsApi.storage() } returns AgentResult.Ok(StorageStatus(present = false))
+        coEvery { sensorsApi.sensors() } returns AgentResult.Err(AgentError.Network(java.io.IOException("down")))
+        val vm = overviewVm()
+        vm.loadOverview()
+
+        val o = (vm.state.value.overview as Load.Ready).value
+        assertEquals(Section.Ready(ClockUi(true, "hub_freerun", 420_000, emptyList())), o.clock)
+        assertEquals(Section.NotFitted, o.storage)
+        assertTrue(o.sensors is Section.Failed)
+    }
+
+    @Test
+    fun aFailedReadKeepsTheLastValueMarkedStale() = runTest(dispatcher) {
+        coEvery { sensorsApi.clock() } returnsMany listOf(
+            AgentResult.Ok(ClockStatus(present = true, locked = true, sigmaNs = 1)),
+            AgentResult.Err(AgentError.Server(500, null)),
+        )
+        coEvery { sensorsApi.storage() } returns AgentResult.Ok(StorageStatus(present = false))
+        coEvery { sensorsApi.sensors() } returns AgentResult.Ok(SensorsStatus(present = false))
+        val vm = overviewVm()
+        vm.loadOverview()
+        vm.loadOverview()
+
+        val clock = (vm.state.value.overview as Load.Ready).value.clock as Section.Ready
+        assertTrue(clock.stale)
+        assertTrue(clock.value.locked)
+    }
+
+    @Test
+    fun previewUsesTheCaptureWhepRouteOfTheFirstCamera() = runTest(dispatcher) {
+        val endpoints = mockk<AgentEndpoints> {
+            coEvery { endpointFor(DeviceId("v1")) } returns AgentEndpoint.forHost("192.168.1.50", "k", DeviceId("v1"))
+        }
+        coEvery { capture.state() } returns AgentResult.Ok(recording)
+        coEvery { apis.sensors(DeviceId("v1")) } returns null
+        val vm = VisorViewModel("v1", apis, endpoints)
+        vm.loadCapture()
+        vm.resolvePreview()
+
+        val preview = vm.state.value.preview as VideoSource.AgentWhep
+        assertEquals("http://192.168.1.50:8080/api/plugins/com.altnautica.world-engine/x/atlas/capture", preview.baseUrl)
+        assertEquals("cam_fl", preview.streamId)
+        assertEquals(listOf("cam_fl"), vm.state.value.cameras)
     }
 }

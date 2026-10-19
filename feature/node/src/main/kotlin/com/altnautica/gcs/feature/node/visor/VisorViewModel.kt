@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.capture.CaptureApi
-import com.altnautica.gcs.core.agent.capture.CaptureExposure
 import com.altnautica.gcs.core.agent.capture.CaptureStartRequest
 import com.altnautica.gcs.core.agent.capture.ReconstructResponse
+import com.altnautica.gcs.core.agent.capture.AgentCaptureApi
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.link.direct.DemoNode
 import com.altnautica.gcs.core.model.DeviceId
@@ -36,7 +36,10 @@ data class VisorUiState(
     val action: ActionState = ActionState.Idle,
     /** Segment number the agent gave the last MARK. */
     val lastSegment: Int? = null,
-    /** Live camera preview; null when the node has no reachable video endpoint. */
+    /** Capture cameras the preview can show (session cameras, else the rig's cameras). */
+    val cameras: List<String> = emptyList(),
+    val previewCamera: String? = null,
+    /** Live camera preview; null when the node has no reachable capture video endpoint. */
     val preview: VideoSource? = null,
 )
 
@@ -88,7 +91,11 @@ class VisorViewModel @AssistedInject constructor(
     internal suspend fun loadCapture() {
         val api = apis.capture(id) ?: return failCapture(PageProblem.NoAgentLink)
         when (val r = api.state()) {
-            is AgentResult.Ok -> _state.update { it.copy(capture = Load.Ready(CaptureUi.from(r.value))) }
+            is AgentResult.Ok -> {
+                val ui = CaptureUi.from(r.value)
+                _state.update { it.copy(capture = Load.Ready(ui)) }
+                if (ui.cameraIds.isNotEmpty()) setCameras(ui.cameraIds)
+            }
             is AgentResult.Err -> failCapture(PageProblem.from(r.error))
         }
     }
@@ -101,29 +108,56 @@ class VisorViewModel @AssistedInject constructor(
         }
     }
 
+    /** Each block keeps its own state: not fitted, ready (possibly stale after a failed read), or failed. */
     internal suspend fun loadOverview() {
         val api = apis.sensors(id) ?: return _state.update { s ->
             if (s.overview is Load.Ready) s else s.copy(overview = Load.Failed(PageProblem.NoAgentLink))
         }
-        val clock = api.clock()
-        if (clock is AgentResult.Err) {
-            return _state.update { s -> if (s.overview is Load.Ready) s else s.copy(overview = Load.Failed(PageProblem.from(clock.error))) }
-        }
+        val prev = (_state.value.overview as? Load.Ready)?.value
         val overview = VisorOverview(
-            clock = clock.getOrNull()?.takeIf { it.present },
-            storage = api.storage().getOrNull()?.takeIf { it.present },
-            sensors = api.sensors().getOrNull()?.takeIf { it.present },
+            clock = VisorOverviewMapper.next(prev?.clock, api.clock(), { it.present }, VisorOverviewMapper::clock),
+            storage = VisorOverviewMapper.next(prev?.storage, api.storage(), { it.present }, VisorOverviewMapper::storage),
+            sensors = VisorOverviewMapper.next(prev?.sensors, api.sensors(), { it.present }, VisorOverviewMapper::sensors),
         )
         _state.update { it.copy(overview = Load.Ready(overview)) }
     }
 
-    private suspend fun resolvePreview() {
-        val source = if (id == DemoNode.VISOR_ID) {
-            DemoVideoFactory.SOURCE
-        } else {
-            endpoints.endpointFor(id)?.let { VideoSource.AgentWhep(id, it.baseUrlString, null) }
+    /** The preview cameras come from the session; before one runs, from the rig's camera sensors. */
+    internal suspend fun resolvePreview() {
+        if (id == DemoNode.VISOR_ID) {
+            _state.update { it.copy(preview = DemoVideoFactory.SOURCE) }
+            return
         }
-        _state.update { it.copy(preview = source) }
+        // The extension serves each capture camera at `atlas/capture/whep?camera=<id>` under its plugin mount.
+        whepBase = endpoints.endpointFor(id)?.url(AgentCaptureApi.route("atlas/capture/"))?.toString()
+        if (_state.value.cameras.isEmpty()) {
+            val rig = apis.sensors(id)?.sensors()?.getOrNull()?.takeIf { it.present }
+            rig?.sensors?.filter { it.kind == "camera" }?.map { it.id }?.takeIf { it.isNotEmpty() }?.let(::setCameras)
+        }
+        updatePreview()
+    }
+
+    fun selectCamera(camera: String) {
+        if (camera !in _state.value.cameras) return
+        _state.update { it.copy(previewCamera = camera) }
+        updatePreview()
+    }
+
+    private var whepBase: String? = null
+
+    private fun setCameras(ids: List<String>) {
+        if (ids == _state.value.cameras) return
+        _state.update { s -> s.copy(cameras = ids, previewCamera = s.previewCamera?.takeIf { it in ids } ?: ids.first()) }
+        updatePreview()
+    }
+
+    private fun updatePreview() {
+        if (id == DemoNode.VISOR_ID) return
+        _state.update { s ->
+            val base = whepBase
+            val camera = s.previewCamera
+            s.copy(preview = if (base != null && camera != null) VideoSource.AgentWhep(id, base, camera) else null)
+        }
     }
 
     // ---- capture actions -----------------------------------------------------
@@ -147,7 +181,7 @@ class VisorViewModel @AssistedInject constructor(
         }
     }
 
-    fun setExposure(exposure: CaptureExposure) = act(CaptureAction.Exposure, refresh = ::loadCapture) { it.exposure(exposure) }
+    fun setExposure(exposure: ExposureUi) = act(CaptureAction.Exposure, refresh = ::loadCapture) { it.exposure(exposure.toWire()) }
 
     // ---- session actions -----------------------------------------------------
 

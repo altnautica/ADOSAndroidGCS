@@ -23,6 +23,7 @@ class SensorsApiTest {
             """{"mode":"fixed","lat_deg":12.5,"lon_deg":77.5,"h_ellipsoid_m":920.0}""",
             AgentSensorsApi.baseBody(BaseModeRequest.Fixed(12.5, 77.5, 920.0)).toString(),
         )
+        assertEquals("""{"mode":"off","force":true}""", AgentSensorsApi.baseBody(BaseModeRequest.Off, force = true).toString())
     }
 
     @Test

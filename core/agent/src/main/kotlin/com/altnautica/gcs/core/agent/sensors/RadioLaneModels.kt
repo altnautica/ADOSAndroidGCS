@@ -184,6 +184,21 @@ data class LoraRegionPlan(
     @SerialName("band_mhz") val bandMhz: List<Double> = emptyList(),
     val rules: List<String> = emptyList(),
     @SerialName("supported_by_module") val supportedByModule: Boolean = false,
+    /** Expected ELRS regulatory domain per band (`2g4`, `900`); a null value is unverified. */
+    @SerialName("elrs_domains") val elrsDomains: Map<String, String?> = emptyMap(),
+)
+
+/** `GET /api/v1/ground-station/crsf`: only the module list is read here. */
+@Serializable
+data class CrsfStatus(val modules: List<CrsfModule> = emptyList())
+
+@Serializable
+data class CrsfModule(
+    val id: String,
+    val role: String? = null,
+    val connected: Boolean = false,
+    /** ELRS regulatory domain the module reports, verbatim (`ISM2G4`, `CE_LBT`, `FCC915`, ...); null when unknown. */
+    val domain: String? = null,
 )
 
 /** `GET /api/v1/lora/beacons`, newest first. */

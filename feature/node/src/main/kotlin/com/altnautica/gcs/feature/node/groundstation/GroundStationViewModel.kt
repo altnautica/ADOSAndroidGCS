@@ -124,7 +124,7 @@ class GroundStationViewModel @AssistedInject constructor(
             }
             var tick = 0
             while (isActive) {
-                if (tab == NodeTab.Gnss) lanes.loadGnss() else lanes.loadLora(withBeacons = tick % BEACON_EVERY == 0)
+                if (tab == NodeTab.Gnss) lanes.loadGnss() else lanes.loadLora(withLinks = tick % BEACON_EVERY == 0)
                 tick++
                 delay(if (tab == NodeTab.Lora) LORA_POLL_MS else POLL_MS)
             }
@@ -133,7 +133,8 @@ class GroundStationViewModel @AssistedInject constructor(
 
     // ---- gnss ----------------------------------------------------------------
 
-    fun setBase(request: BaseModeRequest) = writes.run(label = "gnss_base") { _ -> lanes.setBase(request) }
+    /** RTK base mode; a write refused while armed retries with the override after the hold-to-confirm. */
+    fun setBase(request: BaseModeRequest) = writes.run(label = "gnss_base") { force -> lanes.setBase(request, force) }
 
     private fun refresh() {
         val tab = activeTab

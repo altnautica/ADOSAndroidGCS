@@ -20,7 +20,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import com.altnautica.gcs.core.agent.sensors.LoraBeacon
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
@@ -56,11 +55,11 @@ internal fun LoraView(lanes: LanesUiState, vm: GroundStationViewModel) {
         }
     }
     lora.block?.let { BlockedBanner(it, lora, remainingMs) { picking = true } }
-    RegionCard(lora, remainingMs, lanes.armed) { picking = true }
+    RegionCard(lora, lanes.mismatches, remainingMs, lanes.armed) { picking = true }
     GovernorCard(lora)
     RefusalsCard(lora)
     BeaconsCard(lanes.beacons)
-    lora.meshtastic?.takeIf { it.enabled }?.let { m ->
+    lora.meshtastic?.let { m ->
         NodeCard(stringResource(R.string.gs_lora_meshtastic)) {
             StatusChip(
                 if (m.connected) StatusLevel.Success else StatusLevel.Warning,
@@ -76,7 +75,7 @@ internal fun LoraView(lanes: LanesUiState, vm: GroundStationViewModel) {
 }
 
 @Composable
-private fun RegionCard(lora: LoraUi, remainingMs: Long, armed: Boolean, onChange: () -> Unit) {
+private fun RegionCard(lora: LoraUi, mismatches: List<LoraMismatch>, remainingMs: Long, armed: Boolean, onChange: () -> Unit) {
     NodeCard(stringResource(R.string.gs_lora_region)) {
         val region = lora.regionCode?.let { code -> listOfNotNull(code, lora.regionName, lora.planId).joinToString(" · ") }
         StatusChip(
@@ -88,6 +87,7 @@ private fun RegionCard(lora: LoraUi, remainingMs: Long, armed: Boolean, onChange
             lora.regionCode?.let { stringResource(if (lora.regionFromCountry) R.string.gs_lora_source_country else R.string.gs_lora_source_lora) },
         )
         KeyValueRow(stringResource(R.string.gs_lora_band), band(lora.bandMhz))
+        mismatches.forEach { StatusChip(StatusLevel.Warning, mismatchText(it)) }
         KeyValueRow(stringResource(R.string.gs_lora_citation), lora.citation)
         KeyValueRow(stringResource(R.string.gs_lora_module), listOfNotNull(lora.transport, lora.moduleBand?.let { "$it MHz" }).joinToString(" · ").ifEmpty { null })
         lora.channel?.let { c ->
@@ -98,14 +98,12 @@ private fun RegionCard(lora: LoraUi, remainingMs: Long, armed: Boolean, onChange
             if (lora.txAllowed) StatusLevel.Success else StatusLevel.Error,
             stringResource(if (lora.txAllowed) R.string.gs_lora_tx_allowed else R.string.gs_lora_tx_blocked),
         )
-        KeyValueRow(
-            stringResource(R.string.gs_lora_next_tx),
-            when {
-                lora.nextTxAllowedMs == null -> null
-                remainingMs <= 0 -> stringResource(R.string.gs_lora_next_tx_now)
-                else -> countdown(remainingMs)
-            },
-        )
+        if (lora.showNextTx) {
+            KeyValueRow(
+                stringResource(R.string.gs_lora_next_tx),
+                if (remainingMs <= 0) stringResource(R.string.gs_lora_now) else countdown(remainingMs),
+            )
+        }
         AdosButton(
             label = stringResource(R.string.gs_lora_change_region),
             onClick = onChange,
@@ -115,6 +113,12 @@ private fun RegionCard(lora: LoraUi, remainingMs: Long, armed: Boolean, onChange
         )
         if (armed) Text(stringResource(R.string.gs_lora_region_locked_armed), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
     }
+}
+
+@Composable
+private fun mismatchText(m: LoraMismatch): String = when (m) {
+    is LoraMismatch.ElrsDomain -> stringResource(R.string.gs_lora_mismatch_elrs, m.moduleId, m.domain, m.expected)
+    is LoraMismatch.MeshtasticPreset -> stringResource(R.string.gs_lora_mismatch_meshtastic, m.preset, m.region)
 }
 
 @Composable
@@ -182,7 +186,11 @@ private fun MeterRow(m: RuleMeter) {
         )
         is RuleMeter.Dwell -> Triple(
             stringResource(R.string.gs_lora_rule_dwell),
-            m.lastTxMs?.let { t -> m.limitMs?.let { l -> "$t / $l ms" + (m.perS?.let { " per $it s" } ?: "") } },
+            m.lastTxMs?.let { t ->
+                m.limitMs?.let { l ->
+                    m.perS?.let { p -> stringResource(R.string.gs_lora_dwell_value_per, t, l, p) } ?: stringResource(R.string.gs_lora_dwell_value, t, l)
+                }
+            },
             m.fraction,
         )
         is RuleMeter.Power -> Triple(
@@ -238,7 +246,7 @@ private fun RefusalsCard(lora: LoraUi) {
 }
 
 @Composable
-private fun BeaconsCard(beacons: List<LoraBeacon>) {
+private fun BeaconsCard(beacons: List<BeaconUi>) {
     NodeCard(stringResource(R.string.gs_lora_beacons)) {
         if (beacons.isEmpty()) {
             Text(stringResource(R.string.gs_lora_beacons_none), style = MaterialTheme.typography.bodyMedium, color = AdosTheme.colors.fgSecondary)

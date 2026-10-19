@@ -3,9 +3,9 @@ package com.altnautica.gcs.feature.node.groundstation
 import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.sensors.BaseModeRequest
-import com.altnautica.gcs.core.agent.sensors.GnssStatus
-import com.altnautica.gcs.core.agent.sensors.LoraBeacon
+import com.altnautica.gcs.core.agent.sensors.CrsfModule
 import com.altnautica.gcs.core.agent.sensors.LoraRegionPlan
+import com.altnautica.gcs.core.agent.sensors.LoraStatus
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.feature.node.common.PageProblem
 import kotlinx.coroutines.CoroutineScope
@@ -26,14 +26,15 @@ sealed interface RegionWrite {
 enum class RegionFailure { Armed, OutOfPlan, NotAllowed, Other }
 
 data class LanesUiState(
-    /** `present: false` arrives as Ready with `present` false: the "not fitted" state. */
-    val gnss: Load<GnssStatus> = Load.Loading,
+    /** Ready(null) when no GNSS receiver is fitted. */
+    val gnss: Load<GnssUi?> = Load.Loading,
     /** Ready(null) when no LoRa radio is fitted. */
     val lora: Load<LoraUi?> = Load.Loading,
     /** Wall time of the last LoRa read; the next-TX countdown ticks from here. */
     val loraReadAtMs: Long = 0,
-    val beacons: List<LoraBeacon> = emptyList(),
-    val regions: Load<List<LoraRegionPlan>>? = null,
+    val beacons: List<BeaconUi> = emptyList(),
+    val regions: Load<List<RegionOptionUi>>? = null,
+    val mismatches: List<LoraMismatch> = emptyList(),
     val regionWrite: RegionWrite = RegionWrite.Idle,
     /** A paired vehicle is armed: region changes are locked. */
     val armed: Boolean = false,
@@ -41,7 +42,8 @@ data class LanesUiState(
 
 /**
  * The ground station's GNSS and LoRa lanes, owned by [GroundStationViewModel].
- * [api] is resolved per call so demo nodes and real agents share the path.
+ * Agent payloads are mapped to screen models here; [api] is resolved per call
+ * so demo nodes and real agents share the path.
  */
 class StationLanes(
     private val scope: CoroutineScope,
@@ -51,22 +53,28 @@ class StationLanes(
     private val _state = MutableStateFlow(LanesUiState())
     val state: StateFlow<LanesUiState> = _state.asStateFlow()
 
+    private var plans: List<LoraRegionPlan> = emptyList()
+    private var modules: List<CrsfModule> = emptyList()
+
     suspend fun loadGnss() {
         val a = api() ?: return failGnss(PageProblem.NoAgentLink)
         when (val r = a.gnss()) {
-            is AgentResult.Ok -> _state.update { it.copy(gnss = Load.Ready(r.value)) }
+            is AgentResult.Ok -> _state.update { it.copy(gnss = Load.Ready(GnssMapper.map(r.value))) }
             is AgentResult.Err -> failGnss(PageProblem.from(r.error))
         }
     }
 
-    suspend fun loadLora(withBeacons: Boolean) {
+    /** LoRa status; [withLinks] also reads beacons and the ELRS modules (slower cadence). */
+    suspend fun loadLora(withLinks: Boolean) {
         val a = api() ?: return failLora(PageProblem.NoAgentLink)
         when (val r = a.lora()) {
             is AgentResult.Ok -> {
-                val ui = r.value.takeIf { it.present }?.let(LoraGovernor::map)
-                _state.update { it.copy(lora = Load.Ready(ui), loraReadAtMs = now()) }
-                if (withBeacons && ui != null) {
-                    a.loraBeacons().getOrNull()?.let { b -> _state.update { it.copy(beacons = b.beacons) } }
+                applyLora(r.value)
+                if (withLinks && r.value.present) {
+                    a.loraBeacons().getOrNull()?.let { b -> _state.update { it.copy(beacons = b.beacons.map(LoraLinks::beacon)) } }
+                    // A station without an RC lane answers 404: no modules, no domain check.
+                    modules = a.elrsModules().getOrNull()?.modules.orEmpty()
+                    refreshMismatches()
                 }
             }
             is AgentResult.Err -> failLora(PageProblem.from(r.error))
@@ -77,13 +85,13 @@ class StationLanes(
         _state.update { it.copy(regions = Load.Loading) }
         scope.launch {
             val a = api() ?: return@launch _state.update { it.copy(regions = Load.Failed(PageProblem.NoAgentLink)) }
-            _state.update {
-                it.copy(
-                    regions = when (val r = a.loraRegions()) {
-                        is AgentResult.Ok -> Load.Ready(r.value.regions)
-                        is AgentResult.Err -> Load.Failed(PageProblem.from(r.error))
-                    },
-                )
+            when (val r = a.loraRegions()) {
+                is AgentResult.Ok -> {
+                    plans = r.value.regions
+                    _state.update { it.copy(regions = Load.Ready(plans.map(LoraLinks::option))) }
+                    refreshMismatches()
+                }
+                is AgentResult.Err -> _state.update { it.copy(regions = Load.Failed(PageProblem.from(r.error))) }
             }
         }
     }
@@ -99,37 +107,42 @@ class StationLanes(
         if (_state.value.regionWrite == RegionWrite.Running) return
         _state.update { it.copy(regionWrite = RegionWrite.Running) }
         scope.launch {
-            val a = api()
-            val r = a?.putLoraRegion(code)
-            val next = when (r) {
-                null -> RegionWrite.Failed(RegionFailure.Other, null)
-                is AgentResult.Ok -> RegionWrite.Done(code)
-                is AgentResult.Err -> regionFailure(r.error)
-            }
-            _state.update { s ->
-                val ok = (r as? AgentResult.Ok)?.value
-                s.copy(
-                    regionWrite = next,
-                    lora = if (ok != null) Load.Ready(ok.takeIf { it.present }?.let(LoraGovernor::map)) else s.lora,
-                    loraReadAtMs = if (ok != null) now() else s.loraReadAtMs,
-                )
+            val r = api()?.putLoraRegion(code)
+            when (r) {
+                null -> _state.update { it.copy(regionWrite = RegionWrite.Failed(RegionFailure.Other, null)) }
+                is AgentResult.Ok -> {
+                    applyLora(r.value)
+                    _state.update { it.copy(regionWrite = RegionWrite.Done(code)) }
+                }
+                is AgentResult.Err -> _state.update { it.copy(regionWrite = regionFailure(r.error)) }
             }
         }
     }
 
     fun dismissRegionWrite() = _state.update { it.copy(regionWrite = RegionWrite.Idle) }
 
-    /** RTK base mode; the answer replaces the base block until the next poll. */
-    suspend fun setBase(request: BaseModeRequest): AgentResult<*> {
+    /** RTK base mode; [force] is the operator's confirmed armed override. The answer replaces the base block until the next poll. */
+    suspend fun setBase(request: BaseModeRequest, force: Boolean): AgentResult<*> {
         val a = api() ?: return AgentResult.Err(AgentError.Unauthorized)
-        val r = a.putGnssBase(request)
+        val r = a.putGnssBase(request, force)
         r.getOrNull()?.let { base ->
             _state.update { s ->
                 val g = (s.gnss as? Load.Ready)?.value ?: return@update s
-                s.copy(gnss = Load.Ready(g.copy(base = base)))
+                s.copy(gnss = Load.Ready(g.copy(base = GnssMapper.base(base))))
             }
         }
         return r
+    }
+
+    private fun applyLora(status: LoraStatus) {
+        val ui = status.takeIf { it.present }?.let(LoraGovernor::map)
+        _state.update { it.copy(lora = Load.Ready(ui), loraReadAtMs = now()) }
+        refreshMismatches()
+    }
+
+    private fun refreshMismatches() = _state.update { s ->
+        val lora = (s.lora as? Load.Ready)?.value
+        s.copy(mismatches = LoraLinks.mismatches(lora?.regionCode, plans, modules, lora?.meshtastic))
     }
 
     private fun failGnss(problem: PageProblem) = _state.update { s -> if (s.gnss is Load.Ready) s else s.copy(gnss = Load.Failed(problem)) }

@@ -1,7 +1,5 @@
 package com.altnautica.gcs.feature.node.groundstation
 
-import com.altnautica.gcs.core.agent.sensors.LoraChannel
-import com.altnautica.gcs.core.agent.sensors.LoraMeshtastic
 import com.altnautica.gcs.core.agent.sensors.LoraRule
 import com.altnautica.gcs.core.agent.sensors.LoraStatus
 
@@ -79,7 +77,7 @@ data class LoraUi(
     val citation: String?,
     val transport: String?,
     val moduleBand: String?,
-    val channel: LoraChannel?,
+    val channel: ChannelUi?,
     val nodeId: Int?,
     val txAllowed: Boolean,
     val block: LoraBlock?,
@@ -92,8 +90,16 @@ data class LoraUi(
     val txFrames: Long?,
     val rxFrames: Long?,
     val crcErrors: Long?,
-    val meshtastic: LoraMeshtastic?,
-)
+    /** Present only while the Meshtastic bridge is enabled. */
+    val meshtastic: MeshtasticUi?,
+) {
+    /**
+     * The next-TX time means something only while transmit is allowed or the
+     * block clears on its own (duty, dwell); a configuration block never shows
+     * "now".
+     */
+    val showNextTx: Boolean get() = nextTxAllowedMs != null && (txAllowed || block?.countdown == true)
+}
 
 object LoraGovernor {
 
@@ -113,7 +119,7 @@ object LoraGovernor {
             citation = s.region?.citation,
             transport = s.transport,
             moduleBand = s.moduleBand,
-            channel = s.channel,
+            channel = s.channel?.let { ChannelUi(it.freqMhz, it.bwKhz, it.sf, it.erpMw, it.maxErpMw) },
             nodeId = s.nodeId,
             txAllowed = s.txAllowed,
             block = block(s.blockedReason, s.txAllowed),
@@ -126,7 +132,7 @@ object LoraGovernor {
             txFrames = s.tx?.frames,
             rxFrames = s.rx?.frames,
             crcErrors = s.rx?.crcErrors,
-            meshtastic = s.meshtastic,
+            meshtastic = s.meshtastic?.takeIf { it.enabled }?.let { MeshtasticUi(it.connected, it.port, it.regionPreset) },
         )
     }
 

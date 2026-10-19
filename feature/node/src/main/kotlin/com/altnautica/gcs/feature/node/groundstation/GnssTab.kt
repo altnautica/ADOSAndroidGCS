@@ -16,9 +16,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.agent.sensors.BaseModeRequest
-import com.altnautica.gcs.core.agent.sensors.GnssBase
-import com.altnautica.gcs.core.agent.sensors.GnssReceiver
-import com.altnautica.gcs.core.agent.sensors.GnssStatus
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
@@ -33,8 +30,8 @@ import com.altnautica.gcs.feature.node.common.fmtInt
 
 /** GNSS tab body: fix, sats, PPS lock per receiver; RTK base mode with survey-in; RTCM out; heading. */
 @Composable
-internal fun GnssView(gnss: GnssStatus, busy: Boolean, onBase: (BaseModeRequest) -> Unit) {
-    if (!gnss.present) {
+internal fun GnssView(gnss: GnssUi?, busy: Boolean, onBase: (BaseModeRequest) -> Unit) {
+    if (gnss == null) {
         EmptyState(
             icon = Icons.Outlined.SatelliteAlt,
             title = stringResource(R.string.gs_gnss_absent_title),
@@ -43,8 +40,8 @@ internal fun GnssView(gnss: GnssStatus, busy: Boolean, onBase: (BaseModeRequest)
         return
     }
     gnss.receivers.forEach { ReceiverCard(it) }
-    BaseCard(gnss.base, gnss.receivers.firstOrNull(), busy, onBase)
-    gnss.heading?.takeIf { it.available }?.let { h ->
+    BaseCard(gnss.base, gnss.receivers.firstOrNull()?.position, busy, onBase)
+    gnss.heading?.let { h ->
         NodeCard(stringResource(R.string.gs_gnss_heading)) {
             KeyValueRow(stringResource(R.string.gs_gnss_heading_deg), h.deg.fmt(1, "°"))
             KeyValueRow(stringResource(R.string.gs_gnss_heading_accuracy), h.accuracyDeg.fmt(1, "°"))
@@ -54,10 +51,9 @@ internal fun GnssView(gnss: GnssStatus, busy: Boolean, onBase: (BaseModeRequest)
 }
 
 @Composable
-private fun ReceiverCard(r: GnssReceiver) {
+private fun ReceiverCard(r: ReceiverUi) {
     NodeCard(listOfNotNull(r.id, r.model).joinToString(" · ")) {
-        val fixed = r.fix == "rtk_fixed" || r.fix == "3d" || r.fix == "dgps" || r.fix == "rtk_float"
-        StatusChip(if (fixed) StatusLevel.Success else StatusLevel.Warning, fixLabel(r.fix))
+        StatusChip(if (r.fix.hasFix) StatusLevel.Success else StatusLevel.Warning, fixLabel(r.fix))
         KeyValueRow(stringResource(R.string.gs_gnss_sats), r.sats.fmtInt())
         KeyValueRow(stringResource(R.string.gs_gnss_hdop), r.hdop.fmt(1))
         KeyValueRow(stringResource(R.string.gs_gnss_rtk), r.rtk)
@@ -77,18 +73,18 @@ private fun ReceiverCard(r: GnssReceiver) {
 }
 
 @Composable
-private fun BaseCard(base: GnssBase?, receiver: GnssReceiver?, busy: Boolean, onBase: (BaseModeRequest) -> Unit) {
+private fun BaseCard(base: BaseUi?, here: PositionUi?, busy: Boolean, onBase: (BaseModeRequest) -> Unit) {
     var confirmFixed by rememberSaveable { mutableStateOf(false) }
     NodeCard(stringResource(R.string.gs_gnss_base)) {
         val (level, label) = when (base?.state) {
-            "surveying" -> StatusLevel.Info to R.string.gs_gnss_base_surveying
-            "fixed" -> StatusLevel.Success to R.string.gs_gnss_base_fixed
-            "failed" -> StatusLevel.Error to R.string.gs_gnss_base_failed
-            "off" -> StatusLevel.Neutral to R.string.gs_gnss_base_off
-            else -> StatusLevel.Neutral to R.string.gs_gnss_base_unknown
+            BaseState.Surveying -> StatusLevel.Info to R.string.gs_gnss_base_surveying
+            BaseState.Fixed -> StatusLevel.Success to R.string.gs_gnss_base_fixed
+            BaseState.Failed -> StatusLevel.Error to R.string.gs_gnss_base_failed
+            BaseState.Off -> StatusLevel.Neutral to R.string.gs_gnss_base_off
+            BaseState.Unknown, null -> StatusLevel.Neutral to R.string.gs_gnss_base_unknown
         }
         StatusChip(level, stringResource(label))
-        if (base?.state == "surveying") {
+        if (base?.state == BaseState.Surveying) {
             KeyValueRow(
                 stringResource(R.string.gs_gnss_survey_elapsed),
                 base.elapsedS?.let { e -> base.minDurS?.let { m -> "$e / $m s" } ?: "$e s" },
@@ -98,11 +94,11 @@ private fun BaseCard(base: GnssBase?, receiver: GnssReceiver?, busy: Boolean, on
                 base.accuracyM?.let { a -> base.targetAccuracyM?.let { t -> "%.1f / %.1f m".format(a, t) } ?: "%.1f m".format(a) },
             )
         }
-        base?.fixed?.let { KeyValueRow(stringResource(R.string.gs_gnss_base_position), "%.6f %.6f %.1f m".format(it.latDeg, it.lonDeg, it.hEllipsoidM)) }
-        base?.rtcmOut?.let { out ->
-            KeyValueRow(stringResource(R.string.gs_gnss_rtcm_rate), out.msgsPerS.fmt(1, " msg/s"))
-            KeyValueRow(stringResource(R.string.gs_gnss_rtcm_targets), out.targets.fmtInt())
-            KeyValueRow(stringResource(R.string.gs_gnss_rtcm_bytes), out.bytesTotal.fmtInt(" B"))
+        base?.fixed?.let { KeyValueRow(stringResource(R.string.gs_gnss_base_position), position(it)) }
+        if (base != null) {
+            KeyValueRow(stringResource(R.string.gs_gnss_rtcm_rate), base.rtcmMsgsPerS.fmt(1, " msg/s"))
+            KeyValueRow(stringResource(R.string.gs_gnss_rtcm_targets), base.rtcmTargets.fmtInt())
+            KeyValueRow(stringResource(R.string.gs_gnss_rtcm_bytes), base.rtcmBytes.fmtInt(" B"))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), modifier = Modifier.fillMaxWidth()) {
             AdosButton(
@@ -114,31 +110,28 @@ private fun BaseCard(base: GnssBase?, receiver: GnssReceiver?, busy: Boolean, on
             AdosButton(
                 label = stringResource(R.string.gs_gnss_set_fixed),
                 onClick = { confirmFixed = true },
-                enabled = !busy && receiver?.latDeg != null && receiver.lonDeg != null && receiver.hEllipsoidM != null,
+                enabled = !busy && here != null,
                 variant = AdosButtonVariant.Secondary,
                 modifier = Modifier.weight(1f),
             )
             AdosButton(
                 label = stringResource(R.string.gs_gnss_base_stop),
                 onClick = { onBase(BaseModeRequest.Off) },
-                enabled = !busy && base?.mode != "off",
+                enabled = !busy && base?.isOff != true,
                 variant = AdosButtonVariant.Secondary,
                 modifier = Modifier.weight(1f),
             )
         }
     }
-    val lat = receiver?.latDeg
-    val lon = receiver?.lonDeg
-    val h = receiver?.hEllipsoidM
-    if (confirmFixed && lat != null && lon != null && h != null) {
+    if (confirmFixed && here != null) {
         AlertDialog(
             onDismissRequest = { confirmFixed = false },
             title = { Text(stringResource(R.string.gs_gnss_set_fixed)) },
-            text = { Text(stringResource(R.string.gs_gnss_set_fixed_message, "%.6f %.6f %.1f m".format(lat, lon, h))) },
+            text = { Text(stringResource(R.string.gs_gnss_set_fixed_message, position(here))) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmFixed = false
-                    onBase(BaseModeRequest.Fixed(lat, lon, h))
+                    onBase(BaseModeRequest.Fixed(here.latDeg, here.lonDeg, here.hEllipsoidM))
                 }) { Text(stringResource(R.string.gs_gnss_set_fixed)) }
             },
             dismissButton = { TextButton(onClick = { confirmFixed = false }) { Text(stringResource(R.string.node_cancel)) } },
@@ -146,15 +139,17 @@ private fun BaseCard(base: GnssBase?, receiver: GnssReceiver?, busy: Boolean, on
     }
 }
 
+private fun position(p: PositionUi) = "%.6f %.6f %.1f m".format(p.latDeg, p.lonDeg, p.hEllipsoidM)
+
 @Composable
-private fun fixLabel(fix: String?): String = stringResource(
+private fun fixLabel(fix: GnssFixKind): String = stringResource(
     when (fix) {
-        "2d" -> R.string.gs_gnss_fix_2d
-        "3d" -> R.string.gs_gnss_fix_3d
-        "dgps" -> R.string.gs_gnss_fix_dgps
-        "rtk_float" -> R.string.gs_gnss_fix_rtk_float
-        "rtk_fixed" -> R.string.gs_gnss_fix_rtk_fixed
-        else -> R.string.gs_gnss_fix_none
+        GnssFixKind.Fix2d -> R.string.gs_gnss_fix_2d
+        GnssFixKind.Fix3d -> R.string.gs_gnss_fix_3d
+        GnssFixKind.Dgps -> R.string.gs_gnss_fix_dgps
+        GnssFixKind.RtkFloat -> R.string.gs_gnss_fix_rtk_float
+        GnssFixKind.RtkFixed -> R.string.gs_gnss_fix_rtk_fixed
+        GnssFixKind.None -> R.string.gs_gnss_fix_none
     },
 )
 

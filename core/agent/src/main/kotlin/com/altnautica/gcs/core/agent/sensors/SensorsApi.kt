@@ -23,13 +23,18 @@ interface SensorsApi {
     suspend fun sensors(): AgentResult<SensorsStatus>
     suspend fun storage(): AgentResult<StorageStatus>
     suspend fun gnss(): AgentResult<GnssStatus>
-    suspend fun putGnssBase(request: BaseModeRequest): AgentResult<GnssBase>
+
+    /** RTK base mode; [force] carries the operator's armed override. */
+    suspend fun putGnssBase(request: BaseModeRequest, force: Boolean): AgentResult<GnssBase>
     suspend fun lora(): AgentResult<LoraStatus>
     suspend fun loraRegions(): AgentResult<LoraRegions>
     suspend fun loraBeacons(): AgentResult<LoraBeacons>
 
     /** Sets the LoRa region; null follows the node's country setting. Admin scope; the agent refuses while armed. */
     suspend fun putLoraRegion(code: String?): AgentResult<LoraStatus>
+
+    /** ELRS modules of the ground station's RC lane (`/api/v1/ground-station/crsf`), for the domain check. */
+    suspend fun elrsModules(): AgentResult<CrsfStatus>
 }
 
 /** [SensorsApi] over the agent's `/api/v1` routes. */
@@ -43,8 +48,8 @@ class AgentSensorsApi internal constructor(private val client: AgentClient) : Se
 
     override suspend fun gnss() = client.get("api/v1/gnss", GnssStatus.serializer())
 
-    override suspend fun putGnssBase(request: BaseModeRequest) =
-        client.sendJson("PUT", "api/v1/gnss/base", baseBody(request), GnssBase.serializer())
+    override suspend fun putGnssBase(request: BaseModeRequest, force: Boolean) =
+        client.sendJson("PUT", "api/v1/gnss/base", baseBody(request, force), GnssBase.serializer())
 
     override suspend fun lora() = client.get("api/v1/lora", LoraStatus.serializer())
 
@@ -55,8 +60,10 @@ class AgentSensorsApi internal constructor(private val client: AgentClient) : Se
     override suspend fun putLoraRegion(code: String?) =
         client.sendJson("PUT", "api/v1/lora", regionBody(code), LoraStatus.serializer())
 
+    override suspend fun elrsModules() = client.get("api/v1/ground-station/crsf", CrsfStatus.serializer())
+
     internal companion object {
-        fun baseBody(request: BaseModeRequest): JsonObject = buildJsonObject {
+        fun baseBody(request: BaseModeRequest, force: Boolean = false): JsonObject = buildJsonObject {
             when (request) {
                 BaseModeRequest.Off -> put("mode", "off")
                 is BaseModeRequest.Survey -> {
@@ -71,6 +78,7 @@ class AgentSensorsApi internal constructor(private val client: AgentClient) : Se
                     put("h_ellipsoid_m", request.hEllipsoidM)
                 }
             }
+            if (force) put("force", true)
         }
 
         fun regionBody(code: String?): JsonObject = buildJsonObject {
