@@ -122,4 +122,24 @@ class FleetViewModelTest {
         assertFalse(card.showThumbnail)
         assertTrue(card.canFly)
     }
+
+    @Test
+    fun liveNodesOrderByProfileThenName() = runTest(dispatcher) {
+        val state = MutableStateFlow(
+            listOf(
+                node("a-gs", NodeProfile.GroundStation, listOf(Reach.Lan)),
+                node("b-unknown", NodeProfile.Unknown, listOf(Reach.Lan)),
+                node("c-ws", NodeProfile.Workstation, listOf(Reach.Lan)),
+                node("d-visor", NodeProfile.Visor, listOf(Reach.Lan)),
+                node("e-drone", NodeProfile.Drone, listOf(Reach.Lan)),
+            ),
+        )
+        val repo = NodeRepository(setOf(Source(state)), backgroundScope)
+        val vm = FleetViewModel(repo, vitals(), lanNodes())
+        backgroundScope.launch { vm.uiState.collect {} }
+        val cards = (vm.uiState.first { it is FleetUiState.Nodes } as FleetUiState.Nodes).cards
+        assertEquals(listOf("e-drone", "d-visor", "c-ws", "a-gs", "b-unknown"), cards.map { it.node.id.value })
+        assertFalse(cards.first { it.node.profile == NodeProfile.Visor }.canFly)
+        assertFalse(cards.first { it.node.profile == NodeProfile.Unknown }.canFly)
+    }
 }

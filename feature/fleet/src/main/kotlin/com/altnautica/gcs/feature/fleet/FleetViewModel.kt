@@ -84,7 +84,7 @@ class FleetViewModel @Inject constructor(
         when {
             list == null -> FleetUiState.Loading
             list.isEmpty() -> FleetUiState.Empty
-            else -> FleetUiState.Nodes(list.map { card(it, v[it.id] ?: NodeVitals.UNKNOWN) })
+            else -> FleetUiState.Nodes(list.sortedWith(FLEET_RANK).map { card(it, v[it.id] ?: NodeVitals.UNKNOWN) })
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), FleetUiState.Loading)
 
@@ -99,12 +99,28 @@ class FleetViewModel @Inject constructor(
     companion object {
         private const val STOP_GRACE_MS = 5_000L
 
+        /**
+         * Order inside the fleet: liveness first (as merged), then profile so
+         * flyable vehicles lead and infrastructure trails. The sort is stable,
+         * so the merger's alphabetical order holds inside each group.
+         */
+        private val FLEET_RANK = compareBy<NodeSummary>({ it.liveness.ordinal }, { profileRank(it.profile) })
+
+        /** Drone 0, Visor 1, Workstation 2, Ground station 3, unknown last. */
+        fun profileRank(profile: NodeProfile): Int = when (profile) {
+            NodeProfile.Drone -> 0
+            NodeProfile.Visor -> 1
+            NodeProfile.Workstation -> 2
+            NodeProfile.GroundStation -> 3
+            NodeProfile.Unknown -> 4
+        }
+
         fun card(node: NodeSummary, vitals: NodeVitals): FleetCard {
             val usable = node.reaches.firstOrNull()?.let { it !is Reach.Blocked } == true
             val flyable = when (node.profile) {
                 NodeProfile.Drone -> true
                 NodeProfile.GroundStation -> node.carriedDroneId != null
-                NodeProfile.Workstation -> false
+                NodeProfile.Workstation, NodeProfile.Visor -> false
                 NodeProfile.Unknown -> Reach.DirectFc in node.reaches
             }
             val agentReach = node.reaches.any { it == Reach.Lan || it is Reach.ViaGround }

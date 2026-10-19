@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Visor: capture actions -->
+    <string name="visor_action_start">Start recording</string>
+    <string name="visor_action_stop">Stop</string>
+    <string name="visor_action_pause">Pause</string>
+    <string name="visor_action_resume">Resume</string>
+    <string name="visor_action_mark">Mark room</string>
+    <string name="visor_action_exposure">Exposure</string>
+    <string name="visor_action_upload">Upload</string>
+    <string name="visor_action_reconstruct">Reconstruct</string>
+    <string name="visor_action_delete">Delete</string>
+    <string name="visor_action_running">%1$s…</string>
+    <string name="visor_action_done">%1$s: done</string>
+    <string name="visor_action_done_detail">%1$s: done (%2$s)</string>
+
+    <!-- Visor: problems -->
+    <string name="visor_problem_storage_full">Capture storage is full. Upload and delete sessions before recording again.</string>
+    <string name="visor_problem_already_recording">A session is already recording.</string>
+    <string name="visor_problem_not_uploaded">The session is not uploaded to the reconstruction node yet.</string>
+    <string name="visor_problem_no_extension">The capture extension is not installed or enabled on this node.</string>
+
+    <!-- Visor: capture tab -->
+    <string name="visor_preview">Live preview</string>
+    <string name="visor_preview_connecting">Connecting to the camera…</string>
+    <string name="visor_preview_frozen">Preview paused: no new frames.</string>
+    <string name="visor_preview_none">No preview stream from this node.</string>
+    <string name="visor_session">Session</string>
+    <string name="visor_state_recording">Recording</string>
+    <string name="visor_state_paused">Paused</string>
+    <string name="visor_state_closing">Closing session</string>
+    <string name="visor_state_idle">Not recording</string>
+    <string name="visor_session_id">Session id</string>
+    <string name="visor_duration">Duration</string>
+    <string name="visor_site">Site</string>
+    <string name="visor_floor">Floor</string>
+    <string name="visor_floor_down">Floor down</string>
+    <string name="visor_floor_up">Floor up</string>
+    <string name="visor_room">Room</string>
+    <string name="visor_segment">Segment</string>
+    <string name="visor_frames">Frames</string>
+    <string name="visor_dropped">Dropped</string>
+    <string name="visor_pose">Pose</string>
+    <string name="visor_features">Tracked features</string>
+    <string name="visor_storage_free">Free space</string>
+    <string name="visor_storage_remaining">Recording time left</string>
+    <string name="visor_health_blur">Blur</string>
+    <string name="visor_health_texture">Texture</string>
+    <string name="visor_health_flicker">Flicker</string>
+    <string name="visor_health_corridor">Corridor</string>
+    <string name="visor_health_storage">Storage</string>
+    <string name="visor_health_clock">Clock</string>
+    <string name="visor_health_value">%1$s %2$s</string>
+    <string name="visor_coverage">Coverage</string>
+    <string name="visor_coverage_room">Room covered</string>
+    <string name="visor_coverage_voxels">Voxels seen</string>
+    <string name="visor_coverage_from_start">Distance from start</string>
+    <string name="visor_coverage_loop">Loop closed</string>
+    <string name="visor_yes">Yes</string>
+    <string name="visor_no">No</string>
+    <string name="visor_controls">Controls</string>
+    <string name="visor_closing_note">The node is closing the session.</string>
+    <string name="visor_mark_hint">Name the room, then Mark room to start a new segment.</string>
+    <string name="visor_stop_title">Stop recording?</string>
+    <string name="visor_stop_message">The session closes and is kept on the node for upload.</string>
+    <string name="visor_exposure">Exposure</string>
+    <string name="visor_exposure_lock">Lock exposure</string>
+    <string name="visor_exposure_lock_summary">Keeps brightness constant within a room segment.</string>
+    <string name="visor_exposure_mode">Mode</string>
+    <string name="visor_exposure_mode_walking">Walking</string>
+    <string name="visor_exposure_mode_slow">Slow</string>
+    <string name="visor_exposure_mode_short">Short exposure</string>
+    <string name="visor_exposure_time">Exposure time</string>
+    <string name="visor_exposure_gain">Gain</string>
+
+    <!-- Visor: sessions tab -->
+    <string name="visor_sessions_empty_title">No sessions yet</string>
+    <string name="visor_sessions_empty_message">Recorded sessions appear here for upload and reconstruction.</string>
+    <string name="visor_started">Started (UTC)</string>
+    <string name="visor_size">Size</string>
+    <string name="visor_rooms">Rooms</string>
+    <string name="visor_floors">Floors</string>
+    <string name="visor_upload_node">Reconstruction node</string>
+    <string name="visor_upload_progress">Uploaded %1$d %%</string>
+    <string name="visor_upload_committed">Uploaded</string>
+    <string name="visor_upload_uploading">Uploading</string>
+    <string name="visor_upload_queued">Queued</string>
+    <string name="visor_upload_failed">Upload failed</string>
+    <string name="visor_upload_not_uploaded">Not uploaded</string>
+    <string name="visor_preset">Preset</string>
+    <string name="visor_preset_preview">Preview</string>
+    <string name="visor_preset_hq">High quality</string>
+    <string name="visor_preset_tour">Tour</string>
+    <string name="visor_preset_warehouse">Warehouse</string>
+    <string name="visor_delete_title">Delete session?</string>
+    <string name="visor_delete_message">Session %1$s is deleted from the node. The uploaded copy stays on the reconstruction node.</string>
+    <string name="visor_delete_not_uploaded_message">Session %1$s has not been uploaded. Deleting it now loses the recording for good.</string>
+    <string name="visor_delete_anyway">Delete without upload</string>
+
+    <!-- Visor: overview rows -->
+    <string name="visor_clock">Clock</string>
+    <string name="visor_clock_locked">Locked</string>
+    <string name="visor_clock_unlocked">Not locked</string>
+    <string name="visor_clock_timebase">Timebase</string>
+    <string name="visor_clock_sigma">Sync sigma</string>
+    <string name="visor_clock_source">Source %1$s</string>
+    <string name="visor_clock_source_locked">Locked, sigma %1$s</string>
+    <string name="visor_unmeasured">unmeasured</string>
+    <string name="visor_storage">Capture storage</string>
+    <string name="visor_storage_full">Full: new sessions refused</string>
+    <string name="visor_storage_near_full">Nearly full</string>
+    <string name="visor_storage_ok">OK</string>
+    <string name="visor_storage_unknown">State unknown</string>
+    <string name="visor_storage_root">Capture folder</string>
+    <string name="visor_storage_used">Used</string>
+    <string name="visor_storage_budget">Budget</string>
+    <string name="visor_storage_sessions">Sessions uploaded</string>
+    <string name="visor_storage_write">Write speed</string>
+    <string name="visor_sensors">Sensors</string>
+    <string name="visor_sensors_rig">Rig</string>
+    <string name="visor_sensors_hub">Sensor hub</string>
+    <string name="visor_sensors_fc">Flight controller</string>
+    <string name="visor_sensors_gnss">GNSS</string>
+    <string name="visor_connected">Connected</string>
+    <string name="visor_disconnected">Disconnected</string>
+    <string name="visor_not_fitted">Not fitted</string>
+    <string name="visor_sensors_slow">Below expected rate: %1$d</string>
+</resources>

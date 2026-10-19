@@ -40,5 +40,6 @@
     <string name="profile_drone">Drone</string>
     <string name="profile_ground_station">Ground station</string>
     <string name="profile_workstation">Workstation</string>
+    <string name="profile_visor">Visor</string>
     <string name="profile_unknown">Node</string>
 </resources>

@@ -11,11 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Flight
-import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -35,7 +32,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
-import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.NumberSettingRow
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
@@ -55,11 +51,12 @@ import com.altnautica.gcs.feature.node.common.WriteStatus
 import com.altnautica.gcs.feature.node.common.fmt
 import com.altnautica.gcs.feature.node.common.fmtInt
 
-/** Body of one ground-station tab (Carried drones, Radio, Network, Mesh). */
+/** Body of one ground-station tab (Carried drones, Radio, Network, GNSS, LoRa, Mesh). */
 @Composable
 fun GroundStationTab(nodeId: String, tab: NodeTab, onOpenNode: (DeviceId) -> Unit, modifier: Modifier = Modifier) {
     val vm = hiltViewModel<GroundStationViewModel, GroundStationViewModel.Factory>(key = "gs-$nodeId") { it.create(nodeId) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val lanes by vm.lanes.state.collectAsStateWithLifecycle()
     val write by vm.writeState.collectAsStateWithLifecycle()
     DisposableEffect(tab) {
         vm.show(tab)
@@ -84,6 +81,8 @@ fun GroundStationTab(nodeId: String, tab: NodeTab, onOpenNode: (DeviceId) -> Uni
                         NetworkView(net, state.scan, state.joinNeedsForce, busy, vm)
                     }
                 }
+                NodeTab.Gnss -> item { LoadView(lanes.gnss, { vm.show(tab) }) { GnssView(it, busy, vm::setBase) } }
+                NodeTab.Lora -> item { LoadView(lanes.lora, { vm.show(tab) }) { LoraView(lanes, vm) } }
                 NodeTab.Mesh -> item { LoadView(state.mesh, { vm.show(tab) }) { MeshView(it, state.pairWindow, busy, vm) } }
                 else -> Unit
             }
@@ -97,72 +96,6 @@ private fun <T> LoadView(load: Load<T>, onRetry: () -> Unit, content: @Composabl
         Load.Loading -> LoadingState(stringResource(R.string.node_loading))
         is Load.Failed -> ProblemState(load.problem, onRetry)
         is Load.Ready -> Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) { content(load.value) }
-    }
-}
-
-// ---- carried drones ----------------------------------------------------------
-
-@Composable
-private fun CarriedView(c: CarriedDrones, busy: Boolean, onOpenNode: (DeviceId) -> Unit, onRelease: (String) -> Unit) {
-    var releasing by rememberSaveable { mutableStateOf<String?>(null) }
-    if (c.slots.isEmpty() && c.primaryDroneId == null) {
-        EmptyState(
-            icon = Icons.Outlined.LinkOff,
-            title = stringResource(R.string.gs_carried_empty_title),
-            message = stringResource(R.string.gs_carried_empty_message),
-        )
-        return
-    }
-    val peers = c.peers.orEmpty().associateBy { it.deviceId }
-    val ids = (c.slots.map { it.deviceId } + listOfNotNull(c.primaryDroneId)).distinct()
-    ids.forEach { id ->
-        val slot = c.slots.firstOrNull { it.deviceId == id }
-        val peer = peers[id]
-        NodeCard(null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().clickable { onOpenNode(DeviceId(id)) },
-            ) {
-                Icon(Icons.Outlined.Flight, contentDescription = null, tint = AdosTheme.colors.accentPrimary)
-                Column(Modifier.weight(1f).padding(start = AdosSpacing.S3)) {
-                    Text(peer?.name ?: id, style = MaterialTheme.typography.titleSmall)
-                    if (peer?.name != null) Text(id, style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgTertiary)
-                }
-                StatusChip(
-                    level = if (peer?.statusFresh == true) StatusLevel.Success else StatusLevel.Neutral,
-                    label = stringResource(if (peer?.statusFresh == true) R.string.gs_carried_fresh else R.string.gs_carried_not_heard),
-                )
-            }
-            slot?.let { s ->
-                KeyValueRow(stringResource(R.string.gs_carried_slot), s.slot.toString())
-                KeyValueRow(stringResource(R.string.gs_carried_relay_credential), s.relayCredential)
-                if (s.videoHero) KeyValueRow(stringResource(R.string.gs_carried_video), stringResource(R.string.gs_carried_video_primary))
-                if (s.systemIdConflict) StatusChip(StatusLevel.Warning, stringResource(R.string.gs_carried_sysid_conflict))
-            }
-            peer?.agentVersion?.let { KeyValueRow(stringResource(R.string.gs_carried_agent), it) }
-            if (slot != null) {
-                AdosButton(
-                    label = stringResource(R.string.gs_carried_release),
-                    onClick = { releasing = id },
-                    variant = AdosButtonVariant.Secondary,
-                    enabled = !busy,
-                )
-            }
-        }
-    }
-    releasing?.let { id ->
-        AlertDialog(
-            onDismissRequest = { releasing = null },
-            title = { Text(stringResource(R.string.gs_carried_release_title)) },
-            text = { Text(stringResource(R.string.gs_carried_release_message, id)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRelease(id)
-                    releasing = null
-                }) { Text(stringResource(R.string.gs_carried_release)) }
-            },
-            dismissButton = { TextButton(onClick = { releasing = null }) { Text(stringResource(R.string.node_cancel)) } },
-        )
     }
 }
 

@@ -149,6 +149,7 @@ class CloudNodeSource @Inject constructor(
             "drone" -> NodeProfile.Drone
             "ground-station", "ground_station", "groundstation" -> NodeProfile.GroundStation
             "workstation" -> NodeProfile.Workstation
+            "visor" -> NodeProfile.Visor
             else -> NodeProfile.Unknown
         }
 

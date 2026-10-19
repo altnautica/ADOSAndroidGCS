@@ -18,10 +18,20 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 
-/** The simulated vehicle shown when demo mode is on. */
+/** The simulated nodes shown when demo mode is on. */
 object DemoNode {
     val ID: DeviceId = DeviceId("demo-copter")
     const val NAME: String = "Demo drone"
+
+    /** Demo handheld capture rig; its pages are served from demo data, never an agent. */
+    val VISOR_ID: DeviceId = DeviceId("demo-visor")
+    const val VISOR_NAME: String = "Demo Visor"
+
+    /** Demo ground station with GNSS and LoRa demo data. */
+    val GROUND_ID: DeviceId = DeviceId("demo-ground")
+    const val GROUND_NAME: String = "Demo ground station"
+
+    fun isDemo(id: DeviceId): Boolean = id == ID || id == VISOR_ID || id == GROUND_ID
 }
 
 /**
@@ -56,7 +66,11 @@ class DirectLinkSource @Inject constructor(
         ticker,
     ) { endpoints, demo, devices, heartbeats, _ ->
         buildList {
-            if (demo) add(demoNode())
+            if (demo) {
+                add(demoNode())
+                add(demoAgentNode(DemoNode.VISOR_ID, DemoNode.VISOR_NAME, NodeProfile.Visor))
+                add(demoAgentNode(DemoNode.GROUND_ID, DemoNode.GROUND_NAME, NodeProfile.GroundStation))
+            }
             devices.forEach { d ->
                 add(
                     node(
@@ -87,6 +101,19 @@ class DirectLinkSource @Inject constructor(
         fcVariant = FcVariant.MavlinkArdupilot,
         carriedDroneId = null,
         lastSeenMs = activity.lastHeartbeat.value[DemoNode.ID],
+    )
+
+    /** A demo node with an agent-like profile; it lists a LAN reach so its agent pages show. */
+    private fun demoAgentNode(id: DeviceId, name: String, profile: NodeProfile) = NodeSummary(
+        id = id,
+        name = name,
+        profile = profile,
+        reaches = listOf(Reach.Lan),
+        liveness = Liveness.Live,
+        agentVersion = null,
+        fcVariant = FcVariant.Unknown,
+        carriedDroneId = null,
+        lastSeenMs = null,
     )
 
     private fun node(id: DeviceId, name: String, reaches: List<Reach>, lastSeen: Long?, attached: Boolean): NodeSummary {

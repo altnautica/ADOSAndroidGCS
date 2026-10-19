@@ -9,6 +9,7 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.agent)
     implementation(projects.core.link)
+    implementation(projects.core.video)
     implementation(projects.core.extensions)
     implementation(projects.radio.rx)
     implementation(projects.feature.fleet)

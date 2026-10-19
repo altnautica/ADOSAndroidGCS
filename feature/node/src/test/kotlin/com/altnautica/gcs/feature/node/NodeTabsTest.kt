@@ -60,4 +60,36 @@ class NodeTabsTest {
             NodeTabs.tabsFor(node(NodeProfile.Drone, Reach.CloudLive)),
         )
     }
+
+    @Test
+    fun visorHasCaptureAndSessions() {
+        assertEquals(
+            listOf(NodeTab.Overview, NodeTab.Capture, NodeTab.Sessions, NodeTab.Logs, NodeTab.Agent),
+            NodeTabs.tabsFor(node(NodeProfile.Visor, Reach.Lan)),
+        )
+    }
+
+    @Test
+    fun visorWithoutAgentLinkKeepsOverviewOnly() {
+        assertEquals(listOf(NodeTab.Overview), NodeTabs.tabsFor(node(NodeProfile.Visor, Reach.CloudLive)))
+    }
+
+    @Test
+    fun groundStationGainsGnssAndLoraWhenFitted() {
+        assertEquals(
+            listOf(
+                NodeTab.Overview, NodeTab.Cockpit, NodeTab.CarriedDrones, NodeTab.Radio,
+                NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh, NodeTab.Logs, NodeTab.Agent,
+            ),
+            NodeTabs.tabsFor(node(NodeProfile.GroundStation, Reach.Lan), StationFeatures(gnss = true, lora = true)),
+        )
+        val gnssOnly = NodeTabs.tabsFor(node(NodeProfile.GroundStation, Reach.Lan), StationFeatures(gnss = true))
+        assertEquals(true, NodeTab.Gnss in gnssOnly)
+        assertEquals(false, NodeTab.Lora in gnssOnly)
+    }
+
+    @Test
+    fun unknownAgentIsNotADroneAndGetsAgentOnly() {
+        assertEquals(listOf(NodeTab.Agent), NodeTabs.tabsFor(node(NodeProfile.Unknown, Reach.Lan)))
+    }
 }

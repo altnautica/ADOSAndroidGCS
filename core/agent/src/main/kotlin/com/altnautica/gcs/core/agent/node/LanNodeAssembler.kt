@@ -109,6 +109,7 @@ object LanNodeAssembler {
         "drone" -> NodeProfile.Drone
         "ground-station" -> NodeProfile.GroundStation
         "workstation" -> NodeProfile.Workstation
+        "visor" -> NodeProfile.Visor
         else -> NodeProfile.Unknown
     }
 

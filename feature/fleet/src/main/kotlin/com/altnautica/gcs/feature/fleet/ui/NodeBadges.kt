@@ -5,6 +5,7 @@ import androidx.compose.material.icons.outlined.CellTower
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.CloudQueue
 import androidx.compose.material.icons.outlined.Computer
+import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Flight
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.LinkOff
@@ -15,8 +16,10 @@ import androidx.compose.material.icons.outlined.Usb
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
 import com.altnautica.gcs.core.model.BlockReason
@@ -80,6 +83,7 @@ fun profileIcon(profile: NodeProfile): ImageVector = when (profile) {
     NodeProfile.Drone -> Icons.Outlined.Flight
     NodeProfile.GroundStation -> Icons.Outlined.Router
     NodeProfile.Workstation -> Icons.Outlined.Computer
+    NodeProfile.Visor -> Icons.Outlined.DocumentScanner
     NodeProfile.Unknown -> Icons.Outlined.Hub
 }
 
@@ -87,5 +91,29 @@ fun profileLabel(profile: NodeProfile): Int = when (profile) {
     NodeProfile.Drone -> R.string.profile_drone
     NodeProfile.GroundStation -> R.string.profile_ground_station
     NodeProfile.Workstation -> R.string.profile_workstation
+    NodeProfile.Visor -> R.string.profile_visor
     NodeProfile.Unknown -> R.string.profile_unknown
+}
+
+/**
+ * Categorical identity hue per node profile, the same values Mission Control
+ * uses for its node accents. These are identity colours, not status: a status
+ * still pairs its own colour with an icon and a label. An unknown profile gets
+ * the neutral secondary foreground.
+ */
+@Composable
+fun profileTint(profile: NodeProfile): Color = when (profile) {
+    NodeProfile.Drone -> NodeAccent.DRONE
+    NodeProfile.GroundStation -> NodeAccent.GROUND_STATION
+    NodeProfile.Workstation -> NodeAccent.WORKSTATION
+    NodeProfile.Visor -> NodeAccent.VISOR
+    NodeProfile.Unknown -> AdosTheme.colors.fgSecondary
+}
+
+/** Node identity accents, mirrored from Mission Control's `--node-accent-*` values. */
+object NodeAccent {
+    val DRONE = Color(0xFF3B82F6)
+    val GROUND_STATION = Color(0xFFA78BFA)
+    val WORKSTATION = Color(0xFF2DD4BF)
+    val VISOR = Color(0xFFF9A8D4)
 }

@@ -23,6 +23,7 @@ object SlotMounts {
         NodeProfile.Drone -> "drone"
         NodeProfile.GroundStation -> "ground-station"
         NodeProfile.Workstation -> "workstation"
+        NodeProfile.Visor -> "visor"
         NodeProfile.Unknown -> null
     }
 

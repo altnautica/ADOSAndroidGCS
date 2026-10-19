@@ -31,8 +31,8 @@ sealed interface AgentError {
     /** Transport failure: the node could not be reached. */
     data class Network(val cause: IOException) : AgentError
 
-    /** Any other non-2xx answer, or a 2xx body that does not decode. */
-    data class Server(val code: Int, val message: String?) : AgentError
+    /** Any other non-2xx answer, or a 2xx body that does not decode; [errorCode] is the agent's `E_*` code when it sent one. */
+    data class Server(val code: Int, val message: String?, val errorCode: String? = null) : AgentError
 }
 
 /** Result of one agent call. */
@@ -90,9 +90,9 @@ object AgentErrorParser {
             } else {
                 AgentError.Unauthorized
             }
-            404, 501 -> if (code == null) AgentError.FeatureAbsent else AgentError.Server(status, message ?: code)
-            502, 504 -> if (relayed) AgentError.PeerApi(code, message) else AgentError.Server(status, message)
-            else -> AgentError.Server(status, message ?: code)
+            404, 501 -> if (code == null) AgentError.FeatureAbsent else AgentError.Server(status, message ?: code, code)
+            502, 504 -> if (relayed) AgentError.PeerApi(code, message) else AgentError.Server(status, message, code)
+            else -> AgentError.Server(status, message ?: code, code)
         }
     }
 

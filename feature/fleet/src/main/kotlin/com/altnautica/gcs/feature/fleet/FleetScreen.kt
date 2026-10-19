@@ -67,6 +67,7 @@ import com.altnautica.gcs.feature.fleet.ui.LivenessChip
 import com.altnautica.gcs.feature.fleet.ui.ReachBadge
 import com.altnautica.gcs.feature.fleet.ui.profileIcon
 import com.altnautica.gcs.feature.fleet.ui.profileLabel
+import com.altnautica.gcs.feature.fleet.ui.profileTint
 import kotlinx.coroutines.flow.Flow
 
 @Composable
@@ -184,7 +185,7 @@ private fun NodeCard(
         Column(Modifier.padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
             if (card.showThumbnail) Thumbnail(node.id, node.name, thumbnails)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(profileIcon(node.profile), contentDescription = null, tint = colors.accentPrimary, modifier = Modifier.size(AdosSize.IconLg))
+                Icon(profileIcon(node.profile), contentDescription = null, tint = profileTint(node.profile), modifier = Modifier.size(AdosSize.IconLg))
                 Column(Modifier.weight(1f).padding(start = AdosSpacing.S3)) {
                     Text(node.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(

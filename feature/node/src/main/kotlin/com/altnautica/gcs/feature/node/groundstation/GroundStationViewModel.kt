@@ -10,6 +10,9 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.fleet.data.NodeRepository
 import com.altnautica.gcs.feature.node.NodeTab
 import com.altnautica.gcs.feature.node.common.AgentWriteRunner
+import com.altnautica.gcs.core.agent.sensors.BaseModeRequest
+import com.altnautica.gcs.feature.fleet.data.NodeVitalsRepository
+import com.altnautica.gcs.feature.node.common.NodeApis
 import com.altnautica.gcs.feature.node.common.NodeClients
 import com.altnautica.gcs.feature.node.common.PageProblem
 import com.altnautica.gcs.feature.node.common.WriteState
@@ -52,14 +55,17 @@ data class GroundStationUiState(
 )
 
 /**
- * The ground-station tabs (Carried drones, Radio, Network, Mesh). Only the
- * visible tab polls; writes go through one runner with the armed override.
+ * The ground-station tabs (Carried drones, Radio, Network, GNSS, LoRa, Mesh).
+ * Only the visible tab polls; writes go through one runner with the armed
+ * override (a LoRa region change is never forced).
  */
 @HiltViewModel(assistedFactory = GroundStationViewModel.Factory::class)
 class GroundStationViewModel @AssistedInject constructor(
     @Assisted nodeId: String,
     private val nodes: NodeRepository,
     private val clients: NodeClients,
+    private val apis: NodeApis,
+    private val vitals: NodeVitalsRepository,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -70,6 +76,9 @@ class GroundStationViewModel @AssistedInject constructor(
     private val id = DeviceId(nodeId)
     private val _state = MutableStateFlow(GroundStationUiState())
     val state: StateFlow<GroundStationUiState> = _state.asStateFlow()
+
+    /** GNSS (`/api/v1/gnss`) and LoRa (`/api/v1/lora`) lanes. */
+    val lanes = StationLanes(viewModelScope, { apis.sensors(id) })
 
     val writes = AgentWriteRunner(viewModelScope)
     val writeState: StateFlow<WriteState> get() = writes.state
@@ -82,6 +91,8 @@ class GroundStationViewModel @AssistedInject constructor(
         if (tab == activeTab && pollJob?.isActive == true) return
         activeTab = tab
         pollJob?.cancel()
+        val lane = tab?.takeIf { it == NodeTab.Gnss || it == NodeTab.Lora }
+        if (lane != null) return showLane(lane)
         val loader: (suspend (AgentClient) -> Unit) = when (tab) {
             NodeTab.CarriedDrones -> ::loadCarried
             NodeTab.Radio -> ::loadRadio
@@ -101,6 +112,28 @@ class GroundStationViewModel @AssistedInject constructor(
             }
         }
     }
+
+    private fun showLane(tab: NodeTab) {
+        pollJob = viewModelScope.launch {
+            if (tab == NodeTab.Lora) {
+                lanes.loadRegions()
+                launch {
+                    val node = nodes.node(id).filterNotNull().first()
+                    vitals.vitals(node).collect { lanes.setArmed(it.armed == true) }
+                }
+            }
+            var tick = 0
+            while (isActive) {
+                if (tab == NodeTab.Gnss) lanes.loadGnss() else lanes.loadLora(withBeacons = tick % BEACON_EVERY == 0)
+                tick++
+                delay(if (tab == NodeTab.Lora) LORA_POLL_MS else POLL_MS)
+            }
+        }
+    }
+
+    // ---- gnss ----------------------------------------------------------------
+
+    fun setBase(request: BaseModeRequest) = writes.run(label = "gnss_base") { _ -> lanes.setBase(request) }
 
     private fun refresh() {
         val tab = activeTab
@@ -274,6 +307,10 @@ class GroundStationViewModel @AssistedInject constructor(
 
     private companion object {
         const val POLL_MS = 3_000L
+        const val LORA_POLL_MS = 1_000L
+
+        /** Beacons are read on every fifth LoRa poll (5 s). */
+        const val BEACON_EVERY = 5
     }
 }
 

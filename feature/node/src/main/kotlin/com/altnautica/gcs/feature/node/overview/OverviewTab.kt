@@ -25,15 +25,16 @@ import com.altnautica.gcs.feature.node.common.ProblemState
 import com.altnautica.gcs.feature.node.common.fmt
 import com.altnautica.gcs.feature.node.common.fmtInt
 
+/** [extra] adds profile-specific cards after the identity and agent cards (the Visor rows). */
 @Composable
-fun OverviewTab(nodeId: String, modifier: Modifier = Modifier) {
+fun OverviewTab(nodeId: String, modifier: Modifier = Modifier, extra: (@Composable () -> Unit)? = null) {
     val vm = hiltViewModel<OverviewViewModel, OverviewViewModel.Factory>(key = "overview-$nodeId") { it.create(nodeId) }
     val state by vm.state.collectAsStateWithLifecycle()
-    OverviewContent(state, modifier)
+    OverviewContent(state, modifier, extra)
 }
 
 @Composable
-fun OverviewContent(state: OverviewUiState, modifier: Modifier = Modifier) {
+fun OverviewContent(state: OverviewUiState, modifier: Modifier = Modifier, extra: (@Composable () -> Unit)? = null) {
     val node = state.node ?: return LoadingState(stringResource(R.string.node_loading), modifier)
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -42,6 +43,7 @@ fun OverviewContent(state: OverviewUiState, modifier: Modifier = Modifier) {
     ) {
         item { IdentityCard(node, state.agent) }
         state.agent?.let { poll -> item { AgentCard(poll) } }
+        extra?.let { content -> item { content() } }
         state.agent?.status?.let { status -> item { FlightCard(status) } }
         state.station?.let { load -> item { StationCards(load) } }
         state.vehicle?.let { v -> item { VehicleCard(v) } }

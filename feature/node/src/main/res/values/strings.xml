@@ -35,6 +35,10 @@
     <string name="tab_carried_drones">Carried drones</string>
     <string name="tab_radio">Radio</string>
     <string name="tab_network">Network</string>
+    <string name="tab_capture">Capture</string>
+    <string name="tab_sessions">Sessions</string>
+    <string name="tab_gnss">GNSS</string>
+    <string name="tab_lora">LoRa</string>
     <string name="tab_mesh">Mesh &amp; RX</string>
     <string name="tab_logs">Logs</string>
     <string name="tab_agent">Agent</string>

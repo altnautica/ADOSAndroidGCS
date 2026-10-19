@@ -6,6 +6,7 @@ import com.altnautica.gcs.core.agent.pairing.PairingService
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.fleet.data.NodeRepository
 import com.altnautica.gcs.feature.fleet.data.NodeVitalsRepository
+import com.altnautica.gcs.feature.node.common.NodeApis
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -34,8 +35,9 @@ class NodeDetailForgetTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm() =
-        NodeDetailViewModel("d1", NodeRepository(emptySet()), mockk<NodeVitalsRepository>(relaxed = true), pairing)
+    private fun vm() = NodeDetailViewModel(
+        "d1", NodeRepository(emptySet()), mockk<NodeVitalsRepository>(relaxed = true), pairing, mockk<NodeApis>(relaxed = true),
+    )
 
     @Test
     fun forgetRefusedByTheCredentialStoreOffersARetryThatRepeatsTheForget() = runTest(dispatcher) {

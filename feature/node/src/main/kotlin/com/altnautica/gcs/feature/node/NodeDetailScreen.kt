@@ -66,6 +66,9 @@ import com.altnautica.gcs.feature.node.agent.AgentTab
 import com.altnautica.gcs.feature.node.groundstation.GroundStationTab
 import com.altnautica.gcs.feature.node.logs.NodeLogsTab
 import com.altnautica.gcs.feature.node.overview.OverviewTab
+import com.altnautica.gcs.feature.node.visor.VisorCaptureTab
+import com.altnautica.gcs.feature.node.visor.VisorOverviewCards
+import com.altnautica.gcs.feature.node.visor.VisorSessionsTab
 
 /**
  * Node detail: header (profile, liveness, reach, vitals) and the tab set for
@@ -264,11 +267,20 @@ private fun NodeBody(
                 null -> Unit
                 is TabItem.Extension -> ExtensionNodePage(node = node.id, page = selected.page, modifier = Modifier.fillMaxSize())
                 is TabItem.Builtin -> when (val tab = selected.tab) {
-                    NodeTab.Overview -> OverviewTab(node.id.value)
+                    NodeTab.Overview -> OverviewTab(
+                        node.id.value,
+                        extra = if (node.profile == NodeProfile.Visor) {
+                            { VisorOverviewCards(node.id.value) }
+                        } else {
+                            null
+                        },
+                    )
                     NodeTab.Cockpit -> CockpitLauncher(node, onOpenCockpit)
                     NodeTab.Setup -> SetupRoute(nodeId = node.id, fcVariant = node.fcVariant)
                     NodeTab.Parameters -> ParametersRoute(nodeId = node.id)
-                    NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network, NodeTab.Mesh ->
+                    NodeTab.Capture -> VisorCaptureTab(node.id.value)
+                    NodeTab.Sessions -> VisorSessionsTab(node.id.value)
+                    NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh ->
                         GroundStationTab(node.id.value, tab, onOpenNode)
                     NodeTab.Logs -> NodeLogsTab(node.id.value)
                     NodeTab.Agent -> AgentTab(node.id.value)
@@ -330,9 +342,13 @@ private fun tabLabel(tab: NodeTab): Int = when (tab) {
     NodeTab.Cockpit -> R.string.tab_cockpit
     NodeTab.Setup -> R.string.tab_setup
     NodeTab.Parameters -> R.string.tab_parameters
+    NodeTab.Capture -> R.string.tab_capture
+    NodeTab.Sessions -> R.string.tab_sessions
     NodeTab.CarriedDrones -> R.string.tab_carried_drones
     NodeTab.Radio -> R.string.tab_radio
     NodeTab.Network -> R.string.tab_network
+    NodeTab.Gnss -> R.string.tab_gnss
+    NodeTab.Lora -> R.string.tab_lora
     NodeTab.Mesh -> R.string.tab_mesh
     NodeTab.Logs -> R.string.tab_logs
     NodeTab.Agent -> R.string.tab_agent

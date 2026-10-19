@@ -1,6 +1,10 @@
 package com.altnautica.gcs.core.agent
 
+import com.altnautica.gcs.core.agent.capture.AgentCaptureApi
+import com.altnautica.gcs.core.agent.capture.CaptureApi
 import com.altnautica.gcs.core.agent.groundstation.GroundStationApi
+import com.altnautica.gcs.core.agent.sensors.AgentSensorsApi
+import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.agent.groundstation.RecordingStartRequest
 import com.altnautica.gcs.core.agent.groundstation.RecordingStartResponse
 import com.altnautica.gcs.core.agent.groundstation.RecordingStopResponse
@@ -55,6 +59,12 @@ class AgentClient internal constructor(
 
     /** Extension routes (`/api/plugins...`). */
     val plugins: PluginApi = PluginApi(this)
+
+    /** Sensor, clock, storage, GNSS and LoRa routes (`/api/v1/...`). */
+    val sensors: SensorsApi = AgentSensorsApi(this)
+
+    /** World Engine capture routes (extension plugin mount). */
+    val capture: CaptureApi = AgentCaptureApi(this)
 
     // ---- identity and status -------------------------------------------------
 

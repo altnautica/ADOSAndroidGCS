@@ -80,4 +80,12 @@ class LanNodeAssemblerTest {
         assertEquals(FcVariant.Msp, LanNodeAssembler.fcVariant(StatusFull(fcVariant = "betaflight")))
         assertEquals(FcVariant.Unknown, LanNodeAssembler.fcVariant(null))
     }
+
+    @Test
+    fun `profile mapping keeps visor and never guesses a drone`() {
+        assertEquals(NodeProfile.Visor, LanNodeAssembler.profile("visor"))
+        assertEquals(NodeProfile.GroundStation, LanNodeAssembler.profile("ground_station"))
+        assertEquals(NodeProfile.Unknown, LanNodeAssembler.profile("something-new"))
+        assertEquals(NodeProfile.Unknown, LanNodeAssembler.profile(null))
+    }
 }

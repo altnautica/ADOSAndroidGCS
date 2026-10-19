@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.Flow
 @JvmInline
 value class DeviceId(val value: String)
 
-enum class NodeProfile { Drone, GroundStation, Workstation, Unknown }
+/** Agent profile of a node. [Unknown] stays unknown: it is never treated as a drone. */
+enum class NodeProfile { Drone, GroundStation, Workstation, Visor, Unknown }
 
 enum class Liveness { Live, Stale, Offline }
 

@@ -14,7 +14,11 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.altnautica.gcs.core.model.NodeProfile
+import com.altnautica.gcs.feature.node.common.NodeApis
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -52,6 +57,7 @@ class NodeDetailViewModel @AssistedInject constructor(
     nodes: NodeRepository,
     vitals: NodeVitalsRepository,
     private val pairing: PairingService,
+    private val apis: NodeApis,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -61,6 +67,32 @@ class NodeDetailViewModel @AssistedInject constructor(
 
     private val id = DeviceId(nodeId)
 
+    /**
+     * GNSS and LoRa tabs of a ground station follow what its agent reports as
+     * fitted (`present`). Re-read every [FEATURE_PROBE_MS]; a failed read keeps
+     * the last answer so a poll blip does not flicker the tab row.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val station: Flow<StationFeatures> = nodes.node(id)
+        .map { n -> n != null && n.profile == NodeProfile.GroundStation && NodeTabs.hasAgentLink(n) }
+        .distinctUntilChanged()
+        .flatMapLatest { probe ->
+            if (!probe) {
+                flowOf(StationFeatures.NONE)
+            } else {
+                flow {
+                    var last = StationFeatures.NONE
+                    while (true) {
+                        last = probeStation(last)
+                        emit(last)
+                        delay(FEATURE_PROBE_MS)
+                    }
+                }
+            }
+        }
+        .onStart { emit(StationFeatures.NONE) }
+        .distinctUntilChanged()
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val state: StateFlow<NodeDetailState> = combine(
         nodes.nodes,
@@ -68,12 +100,20 @@ class NodeDetailViewModel @AssistedInject constructor(
             val node = nodes.nodes.value?.firstOrNull { it.id == id }
             if (reaches == null || node == null) flowOf(NodeVitals.UNKNOWN) else vitals.vitals(node).onStart { emit(NodeVitals.UNKNOWN) }
         },
-    ) { list, v ->
+        station,
+    ) { list, v, features ->
         when {
             list == null -> NodeDetailState.Loading
-            else -> list.firstOrNull { it.id == id }?.let { NodeDetailState.Ready(it, NodeTabs.tabsFor(it), v) } ?: NodeDetailState.Missing
+            else -> list.firstOrNull { it.id == id }?.let { NodeDetailState.Ready(it, NodeTabs.tabsFor(it, features), v) } ?: NodeDetailState.Missing
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NodeDetailState.Loading)
+
+    private suspend fun probeStation(last: StationFeatures): StationFeatures {
+        val api = apis.sensors(id) ?: return StationFeatures.NONE
+        val gnss = api.gnss().getOrNull()?.present ?: last.gnss
+        val lora = api.lora().getOrNull()?.present ?: last.lora
+        return StationFeatures(gnss, lora)
+    }
 
     private val _forget = MutableStateFlow<ForgetState>(ForgetState.Idle)
     val forget: StateFlow<ForgetState> = _forget.asStateFlow()
@@ -109,5 +149,9 @@ class NodeDetailViewModel @AssistedInject constructor(
         is PairingOutcome.Success -> ForgetState.Done
         is PairingOutcome.Failure ->
             if (failure == PairingFailure.VaultUnavailable) ForgetState.CredentialStoreUnavailable else ForgetState.Failed(failure.toString())
+    }
+
+    private companion object {
+        const val FEATURE_PROBE_MS = 30_000L
     }
 }
