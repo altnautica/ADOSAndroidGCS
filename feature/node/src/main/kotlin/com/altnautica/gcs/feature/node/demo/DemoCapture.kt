@@ -179,7 +179,7 @@ class DemoCaptureApi(private val now: () -> Long = System::currentTimeMillis) : 
         return AgentResult.Ok(ReconstructResponse(ok = true, node = NODE, jobId = "j-demo-$preset"))
     }
 
-    private fun storageLeft() = CaptureStorageLeft(freeBytes = 812_345_678_901 - (recordingS * 150_000_000).toLong(), estRemainingS = 14_400)
+    private fun storageLeft() = CaptureStorageLeft(freeBytes = 812_345_678_901 - (recordingS * 150_000_000).toLong(), estRemainingS = 14_400.0)
 
     private fun ok(): AgentResult<JsonElement> = AgentResult.Ok(JsonObject(mapOf("ok" to JsonPrimitive(true))))
 

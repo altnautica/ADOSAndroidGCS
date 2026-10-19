@@ -153,7 +153,13 @@ private fun OptionRow(selected: Boolean, title: String, detail: String?, onClick
 @Composable
 private fun planDetail(plan: RegionOptionUi): String {
     val rules = if (plan.rules.isEmpty()) stringResource(R.string.gs_lora_picker_unverified) else plan.rules.map { ruleName(it) }.joinToString(", ")
-    val module = stringResource(if (plan.moduleOk) R.string.gs_lora_picker_module_ok else R.string.gs_lora_picker_module_no)
+    val module = stringResource(
+        when (plan.moduleOk) {
+            true -> R.string.gs_lora_picker_module_ok
+            false -> R.string.gs_lora_picker_module_no
+            null -> R.string.gs_lora_picker_module_unknown
+        },
+    )
     return listOfNotNull(band(plan.bandMhz), rules, module).joinToString(" · ")
 }
 

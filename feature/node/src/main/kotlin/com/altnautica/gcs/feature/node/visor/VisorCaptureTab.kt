@@ -139,7 +139,7 @@ private fun SessionCard(c: CaptureUi, lastSegment: Int?) {
             KeyValueRow(stringResource(R.string.visor_features), c.trackedFeatures.fmtInt())
         }
         KeyValueRow(stringResource(R.string.visor_storage_free), formatBytes(c.freeBytes))
-        KeyValueRow(stringResource(R.string.visor_storage_remaining), c.estRemainingS?.let { formatDuration(it.toDouble()) })
+        KeyValueRow(stringResource(R.string.visor_storage_remaining), c.estRemainingS?.let { formatDuration(it) })
     }
 }
 

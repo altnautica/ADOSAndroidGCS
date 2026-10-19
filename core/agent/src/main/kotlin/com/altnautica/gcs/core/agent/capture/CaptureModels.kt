@@ -1,5 +1,7 @@
 package com.altnautica.gcs.core.agent.capture
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -57,9 +59,11 @@ data class CaptureCoverage(
 data class CaptureHealth(val id: String, val level: String = "ok", val value: Double? = null)
 
 /** Exposure state; also the body and answer of `PUT atlas/capture/exposure`. */
+/** [locked] is always encoded so an unlock request carries `"locked":false`. */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CaptureExposure(
-    val locked: Boolean = false,
+    @EncodeDefault val locked: Boolean = false,
     @SerialName("exposure_us") val exposureUs: Long? = null,
     val gain: Double? = null,
     /** `walking` | `slow` | `short`. */
@@ -71,7 +75,8 @@ data class CaptureExposure(
 @Serializable
 data class CaptureStorageLeft(
     @SerialName("free_bytes") val freeBytes: Long? = null,
-    @SerialName("est_remaining_s") val estRemainingS: Long? = null,
+    /** Seconds; the agent may send an integer or a decimal. */
+    @SerialName("est_remaining_s") val estRemainingS: Double? = null,
 )
 
 /** Optional `POST atlas/capture/start` body. */

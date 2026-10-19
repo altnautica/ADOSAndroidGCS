@@ -9,7 +9,7 @@ data class ChannelUi(val freqMhz: Double?, val bwKhz: Int?, val sf: Int?, val er
 data class MeshtasticUi(val connected: Boolean, val port: String?, val regionPreset: String?)
 
 data class BeaconUi(
-    val nodeId: Int,
+    val nodeId: Long,
     val latDeg: Double?,
     val lonDeg: Double?,
     val altM: Double?,
@@ -28,7 +28,8 @@ data class RegionOptionUi(
     val bandMhz: List<Double>,
     /** Rule kinds the plan declares; empty = no verified plan (receive only). */
     val rules: List<String>,
-    val moduleOk: Boolean,
+    /** Null = the module's range is unknown. */
+    val moduleOk: Boolean?,
 )
 
 /** Amber advisory chips under the region line; they never block (the agent does that). */

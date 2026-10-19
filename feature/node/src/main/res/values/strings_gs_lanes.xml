@@ -111,6 +111,7 @@
     <string name="gs_lora_picker_unverified">not verified, receive only</string>
     <string name="gs_lora_picker_module_ok">module OK</string>
     <string name="gs_lora_picker_module_no">module cannot tune</string>
+    <string name="gs_lora_picker_module_unknown">module unknown</string>
     <string name="gs_lora_picker_responsibility">You are responsible for using the region where the station operates.</string>
     <string name="gs_lora_picker_apply">Apply</string>
     <string name="gs_lora_confirm_title">Change region?</string>

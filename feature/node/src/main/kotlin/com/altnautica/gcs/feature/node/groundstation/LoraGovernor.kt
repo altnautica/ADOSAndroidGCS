@@ -57,7 +57,7 @@ enum class LoraFix { SetRegion, ChangeRegion, PowerSettings, None }
 data class LoraBlock(
     val reason: LoraBlockReason,
     val fix: LoraFix,
-    /** Blocks that clear by themselves show the next-TX countdown. */
+    /** Blocks that clear by themselves (duty, dwell, lbt) show the next-TX countdown. */
     val countdown: Boolean,
     /** A temporary pause (duty/dwell/lbt) rather than a configuration block. */
     val paused: Boolean,
@@ -80,7 +80,7 @@ data class LoraUi(
     val transport: String?,
     val moduleBand: String?,
     val channel: ChannelUi?,
-    val nodeId: Int?,
+    val nodeId: Long?,
     val txAllowed: Boolean,
     val block: LoraBlock?,
     val meters: List<RuleMeter>,
@@ -124,7 +124,7 @@ object LoraGovernor {
             moduleBand = s.moduleBand,
             channel = s.channel?.let { ChannelUi(it.freqMhz, it.bwKhz, it.sf, it.erpMw, it.maxErpMw) },
             nodeId = s.nodeId,
-            txAllowed = s.txAllowed,
+            txAllowed = s.txAllowed && s.blockedReason == null,
             block = block(s.blockedReason, s.txAllowed),
             meters = governor?.rules.orEmpty().mapNotNull(::meter),
             nextTxAllowedMs = governor?.nextTxAllowedMs,
@@ -161,9 +161,8 @@ object LoraGovernor {
             LoraBlockReason.PowerOverLimit -> LoraFix.PowerSettings
             else -> LoraFix.None
         }
-        val countdown = kind == LoraBlockReason.DutyExhausted || kind == LoraBlockReason.DwellTime
-        val paused = countdown || kind == LoraBlockReason.LbtBusy
-        return LoraBlock(kind, fix, countdown, paused, reason)
+        val paused = kind == LoraBlockReason.DutyExhausted || kind == LoraBlockReason.DwellTime || kind == LoraBlockReason.LbtBusy
+        return LoraBlock(kind, fix, paused, paused, reason)
     }
 
     fun meter(rule: LoraRule): RuleMeter? = when (rule.kind) {

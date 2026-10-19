@@ -84,7 +84,7 @@ class VisorViewModelTest {
         assertEquals(12480L, ui.framesTotal)
         assertEquals("vio", ui.poseSource)
         assertEquals(72.0, ui.coveragePct!!, 0.0)
-        assertEquals(14400L, ui.estRemainingS)
+        assertEquals(14400.0, ui.estRemainingS!!, 0.0)
         // Fixed chip order, unknown ids dropped, levels mapped.
         assertEquals(listOf("blur", "texture", "flicker", "corridor", "storage", "clock"), ui.chips.map { it.id })
         assertEquals(ChipLevel.Warn, ui.chips.first { it.id == "texture" }.level)

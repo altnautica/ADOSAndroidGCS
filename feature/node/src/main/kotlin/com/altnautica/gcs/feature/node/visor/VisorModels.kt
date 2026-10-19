@@ -42,7 +42,7 @@ data class CaptureUi(
     val chips: List<HealthChip>,
     val exposure: ExposureUi?,
     val freeBytes: Long?,
-    val estRemainingS: Long?,
+    val estRemainingS: Double?,
     /** Capture cameras the session reports, in agent order; the preview picks from these. */
     val cameraIds: List<String>,
 ) {

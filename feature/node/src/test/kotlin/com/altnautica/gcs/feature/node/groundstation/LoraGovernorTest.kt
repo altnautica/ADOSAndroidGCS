@@ -125,11 +125,24 @@ class LoraGovernorTest {
 
         assertTrue(b("dwell_time").countdown)
         assertEquals(LoraBlockReason.LbtBusy, b("lbt_busy").reason)
-        assertFalse(b("lbt_busy").countdown)
+        assertTrue(b("lbt_busy").countdown)
         assertTrue(b("lbt_busy").paused)
 
         assertEquals(LoraFix.PowerSettings, b("power_over_limit").fix)
         assertEquals(LoraBlockReason.Other, b("something_else").reason)
+    }
+
+    @Test
+    fun aBlockedReasonOverridesTxAllowed() {
+        val ui = LoraGovernor.map(
+            AgentJson.json.decodeFromString(
+                LoraStatus.serializer(),
+                """{"present":true,"tx_allowed":true,"blocked_reason":"duty_exhausted","node_id":4294967295}""",
+            ),
+        )
+        assertFalse(ui.txAllowed)
+        assertTrue(ui.block!!.paused)
+        assertEquals(4294967295L, ui.nodeId)
     }
 
     @Test

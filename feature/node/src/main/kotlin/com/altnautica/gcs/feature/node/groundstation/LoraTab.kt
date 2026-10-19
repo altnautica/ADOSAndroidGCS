@@ -94,9 +94,20 @@ private fun RegionCard(lora: LoraUi, mismatches: List<LoraMismatch>, remainingMs
             KeyValueRow(stringResource(R.string.gs_lora_channel), listOfNotNull(c.freqMhz.fmt(3, " MHz"), c.bwKhz.fmtInt(" kHz"), c.sf?.let { "SF$it" }).joinToString(" · "))
             KeyValueRow(stringResource(R.string.gs_lora_power), listOfNotNull(c.erpMw.fmt(0), c.maxErpMw.fmt(0, " mW ERP")).joinToString(" / ").ifEmpty { null })
         }
+        val paused = lora.block?.paused == true
         StatusChip(
-            if (lora.txAllowed) StatusLevel.Success else StatusLevel.Error,
-            stringResource(if (lora.txAllowed) R.string.gs_lora_tx_allowed else R.string.gs_lora_tx_blocked),
+            when {
+                lora.txAllowed -> StatusLevel.Success
+                paused -> StatusLevel.Warning
+                else -> StatusLevel.Error
+            },
+            stringResource(
+                when {
+                    lora.txAllowed -> R.string.gs_lora_tx_allowed
+                    paused -> R.string.gs_lora_tx_paused
+                    else -> R.string.gs_lora_tx_blocked
+                },
+            ),
         )
         if (lora.showNextTx) {
             KeyValueRow(

@@ -79,7 +79,7 @@ data class LoraStatus(
     @SerialName("module_band") val moduleBand: String? = null,
     val region: LoraRegion? = null,
     val channel: LoraChannel? = null,
-    @SerialName("node_id") val nodeId: Int? = null,
+    @SerialName("node_id") val nodeId: Long? = null,
     @SerialName("tx_allowed") val txAllowed: Boolean = false,
     /**
      * `region_unset` | `module_band_mismatch` | `duty_exhausted` | `dwell_time` |
@@ -185,7 +185,8 @@ data class LoraRegionPlan(
     @SerialName("plan_id") val planId: String? = null,
     @SerialName("band_mhz") val bandMhz: List<Double> = emptyList(),
     val rules: List<String> = emptyList(),
-    @SerialName("supported_by_module") val supportedByModule: Boolean = false,
+    /** Null when the module's tuning range is unknown. */
+    @SerialName("supported_by_module") val supportedByModule: Boolean? = null,
     /** Expected ELRS regulatory domain per band (`2g4`, `900`); a null value is unverified. */
     @SerialName("elrs_domains") val elrsDomains: Map<String, String?> = emptyMap(),
     /** Meshtastic region preset the plan maps to; null = no preset. */
@@ -211,7 +212,7 @@ data class LoraBeacons(val beacons: List<LoraBeacon> = emptyList())
 
 @Serializable
 data class LoraBeacon(
-    @SerialName("node_id") val nodeId: Int,
+    @SerialName("node_id") val nodeId: Long,
     val kind: String? = null,
     @SerialName("lat_deg") val latDeg: Double? = null,
     @SerialName("lon_deg") val lonDeg: Double? = null,
