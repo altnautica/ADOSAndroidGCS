@@ -75,6 +75,8 @@ data class LoraUi(
     val regionFromCountry: Boolean,
     val bandMhz: List<Double>,
     val citation: String?,
+    /** Meshtastic preset the active region expects; null = none. */
+    val expectedMeshtasticPreset: String?,
     val transport: String?,
     val moduleBand: String?,
     val channel: ChannelUi?,
@@ -117,6 +119,7 @@ object LoraGovernor {
             regionFromCountry = s.region?.source == "network.regulatory.region",
             bandMhz = s.region?.bandMhz.orEmpty(),
             citation = s.region?.citation,
+            expectedMeshtasticPreset = s.region?.meshtasticPreset,
             transport = s.transport,
             moduleBand = s.moduleBand,
             channel = s.channel?.let { ChannelUi(it.freqMhz, it.bwKhz, it.sf, it.erpMw, it.maxErpMw) },

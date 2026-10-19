@@ -101,6 +101,8 @@ data class LoraRegion(
     val source: String? = null,
     @SerialName("band_mhz") val bandMhz: List<Double> = emptyList(),
     val citation: String? = null,
+    /** Meshtastic region preset this region maps to; null = no preset. */
+    @SerialName("meshtastic_preset") val meshtasticPreset: String? = null,
 )
 
 @Serializable
@@ -186,6 +188,8 @@ data class LoraRegionPlan(
     @SerialName("supported_by_module") val supportedByModule: Boolean = false,
     /** Expected ELRS regulatory domain per band (`2g4`, `900`); a null value is unverified. */
     @SerialName("elrs_domains") val elrsDomains: Map<String, String?> = emptyMap(),
+    /** Meshtastic region preset the plan maps to; null = no preset. */
+    @SerialName("meshtastic_preset") val meshtasticPreset: String? = null,
 )
 
 /** `GET /api/v1/ground-station/crsf`: only the module list is read here. */

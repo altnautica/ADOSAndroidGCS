@@ -132,7 +132,7 @@ class DemoGroundSensors(private val now: () -> Long = System::currentTimeMillis)
         return AgentResult.Ok(
             LoraStatus(
                 present = true, transport = "e22", moduleBand = "850-930",
-                region = LoraRegion("IN", "India", "IN865", "network.regulatory.region", listOf(865.0, 867.0), "G.S.R. 853(E), 2021"),
+                region = LoraRegion("IN", "India", "IN865", "network.regulatory.region", listOf(865.0, 867.0), "G.S.R. 853(E), 2021", meshtasticPreset = "IN"),
                 channel = LoraChannel(866.0, 125, 9, 25.0, 25.0),
                 nodeId = 17, txAllowed = true, blockedReason = null,
                 governor = LoraGovernor(

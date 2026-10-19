@@ -142,7 +142,7 @@ class StationLanes(
 
     private fun refreshMismatches() = _state.update { s ->
         val lora = (s.lora as? Load.Ready)?.value
-        s.copy(mismatches = LoraLinks.mismatches(lora?.regionCode, plans, modules, lora?.meshtastic))
+        s.copy(mismatches = LoraLinks.mismatches(lora?.regionCode, plans, modules, lora?.meshtastic, lora?.expectedMeshtasticPreset))
     }
 
     private fun failGnss(problem: PageProblem) = _state.update { s -> if (s.gnss is Load.Ready) s else s.copy(gnss = Load.Failed(problem)) }

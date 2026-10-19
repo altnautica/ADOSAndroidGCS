@@ -119,5 +119,5 @@
     <string name="gs_lora_dwell_value">%1$d / %2$d ms</string>
     <string name="gs_lora_dwell_value_per">%1$d / %2$d ms per %3$d s</string>
     <string name="gs_lora_mismatch_elrs">ELRS module %1$s is %2$s, region expects %3$s</string>
-    <string name="gs_lora_mismatch_meshtastic">Meshtastic preset %1$s differs from region %2$s</string>
+    <string name="gs_lora_mismatch_meshtastic">Meshtastic preset %1$s, region expects %2$s</string>
 </resources>

@@ -118,7 +118,7 @@ private fun RegionCard(lora: LoraUi, mismatches: List<LoraMismatch>, remainingMs
 @Composable
 private fun mismatchText(m: LoraMismatch): String = when (m) {
     is LoraMismatch.ElrsDomain -> stringResource(R.string.gs_lora_mismatch_elrs, m.moduleId, m.domain, m.expected)
-    is LoraMismatch.MeshtasticPreset -> stringResource(R.string.gs_lora_mismatch_meshtastic, m.preset, m.region)
+    is LoraMismatch.MeshtasticPreset -> stringResource(R.string.gs_lora_mismatch_meshtastic, m.preset, m.expected)
 }
 
 @Composable

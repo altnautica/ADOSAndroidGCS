@@ -221,23 +221,48 @@ class LoraGovernorTest {
         )
         assertEquals(
             listOf(LoraMismatch.ElrsDomain("m0", "CE_LBT", "ISM2G4"), LoraMismatch.ElrsDomain("m2", "FCC915", "IN866")),
-            LoraLinks.mismatches("IN", plans, modules, null),
+            LoraLinks.mismatches("IN", plans, modules, null, null),
         )
         // An unverified expected domain raises nothing.
-        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("JP", plans, listOf(CrsfModule("m2", null, true, "FCC915")), null))
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("JP", plans, listOf(CrsfModule("m2", null, true, "FCC915")), null, null))
         // No region, no comparison.
-        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches(null, plans, modules, null))
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches(null, plans, modules, null, null))
         assertEquals("2g4", LoraLinks.elrsBand("CE_LBT"))
         assertEquals("900", LoraLinks.elrsBand("AU433"))
     }
 
     @Test
-    fun meshtasticPresetMismatch() {
+    fun meshtasticPresetComparesWithTheRegionsExpectedPreset() {
+        val bridge = { preset: String? -> MeshtasticUi(true, "/dev/ttyACM2", preset) }
         assertEquals(
             listOf(LoraMismatch.MeshtasticPreset("EU_868", "IN")),
-            LoraLinks.mismatches("IN", plans, emptyList(), MeshtasticUi(true, "/dev/ttyACM2", "EU_868")),
+            LoraLinks.mismatches("IN", plans, emptyList(), bridge("EU_868"), "IN"),
         )
-        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("IN", plans, emptyList(), MeshtasticUi(true, null, "IN")))
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("IN", plans, emptyList(), bridge("IN"), "IN"))
+        // Exact match against the preset, not the region code: AU maps to ANZ.
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("AU", plans, emptyList(), bridge("ANZ"), "ANZ"))
+        assertEquals(listOf(LoraMismatch.MeshtasticPreset("AU", "ANZ")), LoraLinks.mismatches("AU", plans, emptyList(), bridge("AU"), "ANZ"))
+        // Either side unknown, or bridge disabled (null), raises nothing.
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("IN", plans, emptyList(), bridge("EU_868"), null))
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("IN", plans, emptyList(), bridge(null), "IN"))
+        assertEquals(emptyList<LoraMismatch>(), LoraLinks.mismatches("IN", plans, emptyList(), null, "IN"))
+    }
+
+    @Test
+    fun lanesFlagABridgePresetThatDiffersFromTheRegion() = runTest(UnconfinedTestDispatcher()) {
+        val status = status(
+            """{"present":true,"region":{"code":"IN","name":"India","meshtastic_preset":"IN"},"tx_allowed":true,
+               "meshtastic":{"enabled":true,"connected":true,"port":"/dev/ttyACM2","region_preset":"EU_868"}}""",
+        )
+        assertEquals("IN", LoraGovernor.map(status).expectedMeshtasticPreset)
+        val api = mockk<SensorsApi> {
+            coEvery { lora() } returns AgentResult.Ok(status)
+            coEvery { loraBeacons() } returns AgentResult.Ok(LoraBeacons())
+            coEvery { elrsModules() } returns AgentResult.Ok(CrsfStatus())
+        }
+        val lanes = StationLanes(backgroundScope, { api })
+        lanes.loadLora(withLinks = true)
+        assertEquals(listOf(LoraMismatch.MeshtasticPreset("EU_868", "IN")), lanes.state.value.mismatches)
     }
 
     @Test

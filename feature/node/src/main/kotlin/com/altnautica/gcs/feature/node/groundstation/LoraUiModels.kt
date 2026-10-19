@@ -36,8 +36,8 @@ sealed interface LoraMismatch {
     /** An ELRS module reports [domain] where the region expects [expected] on its band. */
     data class ElrsDomain(val moduleId: String, val domain: String, val expected: String) : LoraMismatch
 
-    /** The Meshtastic bridge runs preset [preset] while the LoRa region is [region]. */
-    data class MeshtasticPreset(val preset: String, val region: String) : LoraMismatch
+    /** The Meshtastic bridge runs preset [preset] while the region's table maps to [expected]. */
+    data class MeshtasticPreset(val preset: String, val expected: String) : LoraMismatch
 }
 
 object LoraLinks {
@@ -56,12 +56,16 @@ object LoraLinks {
      * Advisory mismatches for the active [regionCode]. A module whose domain is
      * unknown, or a region whose expected domain for that band is unverified
      * (null), raises nothing: there is no verified expectation to differ from.
+     * The Meshtastic preset is compared by exact equality with the region's
+     * [expectedPreset], only while the bridge is enabled ([meshtastic] is
+     * non-null only then) and both values are known.
      */
     fun mismatches(
         regionCode: String?,
         plans: List<LoraRegionPlan>,
         modules: List<CrsfModule>,
         meshtastic: MeshtasticUi?,
+        expectedPreset: String?,
     ): List<LoraMismatch> {
         if (regionCode == null) return emptyList()
         val plan = plans.firstOrNull { it.code == regionCode }
@@ -71,7 +75,11 @@ object LoraLinks {
             if (domain != expected) LoraMismatch.ElrsDomain(m.id, domain, expected) else null
         }
         val preset = meshtastic?.regionPreset
-        val mesh = if (preset != null && preset != regionCode) listOf(LoraMismatch.MeshtasticPreset(preset, regionCode)) else emptyList()
+        val mesh = if (preset != null && expectedPreset != null && preset != expectedPreset) {
+            listOf(LoraMismatch.MeshtasticPreset(preset, expectedPreset))
+        } else {
+            emptyList()
+        }
         return elrs + mesh
     }
 }
