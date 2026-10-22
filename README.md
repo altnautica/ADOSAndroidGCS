@@ -1,8 +1,8 @@
 <p align="center">
   <a href="https://altnautica.com">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/brand/ados-lockup-dark.svg">
-      <img src=".github/assets/brand/ados-lockup-light.svg" alt="ADOS" width="220">
+      <source media="(prefers-color-scheme: dark)" srcset=".github/assets/brand/altnautica-wordmark-dark.svg">
+      <img src=".github/assets/brand/altnautica-wordmark-light.svg" alt="Altnautica" width="240">
     </picture>
   </a>
 </p>
@@ -37,7 +37,9 @@
   </picture>
 </p>
 
-ADOS Android GCS is a native ground control station written in Kotlin with Jetpack Compose, for phones, tablets and handheld controllers running Android 10 (API 29) or later, in either screen orientation. It reaches an ADOS Drone Agent on the LAN, a flight controller directly over USB, UDP or TCP, and your fleet through the opt-in cloud.
+ADOS Android GCS is the native Android ground station of ADOS, an open-source platform for software-defined drones. It is written in Kotlin with Jetpack Compose for phones, tablets and handheld controllers running Android 10 (API 29) or later, in either screen orientation. It reaches an ADOS Drone Agent on the LAN, a flight controller directly over USB, UDP or TCP, and your fleet through the opt-in cloud.
+
+It is the handheld counterpart to [ADOS Mission Control](https://github.com/altnautica/ADOSMissionControl): the same drones and the same agents, from a device you carry into the field. The app grows with each release, and contributions are welcome (see [Contributing](#contributing)).
 
 ## Quick start
 
