@@ -23,7 +23,7 @@ class DirectFcTransportProvider @Inject constructor(
     private val settings: DirectLinkSettings,
 ) : TransportProvider {
 
-    override fun supports(reach: Reach): Boolean = reach == Reach.DirectFc
+    override fun supports(node: NodeSummary, reach: Reach): Boolean = reach == Reach.DirectFc
 
     override suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport {
         require(reach == Reach.DirectFc) { "Unsupported reach $reach" }

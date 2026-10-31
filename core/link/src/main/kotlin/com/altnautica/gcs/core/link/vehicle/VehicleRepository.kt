@@ -308,7 +308,7 @@ class VehicleRepository @Inject constructor(
     }
 
     private suspend fun openOrNull(node: NodeSummary, reach: Reach): MavlinkByteTransport? {
-        val provider = providers.firstOrNull { it.supports(reach) } ?: return null
+        val provider = providers.firstOrNull { it.supports(node, reach) } ?: return null
         return try {
             provider.open(node, reach)
         } catch (e: CancellationException) {
@@ -319,7 +319,7 @@ class VehicleRepository @Inject constructor(
     }
 
     private fun candidatesOf(node: NodeSummary): List<Reach> =
-        node.reaches.filter { r -> r !is Reach.Blocked && providers.any { it.supports(r) } }
+        node.reaches.filter { r -> r !is Reach.Blocked && providers.any { it.supports(node, r) } }
 
     private fun TransportState.isTerminal() = this is TransportState.Closed || this is TransportState.Failed
 

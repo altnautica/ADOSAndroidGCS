@@ -164,7 +164,7 @@ class CloudMavlinkTransportProvider @Inject constructor(
     @param:CloudScope private val scope: CoroutineScope,
 ) : TransportProvider {
 
-    override fun supports(reach: Reach): Boolean = reach == Reach.CloudLive
+    override fun supports(node: NodeSummary, reach: Reach): Boolean = reach == Reach.CloudLive
 
     override suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport {
         check(auth.active.value && auth.state.value == CloudSessionState.SignedIn) { "Cloud is not signed in" }

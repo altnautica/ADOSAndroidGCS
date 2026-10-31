@@ -171,7 +171,7 @@ class AgentMavlinkTransportProvider @Inject constructor(
     private val http: AgentHttp,
 ) : TransportProvider {
 
-    override fun supports(reach: Reach): Boolean = reach is Reach.Lan || reach is Reach.ViaGround
+    override fun supports(node: NodeSummary, reach: Reach): Boolean = reach is Reach.Lan || reach is Reach.ViaGround
 
     override suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport {
         val target = when (reach) {

@@ -28,6 +28,6 @@ sealed interface WriteResult {
 
 /** Opens a transport for the reaches it supports; bound into a Hilt set. */
 interface TransportProvider {
-    fun supports(reach: Reach): Boolean
+    fun supports(node: NodeSummary, reach: Reach): Boolean
     suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport
 }

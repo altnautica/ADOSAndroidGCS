@@ -45,7 +45,7 @@ class QueuedRoutingTest {
 
     /** Supports LAN only and never opens, so a LAN node stays a MAVLink vehicle waiting for its link. */
     private object LanOnly : TransportProvider {
-        override fun supports(reach: Reach) = reach == Reach.Lan
+        override fun supports(node: NodeSummary, reach: Reach) = reach == Reach.Lan
         override suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport = error("offline")
     }
 

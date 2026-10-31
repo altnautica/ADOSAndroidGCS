@@ -64,7 +64,7 @@ class PhoneRadioTransport(
 class PhoneRadioTransportProvider @Inject constructor(
     private val session: PhoneRadioSession,
 ) : TransportProvider {
-    override fun supports(reach: Reach): Boolean = reach is Reach.PhoneRadio
+    override fun supports(node: NodeSummary, reach: Reach): Boolean = reach is Reach.PhoneRadio
 
     override suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport {
         require(reach is Reach.PhoneRadio) { "unsupported reach $reach" }
