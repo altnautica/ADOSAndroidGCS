@@ -6,25 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.database.SavedPlanDao
 import com.altnautica.gcs.core.database.SavedPlanEntity
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
-import com.altnautica.gcs.core.link.mission.MissionItem
-import com.altnautica.gcs.core.link.mission.MissionResult
-import com.altnautica.gcs.core.link.mission.MissionTransfer
-import com.altnautica.gcs.core.link.mission.MissionType
-import com.altnautica.gcs.core.link.mission.TransferDirection
-import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.MapBasemap
 import com.altnautica.gcs.core.map.offline.OfflineMapRepository
-import com.altnautica.gcs.core.mavlink.modes.FirmwareFamily
-import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.core.model.GpsFix
-import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSource
-import com.altnautica.gcs.core.model.NodeSummary
-import com.altnautica.gcs.core.model.Reach
-import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.feature.plan.io.PlanDocuments
 import com.altnautica.gcs.feature.plan.io.PlanFileFormat
 import com.altnautica.gcs.feature.plan.io.PlanFiles
@@ -32,26 +19,15 @@ import com.altnautica.gcs.feature.plan.io.PlanFormatException
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
 import com.altnautica.gcs.feature.plan.model.FenceZone
 import com.altnautica.gcs.feature.plan.model.MissionPlan
-import com.altnautica.gcs.feature.plan.model.MissionWire
 import com.altnautica.gcs.feature.plan.model.PlanCommand
 import com.altnautica.gcs.feature.plan.model.PlanEditor
-import com.altnautica.gcs.feature.plan.model.PlanHome
 import com.altnautica.gcs.feature.plan.model.RallyPoint
 import com.altnautica.gcs.feature.plan.survey.SurveyBuilder
 import com.altnautica.gcs.feature.plan.survey.SurveySettings
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -64,11 +40,11 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class PlannerViewModel @Inject constructor(
-    private val servicesProvider: VehicleServicesProvider,
-    private val nodeSources: Set<@JvmSuppressWildcards NodeSource>,
+    servicesProvider: VehicleServicesProvider,
+    nodeSources: Set<@JvmSuppressWildcards NodeSource>,
     private val savedPlans: SavedPlanDao,
     private val documents: PlanDocuments,
-    private val clock: ElapsedClock,
+    clock: ElapsedClock,
     private val offlineMaps: OfflineMapRepository,
 ) : ViewModel() {
 
@@ -80,102 +56,21 @@ class PlannerViewModel @Inject constructor(
 
     /** Plan as last saved or loaded; drives [PlannerUiState.dirty]. */
     private var savedPlan = MissionPlan()
-    private var services: VehicleServices? = null
-    private var vehicleJob: Job? = null
-    private var transferJob: Job? = null
-    private var startJob: Job? = null
+    private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId) { plan, name, savedId, dirty ->
+        replacePlan(plan, name = name, savedId = savedId, dirty = dirty)
+    }
 
     init {
         viewModelScope.launch { savedPlans.observeAll().collect { list -> _state.update { it.copy(library = list) } } }
         viewModelScope.launch { offlineMaps.pmtiles.collect { packs -> _state.update { it.copy(packs = packs) } } }
         viewModelScope.launch { offlineMaps.refresh() }
-        viewModelScope.launch {
-            allNodes().collect { nodes ->
-                val vehicles = nodes.filter { it.profile == NodeProfile.Drone || Reach.DirectFc in it.reaches }
-                _state.update { s -> s.copy(nodes = vehicles, nodeName = vehicles.firstOrNull { it.id == s.nodeId }?.name ?: s.nodeName) }
-            }
-        }
-    }
-
-    private fun allNodes(): Flow<List<NodeSummary>> {
-        if (nodeSources.isEmpty()) return flowOf(emptyList())
-        return combine(nodeSources.map { it.nodes }) { lists -> lists.flatMap { it.toList() }.distinctBy { it.id } }
+        vehicle.observeNodes(nodeSources)
     }
 
     // ── Vehicle ──────────────────────────────────────────────
 
     /** Plans for [nodeId]; null detaches from any vehicle. */
-    fun selectVehicle(nodeId: DeviceId?) {
-        if (nodeId == _state.value.nodeId && vehicleJob != null) return
-        vehicleJob?.cancel()
-        transferJob?.cancel()
-        transferJob = null
-        startJob?.cancel()
-        startJob = null
-        services = null
-        _state.update { s ->
-            s.copy(
-                nodeId = nodeId,
-                nodeName = s.nodes.firstOrNull { it.id == nodeId }?.name,
-                link = if (nodeId == null) VehicleLink.None else VehicleLink.Connecting,
-                vehiclePlan = null,
-                transfer = TransferState.Idle,
-                startSheet = null,
-            )
-        }
-        if (nodeId == null) {
-            vehicleJob = null
-            return
-        }
-        vehicleJob = viewModelScope.launch {
-            servicesProvider.services(nodeId).collectLatest { svc ->
-                services = svc
-                if (svc == null) {
-                    _state.update { it.copy(link = VehicleLink.Unsupported) }
-                    return@collectLatest
-                }
-                observeVehicle(svc)
-            }
-        }
-    }
-
-    private suspend fun observeVehicle(svc: VehicleServices) {
-        val t = svc.vehicle.telemetry
-        val ticker = flow {
-            while (true) {
-                emit(Unit)
-                delay(1_000)
-            }
-        }
-        combine(t.heartbeat, t.position, t.home, t.gps, svc.firmware) { hb, pos, home, gps, fw -> Snapshot(hb?.armed, hb?.tMs, pos, home, gps?.fix, fw) }
-            .combine(t.vfr) { snap, vfr -> snap to vfr?.headingDeg }
-            .combine(ticker) { pair, _ -> pair }
-            .map { (snap, heading) ->
-                VehicleLink.Connected(
-                    armed = snap.armed,
-                    linkFresh = snap.heartbeatMs != null && clock.nowMs() - snap.heartbeatMs <= LINK_FRESH_MS,
-                    position = snap.position?.let { GeoPoint(it.latDeg, it.lonDeg) },
-                    headingDeg = heading,
-                    home = snap.home?.let { GeoPoint(it.latDeg, it.lonDeg) },
-                    homeAltMslM = snap.home?.altMslM,
-                    gpsFix = snap.fix,
-                    homeSlot = snap.firmware != null && snap.firmware != FirmwareFamily.Px4 && snap.firmware != FirmwareFamily.Unknown,
-                )
-            }
-            .distinctUntilChanged()
-            .collect { link ->
-                _state.update { s -> s.copy(link = link, startSheet = s.startSheet?.let { sheet -> refreshChecks(sheet, s.copy(link = link)) }) }
-            }
-    }
-
-    private data class Snapshot(
-        val armed: Boolean?,
-        val heartbeatMs: Long?,
-        val position: com.altnautica.gcs.core.model.PositionFix?,
-        val home: com.altnautica.gcs.core.model.HomePosition?,
-        val fix: GpsFix?,
-        val firmware: FirmwareFamily?,
-    )
+    fun selectVehicle(nodeId: DeviceId?) = vehicle.selectVehicle(nodeId)
 
     // ── Editing ──────────────────────────────────────────────
 
@@ -243,7 +138,7 @@ class PlannerViewModel @Inject constructor(
 
     fun setAltitude(id: Long, altM: Float) = edit { plan -> PlanEditor.update(plan, id) { it.copy(z = altM) } }
 
-    fun setAltitudeRef(id: Long, ref: AltitudeRef) = edit { PlanEditor.setAltitudeRef(it, id, ref, homeAltMsl()) }
+    fun setAltitudeRef(id: Long, ref: AltitudeRef) = edit { PlanEditor.setAltitudeRef(it, id, ref, vehicle.homeAltMsl()) }
 
     /** Leg speed into the item; null removes the speed change. */
     fun setSpeed(id: Long, speedMs: Float?) = edit { plan -> PlanEditor.update(plan, id) { it.copy(speedMs = speedMs?.takeIf { s -> s > 0f }) } }
@@ -425,8 +320,8 @@ class PlannerViewModel @Inject constructor(
     }
 
     fun exportText(format: PlanFileFormat): String = when (format) {
-        PlanFileFormat.QgcPlan -> PlanFiles.exportPlan(planWithHome())
-        PlanFileFormat.Waypoints -> PlanFiles.exportWaypoints(planWithHome())
+        PlanFileFormat.QgcPlan -> PlanFiles.exportPlan(vehicle.planWithHome())
+        PlanFileFormat.Waypoints -> PlanFiles.exportWaypoints(vehicle.planWithHome())
     }
 
     fun exportDocument(uri: Uri, format: PlanFileFormat) {
@@ -441,152 +336,29 @@ class PlannerViewModel @Inject constructor(
     // ── Vehicle transfer ─────────────────────────────────────
 
     /** Uploads mission, then fence, then rally; an empty fence or rally list clears it on the vehicle. */
-    fun upload() {
-        val svc = services ?: return
-        if (_state.value.transferring) return
-        val plan = _state.value.plan
-        val wire = MissionWire.toWire(plan, homeSlot())
-        runTransfer(svc, TransferDirection.Upload) {
-            val steps = listOf(MissionType.Mission to wire.mission, MissionType.Fence to wire.fence, MissionType.Rally to wire.rally)
-            for ((type, items) in steps) {
-                val result = if (items.isEmpty() && type != MissionType.Mission) svc.mission.clear(type) else svc.mission.upload(type, items)
-                if (result is MissionResult.Failure) {
-                    _state.update { it.copy(transfer = TransferState.Failed(TransferDirection.Upload, type, result.error)) }
-                    return@runTransfer
-                }
-            }
-            _state.update { it.copy(transfer = TransferState.Done(TransferDirection.Upload, wire.mission.size), vehiclePlan = plan) }
-        }
-    }
+    fun upload() = vehicle.upload()
 
     /** Downloads from the vehicle; asks first when the open plan has unsaved edits. */
-    fun download() {
-        if (services == null || _state.value.transferring) return
-        if (_state.value.dirty && !_state.value.plan.isEmpty) {
-            _state.update { it.copy(confirmReplaceWithDownload = true) }
-            return
-        }
-        confirmDownload()
-    }
+    fun download() = vehicle.download()
 
-    fun cancelDownload() = _state.update { it.copy(confirmReplaceWithDownload = false) }
+    fun cancelDownload() = vehicle.cancelDownload()
 
-    fun confirmDownload() {
-        val svc = services ?: return
-        _state.update { it.copy(confirmReplaceWithDownload = false) }
-        val homeSlot = homeSlot()
-        runTransfer(svc, TransferDirection.Download) {
-            val mission = when (val r = svc.mission.download(MissionType.Mission)) {
-                is MissionResult.Failure -> {
-                    _state.update { it.copy(transfer = TransferState.Failed(TransferDirection.Download, MissionType.Mission, r.error)) }
-                    return@runTransfer
-                }
-                is MissionResult.Success -> r.value
-            }
-            var partial: MissionType? = null
-            fun extra(type: MissionType, result: MissionResult<com.altnautica.gcs.core.link.mission.MissionPlan>): List<MissionItem> =
-                when (result) {
-                    is MissionResult.Success -> result.value.items
-                    is MissionResult.Failure -> {
-                        partial = partial ?: type
-                        emptyList()
-                    }
-                }
-            val fence = extra(MissionType.Fence, svc.mission.download(MissionType.Fence))
-            val rally = extra(MissionType.Rally, svc.mission.download(MissionType.Rally))
-            val rebuilt = MissionWire.fromWire(mission.home, mission.items, fence, rally, homeSlot, nextId)
-            val message = when {
-                partial != null -> PlannerMessage.DownloadPartial(partial!!)
-                rebuilt.plan.isEmpty -> PlannerMessage.VehicleHasNoMission
-                else -> null
-            }
-            if (rebuilt.plan.isEmpty) {
-                _state.update { it.copy(transfer = TransferState.Done(TransferDirection.Download, 0), message = message) }
-                return@runTransfer
-            }
-            replacePlan(rebuilt.plan, name = _state.value.nodeName.orEmpty(), savedId = null, dirty = true)
-            _state.update {
-                it.copy(
-                    transfer = TransferState.Done(TransferDirection.Download, mission.items.size),
-                    vehiclePlan = rebuilt.plan,
-                    message = message ?: it.message,
-                )
-            }
-        }
-    }
+    fun confirmDownload() = vehicle.confirmDownload()
 
-    private fun runTransfer(svc: VehicleServices, direction: TransferDirection, block: suspend () -> Unit) {
-        transferJob?.cancel()
-        _state.update { it.copy(transfer = TransferState.Running(direction, MissionType.Mission, 0, 0)) }
-        transferJob = viewModelScope.launch {
-            val progress = launch {
-                svc.mission.transfer.collect { t ->
-                    if (t is MissionTransfer.InProgress) {
-                        _state.update { s ->
-                            if (s.transfer is TransferState.Running) s.copy(transfer = TransferState.Running(direction, t.type, t.done, t.total)) else s
-                        }
-                    }
-                }
-            }
-            try {
-                block()
-            } finally {
-                progress.cancel()
-            }
-        }
-    }
-
-    fun dismissTransfer() = _state.update { if (it.transferring) it else it.copy(transfer = TransferState.Idle) }
+    fun dismissTransfer() = vehicle.dismissTransfer()
 
     // ── Start mission (slide) ────────────────────────────────
 
-    fun openStartMission() {
-        val s = _state.value
-        if (s.link !is VehicleLink.Connected) return
-        _state.update { it.copy(startSheet = refreshChecks(StartMissionSheet(checks = emptyList(), armed = false), it)) }
-    }
+    fun openStartMission() = vehicle.openStartMission()
 
-    fun setChecklistOverride(enabled: Boolean) = _state.update { s -> s.copy(startSheet = s.startSheet?.copy(overrideChecklist = enabled)) }
+    fun setChecklistOverride(enabled: Boolean) = vehicle.setChecklistOverride(enabled)
 
-    fun dismissStartMission() = _state.update { s -> if (s.startSheet?.running == true) s else s.copy(startSheet = null) }
+    fun dismissStartMission() = vehicle.dismissStartMission()
 
     /** Called when the slide completes: arms if needed, then runs the uploaded mission. */
-    fun startMission() {
-        val svc = services ?: return
-        val sheet = _state.value.startSheet ?: return
-        if (!sheet.canSlide) return
-        val nodeId = _state.value.nodeId ?: return
-        _state.update { it.copy(startSheet = sheet.copy(running = true, error = null)) }
-        startJob = viewModelScope.launch {
-            if (!sheet.armed) {
-                val armed = svc.vehicle.control.run(VehicleCommand.Arm())
-                if (armed != CommandResult.Accepted) {
-                    _state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = StartError.ArmRefused(armed))) }
-                    return@launch
-                }
-            }
-            val started = svc.mission.start()
-            if (started != CommandResult.Accepted) {
-                _state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = StartError.StartRefused(started))) }
-                return@launch
-            }
-            _state.update { it.copy(startSheet = null, missionStartedFor = nodeId) }
-        }
-    }
+    fun startMission() = vehicle.startMission()
 
-    fun onMissionStartHandled() = _state.update { it.copy(missionStartedFor = null) }
-
-    private fun refreshChecks(sheet: StartMissionSheet, s: PlannerUiState): StartMissionSheet {
-        val link = s.link as? VehicleLink.Connected
-        val fix = link?.gpsFix
-        val checks = listOf(
-            StartCheck(StartCheckKind.LinkFresh, link?.linkFresh == true),
-            StartCheck(StartCheckKind.PlanOnVehicle, s.inSyncWithVehicle && s.plan.items.isNotEmpty()),
-            StartCheck(StartCheckKind.GpsFix, fix != null && fix >= GpsFix.Fix3D),
-            StartCheck(StartCheckKind.HomeSet, link?.home != null),
-        )
-        return sheet.copy(checks = checks, armed = link?.armed == true)
-    }
+    fun onMissionStartHandled() = vehicle.onMissionStartHandled()
 
     // ── Shared ───────────────────────────────────────────────
 
@@ -615,24 +387,8 @@ class PlannerViewModel @Inject constructor(
         }
     }
 
-    /** Plan with the vehicle's home filled in when the plan has none. */
-    private fun planWithHome(): MissionPlan {
-        val s = _state.value
-        if (s.plan.home != null) return s.plan
-        val link = s.link as? VehicleLink.Connected ?: return s.plan
-        val home = link.home ?: return s.plan
-        return s.plan.copy(home = PlanHome(home, link.homeAltMslM))
-    }
-
-    private fun homeAltMsl(): Float? =
-        _state.value.plan.home?.altMslM ?: (_state.value.link as? VehicleLink.Connected)?.homeAltMslM
-
-    private fun homeSlot(): Boolean = (_state.value.link as? VehicleLink.Connected)?.homeSlot ?: true
-
     override fun onCleared() {
-        vehicleJob?.cancel()
-        transferJob?.cancel()
-        startJob?.cancel()
+        vehicle.cancel()
     }
 
     companion object {
