@@ -8,8 +8,8 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.feature.cockpit.FakeTelemetry
-import com.altnautica.gcs.feature.cockpit.settings.AltitudeReference
-import com.altnautica.gcs.feature.cockpit.settings.CockpitDensity
+import com.altnautica.gcs.core.data.cockpit.AltitudeReference
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull

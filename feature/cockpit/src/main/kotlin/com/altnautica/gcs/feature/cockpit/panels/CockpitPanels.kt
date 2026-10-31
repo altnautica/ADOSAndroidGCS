@@ -50,9 +50,9 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamDescriptor
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.StripValues
-import com.altnautica.gcs.feature.cockpit.settings.AltitudeReference
-import com.altnautica.gcs.feature.cockpit.settings.CockpitDensity
-import com.altnautica.gcs.feature.cockpit.settings.CockpitSettings
+import com.altnautica.gcs.core.data.cockpit.AltitudeReference
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
+import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import kotlin.math.roundToInt
 
 private const val DASH = "—"

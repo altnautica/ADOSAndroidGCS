@@ -58,10 +58,10 @@ import com.altnautica.gcs.feature.cockpit.input.CockpitInputMapper
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightChecklist
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightInputs
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightResult
-import com.altnautica.gcs.feature.cockpit.settings.AltitudeReference
-import com.altnautica.gcs.feature.cockpit.settings.CockpitDensity
-import com.altnautica.gcs.feature.cockpit.settings.CockpitSettings
-import com.altnautica.gcs.feature.cockpit.settings.CockpitSettingsRepository
+import com.altnautica.gcs.core.data.cockpit.AltitudeReference
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
+import com.altnautica.gcs.core.data.cockpit.CockpitSettings
+import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject

@@ -5,8 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.designsystem.tokens.AdosThemeId
 import com.altnautica.gcs.core.link.direct.DirectEndpoint
 import com.altnautica.gcs.core.link.direct.DirectLinkSettings
-import com.altnautica.gcs.feature.cockpit.settings.CockpitSettings
-import com.altnautica.gcs.feature.cockpit.settings.CockpitSettingsRepository
+import com.altnautica.gcs.core.data.cockpit.CockpitSettings
+import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted

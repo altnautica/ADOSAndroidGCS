@@ -4,7 +4,7 @@ import com.altnautica.gcs.core.model.EkfState
 import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.GpsState
 import com.altnautica.gcs.core.model.HomePosition
-import com.altnautica.gcs.feature.cockpit.settings.BatteryBands
+import com.altnautica.gcs.core.data.cockpit.BatteryBands
 
 enum class PreflightItem { Gps3d, Battery, Ekf, Home, Link, NoPrearm }
 

@@ -19,8 +19,8 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.feature.cockpit.R
-import com.altnautica.gcs.feature.cockpit.settings.AltitudeReference
-import com.altnautica.gcs.feature.cockpit.settings.CockpitDensity
+import com.altnautica.gcs.core.data.cockpit.AltitudeReference
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate

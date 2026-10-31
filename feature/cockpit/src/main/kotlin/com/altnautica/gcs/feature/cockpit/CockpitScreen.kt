@@ -55,8 +55,8 @@ import com.altnautica.gcs.feature.cockpit.panels.StreamTabs
 import com.altnautica.gcs.feature.cockpit.panels.TelemetryStrip
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightSheet
 import com.altnautica.gcs.feature.cockpit.modes.ModePickerSheet
-import com.altnautica.gcs.feature.cockpit.settings.CockpitDensity
-import com.altnautica.gcs.feature.cockpit.settings.CockpitSettingsRepository
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
+import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillBar
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillDrawer
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass

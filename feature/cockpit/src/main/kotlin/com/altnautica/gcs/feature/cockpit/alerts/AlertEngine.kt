@@ -9,7 +9,7 @@ import com.altnautica.gcs.core.model.GpsState
 import com.altnautica.gcs.core.model.SystemHealth
 import com.altnautica.gcs.core.model.VibrationState
 import com.altnautica.gcs.core.skills.heartbeatAgeMs
-import com.altnautica.gcs.feature.cockpit.settings.BatteryBands
+import com.altnautica.gcs.core.data.cockpit.BatteryBands
 
 /** A STATUSTEXT line kept with its receive time. */
 data class ReceivedText(val text: String, val atMs: Long)

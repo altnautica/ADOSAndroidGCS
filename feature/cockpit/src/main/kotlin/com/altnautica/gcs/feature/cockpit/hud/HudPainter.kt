@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.feature.cockpit.Geo
-import com.altnautica.gcs.feature.cockpit.settings.AltitudeReference
-import com.altnautica.gcs.feature.cockpit.settings.CockpitDensity
+import com.altnautica.gcs.core.data.cockpit.AltitudeReference
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.ceil

@@ -38,7 +38,7 @@ import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
-import com.altnautica.gcs.feature.cockpit.settings.CockpitSettingsRepository
+import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk

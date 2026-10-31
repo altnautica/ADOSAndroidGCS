@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.cockpit.settings
+package com.altnautica.gcs.core.data.cockpit
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.map
 /** Altitude tape reference: home-relative or mean sea level. */
 enum class AltitudeReference { Rel, Msl }
 
-/** Cockpit density (CS-10). */
+/** Cockpit density. */
 enum class CockpitDensity { Min, Std, Full }
 
 /** Operator battery bands: below [lowPct] warns, below [criticalPct] is critical. */
