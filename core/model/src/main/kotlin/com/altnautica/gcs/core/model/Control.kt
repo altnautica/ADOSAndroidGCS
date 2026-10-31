@@ -15,6 +15,7 @@ sealed interface VehicleCommand {
     data object Kill : VehicleCommand
     data class FlyTo(val latDeg: Double, val lonDeg: Double, val altRelM: Float) : VehicleCommand
     data class MotorTest(val motor: Int, val throttlePct: Float, val durationS: Float) : VehicleCommand
+    data object RebootAutopilot : VehicleCommand
 }
 
 sealed interface CommandResult {

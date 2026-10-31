@@ -2,11 +2,17 @@ package com.altnautica.gcs.feature.configure.calibration
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.ScreenRotation
+import androidx.compose.material.icons.outlined.SettingsRemote
+import androidx.compose.material.icons.outlined.Straighten
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -14,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,6 +29,7 @@ import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.SectionHeader
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleCard
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.link.calibration.AccelPose
@@ -73,7 +81,20 @@ private fun kindLabel(kind: CalibrationKind): String = stringResource(
     },
 )
 
-@OptIn(ExperimentalLayoutApi::class)
+private fun blockText(block: CalibrationBlock): Int = when (block) {
+    CalibrationBlock.NoVehicle -> R.string.cfg_block_no_vehicle
+    CalibrationBlock.LinkStale -> R.string.cfg_block_link_stale
+    CalibrationBlock.Armed -> R.string.cfg_block_armed
+}
+
+private fun kindIcon(kind: CalibrationKind): ImageVector = when (kind) {
+    CalibrationKind.Gyro -> Icons.Outlined.Sync
+    CalibrationKind.Level -> Icons.Outlined.Straighten
+    CalibrationKind.Accel -> Icons.Outlined.ScreenRotation
+    CalibrationKind.Compass -> Icons.Outlined.Explore
+    CalibrationKind.Radio -> Icons.Outlined.SettingsRemote
+}
+
 @Composable
 fun CalibrationScreen(
     state: CalibrationUiState,
@@ -88,20 +109,18 @@ fun CalibrationScreen(
     Column(modifier.fillMaxWidth().padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
         SectionHeader(stringResource(R.string.cfg_cal_title))
         state.block?.let {
-            Text(
-                stringResource(
-                    when (it) {
-                        CalibrationBlock.NoVehicle -> R.string.cfg_block_no_vehicle
-                        CalibrationBlock.LinkStale -> R.string.cfg_block_link_stale
-                        CalibrationBlock.Armed -> R.string.cfg_block_armed
-                    },
-                ),
-                color = colors.fgSecondary,
-            )
+            Text(stringResource(blockText(it)), color = colors.fgSecondary)
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+        val blockedReason = state.block?.let { stringResource(blockText(it)) }
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             CalibrationKind.entries.forEach { kind ->
-                AdosButton(kindLabel(kind), onClick = { onStart(kind) }, enabled = state.canStart, variant = AdosButtonVariant.Secondary)
+                ConsoleCard(
+                    title = kindLabel(kind),
+                    icon = kindIcon(kind),
+                    onClick = { onStart(kind) },
+                    enabled = state.canStart,
+                    disabledReason = blockedReason,
+                )
             }
         }
         when (val cal = state.calibration) {

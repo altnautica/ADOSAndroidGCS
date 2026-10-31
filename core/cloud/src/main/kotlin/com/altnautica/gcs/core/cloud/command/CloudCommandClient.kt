@@ -80,7 +80,7 @@ class CloudCommandClient @Inject constructor(
             VehicleCommand.PauseMission -> "pausemission" to emptyList()
             VehicleCommand.ResumeMission -> "resumemission" to emptyList()
             VehicleCommand.Kill -> "killswitch" to emptyList()
-            is VehicleCommand.FlyTo, is VehicleCommand.MotorTest -> null
+            is VehicleCommand.FlyTo, is VehicleCommand.MotorTest, VehicleCommand.RebootAutopilot -> null
         }
 
         fun enqueueArgs(node: DeviceId, cmd: String, args: List<Any?>): Map<String, Any?> = mapOf(

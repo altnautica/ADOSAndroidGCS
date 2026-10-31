@@ -3,20 +3,26 @@ package com.altnautica.gcs.feature.configure.params
 import com.altnautica.gcs.core.link.param.ParamLoadResult
 import com.altnautica.gcs.core.link.param.ParamSetResult
 import com.altnautica.gcs.core.link.param.ParamValue
+import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.feature.configure.FakeParamService
 import com.altnautica.gcs.feature.configure.FakeVehicle
 import com.altnautica.gcs.feature.configure.common.ConfigureTarget
 import com.altnautica.gcs.feature.configure.common.ConfigureTargetSource
+import io.mockk.coEvery
+import io.mockk.coVerify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -40,7 +46,9 @@ class ParametersViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun vm() = ParametersViewModel(DeviceId("d"), ConfigureTargetSource { target }) { key ->
+    private var clock = 0L
+
+    private fun vm() = ParametersViewModel(DeviceId("d"), ConfigureTargetSource { target }, { clock }, flowOf(Unit)) { key ->
         requestedKey = key
         metadata
     }
@@ -63,7 +71,6 @@ class ParametersViewModelTest {
         val c = content(vm)
         assertEquals(listOf("RATE", "REBOOT"), c.rows.map { it.name }) // advanced hidden by default
         assertTrue(c.rows.first().modified)
-        assertEquals(listOf("ADV", "ATC", "SYS"), c.groups)
 
         vm.setFilter { it.copy(showAdvanced = true, modifiedOnly = true) }
         assertEquals(listOf("RATE"), content(vm).rows.map { it.name })
@@ -188,5 +195,77 @@ class ParametersViewModelTest {
         vm.applyImport()
         assertEquals(listOf("RATE" to 8.0), params.writes)
         assertEquals(false, vm.importReview.value!!.running)
+    }
+
+    @Test
+    fun rowsAreSortedByGroupThenName() = runTest(dispatcher) {
+        val vm = vm()
+        target.value = FakeVehicle().target(FakeParamService(mapOf("Z_ONE" to 1.0, "REBOOT" to 0.0, "B" to 1.0, "RATE" to 5.0, "ATC_B" to 1.0)))
+        val rows = content(vm).rows
+        assertEquals(listOf("ATC_B", "RATE", "B", "REBOOT", "Z_ONE"), rows.map { it.name })
+
+        val groups = rows.grouped()
+        assertEquals(listOf("ATC", "B", "SYS", "Z"), groups.map { it.first })
+        val headers = headerIndices(groups)
+        assertEquals(listOf(0, 3, 5, 7), headers)
+        assertEquals(3, groupJumpTarget(headers, firstVisible = 1, forward = true))
+        assertEquals(0, groupJumpTarget(headers, firstVisible = 3, forward = false))
+        assertNull(groupJumpTarget(headers, firstVisible = 7, forward = true))
+    }
+
+    @Test
+    fun importAppliesOnlySelectedRowsAndListsUnknownNames() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0, "REBOOT" to 0.0))
+        target.value = FakeVehicle().target(params)
+
+        vm.importText("RATE,8\nREBOOT,1\nGONE,1\n")
+        assertEquals(listOf("GONE"), vm.importReview.value!!.comparison.unknownNames)
+        assertEquals(listOf("RATE", "REBOOT"), vm.importReview.value!!.selected.map { it.name })
+        vm.toggleImportRow("RATE")
+        assertEquals(listOf("REBOOT"), vm.importReview.value!!.selected.map { it.name })
+        vm.toggleImportRow("RATE")
+        vm.toggleImportRow("REBOOT")
+        vm.applyImport()
+        assertEquals(listOf("RATE" to 8.0), params.writes)
+        assertEquals(1, vm.importReview.value!!.applied)
+    }
+
+    @Test
+    fun rebootPendingIsSetByARebootParamAndClearedByAnAcceptedReboot() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0, "REBOOT" to 0.0))
+        val vehicle = FakeVehicle()
+        coEvery { vehicle.control.run(any()) } returns CommandResult.Accepted
+        target.value = vehicle.target(params)
+
+        vm.requestWrite("RATE", "6")
+        assertFalse(vm.rebootPending.value)
+        vm.requestWrite("REBOOT", "1")
+        assertTrue(vm.rebootPending.value)
+
+        vehicle.setArmed(true)
+        vm.reboot()
+        coVerify(exactly = 0) { vehicle.control.run(VehicleCommand.RebootAutopilot) }
+        assertTrue(vm.rebootPending.value)
+
+        vehicle.setArmed(false)
+        vm.reboot()
+        coVerify(exactly = 1) { vehicle.control.run(VehicleCommand.RebootAutopilot) }
+        assertFalse(vm.rebootPending.value)
+        assertEquals(ParamMessage.Reboot(CommandResult.Accepted), vm.message.value)
+    }
+
+    @Test
+    fun rebootIsRefusedOnAStaleLink() = runTest(dispatcher) {
+        clock = 10_000L // the vehicle's last heartbeat is at t=0, older than the freshness limit
+        val vm = vm()
+        val vehicle = FakeVehicle()
+        target.value = vehicle.target(FakeParamService(mapOf("REBOOT" to 0.0)))
+        vm.requestWrite("REBOOT", "1")
+        assertFalse(content(vm).linkFresh)
+        vm.reboot()
+        coVerify(exactly = 0) { vehicle.control.run(any()) }
+        assertTrue(vm.rebootPending.value)
     }
 }

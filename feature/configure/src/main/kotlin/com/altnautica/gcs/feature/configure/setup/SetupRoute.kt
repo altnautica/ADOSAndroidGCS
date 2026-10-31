@@ -9,34 +9,37 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DesktopWindows
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.LinkOff
+import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.component.LoadingState
-import com.altnautica.gcs.core.designsystem.component.SectionHeader
+import com.altnautica.gcs.core.designsystem.component.console.AdosListItem
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleTwoPane
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
@@ -53,29 +56,28 @@ import com.altnautica.gcs.feature.configure.params.ParametersViewModel
 import com.altnautica.gcs.feature.configure.params.paramLoadReason
 import com.altnautica.gcs.feature.configure.params.paramMessageText
 
-private enum class SetupPage(val label: Int) {
-    Calibration(R.string.cfg_setup_calibration),
-    FlightModes(R.string.cfg_setup_modes),
-    Failsafe(R.string.cfg_setup_failsafe),
-    Frame(R.string.cfg_setup_frame),
+/** The setup sections, in list order. */
+enum class SetupSection(val label: Int, val icon: ImageVector) {
+    Calibration(R.string.cfg_setup_calibration, Icons.Outlined.Explore),
+    FlightModes(R.string.cfg_setup_modes, Icons.Outlined.FlightTakeoff),
+    Failsafe(R.string.cfg_setup_failsafe, Icons.Outlined.Shield),
+    Frame(R.string.cfg_setup_frame, Icons.Outlined.Category),
+    MotorTest(R.string.cfg_setup_motors, Icons.Outlined.Speed),
 }
 
 /**
- * Flight-controller setup for one node. MAVLink flight controllers get calibration, flight
- * modes, failsafe and frame/motor pages; MSP flight controllers are configured from the
- * desktop app, so they get an explanation instead.
+ * Section list and the open [section] for a MAVLink flight controller, with the write
+ * results of the curated parameter sections shown in a snackbar.
  */
 @Composable
-fun SetupRoute(nodeId: DeviceId, fcVariant: FcVariant, modifier: Modifier = Modifier) {
-    if (fcVariant == FcVariant.Msp) {
-        EmptyState(
-            icon = Icons.Outlined.DesktopWindows,
-            title = stringResource(R.string.cfg_msp_title),
-            message = stringResource(R.string.cfg_msp_message),
-            modifier = modifier,
-        )
-        return
-    }
+internal fun SetupPanes(
+    nodeId: DeviceId,
+    fcVariant: FcVariant,
+    section: SetupSection,
+    showDetailInPortrait: Boolean,
+    onSelect: (SetupSection) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val params = hiltViewModel<ParametersViewModel, ParametersViewModel.Factory>(
         key = "params-${nodeId.value}",
         creationCallback = { it.create(nodeId.value) },
@@ -83,8 +85,7 @@ fun SetupRoute(nodeId: DeviceId, fcVariant: FcVariant, modifier: Modifier = Modi
     val state by params.state.collectAsStateWithLifecycle()
     val pending by params.pendingWrite.collectAsStateWithLifecycle()
     val message by params.message.collectAsStateWithLifecycle()
-    var page by rememberSaveable { mutableIntStateOf(0) }
-    // Write results from the curated parameter pages; the message is consumed once shown.
+    // Write results from the curated parameter sections; the message is consumed once shown.
     val snackbar = remember { SnackbarHostState() }
     val messageText = message?.let { paramMessageText(it, (state as? ParametersUiState.Content)?.byName.orEmpty()).first }
     LaunchedEffect(message) {
@@ -94,31 +95,41 @@ fun SetupRoute(nodeId: DeviceId, fcVariant: FcVariant, modifier: Modifier = Modi
         }
     }
     Box(modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            PrimaryScrollableTabRow(selectedTabIndex = page) {
-                SetupPage.entries.forEachIndexed { i, p ->
-                    Tab(selected = page == i, onClick = { page = i }, text = { Text(stringResource(p.label)) })
+        ConsoleTwoPane(
+            showDetailInPortrait = showDetailInPortrait,
+            list = {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = AdosSpacing.S2)) {
+                    SetupSection.entries.forEach { s ->
+                        AdosListItem(
+                            headline = stringResource(s.label),
+                            onClick = { onSelect(s) },
+                            selected = s == section,
+                            leading = { Icon(s.icon, contentDescription = null, tint = AdosTheme.colors.fgSecondary) },
+                        )
+                    }
                 }
-            }
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                when (SetupPage.entries[page]) {
-                    SetupPage.Calibration -> CalibrationRoute(nodeId)
-                    SetupPage.FlightModes -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
-                        SetupCatalog.flightModes(variant, mav)?.let { it.slots + it.channelParam }.orEmpty()
-                    }
-                    SetupPage.Failsafe -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
-                        SetupCatalog.failsafe(variant, mav)
-                    }
-                    SetupPage.Frame -> {
-                        CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, _ ->
+            },
+            detail = {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    when (section) {
+                        SetupSection.Calibration -> CalibrationRoute(nodeId)
+                        SetupSection.FlightModes -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
+                            SetupCatalog.flightModes(variant, mav)?.let { it.slots + it.channelParam }.orEmpty()
+                        }
+                        SetupSection.Failsafe -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
+                            SetupCatalog.failsafe(variant, mav)
+                        }
+                        SetupSection.Frame -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, _ ->
                             SetupCatalog.frame(variant)
                         }
-                        val motors = (state as? ParametersUiState.Content)?.byName?.mapValues { it.value.value }?.let(SetupCatalog::motorCount)
-                        MotorTestRoute(nodeId, motors)
+                        SetupSection.MotorTest -> {
+                            val motors = (state as? ParametersUiState.Content)?.byName?.mapValues { it.value.value }?.let(SetupCatalog::motorCount)
+                            MotorTestRoute(nodeId, motors)
+                        }
                     }
                 }
-            }
-        }
+            },
+        )
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
     pending?.let { p ->

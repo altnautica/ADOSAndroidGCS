@@ -1,149 +1,77 @@
 package com.altnautica.gcs.feature.configure.params
 
-import android.content.Context
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.designsystem.component.AdosButton
-import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
-import com.altnautica.gcs.core.link.param.MavlinkParamService
+import com.altnautica.gcs.core.designsystem.component.console.AdosListItem
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.link.param.MavlinkParamService
+import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.feature.configure.R
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.altnautica.gcs.feature.configure.common.commandResultText
 
-/** Parameters destination for one node: browse, search, edit, save to and load from files. */
+/** Rows split into their groups, in list order: the group name and its rows. */
+internal fun List<ParamRow>.grouped(): List<Pair<String, List<ParamRow>>> =
+    groupBy { it.group }.toList()
+
+/**
+ * Lazy-list index of each group header for [groups]: every group takes one header item
+ * plus one item per row.
+ */
+internal fun headerIndices(groups: List<Pair<String, List<ParamRow>>>): List<Int> {
+    var index = 0
+    return groups.map { (_, rows) -> index.also { index += 1 + rows.size } }
+}
+
+/**
+ * The header index to jump to from [firstVisible]: the previous or next group header.
+ * Null when there is none in that direction.
+ */
+internal fun groupJumpTarget(headers: List<Int>, firstVisible: Int, forward: Boolean): Int? =
+    if (forward) headers.firstOrNull { it > firstVisible } else headers.lastOrNull { it < firstVisible }
+
+/** The list pane: search, filters, status lines and the grouped parameter list. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ParametersRoute(nodeId: DeviceId, modifier: Modifier = Modifier) {
-    val viewModel = hiltViewModel<ParametersViewModel, ParametersViewModel.Factory>(
-        key = "params-${nodeId.value}",
-        creationCallback = { it.create(nodeId.value) },
-    )
-    val state by viewModel.state.collectAsStateWithLifecycle()
-    val pending by viewModel.pendingWrite.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
-    val review by viewModel.importReview.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var exportFormat by remember { mutableStateOf(ParamFileFormat.Qgc) }
-
-    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
-        val text = viewModel.exportText(exportFormat)
-        if (uri != null && text != null) scope.launch { writeUri(context, uri, text) }
-    }
-    val openLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch { readUri(context, uri)?.let(viewModel::importText) }
-    }
-
-    ParametersScreen(
-        state = state,
-        message = message,
-        onFilter = viewModel::setFilter,
-        onRefresh = viewModel::refresh,
-        onWrite = viewModel::requestWrite,
-        onDismissMessage = viewModel::consumeMessage,
-        onSave = { format ->
-            exportFormat = format
-            saveLauncher.launch(if (format == ParamFileFormat.Qgc) "vehicle.params" else "vehicle.param")
-        },
-        onLoad = { openLauncher.launch(arrayOf("*/*")) },
-        modifier = modifier,
-    )
-    pending?.let { p ->
-        AdosConfirmSheet(
-            title = stringResource(R.string.cfg_param_armed_title),
-            message = stringResource(R.string.cfg_param_armed_message, p.name, ParamFile.formatValue(p.value)),
-            onDismiss = viewModel::dismissPendingWrite,
-            danger = true,
-        ) {
-            HoldToConfirmButton(
-                label = stringResource(R.string.cfg_param_armed_confirm),
-                holdMs = 800,
-                danger = true,
-                onConfirmed = viewModel::confirmPendingWrite,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-    review?.let {
-        ImportReviewSheet(
-            it,
-            armed = (state as? ParametersUiState.Content)?.armed == true,
-            onApply = viewModel::applyImport,
-            onDismiss = viewModel::dismissImport,
-        )
-    }
-}
-
-private suspend fun writeUri(context: Context, uri: Uri, text: String) = withContext(Dispatchers.IO) {
-    runCatching { context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(text) } }
-}
-
-private suspend fun readUri(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
-    runCatching { context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } }.getOrNull()
-}
-
-@Composable
-fun ParametersScreen(
+fun ParametersListPane(
     state: ParametersUiState,
     message: ParamMessage?,
+    listState: LazyListState,
+    selectedName: String?,
+    onSelect: (ParamRow) -> Unit,
     onFilter: ((ParamFilter) -> ParamFilter) -> Unit,
     onRefresh: () -> Unit,
-    onWrite: (String, String) -> Unit,
     onDismissMessage: () -> Unit,
-    onSave: (ParamFileFormat) -> Unit,
-    onLoad: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = AdosTheme.colors
-    var editing by remember { mutableStateOf<ParamRow?>(null) }
     Column(modifier.fillMaxSize()) {
         when (state) {
             ParametersUiState.NoVehicle -> EmptyState(
@@ -163,50 +91,27 @@ fun ParametersScreen(
                 onRetry = onRefresh,
             )
             is ParametersUiState.Content -> {
-                Row(Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4), verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = state.filter.query,
-                        onValueChange = { q -> onFilter { it.copy(query = q) } },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        placeholder = { Text(stringResource(R.string.cfg_param_search)) },
-                    )
-                    IconButton(onClick = onRefresh, enabled = !state.loading) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.cfg_param_refresh))
-                    }
-                    IconButton(onClick = { onSave(ParamFileFormat.Qgc) }) {
-                        Icon(Icons.Outlined.Save, contentDescription = stringResource(R.string.cfg_param_save_file))
-                    }
-                    IconButton(onClick = onLoad) {
-                        Icon(Icons.Outlined.FileOpen, contentDescription = stringResource(R.string.cfg_param_load_file))
-                    }
-                }
-                LazyRow(
-                    Modifier.fillMaxWidth().padding(vertical = AdosSpacing.S2),
+                OutlinedTextField(
+                    value = state.filter.query,
+                    onValueChange = { q -> onFilter { it.copy(query = q) } },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.cfg_param_search)) },
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
                     horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
                 ) {
-                    item {
-                        FilterChip(
-                            selected = state.filter.modifiedOnly,
-                            onClick = { onFilter { it.copy(modifiedOnly = !it.modifiedOnly) } },
-                            label = { Text(stringResource(R.string.cfg_param_modified_only)) },
-                            modifier = Modifier.padding(start = AdosSpacing.S4),
-                        )
-                    }
-                    item {
-                        FilterChip(
-                            selected = state.filter.showAdvanced,
-                            onClick = { onFilter { it.copy(showAdvanced = !it.showAdvanced) } },
-                            label = { Text(stringResource(R.string.cfg_param_advanced)) },
-                        )
-                    }
-                    items(state.groups) { g ->
-                        FilterChip(
-                            selected = state.filter.group == g,
-                            onClick = { onFilter { it.copy(group = if (it.group == g) null else g) } },
-                            label = { Text(g) },
-                        )
-                    }
+                    FilterChip(
+                        selected = state.filter.modifiedOnly,
+                        onClick = { onFilter { it.copy(modifiedOnly = !it.modifiedOnly) } },
+                        label = { Text(stringResource(R.string.cfg_param_modified_only)) },
+                    )
+                    FilterChip(
+                        selected = state.filter.showAdvanced,
+                        onClick = { onFilter { it.copy(showAdvanced = !it.showAdvanced) } },
+                        label = { Text(stringResource(R.string.cfg_param_advanced)) },
+                    )
                 }
                 if (!state.hasMetadata) {
                     Text(
@@ -223,42 +128,78 @@ fun ParametersScreen(
                     color = colors.fgTertiary,
                     modifier = Modifier.padding(horizontal = AdosSpacing.S4),
                 )
-                LazyColumn(Modifier.fillMaxSize()) {
-                    items(state.rows, key = { it.name }) { row -> ParamRowItem(row, onClick = { editing = row }) }
+                LazyColumn(Modifier.fillMaxSize(), state = listState) {
+                    state.rows.grouped().forEach { (group, rows) ->
+                        stickyHeader(key = "group-$group") { GroupHeader(group) }
+                        items(rows, key = { it.name }) { row ->
+                            ParamRowItem(row, onClick = { onSelect(row) }, selected = row.name == selectedName)
+                        }
+                    }
                 }
             }
         }
     }
-    editing?.let { row ->
-        ParamEditorSheet(
-            row = row,
-            onSubmit = { input ->
-                onWrite(row.name, input)
-                editing = null
-            },
-            onDismiss = { editing = null },
-        )
-    }
 }
 
 @Composable
-fun ParamRowItem(row: ParamRow, onClick: () -> Unit) {
+private fun GroupHeader(group: String) {
     val colors = AdosTheme.colors
-    Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = AdosTheme.touchMin)
+    Text(
+        group,
+        style = MaterialTheme.typography.labelLarge,
+        color = colors.fgSecondary,
+        modifier = Modifier.fillMaxWidth().background(colors.bgSurface)
             .padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(row.name, style = MaterialTheme.typography.bodyMedium, color = colors.fgPrimary)
-            row.meta?.humanName?.takeIf { it != row.name }?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
+    )
+}
+
+@Composable
+fun ParamRowItem(row: ParamRow, onClick: () -> Unit, selected: Boolean = false) {
+    val colors = AdosTheme.colors
+    AdosListItem(
+        headline = row.name,
+        onClick = onClick,
+        supporting = row.meta?.humanName?.takeIf { it != row.name },
+        selected = selected,
+        trailing = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (row.modified) StatusChip(label = stringResource(R.string.cfg_param_modified), level = StatusLevel.Info)
+                Text(
+                    row.displayValue(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.fgPrimary,
+                    modifier = Modifier.padding(start = AdosSpacing.S2),
+                )
             }
+        },
+    )
+}
+
+/**
+ * Pending-reboot banner: changes wait for a flight-controller reboot. The hold button is
+ * live only while disarmed on a fresh link.
+ */
+@Composable
+fun RebootBanner(armed: Boolean, linkFresh: Boolean, onReboot: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = AdosTheme.colors
+    Column(
+        modifier.fillMaxWidth().background(colors.bgRaised).padding(AdosSpacing.S4),
+        verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
+    ) {
+        StatusChip(label = stringResource(R.string.cfg_reboot_pending), level = StatusLevel.Warning)
+        val blocked = when {
+            armed -> R.string.cfg_block_armed
+            !linkFresh -> R.string.cfg_block_link_stale
+            else -> null
         }
-        if (row.modified) {
-            StatusChip(label = stringResource(R.string.cfg_param_modified), level = StatusLevel.Info)
-        }
-        Text(row.displayValue(), style = MaterialTheme.typography.bodyMedium, color = colors.fgPrimary, modifier = Modifier.padding(start = AdosSpacing.S2))
+        blocked?.let { Text(stringResource(it), color = colors.fgSecondary, style = MaterialTheme.typography.bodySmall) }
+        HoldToConfirmButton(
+            label = stringResource(R.string.cfg_reboot_action),
+            holdMs = 800,
+            enabled = blocked == null,
+            onConfirmed = onReboot,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -284,6 +225,13 @@ internal fun paramMessageText(message: ParamMessage, rows: Map<String, ParamRow>
     is ParamMessage.Invalid -> "${message.name}: ${invalidReasonText(message.reason, rows[message.name]?.meta)}" to StatusLevel.Error
     is ParamMessage.LoadIncomplete -> stringResource(R.string.cfg_param_incomplete, message.missing) to StatusLevel.Warning
     is ParamMessage.FileUnreadable -> stringResource(R.string.cfg_param_file_unreadable) to StatusLevel.Error
+    ParamMessage.FileSaved -> stringResource(R.string.cfg_param_file_saved) to StatusLevel.Success
+    is ParamMessage.FileWriteFailed -> (
+        message.reason?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.cfg_param_file_write_failed, it) }
+            ?: stringResource(R.string.cfg_param_file_write_failed_unknown)
+        ) to StatusLevel.Error
+    is ParamMessage.Reboot -> stringResource(R.string.cfg_reboot_result, commandResultText(message.result)) to
+        if (message.result == CommandResult.Accepted) StatusLevel.Success else StatusLevel.Error
 }
 
 @Composable
@@ -299,45 +247,6 @@ private fun MessageLine(message: ParamMessage, rows: Map<String, ParamRow>, onDi
     }
 }
 
-@Composable
-private fun ImportReviewSheet(
-    review: ImportReview,
-    armed: Boolean,
-    onApply: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val colors = AdosTheme.colors
-    AdosSheet(onDismiss = onDismiss) {
-        Column(Modifier.fillMaxWidth().padding(AdosSpacing.S6), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-            Text(stringResource(R.string.cfg_import_title), style = MaterialTheme.typography.titleLarge)
-            Text(
-                stringResource(R.string.cfg_import_summary, review.comparison.changed.size, review.comparison.unknownNames.size),
-                color = colors.fgSecondary,
-            )
-            LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                items(review.comparison.changed, key = { it.name }) { d ->
-                    Text(
-                        "${d.name}: ${ParamFile.formatValue(d.current)} → ${ParamFile.formatValue(d.fromFile)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (d.name in review.failed) colors.statusError else colors.fgPrimary,
-                    )
-                }
-            }
-            if (review.running || review.applied > 0 || review.failed.isNotEmpty()) {
-                Text(stringResource(R.string.cfg_import_progress, review.applied, review.comparison.changed.size, review.failed.size))
-            }
-            val canWrite = !armed && !review.running && review.comparison.changed.isNotEmpty()
-            if (armed) {
-                Text(stringResource(R.string.cfg_import_disarm_first), color = colors.statusWarning)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-                AdosButton(stringResource(R.string.cfg_import_apply), onClick = onApply, enabled = canWrite)
-                AdosButton(stringResource(R.string.cfg_close), onClick = onDismiss, variant = AdosButtonVariant.Secondary)
-            }
-        }
-    }
-}
-
 /** Operator text for a [ParametersUiState.LoadFailed] reason; unknown reasons pass through. */
 @Composable
 internal fun paramLoadReason(reason: String): String = paramLoadReasonRes(reason)?.let { stringResource(it) } ?: reason
@@ -347,4 +256,3 @@ internal fun paramLoadReasonRes(reason: String): Int? = when (reason) {
     MavlinkParamService.REASON_TIMEOUT -> R.string.cfg_result_timeout
     else -> null
 }
-

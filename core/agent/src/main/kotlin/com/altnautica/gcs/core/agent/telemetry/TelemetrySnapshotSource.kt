@@ -159,6 +159,6 @@ object SnapshotMapping {
         VehicleCommand.PauseMission -> "pauseMission" to emptyList()
         VehicleCommand.ResumeMission -> "resumeMission" to emptyList()
         is VehicleCommand.SetMode -> "mode" to listOf(JsonPrimitive(command.mode.name))
-        is VehicleCommand.FlyTo, is VehicleCommand.MotorTest -> null
+        is VehicleCommand.FlyTo, is VehicleCommand.MotorTest, VehicleCommand.RebootAutopilot -> null
     }
 }

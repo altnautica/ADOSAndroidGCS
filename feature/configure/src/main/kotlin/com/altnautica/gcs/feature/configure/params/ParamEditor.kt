@@ -54,35 +54,39 @@ fun ParamRow.displayValue(): String {
     }
 }
 
-/** Sheet editor choosing the widget from the parameter's documentation. */
+/** Sheet editor for portrait, where the list has the whole screen. */
 @Composable
 fun ParamEditorSheet(row: ParamRow, onSubmit: (String) -> Unit, onDismiss: () -> Unit) {
+    AdosSheet(onDismiss = onDismiss) {
+        ParamEditorContent(row, onSubmit, Modifier.padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S4))
+    }
+}
+
+/** Editor body choosing the widget from the parameter's documentation; hosted by a sheet or a pane. */
+@Composable
+fun ParamEditorContent(row: ParamRow, onSubmit: (String) -> Unit, modifier: Modifier = Modifier) {
     val colors = AdosTheme.colors
     val meta = row.meta
-    AdosSheet(onDismiss = onDismiss) {
-        Column(
-            Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S4),
-            verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
-        ) {
-            Text(row.name, style = MaterialTheme.typography.titleLarge)
-            meta?.let {
-                if (it.humanName != row.name) Text(it.humanName, style = MaterialTheme.typography.titleSmall, color = colors.fgSecondary)
-                if (it.description.isNotBlank()) Text(it.description, style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
-                if (it.rebootRequired) Text(stringResource(R.string.cfg_param_reboot), style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
+        Text(row.name, style = MaterialTheme.typography.titleLarge)
+        meta?.let {
+            if (it.humanName != row.name) Text(it.humanName, style = MaterialTheme.typography.titleSmall, color = colors.fgSecondary)
+            if (it.description.isNotBlank()) Text(it.description, style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
+            if (it.rebootRequired) Text(stringResource(R.string.cfg_param_reboot), style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
+        }
+        if (meta?.readOnly == true) {
+            Text(stringResource(R.string.cfg_param_read_only), color = colors.fgTertiary)
+            return@Column
+        }
+        when (meta?.editor) {
+            ParamEditorKind.Bitmask -> BitmaskEditor(row.value, meta, onSubmit)
+            // A documented value list wins over a range: free entry only when no values are given.
+            ParamEditorKind.Enum -> if (meta.options.isNotEmpty()) {
+                EnumEditor(row.value, meta, onSubmit)
+            } else {
+                NumberEditor(row, meta, onSubmit)
             }
-            if (meta?.readOnly == true) {
-                Text(stringResource(R.string.cfg_param_read_only), color = colors.fgTertiary)
-                return@Column
-            }
-            when (meta?.editor) {
-                ParamEditorKind.Bitmask -> BitmaskEditor(row.value, meta, onSubmit)
-                ParamEditorKind.Enum -> if (meta.min == null && meta.max == null) {
-                    EnumEditor(row.value, meta, onSubmit)
-                } else {
-                    NumberEditor(row, meta, onSubmit)
-                }
-                else -> NumberEditor(row, meta, onSubmit)
-            }
+            else -> NumberEditor(row, meta, onSubmit)
         }
     }
 }
@@ -121,7 +125,7 @@ private fun NumberEditor(row: ParamRow, meta: ParamMeta?, onSubmit: (String) -> 
 
 @Composable
 private fun EnumEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> Unit) {
-    var selected by remember(meta.name) { mutableDoubleStateOf(value) }
+    var selected by remember(meta.name, value) { mutableDoubleStateOf(value) }
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
         meta.options.forEach { o ->
             Row(
@@ -133,12 +137,16 @@ private fun EnumEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> Uni
             }
         }
     }
-    AdosButton(stringResource(R.string.cfg_param_write), onClick = { onSubmit(ParamFile.formatValue(selected)) })
+    AdosButton(
+        stringResource(R.string.cfg_param_write),
+        onClick = { onSubmit(ParamFile.formatValue(selected)) },
+        enabled = !ParamFile.sameValue(selected, value),
+    )
 }
 
 @Composable
 private fun BitmaskEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> Unit) {
-    var current by remember(meta.name) { mutableDoubleStateOf(value) }
+    var current by remember(meta.name, value) { mutableDoubleStateOf(value) }
     Text(stringResource(R.string.cfg_param_value, ParamFile.formatValue(current)), color = AdosTheme.colors.fgSecondary)
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
         meta.bits.forEach { b ->
@@ -146,7 +154,8 @@ private fun BitmaskEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> 
                 Modifier.fillMaxWidth().clickable { current = ParamValidator.toggleBit(current, b.bit) }.heightIn(min = AdosTheme.touchMin),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Checkbox(checked = ParamValidator.isBitSet(current, b.bit), onCheckedChange = { current = ParamValidator.toggleBit(current, b.bit) })
+                // The row is the one toggle target; the box only shows the state.
+                Checkbox(checked = ParamValidator.isBitSet(current, b.bit), onCheckedChange = null)
                 Text("${b.bit}: ${b.label}")
             }
         }

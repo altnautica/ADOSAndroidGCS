@@ -87,6 +87,7 @@ class CommandService(
                 y = (command.lonDeg * 1e7).toInt(),
                 z = command.altRelM,
             )
+            VehicleCommand.RebootAutopilot -> long(MavCmd.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN, 1f)
             is VehicleCommand.MotorTest -> long(
                 MavCmd.MAV_CMD_DO_MOTOR_TEST,
                 command.motor.toFloat(),

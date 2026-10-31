@@ -110,8 +110,26 @@
     <string name="cfg_setup_calibration">Calibration</string>
     <string name="cfg_setup_modes">Flight modes</string>
     <string name="cfg_setup_failsafe">Failsafe</string>
-    <string name="cfg_setup_frame">Frame and motors</string>
+    <string name="cfg_setup_frame">Frame</string>
     <string name="cfg_setup_none">This flight controller reports none of these parameters.</string>
     <string name="cfg_msp_title">Configure this flight controller in Mission Control</string>
     <string name="cfg_msp_message">Betaflight and iNav flight controllers are set up from the desktop app. Status and flying work here.</string>
+
+    <!-- Console surfaces -->
+    <string name="cfg_setup_motors">Motor test</string>
+    <string name="cfg_hint_select">Select</string>
+    <string name="cfg_hint_edit">Edit</string>
+    <string name="cfg_hint_section">Section</string>
+    <string name="cfg_hint_group">Group</string>
+    <string name="cfg_param_pick">Select a parameter to edit it.</string>
+    <string name="cfg_param_save_qgc">QGroundControl format</string>
+    <string name="cfg_param_save_ardupilot">ArduPilot .param</string>
+    <string name="cfg_param_file_saved">Parameter file saved</string>
+    <string name="cfg_param_file_write_failed">Could not save the file: %1$s</string>
+    <string name="cfg_param_file_write_failed_unknown">Could not save the file</string>
+    <string name="cfg_import_not_on_vehicle">Not on this vehicle</string>
+    <string name="cfg_import_selected">%1$d of %2$d selected</string>
+    <string name="cfg_reboot_pending">Some changes apply after a reboot</string>
+    <string name="cfg_reboot_action">Reboot flight controller</string>
+    <string name="cfg_reboot_result">Reboot: %1$s</string>
 </resources>

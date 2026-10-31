@@ -1,15 +1,20 @@
 package com.altnautica.gcs.feature.configure.params
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.link.param.ParamLoadResult
 import com.altnautica.gcs.core.link.param.ParamSetResult
 import com.altnautica.gcs.core.link.param.ParamSnapshot
+import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.HeartbeatState
+import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.feature.configure.common.ConfigureTarget
 import com.altnautica.gcs.feature.configure.common.ConfigureTargetSource
+import com.altnautica.gcs.feature.configure.common.LINK_FRESH_MS
 import com.altnautica.gcs.feature.configure.common.fcVariant
+import com.altnautica.gcs.feature.configure.common.secondTicks
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -31,68 +36,20 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** One row of the parameter list. */
-data class ParamRow(
-    val name: String,
-    val value: Double,
-    val type: Int,
-    val meta: ParamMeta?,
-) {
-    /** Differs from the documented default. */
-    val modified: Boolean get() = meta?.defaultValue?.let { !ParamFile.sameValue(it, value) } == true
-    val group: String get() = meta?.group ?: ParamMetadataParser.groupFromName(name)
-}
-
-data class ParamFilter(val query: String = "", val group: String? = null, val modifiedOnly: Boolean = false, val showAdvanced: Boolean = false)
-
-/** A write waiting for the operator: armed vehicles need an explicit confirmation. */
-data class PendingWrite(val name: String, val value: Double)
-
-/** Parameters loaded from a file, compared with the vehicle and awaiting apply. */
-data class ImportReview(val comparison: ParamComparison, val applied: Int = 0, val failed: List<String> = emptyList(), val running: Boolean = false)
-
-sealed interface ParamMessage {
-    data class Saved(val name: String, val value: Double, val rebootRequired: Boolean) : ParamMessage
-    data class Clamped(val name: String, val requested: Double, val actual: Double) : ParamMessage
-    data class WriteFailed(val name: String, val reason: ParamWriteFailure) : ParamMessage
-    data class Invalid(val name: String, val reason: ParamInvalidReason) : ParamMessage
-    data class LoadIncomplete(val missing: Int) : ParamMessage
-    data class FileUnreadable(val reason: String) : ParamMessage
-}
-
-enum class ParamWriteFailure { Timeout, UnknownParam, NoLink, Other }
-
-sealed interface ParametersUiState {
-    data object NoVehicle : ParametersUiState
-    data class Loading(val received: Int, val count: Int) : ParametersUiState
-    data class LoadFailed(val reason: String) : ParametersUiState
-    data class Content(
-        val rows: List<ParamRow>,
-        /** Every loaded parameter, unfiltered; Setup pages pick curated names from it. */
-        val byName: Map<String, ParamRow>,
-        val groups: List<String>,
-        val total: Int,
-        val filter: ParamFilter,
-        val armed: Boolean,
-        /** MAV_TYPE from the vehicle heartbeat. */
-        val mavType: Int?,
-        val hasMetadata: Boolean,
-        val loading: Boolean,
-    ) : ParametersUiState
-}
-
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel(assistedFactory = ParametersViewModel.Factory::class)
 class ParametersViewModel internal constructor(
     nodeId: DeviceId,
     targets: ConfigureTargetSource,
+    private val now: () -> Long,
+    ticks: Flow<Unit>,
     private val metadataFor: suspend (String) -> ParamMetadataSet?,
 ) : ViewModel() {
     @AssistedInject constructor(
         @Assisted nodeId: String,
         targets: ConfigureTargetSource,
         metadata: ParamMetadataRepository,
-    ) : this(DeviceId(nodeId), targets, metadata::load)
+    ) : this(DeviceId(nodeId), targets, SystemClock::elapsedRealtime, secondTicks(), metadata::load)
 
     @AssistedFactory
     interface Factory {
@@ -113,6 +70,12 @@ class ParametersViewModel internal constructor(
     private val _import = MutableStateFlow<ImportReview?>(null)
     val importReview: StateFlow<ImportReview?> = _import.asStateFlow()
 
+    private val _rebootPending = MutableStateFlow(false)
+
+    /** A confirmed write needs a flight-controller reboot before it takes effect. */
+    val rebootPending: StateFlow<Boolean> = _rebootPending.asStateFlow()
+    private var rebooting = false
+
     private val heartbeat: Flow<HeartbeatState?> = target.flatMapLatest { it?.vehicle?.telemetry?.heartbeat ?: flowOf(null) }
 
     private val metadata: StateFlow<ParamMetadataSet?> = heartbeat
@@ -125,14 +88,18 @@ class ParametersViewModel internal constructor(
         t?.let { combine(it.params.snapshot, it.params.loading) { s, l -> s to l } } ?: flowOf(ParamSnapshot.EMPTY to false)
     }
 
-    private val vehicleInfo: Flow<Pair<Boolean, Int?>> = heartbeat.map { (it?.armed == true) to it?.vehicleType }.distinctUntilChanged()
+    private data class VehicleInfo(val armed: Boolean, val mavType: Int?, val fresh: Boolean)
+
+    private val vehicleInfo: Flow<VehicleInfo> = combine(heartbeat, ticks) { hb, _ ->
+        VehicleInfo(hb?.armed == true, hb?.vehicleType, hb != null && now() - hb.tMs <= LINK_FRESH_MS)
+    }.distinctUntilChanged()
 
     val state: StateFlow<ParametersUiState> = combine(
         combine(target, snapshot, loadError) { t, s, e -> Triple(t, s, e) },
         metadata,
         filter,
         vehicleInfo,
-    ) { (t, snap, error), meta, f, (isArmed, mavType) ->
+    ) { (t, snap, error), meta, f, info ->
         val (s, loading) = snap
         when {
             t == null -> ParametersUiState.NoVehicle
@@ -142,15 +109,15 @@ class ParametersViewModel internal constructor(
             else -> {
                 val all = s.values.values.map { ParamRow(it.name, it.value, it.type, meta?.get(it.name)) }
                 ParametersUiState.Content(
-                    rows = all.filter { it.matches(f) }.sortedBy { it.name },
+                    rows = all.filter { it.matches(f) }.sortedWith(compareBy({ it.group }, { it.name })),
                     byName = all.associateBy { it.name },
-                    groups = all.map { it.group }.distinct().sorted(),
                     total = all.size,
                     filter = f,
-                    armed = isArmed,
-                    mavType = mavType,
+                    armed = info.armed,
+                    mavType = info.mavType,
                     hasMetadata = meta != null,
                     loading = loading,
+                    linkFresh = info.fresh,
                 )
             }
         }
@@ -166,7 +133,6 @@ class ParametersViewModel internal constructor(
     }
 
     private fun ParamRow.matches(f: ParamFilter): Boolean {
-        if (f.group != null && group != f.group) return false
         if (f.modifiedOnly && !modified) return false
         if (!f.showAdvanced && meta?.advanced == true && f.query.isBlank()) return false
         if (f.query.isBlank()) return true
@@ -224,13 +190,42 @@ class ParametersViewModel internal constructor(
 
     private suspend fun writeOne(name: String, value: Double): ParamMessage {
         val t = target.value ?: return ParamMessage.WriteFailed(name, ParamWriteFailure.NoLink)
-        return when (val r = t.params.set(name, value)) {
+        val result = when (val r = t.params.set(name, value)) {
             is ParamSetResult.Confirmed -> ParamMessage.Saved(name, r.value.value, metadata.value?.get(name)?.rebootRequired == true)
             is ParamSetResult.Mismatch -> ParamMessage.Clamped(name, r.requested, r.actual.value)
             ParamSetResult.UnknownParam -> ParamMessage.WriteFailed(name, ParamWriteFailure.UnknownParam)
             ParamSetResult.Timeout -> ParamMessage.WriteFailed(name, ParamWriteFailure.Timeout)
             is ParamSetResult.Failed -> ParamMessage.WriteFailed(name, ParamWriteFailure.Other)
         }
+        if (result is ParamMessage.Saved && result.rebootRequired) _rebootPending.value = true
+        return result
+    }
+
+    /**
+     * Reboots the flight controller so pending changes apply. Only while disarmed on a fresh
+     * link; an accepted reboot clears the pending flag.
+     */
+    fun reboot() {
+        val c = state.value as? ParametersUiState.Content ?: return
+        val t = target.value ?: return
+        if (rebooting || c.armed || !c.linkFresh || isArmed()) return
+        rebooting = true
+        viewModelScope.launch {
+            val result = t.vehicle.control.run(VehicleCommand.RebootAutopilot)
+            if (result == CommandResult.Accepted) _rebootPending.value = false
+            _message.value = ParamMessage.Reboot(result)
+            rebooting = false
+        }
+    }
+
+    /** Reports the outcome of writing a parameter file chosen by the operator. */
+    fun fileWritten(result: Result<Unit>) {
+        _message.value = result.fold({ ParamMessage.FileSaved }, { ParamMessage.FileWriteFailed(it.message) })
+    }
+
+    /** A chosen parameter file could not be read. */
+    fun fileUnreadable(reason: String?) {
+        _message.value = ParamMessage.FileUnreadable(reason.orEmpty())
     }
 
     /** Current values as a parameter file. */
@@ -256,17 +251,22 @@ class ParametersViewModel internal constructor(
         _import.value = null
     }
 
+    /** Includes or leaves out one changed row of the reviewed file; ignored while applying. */
+    fun toggleImportRow(name: String) = _import.update { r ->
+        if (r == null || r.running) r else r.copy(deselected = if (name in r.deselected) r.deselected - name else r.deselected + name)
+    }
+
     /**
-     * Writes every changed value from the reviewed file, one confirmed write at a time.
-     * Refused while the vehicle is armed; a vehicle that arms part-way stops the batch at
-     * the next value.
+     * Writes every selected changed value from the reviewed file, one confirmed write at a
+     * time. Refused while the vehicle is armed; a vehicle that arms part-way stops the batch
+     * at the next value.
      */
     fun applyImport() {
         val review = _import.value ?: return
         if (review.running || isArmed()) return
         viewModelScope.launch {
             _import.update { it?.copy(running = true, applied = 0, failed = emptyList()) }
-            for (diff in review.comparison.changed) {
+            for (diff in review.selected) {
                 if (isArmed()) break
                 val ok = writeOne(diff.name, diff.fromFile) is ParamMessage.Saved
                 _import.update { r ->

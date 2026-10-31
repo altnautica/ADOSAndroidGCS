@@ -138,6 +138,15 @@ class CommandServiceTest {
     }
 
     @Test
+    fun `reboot autopilot sends PREFLIGHT_REBOOT_SHUTDOWN with param1 one`() = runTest {
+        val link = ScriptedLink { m -> if (m is CommandLong) reply(m.ack) }
+        service(link, backgroundScope).run(VehicleCommand.RebootAutopilot)
+        val sent = link.sent.single() as CommandLong
+        assertEquals(246, sent.command)
+        assertEquals(1f, sent.param1)
+    }
+
+    @Test
     fun `takeoff on ardupilot switches to guided first`() = runTest {
         val link = ScriptedLink { m -> if (m is CommandLong) reply(m.ack) }
         assertEquals(CommandResult.Accepted, service(link, backgroundScope).run(VehicleCommand.Takeoff(12f)))

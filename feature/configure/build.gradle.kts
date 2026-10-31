@@ -23,6 +23,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigationevent.compose)
 
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
