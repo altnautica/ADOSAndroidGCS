@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.node.demo
+package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.agent.capture.CameraFrames
 import com.altnautica.gcs.core.agent.capture.CaptureApi

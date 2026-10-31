@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.designsystem.tokens.AdosThemeId
+import com.altnautica.gcs.core.demo.DemoSettings
 import com.altnautica.gcs.core.link.direct.DirectEndpoint
 import com.altnautica.gcs.core.link.direct.DirectLinkSettings
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
@@ -28,14 +29,15 @@ class SettingsViewModel @Inject constructor(
     private val app: AppSettingsRepository,
     private val cockpit: CockpitSettingsRepository,
     private val direct: DirectLinkSettings,
+    private val demo: DemoSettings,
 ) : ViewModel() {
 
     val state: StateFlow<SettingsUiState> = combine(
         app.appearance,
         cockpit.settings,
-        direct.demoEnabled,
+        demo.enabled,
         direct.endpoints,
-    ) { a, c, demo, endpoints -> SettingsUiState(true, a, c, demo, endpoints) }
+    ) { a, c, demoOn, endpoints -> SettingsUiState(true, a, c, demoOn, endpoints) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setTheme(theme: AdosThemeId) = launch { app.setTheme(theme) }
@@ -59,7 +61,7 @@ class SettingsViewModel @Inject constructor(
         cockpit.setBatteryBands(bands.lowPct, pct)
     }
 
-    fun setDemoEnabled(on: Boolean) = launch { direct.setDemoEnabled(on) }
+    fun setDemoEnabled(on: Boolean) = launch { demo.setEnabled(on) }
 
     fun removeEndpoint(endpoint: DirectEndpoint) = launch { direct.removeEndpoint(endpoint) }
 

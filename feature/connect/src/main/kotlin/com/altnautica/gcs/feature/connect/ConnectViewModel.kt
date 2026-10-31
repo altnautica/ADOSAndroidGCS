@@ -14,7 +14,7 @@ import com.altnautica.gcs.core.agent.wifi.GroundStationCredential
 import com.altnautica.gcs.core.agent.wifi.WifiConnectionManager
 import com.altnautica.gcs.core.agent.wifi.WifiJoinString
 import com.altnautica.gcs.core.data.vault.CredentialVault
-import com.altnautica.gcs.core.link.direct.DemoNode
+import com.altnautica.gcs.core.demo.DemoSettings
 import com.altnautica.gcs.core.link.direct.DirectEndpoint
 import com.altnautica.gcs.core.link.direct.DirectLinkSettings
 import com.altnautica.gcs.core.link.direct.DirectLinkSource
@@ -106,6 +106,7 @@ class ConnectViewModel @Inject constructor(
     private val usb: UsbFlightControllers,
     private val wifi: WifiConnectionManager,
     private val apStore: GroundStationApStore,
+    private val demo: DemoSettings,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConnectUiState())
@@ -114,7 +115,7 @@ class ConnectViewModel @Inject constructor(
         _state,
         discovery.browse().onStart { emit(emptyList()) },
         vault.nodes,
-        combine(usb.devices, directSettings.usbBaudRate, directSettings.demoEnabled, wifi.connected) { d, b, demo, w -> Extra(d, b, demo, w) },
+        combine(usb.devices, directSettings.usbBaudRate, demo.enabled, wifi.connected) { d, b, on, w -> Extra(d, b, on, w) },
     ) { s, found, stored, extra ->
         val keys = stored.map { it.deviceId }.toSet()
         s.copy(
@@ -303,8 +304,8 @@ class ConnectViewModel @Inject constructor(
 
     fun enableDemo() {
         viewModelScope.launch {
-            directSettings.setDemoEnabled(true)
-            _state.update { it.copy(connected = DemoNode.ID) }
+            val id = demo.enable()
+            _state.update { it.copy(connected = id) }
         }
     }
 

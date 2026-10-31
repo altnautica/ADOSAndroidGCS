@@ -2,7 +2,6 @@ package com.altnautica.gcs.core.video.di
 
 import com.altnautica.gcs.core.video.VideoScope
 import com.altnautica.gcs.core.video.VideoSourceFactory
-import com.altnautica.gcs.core.video.demo.DemoVideoFactory
 import com.altnautica.gcs.core.video.whep.WhepVideoFactory
 import dagger.Binds
 import dagger.Module
@@ -22,10 +21,6 @@ abstract class VideoModule {
     @Binds
     @IntoSet
     abstract fun whep(factory: WhepVideoFactory): VideoSourceFactory
-
-    @Binds
-    @IntoSet
-    abstract fun demo(factory: DemoVideoFactory): VideoSourceFactory
 
     companion object {
         @Provides

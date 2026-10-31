@@ -1,6 +1,5 @@
 package com.altnautica.gcs.core.link.direct
 
-import com.altnautica.gcs.core.link.transport.DemoTransport
 import com.altnautica.gcs.core.link.transport.TcpTransport
 import com.altnautica.gcs.core.link.transport.UdpTransport
 import com.altnautica.gcs.core.link.transport.UsbSerialTransport
@@ -15,7 +14,7 @@ import kotlinx.coroutines.flow.first
 
 /**
  * Opens [Reach.DirectFc] links for the nodes [DirectLinkSource] publishes:
- * the demo vehicle, USB serial devices and manual UDP/TCP endpoints.
+ * USB serial devices and manual UDP/TCP endpoints.
  */
 @Singleton
 class DirectFcTransportProvider @Inject constructor(
@@ -23,13 +22,13 @@ class DirectFcTransportProvider @Inject constructor(
     private val settings: DirectLinkSettings,
 ) : TransportProvider {
 
-    override fun supports(node: NodeSummary, reach: Reach): Boolean = reach == Reach.DirectFc
+    override fun supports(node: NodeSummary, reach: Reach): Boolean =
+        reach == Reach.DirectFc && (node.id.value.startsWith("usb:") || DirectEndpoint.parse(node.id.value) != null)
 
     override suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport {
         require(reach == Reach.DirectFc) { "Unsupported reach $reach" }
         val id = node.id.value
         return when {
-            node.id == DemoNode.ID -> DemoTransport(Dispatchers.Default)
             id.startsWith("usb:") -> {
                 val manager = usb.manager() ?: error("USB host is not available")
                 val driver = usb.driverFor(node.id) ?: error("USB device ${node.name} is no longer attached")

@@ -8,10 +8,8 @@ import com.altnautica.gcs.core.agent.capture.CaptureStartRequest
 import com.altnautica.gcs.core.agent.capture.ReconstructResponse
 import com.altnautica.gcs.core.agent.capture.AgentCaptureApi
 import com.altnautica.gcs.core.agent.http.AgentResult
-import com.altnautica.gcs.core.link.direct.DemoNode
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.VideoSource
-import com.altnautica.gcs.core.video.demo.DemoVideoFactory
 import com.altnautica.gcs.feature.node.NodeTab
 import com.altnautica.gcs.feature.node.common.NodeApis
 import com.altnautica.gcs.feature.node.common.PageProblem
@@ -125,8 +123,8 @@ class VisorViewModel @AssistedInject constructor(
     /** The preview cameras come from the session; before one runs, from the rig's camera sensors. */
     internal suspend fun resolvePreview() {
         // The extension serves each capture camera at `atlas/capture/whep?camera=<id>` under its plugin mount;
-        // the demo Visor draws a labelled test pattern per camera instead.
-        if (id != DemoNode.VISOR_ID) {
+        // an in-process node supplies its own preview instead.
+        if (apis.local(id) == null) {
             whepBase = endpoints.endpointFor(id)?.url(AgentCaptureApi.route("atlas/capture/"))?.toString()
         }
         if (_state.value.cameras.isEmpty()) {
@@ -154,9 +152,10 @@ class VisorViewModel @AssistedInject constructor(
         _state.update { s ->
             val base = whepBase
             val camera = s.previewCamera
+            val local = apis.local(id)
             s.copy(
                 preview = when {
-                    id == DemoNode.VISOR_ID -> DemoVideoFactory.source(camera)
+                    local != null -> local.capturePreview(id, camera)
                     base != null && camera != null -> VideoSource.AgentWhep(id, base, camera)
                     else -> null
                 },

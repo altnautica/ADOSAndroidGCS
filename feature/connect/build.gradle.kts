@@ -10,6 +10,7 @@ dependencies {
     implementation(projects.core.agent)
     implementation(projects.core.data)
     implementation(projects.core.link)
+    implementation(projects.core.demo)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

@@ -1,10 +1,11 @@
-package com.altnautica.gcs.core.video.demo
+package com.altnautica.gcs.core.demo.video
 
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.view.Surface
 import androidx.core.graphics.withRotation
+import com.altnautica.gcs.core.demo.DemoIds
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.VideoSource
@@ -31,9 +32,9 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * Video for the simulated demo vehicle: an animated horizon test pattern
- * drawn at 30 fps, so the cockpit's video path, watchdog and layout run
- * exactly as they do with a real feed.
+ * Video for the demo nodes: an animated horizon test pattern drawn at 30 fps,
+ * so the cockpit's video path, watchdog and layout run exactly as they do with
+ * a real feed. Demo sources carry a non-HTTP base, so no real player claims them.
  */
 @Singleton
 class DemoVideoFactory @Inject constructor(
@@ -44,30 +45,17 @@ class DemoVideoFactory @Inject constructor(
         src is VideoSource.AgentWhep && src.baseUrl.startsWith(DEMO_BASE_URL)
 
     override fun candidates(node: NodeSummary, stream: String?): List<VideoSource> =
-        if (node.id == DEMO_NODE) listOf(source(stream)) else emptyList()
+        if (node.id == DemoIds.DRONE) listOf(source(node.id, stream)) else emptyList()
 
     override fun create(src: VideoSource): VideoSessionHandle = DemoVideoSession(src, scope, VideoClock.Elapsed)
 
     companion object {
-        /** The simulated demo vehicle's id, as published by the direct-link node source. */
-        val DEMO_NODE = DeviceId("demo-copter")
-
-        /** The source the selector offers for the demo node. */
-        val SOURCE: VideoSource = source(null)
-
         /** Not an HTTP base, so only this factory plays a demo source. */
         const val DEMO_BASE_URL: String = "demo://local/"
 
         /** A demo source for one named stream; the pattern is labelled with it so a switch is visible. */
-        fun source(stream: String?): VideoSource = VideoSource.AgentWhep(DEMO_NODE, DEMO_BASE_URL, stream)
+        fun source(node: DeviceId, stream: String?): VideoSource = VideoSource.AgentWhep(node, DEMO_BASE_URL, stream)
     }
-}
-
-internal fun VideoSource.nodeId() = when (this) {
-    is VideoSource.AgentWhep -> node
-    is VideoSource.CloudP2p -> node
-    is VideoSource.CloudRelay -> node
-    is VideoSource.PhoneRadio -> node
 }
 
 private class DemoVideoSession(

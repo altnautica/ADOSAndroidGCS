@@ -1,4 +1,4 @@
-package com.altnautica.gcs.core.video.demo
+package com.altnautica.gcs.core.demo.video
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

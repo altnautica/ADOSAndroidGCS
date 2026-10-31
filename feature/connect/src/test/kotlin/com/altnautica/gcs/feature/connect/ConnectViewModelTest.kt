@@ -14,6 +14,8 @@ import com.altnautica.gcs.core.link.direct.DirectEndpoint
 import com.altnautica.gcs.core.link.direct.DirectLinkSettings
 import com.altnautica.gcs.core.link.direct.DirectLinkSource
 import com.altnautica.gcs.core.link.direct.UsbFlightControllers
+import com.altnautica.gcs.core.demo.DemoIds
+import com.altnautica.gcs.core.demo.DemoSettings
 import com.altnautica.gcs.core.model.DeviceId
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -47,7 +49,10 @@ class ConnectViewModelTest {
     }
     private val direct = mockk<DirectLinkSettings>(relaxed = true) {
         every { usbBaudRate } returns flowOf(57_600)
-        every { demoEnabled } returns flowOf(false)
+    }
+    private val demo = mockk<DemoSettings> {
+        every { enabled } returns flowOf(false)
+        coEvery { enable() } returns DemoIds.DRONE
     }
     private val agent = DiscoveredAgent(
         serviceName = "ados-drone", deviceId = "drone-1", name = "Drone", version = "1", board = null,
@@ -63,6 +68,7 @@ class ConnectViewModelTest {
         usb = mockk<UsbFlightControllers>(relaxed = true) { every { devices } returns MutableStateFlow(emptyList()) },
         wifi = mockk<WifiConnectionManager>(relaxed = true) { every { connected } returns MutableStateFlow(false) },
         apStore = mockk<GroundStationApStore>(relaxed = true),
+        demo = demo,
     )
 
     private fun credential(id: String) = NodeCredential(deviceId = id, apiKey = "k".repeat(32))
@@ -205,8 +211,8 @@ class ConnectViewModelTest {
         val vm = vm()
         backgroundScope.launch { vm.state.collect {} }
         vm.enableDemo()
-        coVerify { direct.setDemoEnabled(true) }
-        assertEquals(com.altnautica.gcs.core.link.direct.DemoNode.ID, vm.state.value.connected)
+        coVerify { demo.enable() }
+        assertEquals(DemoIds.DRONE, vm.state.value.connected)
     }
 
     @Test

@@ -1,4 +1,4 @@
-package com.altnautica.gcs.core.video.demo
+package com.altnautica.gcs.core.demo.video
 
 import kotlin.math.ceil
 import kotlin.math.floor

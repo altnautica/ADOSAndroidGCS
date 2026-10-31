@@ -2,7 +2,6 @@ package com.altnautica.gcs.core.link.direct
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -58,7 +57,7 @@ sealed interface DirectEndpoint {
 
 /**
  * Operator settings for direct flight-controller links: manual UDP/TCP
- * endpoints, the demo vehicle toggle and the USB serial baud rate.
+ * endpoints and the USB serial baud rate.
  */
 @Singleton
 class DirectLinkSettings @Inject constructor(
@@ -67,8 +66,6 @@ class DirectLinkSettings @Inject constructor(
     val endpoints: Flow<List<DirectEndpoint>> = dataStore.data
         .map { prefs -> prefs[ENDPOINTS].orEmpty().mapNotNull(DirectEndpoint::parse).sortedBy { it.label } }
         .distinctUntilChanged()
-
-    val demoEnabled: Flow<Boolean> = dataStore.data.map { it[DEMO] ?: false }.distinctUntilChanged()
 
     val usbBaudRate: Flow<Int> = dataStore.data
         .map { it[USB_BAUD] ?: UsbSerialTransport.DEFAULT_BAUD }
@@ -82,10 +79,6 @@ class DirectLinkSettings @Inject constructor(
         dataStore.edit { it[ENDPOINTS] = it[ENDPOINTS].orEmpty() - DirectEndpoint.encode(endpoint) }
     }
 
-    suspend fun setDemoEnabled(enabled: Boolean) {
-        dataStore.edit { it[DEMO] = enabled }
-    }
-
     /** One of [UsbSerialTransport.BAUD_RATES]. */
     suspend fun setUsbBaudRate(baud: Int) {
         require(baud in UsbSerialTransport.BAUD_RATES) { "Unsupported baud rate $baud" }
@@ -94,7 +87,6 @@ class DirectLinkSettings @Inject constructor(
 
     private companion object {
         val ENDPOINTS = stringSetPreferencesKey("direct_link_endpoints")
-        val DEMO = booleanPreferencesKey("direct_link_demo_enabled")
         val USB_BAUD = intPreferencesKey("direct_link_usb_baud")
     }
 }

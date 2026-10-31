@@ -3,8 +3,8 @@ package com.altnautica.gcs.feature.node.visor
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.capture.CaptureApi
 import com.altnautica.gcs.core.agent.capture.CaptureExposure
-import com.altnautica.gcs.core.link.direct.DemoNode
-import com.altnautica.gcs.feature.node.demo.DemoVisorSensors
+import com.altnautica.gcs.core.demo.DemoIds
+import com.altnautica.gcs.core.demo.node.DemoNodeApis
 import com.altnautica.gcs.core.agent.capture.CaptureMarkResponse
 import com.altnautica.gcs.core.agent.capture.CaptureSessions
 import com.altnautica.gcs.core.agent.capture.CaptureState
@@ -18,6 +18,7 @@ import com.altnautica.gcs.feature.node.common.PageProblem
 import com.altnautica.gcs.feature.node.groundstation.Load
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -44,7 +45,10 @@ class VisorViewModelTest {
 
     private val dispatcher = UnconfinedTestDispatcher()
     private val capture = mockk<CaptureApi>()
-    private val apis = mockk<NodeApis> { coEvery { capture(DeviceId("v1")) } returns capture }
+    private val apis = mockk<NodeApis> {
+        coEvery { capture(DeviceId("v1")) } returns capture
+        every { local(any()) } returns null
+    }
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -147,7 +151,10 @@ class VisorViewModelTest {
 
     @Test
     fun noAgentLinkFailsTheActionWithoutACall() = runTest(dispatcher) {
-        val noLink = mockk<NodeApis> { coEvery { capture(DeviceId("v1")) } returns null }
+        val noLink = mockk<NodeApis> {
+            coEvery { capture(DeviceId("v1")) } returns null
+            every { local(any()) } returns null
+        }
         val vm = VisorViewModel("v1", noLink, mockk<AgentEndpoints>(relaxed = true))
         vm.stop()
         assertEquals(ActionState.Failed(CaptureAction.Stop, CaptureProblem.Page(PageProblem.NoAgentLink)), vm.state.value.action)
@@ -251,18 +258,17 @@ class VisorViewModelTest {
     }
 
     @Test
-    fun demoCameraChipsSwitchThePreview() = runTest(dispatcher) {
-        val demo = DemoNode.VISOR_ID
-        val demoApis = mockk<NodeApis> {
-            coEvery { capture(demo) } returns null
-            coEvery { sensors(demo) } returns DemoVisorSensors()
-        }
-        val vm = VisorViewModel(demo.value, demoApis, mockk<AgentEndpoints>(relaxed = true))
+    fun inProcessNodeCameraChipsSwitchThePreview() = runTest(dispatcher) {
+        val demo = DemoIds.VISOR
+        val localApis = NodeApis(mockk(), mockk(), setOf(DemoNodeApis()))
+        val endpoints = mockk<AgentEndpoints>(relaxed = true)
+        val vm = VisorViewModel(demo.value, localApis, endpoints)
         vm.resolvePreview()
         assertEquals(listOf("cam_fl", "cam_fr"), vm.state.value.cameras)
         assertEquals("cam_fl", (vm.state.value.preview as VideoSource.AgentWhep).streamId)
 
         vm.selectCamera("cam_fr")
         assertEquals("cam_fr", (vm.state.value.preview as VideoSource.AgentWhep).streamId)
+        coVerify(exactly = 0) { endpoints.endpointFor(any()) }
     }
 }

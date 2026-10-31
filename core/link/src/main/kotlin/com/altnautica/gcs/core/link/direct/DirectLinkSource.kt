@@ -4,7 +4,6 @@ import com.altnautica.gcs.core.link.mavlink.ElapsedClock
 import com.altnautica.gcs.core.link.vehicle.LinkActivity
 import com.altnautica.gcs.core.model.BlockReason
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.core.model.FcVariant
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSource
@@ -18,28 +17,14 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 
-/** The simulated nodes shown when demo mode is on. */
-object DemoNode {
-    val ID: DeviceId = DeviceId("demo-copter")
-    const val NAME: String = "Demo drone"
-
-    /** Demo handheld capture rig; its pages are served from demo data, never an agent. */
-    val VISOR_ID: DeviceId = DeviceId("demo-visor")
-    const val VISOR_NAME: String = "Demo Visor"
-
-    /** Demo ground station with GNSS and LoRa demo data. */
-    val GROUND_ID: DeviceId = DeviceId("demo-ground")
-    const val GROUND_NAME: String = "Demo ground station"
-}
-
 /**
- * Nodes reachable without an agent: USB-attached flight controllers, manual
- * UDP/TCP endpoints and the demo vehicle. USB devices without permission are
- * listed as blocked until the operator grants it.
+ * Nodes reachable without an agent: USB-attached flight controllers and manual
+ * UDP/TCP endpoints. USB devices without permission are listed as blocked until
+ * the operator grants it.
  *
  * Liveness of USB and network endpoints follows the vehicle's heartbeat while
  * a link is open (live within 5 s, stale within 15 s); an endpoint nobody has
- * opened yet is offline. The demo vehicle is always live.
+ * opened yet is offline.
  */
 @Singleton
 class DirectLinkSource @Inject constructor(
@@ -58,17 +43,11 @@ class DirectLinkSource @Inject constructor(
 
     override val nodes: Flow<List<NodeSummary>> = combine(
         settings.endpoints,
-        settings.demoEnabled,
         usb.devices,
         activity.lastHeartbeat,
         ticker,
-    ) { endpoints, demo, devices, heartbeats, _ ->
+    ) { endpoints, devices, heartbeats, _ ->
         buildList {
-            if (demo) {
-                add(demoNode())
-                add(demoAgentNode(DemoNode.VISOR_ID, DemoNode.VISOR_NAME, NodeProfile.Visor))
-                add(demoAgentNode(DemoNode.GROUND_ID, DemoNode.GROUND_NAME, NodeProfile.GroundStation))
-            }
             devices.forEach { d ->
                 add(
                     node(
@@ -88,31 +67,6 @@ class DirectLinkSource @Inject constructor(
 
     /** Asks the system for permission to use an attached USB device. */
     fun requestUsbPermission(device: UsbFlightController) = usb.requestPermission(device.deviceName)
-
-    private fun demoNode() = NodeSummary(
-        id = DemoNode.ID,
-        name = DemoNode.NAME,
-        profile = NodeProfile.Drone,
-        reaches = listOf(Reach.DirectFc),
-        liveness = Liveness.Live,
-        agentVersion = null,
-        fcVariant = FcVariant.MavlinkArdupilot,
-        carriedDroneId = null,
-        lastSeenMs = activity.lastHeartbeat.value[DemoNode.ID],
-    )
-
-    /** A demo node with an agent-like profile; it lists a LAN reach so its agent pages show. */
-    private fun demoAgentNode(id: DeviceId, name: String, profile: NodeProfile) = NodeSummary(
-        id = id,
-        name = name,
-        profile = profile,
-        reaches = listOf(Reach.Lan),
-        liveness = Liveness.Live,
-        agentVersion = null,
-        fcVariant = FcVariant.Unknown,
-        carriedDroneId = null,
-        lastSeenMs = null,
-    )
 
     private fun node(id: DeviceId, name: String, reaches: List<Reach>, lastSeen: Long?, attached: Boolean): NodeSummary {
         val age = lastSeen?.let { clock.nowMs() - it }
