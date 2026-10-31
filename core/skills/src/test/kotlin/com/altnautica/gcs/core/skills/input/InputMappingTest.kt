@@ -1,6 +1,8 @@
 package com.altnautica.gcs.core.skills.input
 
 import android.view.KeyEvent
+import com.altnautica.gcs.core.skills.binding.Loadout
+import com.altnautica.gcs.core.skills.binding.LoadoutSlot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -31,10 +33,21 @@ class InputMappingTest {
     @Test
     fun `reserved buttons never reach the manual control bitmask`() {
         val all = 0x1FFFF
-        val mask = ReservedInputs.manualControlButtonMask(all)
+        val mask = ReservedInputs.manualControlButtonMask(all, Loadout(slots = emptyList()))
         for (b in ReservedInputs.GAMEPAD_BUTTONS) assertEquals("button $b", 0, mask and (1 shl b))
-        val expected = (1 shl 0) or (1 shl 1) or (1 shl 2) or (1 shl 3) or (1 shl 6) or (1 shl 7) or (1 shl 10) or (1 shl 11)
+        val expected = (1 shl GamepadButton.A) or (1 shl GamepadButton.X) or (1 shl GamepadButton.L1) or
+            (1 shl GamepadButton.R1) or (1 shl GamepadButton.L2) or (1 shl GamepadButton.R2)
         assertEquals(expected, mask)
+    }
+
+    @Test
+    fun `skill-bound buttons never reach the manual control bitmask`() {
+        val all = 0x1FFFF
+        assertEquals(0, ReservedInputs.manualControlButtonMask(all, Loadout.DEFAULT))
+        val onlyArm = Loadout(slots = listOf(LoadoutSlot(0, "arm", null, GamepadButton.A)))
+        val mask = ReservedInputs.manualControlButtonMask(all, onlyArm)
+        assertEquals(0, mask and (1 shl GamepadButton.A))
+        assertEquals(1 shl GamepadButton.X, mask and (1 shl GamepadButton.X))
     }
 
     @Test

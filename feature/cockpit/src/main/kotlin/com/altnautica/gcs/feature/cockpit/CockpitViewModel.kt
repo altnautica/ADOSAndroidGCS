@@ -5,6 +5,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.video.StreamCatalog
+import com.altnautica.gcs.core.data.cockpit.AltitudeReference
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
+import com.altnautica.gcs.core.data.cockpit.CockpitSettings
+import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
+import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
+import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
+import com.altnautica.gcs.core.extensions.skills.ExtensionSkillContributor
+import com.altnautica.gcs.core.extensions.skills.ExtensionTargetActionSkill
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.model.DeviceId
@@ -16,41 +24,38 @@ import com.altnautica.gcs.core.model.VehicleProvider
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.skills.ActivationOutcome
-import com.altnautica.gcs.core.extensions.skills.ExtensionSkillContributor
-import com.altnautica.gcs.core.extensions.skills.ExtensionTargetActionSkill
-import com.altnautica.gcs.core.skills.SkillActivator
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.core.skills.SkillActivator
 import com.altnautica.gcs.core.skills.SkillNotice
 import com.altnautica.gcs.core.skills.SkillSessionFactory
 import com.altnautica.gcs.core.skills.binding.BindingStore
 import com.altnautica.gcs.core.skills.binding.Loadout
 import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
+import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
+import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.InputCapture
 import com.altnautica.gcs.core.skills.input.InputEvent
-import com.altnautica.gcs.feature.cockpit.preflight.cockpitPreflight
-import com.altnautica.gcs.feature.cockpit.modes.ModePickerUi
-import com.altnautica.gcs.feature.cockpit.modes.modeChoices
+import com.altnautica.gcs.core.skills.input.controller.ControllerManager
 import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
 import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.CockpitAlertsController
+import com.altnautica.gcs.feature.cockpit.alerts.ControllerFeedback
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
 import com.altnautica.gcs.feature.cockpit.band.CockpitHudFlows
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmController
 import com.altnautica.gcs.feature.cockpit.input.CockpitAction
 import com.altnautica.gcs.feature.cockpit.input.CockpitInputMapper
-import com.altnautica.gcs.feature.cockpit.manual.CockpitManualControl
+import com.altnautica.gcs.feature.cockpit.manual.CockpitStickController
+import com.altnautica.gcs.feature.cockpit.modes.ModePickerUi
+import com.altnautica.gcs.feature.cockpit.modes.modeChoices
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightResult
+import com.altnautica.gcs.feature.cockpit.preflight.cockpitPreflight
 import com.altnautica.gcs.feature.cockpit.skillbar.CockpitTargetActions
 import com.altnautica.gcs.feature.cockpit.video.CockpitVideoController
-import com.altnautica.gcs.core.data.cockpit.AltitudeReference
-import com.altnautica.gcs.core.data.cockpit.CockpitDensity
-import com.altnautica.gcs.core.data.cockpit.CockpitSettings
-import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
-import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -97,6 +102,8 @@ class CockpitViewModel @AssistedInject constructor(
     private val router: AdosInputRouter,
     private val settingsRepo: CockpitSettingsRepository,
     controllerSettings: ControllerSettingsRepository,
+    controllerManager: ControllerManager,
+    private val summaries: CockpitSummaryRegistry,
     videoSelector: VideoSourceSelector,
     videoSessions: VideoSessionManager,
     endpoints: AgentEndpoints,
@@ -113,7 +120,8 @@ class CockpitViewModel @AssistedInject constructor(
         fun create(nodeId: String): CockpitViewModel
     }
 
-    private val nodeFlows = CockpitNodeFlows(viewModelScope, DeviceId(nodeIdValue), nodeSources, vehicles, services)
+    private val cockpitNodeId = DeviceId(nodeIdValue)
+    private val nodeFlows = CockpitNodeFlows(viewModelScope, cockpitNodeId, nodeSources, vehicles, services)
 
     private val _events = MutableSharedFlow<CockpitEvent>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val events: SharedFlow<CockpitEvent> = _events.asSharedFlow()
@@ -219,7 +227,10 @@ class CockpitViewModel @AssistedInject constructor(
         clock = clock,
         failingChecks = { preflight.value.failing },
         isButtonHeld = { b -> router.buttons.value and (1 shl b) != 0 },
+        onConfirmed = { feedback.onConfirmed() },
     )
+
+    private val overlays = CockpitOverlays(confirm)
 
     private val session = sessionFactory.create(vehicle, preflight.map { it.ready }.distinctUntilChanged(), viewModelScope)
 
@@ -262,9 +273,20 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
-    // ---- Flight mode picker -----------------------------------------------------------
+    // ---- Manual control ---------------------------------------------------------------
 
-    private val _modePickerOpen = MutableStateFlow(false)
+    private val sticks = CockpitStickController(
+        viewModelScope, clock, vehicle, nodeFlows.vehicleServices, router, controllerSettings, controllerManager, loadout,
+    )
+
+    fun toggleStickControl() = sticks.toggle()
+
+    /** Stick control in every mode for the flown vehicle; null without a vehicle. */
+    val stickAllModes: StateFlow<Boolean?> = sticks.allModes
+
+    fun setStickAllModes(on: Boolean) = sticks.setAllModes(on)
+
+    // ---- Flight mode picker -----------------------------------------------------------
 
     private val modeList: Flow<Pair<List<FlightMode>, String?>> = vehicle.flatMapLatest { v ->
         if (v == null) {
@@ -275,23 +297,23 @@ class CockpitViewModel @AssistedInject constructor(
     }
 
     /** The picker while open: every mode the flown vehicle advertises, with the `set-mode` state. */
-    val modePicker: StateFlow<ModePickerUi?> = combine(_modePickerOpen, modeList, session.states) { open, (modes, current), states ->
+    val modePicker: StateFlow<ModePickerUi?> = combine(overlays.modePicker, modeList, session.states, sticks.stickOn) { open, (modes, current), states, _ ->
         if (!open) return@combine null
         val state = states[SetModeSkill.id]
-        ModePickerUi(modeChoices(modes, current), enabled = state?.enabled == true, reasonKey = state?.takeIf { !it.enabled }?.reasonKey)
+        ModePickerUi(modeChoices(modes, current, sticks::endsStick), enabled = state?.enabled == true, reasonKey = state?.takeIf { !it.enabled }?.reasonKey)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
 
     fun openModePicker() {
-        _modePickerOpen.value = true
+        overlays.modePicker.value = true
     }
 
     fun closeModePicker() {
-        _modePickerOpen.value = false
+        overlays.modePicker.value = false
     }
 
     /** Requests [modeName] through the `set-mode` skill; its risk tier decides the confirm. */
     fun selectMode(modeName: String) {
-        _modePickerOpen.value = false
+        overlays.modePicker.value = false
         activate(SetModeSkill.id, mapOf(SkillArgs.TARGET_MODE to modeName))
     }
 
@@ -305,22 +327,16 @@ class CockpitViewModel @AssistedInject constructor(
     /** Runs a target action on a box drawn over the video (normalized x, y, width, height); the camera is the selected stream. */
     fun activateTarget(skill: ExtensionTargetActionSkill, bbox: Map<String, Float>) = targets.activate(skill, bbox)
 
-    // ---- Manual control ---------------------------------------------------------------
-
-    private val manual = CockpitManualControl(viewModelScope, vehicle, nodeFlows.vehicleServices, router, controllerSettings.settings)
-
-    fun toggleStickControl() = manual.toggle()
-
     // ---- Band, alerts, strip ----------------------------------------------------------
 
     private val hud = CockpitHudFlows(
-        viewModelScope, clock, telemetry, node, vehicle, settings, videoState, manual.stick, preflight, videoCtl.recording, tick500,
+        viewModelScope, clock, telemetry, node, vehicle, settings, videoState, sticks.stick, preflight, videoCtl.recording, tick500,
     )
 
     val band: StateFlow<BandState> = hud.band
 
     private val alertsCtl = CockpitAlertsController(
-        viewModelScope, clock, telemetry, videoState, criticalText, prearmText, settings, tick500, announcer,
+        viewModelScope, clock, telemetry, videoState, criticalText, prearmText, settings, tick500, announcer, sticks.raised, sticks.batteryLow,
     )
 
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
@@ -334,45 +350,46 @@ class CockpitViewModel @AssistedInject constructor(
 
     fun toggleMinimapSwap() = hud.toggleMinimapSwap()
 
+    // ---- Controller feedback ----------------------------------------------------------
+
+    private val feedback = ControllerFeedback(
+        viewModelScope,
+        controllerManager,
+        alerts,
+        armed = band.map { it.armed == true }.stateIn(viewModelScope, SharingStarted.Eagerly, false),
+        stickOn = sticks.stickOn,
+    )
+
+    /** The current theme's colours for the controller light bar. */
+    fun setControllerPalette(colors: AdosColorRoles) = feedback.setPalette(colors)
+
     // ---- Overlays and input -----------------------------------------------------------
 
-    private val _quickSettings = MutableStateFlow(false)
-    val quickSettingsOpen: StateFlow<Boolean> = _quickSettings.asStateFlow()
-    private val _drawer = MutableStateFlow(false)
-    val drawerOpen: StateFlow<Boolean> = _drawer.asStateFlow()
-    private val _preflightOpen = MutableStateFlow(false)
-    val preflightOpen: StateFlow<Boolean> = _preflightOpen.asStateFlow()
+    val quickSettingsOpen: StateFlow<Boolean> = overlays.quickSettings.asStateFlow()
+    val drawerOpen: StateFlow<Boolean> = overlays.drawer.asStateFlow()
+    val preflightOpen: StateFlow<Boolean> = overlays.preflight.asStateFlow()
 
     fun setQuickSettings(open: Boolean) {
-        _quickSettings.value = open
+        overlays.quickSettings.value = open
     }
 
     fun setDrawer(open: Boolean) {
-        _drawer.value = open
+        overlays.drawer.value = open
     }
 
     fun setPreflight(open: Boolean) {
-        _preflightOpen.value = open
-    }
-
-    /** Closes every open sheet and panel; false when none was open. */
-    private fun closeOverlays(): Boolean {
-        val open = _quickSettings.value || _drawer.value || _preflightOpen.value || _modePickerOpen.value
-        _quickSettings.value = false
-        _drawer.value = false
-        _preflightOpen.value = false
-        _modePickerOpen.value = false
-        return open
+        overlays.preflight.value = open
     }
 
     private var inputJob: Job? = null
+    private var summaryJob: Job? = null
 
     private val capture = object : InputCapture {
         override fun consumesChord(chord: String) = CockpitInputMapper.consumesChord(chord, loadout.value)
         override val capturesEnter: Boolean get() = confirm.isOpen
 
-        // Every controller button belongs to the cockpit while it captures input.
-        override val uiNavigation: Boolean get() = false
+        // Mode picker, drawer, preflight and quick settings navigate like the app; a confirm sheet takes the buttons.
+        override val uiNavigation: Boolean get() = overlays.uiNavigation
     }
 
     /** Starts taking hardware input while the cockpit is visible. */
@@ -380,6 +397,12 @@ class CockpitViewModel @AssistedInject constructor(
         router.capture = capture
         if (inputJob?.isActive == true) return
         inputJob = viewModelScope.launch { router.events.collect(::onInput) }
+        feedback.start()
+        summaryJob = viewModelScope.launch {
+            combine(preflight, alerts, sticks.stickOn) { p, a, on ->
+                CockpitSummary(cockpitNodeId, p.passed, p.total, a.size, a.firstOrNull()?.let(announcer::alertText), on)
+            }.distinctUntilChanged().collect(summaries::publish)
+        }
     }
 
     /**
@@ -391,7 +414,11 @@ class CockpitViewModel @AssistedInject constructor(
         if (router.capture === capture) router.capture = null
         inputJob?.cancel()
         inputJob = null
-        manual.forceOff()
+        summaryJob?.cancel()
+        summaryJob = null
+        summaries.clear(cockpitNodeId)
+        feedback.stop()
+        sticks.forceOff()
         confirm.releaseHold()
         router.neutralize()
     }
@@ -408,13 +435,15 @@ class CockpitViewModel @AssistedInject constructor(
                 confirm.onEnter(event.pressed)
                 null
             }
-            is InputEvent.Button -> {
-                if (confirm.isOpen) {
+            is InputEvent.Button -> when {
+                confirm.isOpen -> {
                     confirm.onGamepadButton(event.button, event.pressed)
                     null
-                } else if (event.pressed) {
-                    CockpitInputMapper.onButtonPressed(event.button, router.buttons.value, loadout.value, armed)
-                } else null
+                }
+                // An open overlay navigates with the buttons; they must not also arm or fly.
+                overlays.uiNavigation -> null
+                event.pressed -> CockpitInputMapper.onButtonPressed(event.button, router.buttons.value, loadout.value, armed)
+                else -> CockpitInputMapper.onButtonReleased(event.button, event.heldMs)
             }
             is InputEvent.Chord -> if (confirm.isOpen) null else CockpitInputMapper.onChord(event.chord, loadout.value, armed)
         } ?: return
@@ -427,9 +456,13 @@ class CockpitViewModel @AssistedInject constructor(
                 action.skillId,
                 action.gamepadButton?.let { mapOf(SkillArgs.GAMEPAD_BUTTON to it) } ?: emptyMap(),
             )
-            CockpitAction.ToggleQuickSettings -> _quickSettings.update { !it }
-            CockpitAction.ToggleSkillDrawer -> _drawer.update { !it }
-            CockpitAction.Exit -> if (!closeOverlays()) _events.tryEmit(CockpitEvent.ExitRequested)
+            CockpitAction.ToggleQuickSettings -> overlays.quickSettings.update { !it }
+            CockpitAction.ToggleSkillDrawer -> overlays.drawer.update { !it }
+            CockpitAction.Back -> if (!overlays.closeTop()) _events.tryEmit(CockpitEvent.ExitRequested)
+            CockpitAction.SwapView -> toggleMinimapSwap()
+            CockpitAction.ToggleRecording -> toggleRecording()
+            CockpitAction.OpenModePicker -> openModePicker()
+            CockpitAction.ToggleStickControl -> toggleStickControl()
             is CockpitAction.CycleStream -> cycleStream(action.delta)
             is CockpitAction.SelectStream -> selectStreamIndex(action.index)
             CockpitAction.TogglePip -> togglePip()

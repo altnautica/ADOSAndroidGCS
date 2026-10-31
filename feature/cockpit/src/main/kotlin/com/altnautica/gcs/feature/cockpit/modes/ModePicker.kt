@@ -35,20 +35,29 @@ import com.altnautica.gcs.core.skills.builtin.modeChangeConfirm
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonText
 
-/** One row of the flight-mode picker: a mode the vehicle advertises and its confirm tier. */
-data class ModeChoice(val name: String, val current: Boolean, val gesture: ConfirmGesture)
+/**
+ * One row of the flight-mode picker: a mode the vehicle advertises and its confirm tier.
+ * [endsStick] is true when picking it would turn the controller's stick control off.
+ */
+data class ModeChoice(val name: String, val current: Boolean, val gesture: ConfirmGesture, val endsStick: Boolean = false)
 
 /** The open picker; [enabled] and [reasonKey] come from the `set-mode` skill state. */
 data class ModePickerUi(val choices: List<ModeChoice>, val enabled: Boolean, val reasonKey: String?)
 
-/** Every mode the vehicle advertises, in firmware table order, with the tier its change needs. */
-fun modeChoices(available: List<FlightMode>, currentMode: String?): List<ModeChoice> = available.map { mode ->
-    ModeChoice(
-        name = mode.name,
-        current = mode.name.equals(currentMode, ignoreCase = true),
-        gesture = modeChangeConfirm(mode.name)?.gesture ?: ConfirmGesture.Tap,
-    )
-}
+/**
+ * Every mode the vehicle advertises, in firmware table order, with the tier its change needs.
+ * [endsStick] says which modes would turn stick control off (only asked while it is on).
+ */
+fun modeChoices(available: List<FlightMode>, currentMode: String?, endsStick: (String) -> Boolean = { false }): List<ModeChoice> =
+    available.map { mode ->
+        val current = mode.name.equals(currentMode, ignoreCase = true)
+        ModeChoice(
+            name = mode.name,
+            current = current,
+            gesture = modeChangeConfirm(mode.name)?.gesture ?: ConfirmGesture.Tap,
+            endsStick = !current && endsStick(mode.name),
+        )
+    }
 
 /** Flight-mode picker opened from the band's mode chip and the drawer's Set mode entry; place it in a full-size box. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -105,6 +114,14 @@ private fun ModeTile(choice: ModeChoice, enabled: Boolean, onClick: () -> Unit) 
                 color = colors.fgSecondary,
                 maxLines = 1,
             )
+            if (choice.endsStick) {
+                Text(
+                    stringResource(R.string.cockpit_mode_ends_stick),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.statusWarning,
+                    maxLines = 2,
+                )
+            }
         }
     }
 }

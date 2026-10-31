@@ -25,8 +25,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.model.Skill
-import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.skills.SkillReason
+import com.altnautica.gcs.core.skills.builtinLabelRes
 import com.altnautica.gcs.feature.cockpit.R
 
 /** Material Symbols Outlined for the skill icon names; extensions fall back to a generic glyph. */
@@ -52,26 +52,6 @@ fun skillIcon(name: String): ImageVector = when (name) {
     "visibility", "eye" -> Icons.Outlined.Visibility
     else -> Icons.Outlined.Extension
 }
-
-private val LABELS = mapOf(
-    "skills.arm" to R.string.cockpit_skill_arm,
-    "skills.disarm" to R.string.cockpit_skill_disarm,
-    "skills.takeoff" to R.string.cockpit_skill_takeoff,
-    "skills.land" to R.string.cockpit_skill_land,
-    "skills.rth" to R.string.cockpit_skill_rth,
-    "skills.pause" to R.string.cockpit_skill_pause,
-    "skills.resume" to R.string.cockpit_skill_resume,
-    "skills.abort" to R.string.cockpit_skill_abort,
-    "skills.kill" to R.string.cockpit_skill_kill,
-    "skills.modeLoiter" to R.string.cockpit_skill_mode_loiter,
-    "skills.modeBrake" to R.string.cockpit_skill_mode_brake,
-    "skills.modeAltHold" to R.string.cockpit_skill_mode_althold,
-    "skills.modeStabilize" to R.string.cockpit_skill_mode_stabilize,
-    "skills.modeGuided" to R.string.cockpit_skill_mode_guided,
-    "skills.modeAuto" to R.string.cockpit_skill_mode_auto,
-    "skills.setMode" to R.string.cockpit_skill_set_mode,
-    "skills.flyHere" to R.string.cockpit_skill_fly_here,
-)
 
 private val CONFIRM_TITLES = mapOf(
     "skills.arm.confirm.title" to R.string.cockpit_confirm_arm_title,
@@ -120,10 +100,7 @@ private val REASONS = mapOf(
 
 /** Built-in labels are localized; an extension's label is shown as the extension provides it. */
 @Composable
-fun skillLabel(skill: Skill): String {
-    val res = LABELS[skill.labelKey]
-    return if (skill.source is SkillSource.Builtin && res != null) stringResource(res) else skill.labelKey
-}
+fun skillLabel(skill: Skill): String = skill.builtinLabelRes()?.let { stringResource(it) } ?: skill.labelKey
 
 /** String resource of a known reason key, or null for extension text. */
 fun reasonRes(reasonKey: String): Int? = REASONS[reasonKey]

@@ -73,6 +73,6 @@ class BindingStore @Inject constructor(
     }
 
     private companion object {
-        val KEY = stringPreferencesKey("skills.loadout.v1")
+        val KEY = stringPreferencesKey("skills.loadout.v2")
     }
 }

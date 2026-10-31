@@ -14,6 +14,9 @@ import com.altnautica.gcs.core.data.cockpit.BatteryBands
 /** A STATUSTEXT line kept with its receive time. */
 data class ReceivedText(val text: String, val atMs: Long)
 
+/** A one-off cockpit event shown as an alert for [AlertEngine.RAISED_HOLD_MS] from [atMs]. */
+data class RaisedAlert(val id: String, val level: AlertLevel, val detail: String?, val atMs: Long)
+
 /** Every input the alert rules read; times are on the monotonic telemetry clock. */
 data class AlertInputs(
     val armed: Boolean?,
@@ -29,6 +32,10 @@ data class AlertInputs(
     val videoFrozen: Boolean,
     val criticalText: ReceivedText?,
     val prearmText: ReceivedText?,
+    /** The latest one-off cockpit event (stick control turned off on its own). */
+    val raised: RaisedAlert? = null,
+    /** The controller battery is low while stick control is on. */
+    val controllerBatteryLow: Boolean = false,
 )
 
 /** Alert ids; the cockpit maps each to a localized title. */
@@ -46,6 +53,9 @@ object AlertId {
     const val RC_FAILSAFE = "rcFailsafe"
     const val PREARM = "prearm"
     const val HIGH_VIBRATION = "highVibration"
+    const val STICK_MODE = "stickMode"
+    const val CONTROLLER_LOST = "controllerLost"
+    const val CONTROLLER_BATTERY = "controllerBattery"
 }
 
 /** Detail keys for the FC-state alert (MAV_STATE). */
@@ -77,6 +87,10 @@ class AlertEngine {
         const val LINK_LOST_MS = 10_000L
         const val SAMPLE_FRESH_MS = 5_000L
         const val STATUS_TEXT_HOLD_MS = 10_000L
+        const val RAISED_HOLD_MS = 10_000L
+
+        /** Controller charge below which stick control raises a warning. */
+        const val CONTROLLER_BATTERY_LOW_PCT = 15
         const val PREARM_HOLD_MS = 35_000L
         const val EKF_FAILSAFE_VARIANCE = 0.8f
         const val HIGH_VIBRATION = 30f
@@ -155,6 +169,11 @@ class AlertEngine {
             if (text != null && now - text.atMs < STATUS_TEXT_HOLD_MS) {
                 out += Triple(AlertId.STATUS_TEXT, AlertLevel.Critical, text.text)
             }
+
+            val raised = i.raised
+            if (raised != null && now - raised.atMs < RAISED_HOLD_MS) out += Triple(raised.id, raised.level, raised.detail)
+
+            if (i.controllerBatteryLow) out += Triple(AlertId.CONTROLLER_BATTERY, AlertLevel.Warning, null)
 
             val gps = i.gps?.takeIf { fresh(it.tMs, now) }
             if (gps != null && armed && gps.fix.ordinal < GpsFix.Fix3D.ordinal) {

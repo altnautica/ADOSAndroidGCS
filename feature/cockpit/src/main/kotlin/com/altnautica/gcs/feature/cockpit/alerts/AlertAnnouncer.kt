@@ -35,7 +35,7 @@ class AlertAnnouncer @Inject constructor(
         vibration.vibrate(AlertLevel.Critical)
         if (audio) {
             ensureTts()
-            for (alert in fresh) tts.speak(spokenTitle(alert), AlertLevel.Critical)
+            for (alert in fresh) tts.speak(alertText(alert), AlertLevel.Critical)
         }
     }
 
@@ -47,7 +47,8 @@ class AlertAnnouncer @Inject constructor(
         tts.speak(context.getString(R.string.cockpit_tts_mode, mode.replace('_', ' ').lowercase()), AlertLevel.Advisory)
     }
 
-    private fun spokenTitle(alert: CockpitAlert): String {
+    /** The alert's localized title, or the FC's own text for a STATUSTEXT alert. */
+    fun alertText(alert: CockpitAlert): String {
         val title = context.getString(alertTitleRes(alert.id))
         return if (alert.id == AlertId.STATUS_TEXT) alert.detail ?: title else title
     }
@@ -73,6 +74,9 @@ fun alertTitleRes(id: String): Int = when (id) {
     AlertId.RC_FAILSAFE -> R.string.cockpit_alert_rc_failsafe
     AlertId.PREARM -> R.string.cockpit_alert_prearm
     AlertId.HIGH_VIBRATION -> R.string.cockpit_alert_high_vibration
+    AlertId.STICK_MODE -> R.string.cockpit_alert_stick_mode
+    AlertId.CONTROLLER_LOST -> R.string.cockpit_alert_controller_lost
+    AlertId.CONTROLLER_BATTERY -> R.string.cockpit_alert_controller_battery
     else -> R.string.cockpit_alert_status_text
 }
 

@@ -10,11 +10,14 @@ import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.ArmRequirement
 import com.altnautica.gcs.core.skills.input.GamepadButton
+import com.altnautica.gcs.core.skills.input.ReservedInputs
 import java.io.File
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -27,20 +30,47 @@ class LoadoutTest {
     fun `factory loadout has twelve slots with two free`() {
         assertEquals(12, Loadout.DEFAULT.slots.size)
         assertEquals(2, Loadout.DEFAULT.slots.count { it.skillId == null })
-        assertEquals("arm", Loadout.DEFAULT.slotForButton(GamepadButton.A)?.skillId)
-        assertEquals("rth", Loadout.DEFAULT.slotForButton(GamepadButton.B)?.skillId)
-        assertEquals("land", Loadout.DEFAULT.slotForButton(GamepadButton.X)?.skillId)
-        assertEquals("pause", Loadout.DEFAULT.slotForButton(GamepadButton.Y)?.skillId)
+    }
+
+    @Test
+    fun `factory loadout binds the face, shoulder and trigger buttons`() {
+        val d = Loadout.DEFAULT
+        assertEquals("arm", d.slotForButton(GamepadButton.A)?.skillId)
+        assertEquals("pause", d.slotForButton(GamepadButton.X)?.skillId)
+        assertEquals("land", d.slotForButton(GamepadButton.L1)?.skillId)
+        assertEquals("rth", d.slotForButton(GamepadButton.R1)?.skillId)
+        assertEquals("takeoff", d.slotForButton(GamepadButton.L2)?.skillId)
+        assertEquals("mode.loiter", d.slotForButton(GamepadButton.R2)?.skillId)
+        assertNull(d.slotForButton(GamepadButton.B))
+        assertNull(d.slotForButton(GamepadButton.Y))
+        assertNull(d.slotFor("kill")?.gamepadButton)
+    }
+
+    @Test
+    fun `every factory button is bindable and none is reserved`() {
+        for (b in Loadout.BUILTIN_BUTTONS) assertFalse("button $b", ReservedInputs.isReservedButton(b))
+    }
+
+    @Test
+    fun `cockpit buttons are reserved`() {
+        val reserved = listOf(
+            GamepadButton.B, GamepadButton.Y, GamepadButton.SELECT, GamepadButton.START, GamepadButton.L3, GamepadButton.R3,
+            GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT, GamepadButton.HOME,
+        )
+        for (b in reserved) assertTrue("button $b", ReservedInputs.isReservedButton(b))
+        for (b in listOf(GamepadButton.A, GamepadButton.X, GamepadButton.L1, GamepadButton.R1, GamepadButton.L2, GamepadButton.R2)) {
+            assertFalse("button $b", ReservedInputs.isReservedButton(b))
+        }
     }
 
     @Test
     fun `seeding takes the first empty slot with its suggested inputs`() {
-        val (next, outcome) = Loadout.DEFAULT.seed("gimbal:recenter", Binding("shift+c", 6))
+        val (next, outcome) = Loadout.DEFAULT.seed("gimbal:recenter", Binding("shift+c", null))
         assertEquals(SeedOutcome.Bound, outcome)
         val slot = next.slotFor("gimbal:recenter")!!
         assertEquals(10, slot.index)
         assertEquals("shift+c", slot.keyChord)
-        assertEquals(6, slot.gamepadButton)
+        assertNull(slot.gamepadButton)
     }
 
     @Test
@@ -53,6 +83,9 @@ class LoadoutTest {
         val (again, reserved) = next.seed("siyi:palette", Binding("p", null))
         assertEquals(SeedOutcome.Unbound, reserved)
         assertNull(again.slotFor("siyi:palette")!!.keyChord)
+        val (builtin, taken) = Loadout.DEFAULT.seed("gimbal:center", Binding(null, GamepadButton.L2))
+        assertEquals(SeedOutcome.Unbound, taken)
+        assertNull(builtin.slotFor("gimbal:center")!!.gamepadButton)
     }
 
     @Test
@@ -73,7 +106,17 @@ class LoadoutTest {
     fun `binding a reserved chord or button is refused`() {
         assertEquals(BindResult.Reserved, Loadout.DEFAULT.bindChord(0, "ctrl+k").second)
         assertEquals(BindResult.Reserved, Loadout.DEFAULT.bindButton(0, GamepadButton.SELECT).second)
+        assertEquals(BindResult.Reserved, Loadout.DEFAULT.bindButton(0, GamepadButton.B).second)
+        assertEquals(BindResult.Reserved, Loadout.DEFAULT.bindButton(0, GamepadButton.L3).second)
         assertEquals(BindResult.OutOfRange, Loadout.DEFAULT.bindButton(0, 16).second)
+    }
+
+    @Test
+    fun `a button moves off its previous slot`() {
+        val (next, result) = Loadout.DEFAULT.bindButton(10, GamepadButton.X)
+        assertEquals(BindResult.Ok, result)
+        assertNull(next.slots[4].gamepadButton)
+        assertEquals(GamepadButton.X, next.slots[10].gamepadButton)
     }
 
     @Test
@@ -87,11 +130,11 @@ class LoadoutTest {
     @Test
     fun `store seeds extension skills and persists the loadout`() = runTest {
         val store = BindingStore(PreferenceDataStoreFactory.create(scope = backgroundScope) { File(tmp.root, "t.preferences_pb") })
-        val outcomes = store.seedExtensionDefaults(listOf(ext("follow:follow", Binding("shift+f", 7))))
+        val outcomes = store.seedExtensionDefaults(listOf(ext("follow:follow", Binding("shift+f", null))))
         assertEquals(mapOf("follow:follow" to SeedOutcome.Bound), outcomes)
         assertEquals(10, store.loadout.first().slotFor("follow:follow")!!.index)
         // A second pass offers nothing new.
-        assertEquals(emptyMap<String, SeedOutcome>(), store.seedExtensionDefaults(listOf(ext("follow:follow", Binding("shift+f", 7)))))
+        assertEquals(emptyMap<String, SeedOutcome>(), store.seedExtensionDefaults(listOf(ext("follow:follow", Binding("shift+f", null)))))
     }
 
     private fun ext(id: String, binding: Binding?) = object : Skill {

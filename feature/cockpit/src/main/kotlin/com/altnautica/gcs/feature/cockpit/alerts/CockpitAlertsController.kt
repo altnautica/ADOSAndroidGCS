@@ -36,6 +36,10 @@ internal class CockpitAlertsController(
     settings: StateFlow<CockpitSettings>,
     tick500: StateFlow<Long>,
     announcer: AlertAnnouncer,
+    /** The latest one-off cockpit event (stick control turned off on its own). */
+    raised: StateFlow<RaisedAlert?>,
+    /** The controller battery is low while stick control is on. */
+    controllerBatteryLow: StateFlow<Boolean>,
 ) {
     private val alertEngine = AlertEngine()
 
@@ -44,9 +48,9 @@ internal class CockpitAlertsController(
         combine(
             combine(t.heartbeat, t.systemHealth, t.battery, t.ekf, t.fence) { hb, sys, batt, ekf, fence -> AlertParts1(hb, sys, batt, ekf, fence) },
             combine(t.gps, t.vibration, videoState, criticalText, prearmText) { gps, vib, vs, crit, pre -> AlertParts2(gps, vib, vs is VideoState.Frozen, crit, pre) },
-            settings,
+            combine(settings, raised, controllerBatteryLow) { s, r, low -> Triple(s, r, low) },
             tick500,
-        ) { a, b, s, _ ->
+        ) { a, b, (s, raisedAlert, batteryLow), _ ->
             val now = clock.nowMs()
             alertEngine.evaluate(
                 AlertInputs(
@@ -62,6 +66,8 @@ internal class CockpitAlertsController(
                     videoFrozen = b.frozen,
                     criticalText = b.crit,
                     prearmText = b.pre,
+                    raised = raisedAlert,
+                    controllerBatteryLow = batteryLow,
                 ),
                 now,
             )

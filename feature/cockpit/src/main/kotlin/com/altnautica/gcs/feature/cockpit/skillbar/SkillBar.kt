@@ -46,6 +46,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleButton
+import com.altnautica.gcs.core.designsystem.component.console.ControllerGlyph
+import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.GLOVE_TOUCH_SCALE
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
@@ -138,6 +141,18 @@ private fun DrawerButton(size: Dp, onClick: () -> Unit) {
     }
 }
 
+/** The console glyph for a bindable skill [button], or null when it has none. */
+internal fun consoleButtonFor(button: Int): ConsoleButton? = when (button) {
+    GamepadButton.A -> ConsoleButton.Confirm
+    GamepadButton.X -> ConsoleButton.More
+    GamepadButton.Y -> ConsoleButton.Details
+    GamepadButton.L1 -> ConsoleButton.PrevTab
+    GamepadButton.R1 -> ConsoleButton.NextTab
+    GamepadButton.L2 -> ConsoleButton.PrevPage
+    GamepadButton.R2 -> ConsoleButton.NextPage
+    else -> null
+}
+
 @Composable
 fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Modifier = Modifier) {
     val skill = slot.skill ?: return
@@ -152,7 +167,11 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
         danger -> colors.hudCrit
         else -> colors.hudHair
     }
-    val hint = listOfNotNull(slot.keyChord?.uppercase(), slot.gamepadButton?.let(::gamepadButtonName)).joinToString(" · ")
+    val controller = LocalControllerUi.current
+    val glyph = slot.gamepadButton?.takeIf { controller.active }?.let(::consoleButtonFor)
+    // With a pad in hand the glyph badge names the button; the text hint keeps only the key chord.
+    val padHint = slot.gamepadButton?.takeIf { glyph == null }?.let(::gamepadButtonName)
+    val hint = listOfNotNull(slot.keyChord?.uppercase(), padHint).joinToString(" · ")
     val sweep = remember(skill.id) { Animatable(0f) }
     val cooldownEnd = state?.cooldownEndsAtMs
     LaunchedEffect(cooldownEnd) {
@@ -165,6 +184,7 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
         sweep.animateTo(0f, tween(remaining.toInt(), easing = LinearEasing))
     }
     Column(modifier.width(size), horizontalAlignment = Alignment.CenterHorizontally) {
+      Box {
         Surface(
             modifier = Modifier
                 .size(size)
@@ -202,6 +222,8 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
                 state?.charges?.let { Text("×$it", style = MaterialTheme.typography.labelSmall, color = colors.hudInk2) }
             }
         }
+        glyph?.let { ControllerGlyph(it, Modifier.align(Alignment.TopEnd).padding(AdosSpacing.S1), glyphs = controller.glyphs, size = 16.dp) }
+      }
         if (reason != null) {
             Text(
                 reason,

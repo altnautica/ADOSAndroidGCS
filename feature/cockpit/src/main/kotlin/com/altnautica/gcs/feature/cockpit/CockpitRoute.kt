@@ -38,6 +38,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
@@ -46,6 +47,8 @@ import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.EmptyStateAction
+import com.altnautica.gcs.core.designsystem.component.console.GlyphSet
+import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
 import com.altnautica.gcs.core.designsystem.component.console.LocalLeaveGuard
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
@@ -90,7 +93,10 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
     KeepScreenOn()
     MaxBrightness(maxBrightness)
     HardwareInput(onAttach = vm::attachInput, onDetach = vm::detachInput)
+    val palette = AdosTheme.colors
+    LaunchedEffect(palette) { vm.setControllerPalette(palette) }
     WindowFocusLoss(vm::onWindowFocusLost)
+    TouchpadCapture(LocalControllerUi.current.glyphs == GlyphSet.PlayStation)
     extensionNode?.let { ExtensionCockpitEffect(it) }
 
     NavigationBackHandler(
@@ -221,6 +227,22 @@ private fun MaxBrightness(on: Boolean) {
             reset.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             window.attributes = reset
         }
+    }
+}
+
+/**
+ * Captures the controller touchpad while the cockpit is started and focused, so a stray
+ * touchpad click never taps the screen. Captured events are deliberately left unhandled.
+ */
+@Composable
+private fun TouchpadCapture(enabled: Boolean) {
+    val view = LocalView.current
+    val focused = LocalWindowInfo.current.isWindowFocused
+    val started = LocalLifecycleOwner.current.lifecycle.currentStateAsState().value.isAtLeast(Lifecycle.State.STARTED)
+    val capture = enabled && focused && started
+    DisposableEffect(view, capture) {
+        if (capture) view.requestPointerCapture()
+        onDispose { if (capture && view.hasPointerCapture()) view.releasePointerCapture() }
     }
 }
 

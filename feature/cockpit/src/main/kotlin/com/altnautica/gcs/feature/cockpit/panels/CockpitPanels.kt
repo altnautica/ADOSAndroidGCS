@@ -1,24 +1,13 @@
 package com.altnautica.gcs.feature.cockpit.panels
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,7 +17,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
@@ -38,13 +26,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
-import com.altnautica.gcs.core.designsystem.component.SectionHeader
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
 import com.altnautica.gcs.core.designsystem.component.SwitchSettingRow
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommand
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommandHandler
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
-import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
-import com.altnautica.gcs.core.designsystem.tokens.AdosMotion
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamDescriptor
@@ -129,7 +117,10 @@ fun TelemetryStrip(values: StripValues, modifier: Modifier = Modifier, vertical:
     }
 }
 
-/** Cockpit quick settings, sliding in from the right edge. [panels] hosts extension `cockpit.panel` slots. */
+/**
+ * Cockpit quick settings in a side sheet, so it traps controller focus and closes with
+ * Back like every other overlay. [panels] hosts extension `cockpit.panel` slots.
+ */
 @Composable
 fun QuickSettingsPanel(
     open: Boolean,
@@ -140,6 +131,8 @@ fun QuickSettingsPanel(
     recording: Boolean,
     pipAvailable: Boolean,
     pipOn: Boolean,
+    /** Stick control in every mode for the flown vehicle; null hides the row (no vehicle). */
+    stickAllModes: Boolean?,
     onDismiss: () -> Unit,
     onAltitudeReference: (AltitudeReference) -> Unit,
     onDensity: (CockpitDensity) -> Unit,
@@ -147,72 +140,53 @@ fun QuickSettingsPanel(
     onTelemetryPane: (Boolean) -> Unit,
     onToggleRecording: () -> Unit,
     onTogglePip: () -> Unit,
+    onStickAllModes: (Boolean) -> Unit,
     panels: @Composable () -> Unit,
 ) {
-    val colors = AdosTheme.colors
-    val reduced = rememberReducedMotion()
-    val duration = if (reduced) 0 else AdosMotion.QuickMs
-    if (open) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(colors.mediaScrim.copy(alpha = 0.3f))
-                .clickable(onClickLabel = stringResource(R.string.cockpit_close), onClick = onDismiss),
-        )
+    if (!open) return
+    // The short Options press that opened quick settings also closes it.
+    ConsoleCommandHandler { command ->
+        if (command == ConsoleCommand.Menu) onDismiss()
+        command == ConsoleCommand.Menu
     }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
-        AnimatedVisibility(
-            visible = open,
-            enter = slideInHorizontally(tween(duration, easing = AdosMotion.Standard)) { it },
-            exit = slideOutHorizontally(tween(duration, easing = AdosMotion.Standard)) { it },
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxHeight().width(340.dp),
-                color = colors.bgSurface.copy(alpha = 0.96f),
-                contentColor = colors.fgPrimary,
-                shape = RoundedCornerShape(topStart = AdosRadius.Xl, bottomStart = AdosRadius.Xl),
-            ) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(vertical = AdosSpacing.S3)) {
-                    SectionHeader(stringResource(R.string.cockpit_quick_settings))
-                    val rel = stringResource(R.string.cockpit_alt_rel)
-                    val msl = stringResource(R.string.cockpit_alt_msl)
-                    SelectSettingRow(
-                        title = stringResource(R.string.cockpit_qs_altitude_reference),
-                        options = AltitudeReference.entries,
-                        selected = settings.altitudeReference,
-                        optionLabel = { if (it == AltitudeReference.Rel) rel else msl },
-                        onSelect = onAltitudeReference,
-                    )
-                    val densityLabels = mapOf(
-                        CockpitDensity.Min to stringResource(R.string.cockpit_density_min),
-                        CockpitDensity.Std to stringResource(R.string.cockpit_density_std),
-                        CockpitDensity.Full to stringResource(R.string.cockpit_density_full),
-                    )
-                    SelectSettingRow(
-                        title = stringResource(R.string.cockpit_qs_density),
-                        options = CockpitDensity.entries,
-                        selected = settings.density,
-                        optionLabel = { densityLabels.getValue(it) },
-                        onSelect = onDensity,
-                    )
-                    SwitchSettingRow(stringResource(R.string.cockpit_qs_max_brightness), maxBrightness, onMaxBrightness)
-                    if (showTelemetryPaneToggle) {
-                        SwitchSettingRow(stringResource(R.string.cockpit_qs_telemetry_pane), settings.telemetryPane, onTelemetryPane)
-                    }
-                    if (pipAvailable) {
-                        SwitchSettingRow(stringResource(R.string.cockpit_qs_pip), pipOn, { onTogglePip() })
-                    }
-                    if (canRecord) {
-                        AdosButton(
-                            label = stringResource(if (recording) R.string.cockpit_qs_stop_recording else R.string.cockpit_qs_start_recording),
-                            onClick = onToggleRecording,
-                            variant = if (recording) AdosButtonVariant.Danger else AdosButtonVariant.Secondary,
-                            modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
-                        )
-                    }
-                    panels()
-                }
-            }
+    AdosSheet(onDismiss = onDismiss, title = stringResource(R.string.cockpit_quick_settings)) {
+        val rel = stringResource(R.string.cockpit_alt_rel)
+        val msl = stringResource(R.string.cockpit_alt_msl)
+        SelectSettingRow(
+            title = stringResource(R.string.cockpit_qs_altitude_reference),
+            options = AltitudeReference.entries,
+            selected = settings.altitudeReference,
+            optionLabel = { if (it == AltitudeReference.Rel) rel else msl },
+            onSelect = onAltitudeReference,
+        )
+        val densityLabels = mapOf(
+            CockpitDensity.Min to stringResource(R.string.cockpit_density_min),
+            CockpitDensity.Std to stringResource(R.string.cockpit_density_std),
+            CockpitDensity.Full to stringResource(R.string.cockpit_density_full),
+        )
+        SelectSettingRow(
+            title = stringResource(R.string.cockpit_qs_density),
+            options = CockpitDensity.entries,
+            selected = settings.density,
+            optionLabel = { densityLabels.getValue(it) },
+            onSelect = onDensity,
+        )
+        SwitchSettingRow(stringResource(R.string.cockpit_qs_max_brightness), maxBrightness, onMaxBrightness)
+        if (showTelemetryPaneToggle) {
+            SwitchSettingRow(stringResource(R.string.cockpit_qs_telemetry_pane), settings.telemetryPane, onTelemetryPane)
         }
+        if (pipAvailable) {
+            SwitchSettingRow(stringResource(R.string.cockpit_qs_pip), pipOn, { onTogglePip() })
+        }
+        if (stickAllModes != null) StickAllModesSetting(stickAllModes, onStickAllModes)
+        if (canRecord) {
+            AdosButton(
+                label = stringResource(if (recording) R.string.cockpit_qs_stop_recording else R.string.cockpit_qs_start_recording),
+                onClick = onToggleRecording,
+                variant = if (recording) AdosButtonVariant.Danger else AdosButtonVariant.Secondary,
+                modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
+            )
+        }
+        panels()
     }
 }

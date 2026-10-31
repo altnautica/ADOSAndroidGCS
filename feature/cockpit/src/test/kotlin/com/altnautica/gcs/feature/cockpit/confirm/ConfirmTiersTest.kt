@@ -171,6 +171,70 @@ class ConfirmTiersTest {
     }
 
     @Test
+    fun `circle cancels an open sheet`() = runTest {
+        val c = controller()
+        val result = async { c.confirm(request(LandSkill, GamepadButton.L1)) }
+        runCurrent()
+        c.onGamepadButton(GamepadButton.B, pressed = true)
+        assertEquals(ConfirmResult.Cancelled, result.await())
+        assertFalse(c.isOpen)
+    }
+
+    @Test
+    fun `d-pad up and down step the takeoff altitude by one metre`() = runTest {
+        val c = controller()
+        val result = async { c.confirm(request(TakeoffSkill, GamepadButton.L2)) }
+        runCurrent()
+        assertEquals(10f, c.state.value!!.altitudeM)
+        c.onGamepadButton(GamepadButton.DPAD_UP, pressed = true)
+        c.onGamepadButton(GamepadButton.DPAD_UP, pressed = false)
+        c.onGamepadButton(GamepadButton.DPAD_UP, pressed = true)
+        assertEquals(12f, c.state.value!!.altitudeM)
+        c.onGamepadButton(GamepadButton.DPAD_DOWN, pressed = true)
+        assertEquals(11f, c.state.value!!.altitudeM)
+        c.onGamepadButton(GamepadButton.L2, pressed = true)
+        advanceTimeBy(820)
+        runCurrent()
+        assertEquals(ConfirmResult.Confirmed(mapOf(SkillArgs.ALTITUDE_M to 11f)), result.await())
+    }
+
+    @Test
+    fun `d-pad leaves a sheet without an altitude alone`() = runTest {
+        val c = controller()
+        val result = async { c.confirm(request(LandSkill, GamepadButton.L1)) }
+        runCurrent()
+        c.onGamepadButton(GamepadButton.DPAD_UP, pressed = true)
+        assertEquals(null, c.state.value!!.altitudeM)
+        assertTrue(c.isOpen)
+        c.cancel()
+        assertEquals(ConfirmResult.Cancelled, result.await())
+    }
+
+    @Test
+    fun `triangle toggles the checklist override only when checks fail`() = runTest {
+        val failing = listOf(PreflightCheck(PreflightItem.Gps3d, passed = false, known = true))
+        val c = controller(failing = failing)
+        val result = async { c.confirm(request(ArmSkill, GamepadButton.A, ready = false)) }
+        runCurrent()
+        assertFalse(c.state.value!!.overrideChecklist)
+        c.onGamepadButton(GamepadButton.Y, pressed = true)
+        assertTrue(c.state.value!!.overrideChecklist)
+        c.onGamepadButton(GamepadButton.Y, pressed = false)
+        c.onGamepadButton(GamepadButton.Y, pressed = true)
+        assertFalse(c.state.value!!.overrideChecklist)
+        c.cancel()
+        assertEquals(ConfirmResult.Cancelled, result.await())
+
+        val clean = controller()
+        val other = async { clean.confirm(request(LandSkill, GamepadButton.L1)) }
+        runCurrent()
+        clean.onGamepadButton(GamepadButton.Y, pressed = true)
+        assertFalse(clean.state.value!!.overrideChecklist)
+        clean.cancel()
+        assertEquals(ConfirmResult.Cancelled, other.await())
+    }
+
+    @Test
     fun `guarded kill fires only after a full 1500 ms hold inside the guard window and the countdown tracks it`() = runTest {
         // The sheet's "Hold for" label reads the policy; the controller times the same hold.
         assertEquals(SkillTiming.GUARDED_HOLD_MS, KillSkill.confirm!!.holdMs)

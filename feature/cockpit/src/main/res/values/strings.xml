@@ -2,8 +2,6 @@
 <resources>
     <!-- Route and states -->
     <string name="cockpit_exit">Exit cockpit</string>
-    <string name="cockpit_back">Back</string>
-    <string name="cockpit_close">Close</string>
     <string name="cockpit_connecting">Connecting to the vehicle…</string>
     <string name="cockpit_unknown_node_title">Node not found</string>
     <string name="cockpit_unknown_node_message">This node is not reachable through any link. Connect to it from the fleet first.</string>
@@ -49,8 +47,12 @@
     <string name="cockpit_video_failed">Video failed: %1$s</string>
     <string name="cockpit_video_none_long">No video</string>
     <string name="cockpit_stick_blocked">STICKS N/A</string>
-    <string name="cockpit_stick_on">STICKS ON</string>
-    <string name="cockpit_stick_off">STICKS OFF</string>
+    <!-- Stick chip: on/off with the controller battery, and the mode that blocks stick control -->
+    <string name="cockpit_stick_on_battery">STICK ON · %1$d %%</string>
+    <string name="cockpit_stick_off_battery">STICK OFF · %1$d %%</string>
+    <string name="cockpit_stick_on_battery_unknown">STICK ON · —</string>
+    <string name="cockpit_stick_off_battery_unknown">STICK OFF · —</string>
+    <string name="cockpit_stick_mode_blocked">STICK · %1$s</string>
     <string name="cockpit_preflight_chip">PREFLIGHT %1$d/%2$d</string>
     <string name="cockpit_rec">REC</string>
     <string name="cockpit_flight_time">FLT</string>
@@ -91,23 +93,6 @@
     <string name="cockpit_preflight_fail">FAIL</string>
 
     <!-- Skills -->
-    <string name="cockpit_skill_arm">Arm</string>
-    <string name="cockpit_skill_disarm">Disarm</string>
-    <string name="cockpit_skill_takeoff">Take off</string>
-    <string name="cockpit_skill_land">Land</string>
-    <string name="cockpit_skill_rth">Return home</string>
-    <string name="cockpit_skill_pause">Pause</string>
-    <string name="cockpit_skill_resume">Resume</string>
-    <string name="cockpit_skill_abort">Abort</string>
-    <string name="cockpit_skill_kill">Kill</string>
-    <string name="cockpit_skill_mode_loiter">Loiter</string>
-    <string name="cockpit_skill_mode_brake">Brake</string>
-    <string name="cockpit_skill_mode_althold">Alt hold</string>
-    <string name="cockpit_skill_mode_stabilize">Stabilize</string>
-    <string name="cockpit_skill_mode_guided">Guided</string>
-    <string name="cockpit_skill_mode_auto">Start mission</string>
-    <string name="cockpit_skill_set_mode">Set mode</string>
-    <string name="cockpit_skill_fly_here">Fly here</string>
     <string name="cockpit_skill_drawer">All skills</string>
 
     <!-- Skill reasons -->
@@ -190,19 +175,14 @@
     <string name="cockpit_strip_thr">THR</string>
     <string name="cockpit_strip_wp">WP</string>
     <string name="cockpit_strip_sats">SATS · HDOP</string>
-
-    <!-- Skill bindings -->
-    <string name="cockpit_bindings_title">Skill bindings</string>
-    <string name="cockpit_bindings_hint">Each Skill Bar slot holds one skill, a keyboard chord and a gamepad button. Cockpit controls (L1+R1, Select, Start, D-pad, digits, P, backtick) cannot be bound.</string>
-    <string name="cockpit_bindings_loading">Loading bindings…</string>
-    <string name="cockpit_bindings_reset">Reset</string>
-    <string name="cockpit_bindings_slot">Slot %1$d</string>
-    <string name="cockpit_bindings_empty">Empty</string>
-    <string name="cockpit_bindings_set_key">Set key</string>
-    <string name="cockpit_bindings_set_button">Set button</string>
-    <string name="cockpit_bindings_press_key">Press a key…</string>
-    <string name="cockpit_bindings_press_button">Press a button…</string>
-    <string name="cockpit_bindings_clear">Clear</string>
-    <string name="cockpit_bindings_reserved">That input is reserved by the cockpit</string>
-    <string name="cockpit_bindings_out_of_range">That gamepad button cannot be bound</string>
+    <!-- Controller stick control: alerts, mode picker line, all-modes opt-in -->
+    <string name="cockpit_alert_stick_mode">Stick control off: not an assisted mode</string>
+    <string name="cockpit_alert_controller_lost">Controller disconnected: stick control off</string>
+    <string name="cockpit_alert_controller_battery">Controller battery low</string>
+    <string name="cockpit_mode_ends_stick">Stick control will turn off</string>
+    <string name="cockpit_qs_stick_all_modes">Stick control in all modes (this vehicle)</string>
+    <string name="cockpit_qs_stick_all_modes_summary">When off, the sticks fly only in altitude- or position-holding modes</string>
+    <string name="cockpit_all_modes_title">Allow stick control in all modes?</string>
+    <string name="cockpit_all_modes_warning">The DualShock 4 throttle stick springs back to centre. In modes without altitude hold, centre throttle is not a hover. Only enable this if you fly manual modes with this controller.</string>
+    <string name="cockpit_all_modes_confirm">Hold to allow</string>
 </resources>

@@ -45,6 +45,9 @@ sealed interface StickChip {
     /** The current reach cannot carry manual control (cloud, phone radio, MSP). */
     data object LinkBlocked : StickChip
 
+    /** The vehicle's [mode] is not an assisted mode and this vehicle is not opted in to all modes. */
+    data class ModeBlocked(val mode: String) : StickChip
+
     data class Available(val on: Boolean) : StickChip
 }
 

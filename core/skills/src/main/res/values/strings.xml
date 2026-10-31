@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Built-in skill labels: the Skill Bar, confirm sheets and the bindings editor. -->
+    <string name="skill_label_arm">Arm</string>
+    <string name="skill_label_disarm">Disarm</string>
+    <string name="skill_label_takeoff">Take off</string>
+    <string name="skill_label_land">Land</string>
+    <string name="skill_label_rth">Return home</string>
+    <string name="skill_label_pause">Pause</string>
+    <string name="skill_label_resume">Resume</string>
+    <string name="skill_label_abort">Abort</string>
+    <string name="skill_label_kill">Kill</string>
+    <string name="skill_label_mode_loiter">Loiter</string>
+    <string name="skill_label_mode_brake">Brake</string>
+    <string name="skill_label_mode_althold">Alt hold</string>
+    <string name="skill_label_mode_stabilize">Stabilize</string>
+    <string name="skill_label_mode_guided">Guided</string>
+    <string name="skill_label_mode_auto">Start mission</string>
+    <string name="skill_label_set_mode">Set mode</string>
+    <string name="skill_label_fly_here">Fly here</string>
+</resources>

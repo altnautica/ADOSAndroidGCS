@@ -23,7 +23,9 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.Dangerous
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.FlightTakeoff
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Gamepad
+import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
 import androidx.compose.material.icons.outlined.GpsFixed
 import androidx.compose.material.icons.outlined.GpsOff
 import androidx.compose.material.icons.outlined.Lock
@@ -278,12 +280,21 @@ fun SafetyBand(
                 when (val stick = state.stick) {
                     StickChip.NoGamepad -> Unit
                     StickChip.LinkBlocked -> BandChip(Icons.Outlined.Gamepad, stringResource(R.string.cockpit_stick_blocked), ChipTone.Neutral)
-                    is StickChip.Available -> BandChip(
-                        Icons.Outlined.Gamepad,
-                        stringResource(if (stick.on) R.string.cockpit_stick_on else R.string.cockpit_stick_off),
-                        if (stick.on) ChipTone.Accent else ChipTone.Neutral,
-                        onClick = onToggleStick,
+                    is StickChip.ModeBlocked -> BandChip(
+                        Icons.Outlined.Block,
+                        stringResource(R.string.cockpit_stick_mode_blocked, stick.mode.uppercase()),
+                        ChipTone.Warn,
                     )
+                    is StickChip.Available -> {
+                        val pct = LocalControllerUi.current.batteryPct
+                        val text = when {
+                            pct == null && stick.on -> stringResource(R.string.cockpit_stick_on_battery_unknown)
+                            pct == null -> stringResource(R.string.cockpit_stick_off_battery_unknown)
+                            stick.on -> stringResource(R.string.cockpit_stick_on_battery, pct)
+                            else -> stringResource(R.string.cockpit_stick_off_battery, pct)
+                        }
+                        BandChip(Icons.Outlined.Gamepad, text, if (stick.on) ChipTone.Accent else ChipTone.Neutral, onClick = onToggleStick)
+                    }
                 }
 
                 if (state.preflightTotal > 0) {

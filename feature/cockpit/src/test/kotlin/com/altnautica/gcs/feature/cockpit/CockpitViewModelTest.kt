@@ -30,10 +30,13 @@ import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.core.skills.SkillRegistry
 import com.altnautica.gcs.core.skills.SkillSessionFactory
 import com.altnautica.gcs.core.skills.binding.BindingStore
+import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.GamepadAxes
 import com.altnautica.gcs.core.skills.input.GamepadButton
 import com.altnautica.gcs.core.skills.input.InputEvent
+import com.altnautica.gcs.core.skills.input.controller.ControllerInfo
+import com.altnautica.gcs.core.skills.input.controller.ControllerManager
 import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
@@ -92,6 +95,10 @@ class CockpitViewModelTest {
 
     private val router = mockk<AdosInputRouter>(relaxed = true)
     private val gamepad = MutableStateFlow(false)
+    private val summaries = CockpitSummaryRegistry()
+    private val controllers = mockk<ControllerManager>(relaxed = true) {
+        every { active } returns MutableStateFlow<ControllerInfo?>(null)
+    }
 
     private fun TestScope.vm(
         nodes: List<NodeSummary>,
@@ -126,6 +133,8 @@ class CockpitViewModelTest {
             router = router,
             settingsRepo = CockpitSettingsRepository(dataStore),
             controllerSettings = ControllerSettingsRepository(dataStore),
+            controllerManager = controllers,
+            summaries = summaries,
             videoSelector = VideoSourceSelector(emptySet()),
             videoSessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns (endpoint != null) },
             endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns endpoint },
@@ -143,8 +152,8 @@ class CockpitViewModelTest {
         return vm
     }
 
-    private fun FakeVehicle.beat(armed: Boolean, now: Long) {
-        telemetry.heartbeat.value = HeartbeatState(armed, FlightMode(0, "STABILIZE"), vehicleType = 2, autopilot = 3, tMs = now)
+    private fun FakeVehicle.beat(armed: Boolean, now: Long, mode: String = "STABILIZE") {
+        telemetry.heartbeat.value = HeartbeatState(armed, FlightMode(0, mode), vehicleType = 2, autopilot = 3, tMs = now)
     }
 
     @Test
@@ -281,13 +290,80 @@ class CockpitViewModelTest {
         val vm = vm(listOf(node("drone-1")), vehicle)
         vm.attachInput()
         runCurrent()
-        buttons.value = 1 shl GamepadButton.X
-        events.emit(InputEvent.Button(GamepadButton.X, pressed = true, heldMs = 0))
+        buttons.value = 1 shl GamepadButton.L1
+        events.emit(InputEvent.Button(GamepadButton.L1, pressed = true, heldMs = 0))
         runCurrent()
         assertEquals(ConfirmGesture.Hold, vm.confirm.state.value!!.gesture)
         advanceTimeBy(820)
         runCurrent()
         assertEquals(listOf(VehicleCommand.Land), vehicle.control.sent)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `skill buttons do nothing while a navigable overlay is open`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        advanceTimeBy(5_000)
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val vm = vm(listOf(node("drone-1")), vehicle)
+        vm.attachInput()
+        runCurrent()
+        vm.setQuickSettings(true)
+        buttons.value = 1 shl GamepadButton.L1
+        events.emit(InputEvent.Button(GamepadButton.L1, pressed = true, heldMs = 0))
+        runCurrent()
+        assertNull(vm.confirm.state.value)
+        assertTrue(vm.quickSettingsOpen.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `back leaves, triangle swaps the view and a short options press opens quick settings`() = runTest(dispatcher) {
+        val vm = vm(listOf(node("drone-1")), FakeVehicle())
+        vm.attachInput()
+        runCurrent()
+        val emitted = mutableListOf<CockpitEvent>()
+        backgroundScope.launch { vm.events.collect { emitted += it } }
+        runCurrent()
+
+        events.emit(InputEvent.Button(GamepadButton.Y, pressed = true, heldMs = 0))
+        runCurrent()
+        assertTrue(vm.minimapSwapped.value)
+
+        events.emit(InputEvent.Button(GamepadButton.START, pressed = true, heldMs = 0))
+        events.emit(InputEvent.Button(GamepadButton.START, pressed = false, heldMs = 200))
+        runCurrent()
+        assertTrue(vm.quickSettingsOpen.value)
+        vm.setQuickSettings(false)
+
+        events.emit(InputEvent.Button(GamepadButton.START, pressed = true, heldMs = 0))
+        events.emit(InputEvent.Button(GamepadButton.START, pressed = false, heldMs = 800))
+        runCurrent()
+        assertFalse("a long press is the app menu, not quick settings", vm.quickSettingsOpen.value)
+
+        events.emit(InputEvent.Button(GamepadButton.B, pressed = true, heldMs = 0))
+        runCurrent()
+        assertTrue(CockpitEvent.ExitRequested in emitted)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the started cockpit publishes its summary and clears it on stop`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        advanceTimeBy(5_000)
+        vehicle.beat(armed = false, now = testScheduler.currentTime)
+        val vm = vm(listOf(node("drone-1")), vehicle)
+        vm.attachInput()
+        advanceTimeBy(600)
+        runCurrent()
+        val summary = summaries.summary.value!!
+        assertEquals(DeviceId("drone-1"), summary.nodeId)
+        assertEquals(vm.preflight.value.total, summary.preflightTotal)
+        assertFalse(summary.stickOn)
+
+        vm.detachInput()
+        runCurrent()
+        assertNull(summaries.summary.value)
         vm.viewModelScope.cancel()
     }
 
@@ -308,7 +384,7 @@ class CockpitViewModelTest {
         val services = mockk<VehicleServices>(relaxed = true) { every { manualControl } returns streamer }
         gamepad.value = true
         advanceTimeBy(5_000)
-        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        vehicle.beat(armed = true, now = testScheduler.currentTime, mode = "LOITER")
         val vm = vm(listOf(node("drone-1")), vehicle, services = services)
         vm.attachInput()
         runCurrent()

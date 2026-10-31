@@ -7,7 +7,15 @@ sealed interface CockpitAction {
     data class ActivateSkill(val skillId: String, val gamepadButton: Int?) : CockpitAction
     data object ToggleQuickSettings : CockpitAction
     data object ToggleSkillDrawer : CockpitAction
-    data object Exit : CockpitAction
+
+    /** Closes the top overlay, or asks to leave the cockpit when none is open. */
+    data object Back : CockpitAction
+
+    /** Swaps the main view between video and map. */
+    data object SwapView : CockpitAction
+    data object ToggleStickControl : CockpitAction
+    data object OpenModePicker : CockpitAction
+    data object ToggleRecording : CockpitAction
     data class CycleStream(val delta: Int) : CockpitAction
     data class SelectStream(val index: Int) : CockpitAction
     data object TogglePip : CockpitAction
@@ -19,22 +27,33 @@ object CockpitInputMapper {
     private val PALETTE_CHORDS = setOf("ctrl+k", "meta+k")
     private val STREAM_DIGITS = ('1'..'9').map { it.toString() }.toSet()
 
+    /** A Start press shorter than this opens quick settings; longer is the app menu, handled by the router. */
+    const val START_SHORT_MS = 600L
+
     /** The "arm" slot disarms an armed vehicle, so one slot covers both. */
     private fun flip(skillId: String, armed: Boolean?) = if (skillId == "arm" && armed == true) "disarm" else skillId
 
-    /** A button press; [pressedMask] already includes [button]. Releases map to nothing. */
-    fun onButtonPressed(button: Int, pressedMask: Int, loadout: Loadout, armed: Boolean?): CockpitAction? {
-        val l1 = pressedMask and (1 shl GamepadButton.L1) != 0
-        val r1 = pressedMask and (1 shl GamepadButton.R1) != 0
-        return when (button) {
-            GamepadButton.L1, GamepadButton.R1 -> if (l1 && r1) CockpitAction.ToggleQuickSettings else null
-            GamepadButton.SELECT -> CockpitAction.ToggleSkillDrawer
-            GamepadButton.START -> CockpitAction.Exit
-            GamepadButton.DPAD_LEFT -> CockpitAction.CycleStream(-1)
-            GamepadButton.DPAD_RIGHT -> CockpitAction.CycleStream(1)
-            else -> loadout.slotForButton(button)?.skillId?.let { CockpitAction.ActivateSkill(flip(it, armed), button) }
-        }
+    private fun held(mask: Int, button: Int) = mask and (1 shl button) != 0
+
+    /** A button press; [pressedMask] already includes [button]. */
+    fun onButtonPressed(button: Int, pressedMask: Int, loadout: Loadout, armed: Boolean?): CockpitAction? = when (button) {
+        GamepadButton.B -> CockpitAction.Back
+        GamepadButton.Y -> CockpitAction.SwapView
+        GamepadButton.SELECT -> CockpitAction.ToggleRecording
+        GamepadButton.L3 -> if (held(pressedMask, GamepadButton.R3)) CockpitAction.ToggleStickControl else null
+        GamepadButton.R3 -> if (held(pressedMask, GamepadButton.L3)) CockpitAction.ToggleStickControl else null
+        GamepadButton.DPAD_LEFT -> CockpitAction.CycleStream(-1)
+        GamepadButton.DPAD_RIGHT -> CockpitAction.CycleStream(1)
+        GamepadButton.DPAD_UP -> CockpitAction.OpenModePicker
+        GamepadButton.DPAD_DOWN -> CockpitAction.ToggleSkillDrawer
+        // Start acts on release; Home is the app's quick menu, emitted by the router.
+        GamepadButton.START, GamepadButton.HOME -> null
+        else -> loadout.slotForButton(button)?.skillId?.let { CockpitAction.ActivateSkill(flip(it, armed), button) }
     }
+
+    /** A button release after [heldMs]: a short Start toggles quick settings. */
+    fun onButtonReleased(button: Int, heldMs: Long): CockpitAction? =
+        if (button == GamepadButton.START && heldMs < START_SHORT_MS) CockpitAction.ToggleQuickSettings else null
 
     fun onChord(chord: String, loadout: Loadout, armed: Boolean?): CockpitAction? = when {
         chord in STREAM_DIGITS -> CockpitAction.SelectStream(chord.toInt() - 1)

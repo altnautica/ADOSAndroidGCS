@@ -35,12 +35,12 @@ data class Loadout(
         val DEFAULT = Loadout(
             slots = listOf(
                 LoadoutSlot(0, "arm", "shift+a", GamepadButton.A),
-                LoadoutSlot(1, "takeoff", "shift+t", null),
-                LoadoutSlot(2, "land", "shift+l", GamepadButton.X),
-                LoadoutSlot(3, "rth", "shift+r", GamepadButton.B),
-                LoadoutSlot(4, "pause", "shift+p", GamepadButton.Y),
+                LoadoutSlot(1, "takeoff", "shift+t", GamepadButton.L2),
+                LoadoutSlot(2, "land", "shift+l", GamepadButton.L1),
+                LoadoutSlot(3, "rth", "shift+r", GamepadButton.R1),
+                LoadoutSlot(4, "pause", "shift+p", GamepadButton.X),
                 LoadoutSlot(5, "abort", "shift+x", null),
-                LoadoutSlot(6, "mode.loiter", "f1", null),
+                LoadoutSlot(6, "mode.loiter", "f1", GamepadButton.R2),
                 LoadoutSlot(7, "mode.althold", "f2", null),
                 LoadoutSlot(8, "mode.stabilize", "f3", null),
                 LoadoutSlot(9, "kill", null, null),

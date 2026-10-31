@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.skills.input
 
 import android.view.KeyEvent
+import com.altnautica.gcs.core.skills.binding.Loadout
 import kotlin.math.abs
 import kotlin.math.sign
 
@@ -55,10 +56,16 @@ object GamepadButton {
 
 /** Inputs the cockpit owns; skills can never be bound to them. */
 object ReservedInputs {
-    /** L1+R1 quick settings, Select skill drawer, Start exit, D-pad stream cycle. */
+    /**
+     * B back, Y view swap, Select recording, Start quick settings, L3+R3 stick control,
+     * D-pad stream cycle, mode picker and skill drawer, Home quick menu. A, X, L1, R1,
+     * L2 and R2 are free for skills.
+     */
     val GAMEPAD_BUTTONS: Set<Int> = setOf(
-        GamepadButton.L1, GamepadButton.R1, GamepadButton.SELECT, GamepadButton.START,
+        GamepadButton.B, GamepadButton.Y, GamepadButton.SELECT, GamepadButton.START,
+        GamepadButton.L3, GamepadButton.R3,
         GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT,
+        GamepadButton.HOME,
     )
 
     /** Palette, parameter shortcuts, stream digits and cycle, picture-in-picture, quick settings. */
@@ -73,8 +80,15 @@ object ReservedInputs {
 
     private val RESERVED_MASK: Int = GAMEPAD_BUTTONS.fold(0) { acc, b -> acc or (1 shl b) }
 
-    /** `MANUAL_CONTROL` button bitmask: the first 16 buttons minus every cockpit-reserved button. */
-    fun manualControlButtonMask(pressed: Int): Int = pressed and 0xFFFF and RESERVED_MASK.inv()
+    /**
+     * `MANUAL_CONTROL` button bitmask: the first 16 buttons minus every cockpit-reserved
+     * button and every button bound to a skill in [loadout], so a skill press never also
+     * reaches the flight controller.
+     */
+    fun manualControlButtonMask(pressed: Int, loadout: Loadout): Int {
+        val skillMask = loadout.slots.fold(0) { acc, slot -> slot.gamepadButton?.let { acc or (1 shl it) } ?: acc }
+        return pressed and 0xFFFF and RESERVED_MASK.inv() and skillMask.inv()
+    }
 }
 
 /**
@@ -89,12 +103,17 @@ fun applyDeadZone(value: Float, flat: Float, extra: Float): Float {
     return sign(v) * (abs(v) - f) / (1f - f)
 }
 
-/** Stick positions after the dead-zone, each -1..1. Y is positive with the stick pushed up. */
+/**
+ * Stick positions after the dead-zone, each -1..1. Y is positive with the stick pushed up.
+ * Analog triggers read 0 (released) to 1 (fully pressed); 0 on pads without them.
+ */
 data class GamepadAxes(
     val leftX: Float,
     val leftY: Float,
     val rightX: Float,
     val rightY: Float,
+    val leftTrigger: Float = 0f,
+    val rightTrigger: Float = 0f,
 ) {
     companion object {
         val Neutral = GamepadAxes(0f, 0f, 0f, 0f)

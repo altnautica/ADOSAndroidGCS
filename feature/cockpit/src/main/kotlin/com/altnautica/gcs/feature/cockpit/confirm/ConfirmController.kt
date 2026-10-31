@@ -71,6 +71,8 @@ class ConfirmController(
     private val clock: MonotonicClock,
     private val failingChecks: () -> List<PreflightCheck>,
     private val isButtonHeld: (Int) -> Boolean,
+    /** Runs when a sheet resolves confirmed (controller feedback). */
+    private val onConfirmed: () -> Unit = {},
 ) : SkillConfirmer, ConfirmActions {
     private val _state = MutableStateFlow<ConfirmUiState?>(null)
     val state: StateFlow<ConfirmUiState?> = _state.asStateFlow()
@@ -138,6 +140,7 @@ class ConfirmController(
         val s = _state.value ?: return
         val args = buildMap<String, Any?> { s.altitudeM?.let { put(SkillArgs.ALTITUDE_M, it) } }
         resolve(ConfirmResult.Confirmed(args, checklistOverridden = s.failingChecks.isNotEmpty() && s.overrideChecklist))
+        onConfirmed()
     }
 
     private fun press() = machine?.press(clock.nowMs())
@@ -150,9 +153,25 @@ class ConfirmController(
     /** Drops a hold in progress (the cockpit stopped taking input); the sheet stays open. */
     fun releaseHold() = release()
 
+    /**
+     * A gamepad button while the sheet is open: the triggering button holds to confirm,
+     * B cancels, Y toggles the checklist override when checks fail, and D-pad up and down
+     * step the takeoff altitude by one metre.
+     */
     fun onGamepadButton(button: Int, pressed: Boolean) {
-        if (!isOpen || button != confirmButton) return
-        if (pressed) press() else release()
+        if (!isOpen) return
+        if (button == confirmButton) {
+            if (pressed) press() else release()
+            return
+        }
+        if (!pressed) return
+        val s = _state.value ?: return
+        when (button) {
+            GamepadButton.B -> cancel()
+            GamepadButton.Y -> if (s.failingChecks.isNotEmpty()) setOverride(!s.overrideChecklist)
+            GamepadButton.DPAD_UP -> s.altitudeM?.let { setAltitude(it + ALTITUDE_STEP_M) }
+            GamepadButton.DPAD_DOWN -> s.altitudeM?.let { setAltitude(it - ALTITUDE_STEP_M) }
+        }
     }
 
     fun onEnter(pressed: Boolean) {
@@ -200,5 +219,6 @@ class ConfirmController(
 
     private companion object {
         const val TICK_MS = 16L
+        const val ALTITUDE_STEP_M = 1f
     }
 }

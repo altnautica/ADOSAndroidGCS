@@ -30,10 +30,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.LoadingState
+import com.altnautica.gcs.core.designsystem.component.console.isLandscape
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
@@ -94,11 +96,12 @@ internal fun CockpitScreen(
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val portrait = maxHeight > maxWidth
+        val portrait = !isLandscape()
+        val insetWidth = CockpitLayout.insetWidth(maxWidth)
         val bandBar: @Composable (Modifier) -> Unit = { m -> Band(vm, onExit, m) }
         when {
             portrait -> PortraitLayout(vm, width, bandBar)
-            width == WidthClass.Compact -> CompactLayout(vm, width, settings.density, bandBar)
+            width == WidthClass.Compact -> CompactLayout(vm, width, settings.density, insetWidth, bandBar)
             else -> SplitLayout(vm, width, settings.splitRatio, settings.telemetryPane && width == WidthClass.Expanded, bandBar)
         }
 
@@ -109,7 +112,7 @@ internal fun CockpitScreen(
         }
         Overlays(vm, width)
         // Above the sheets, so the result of an action taken in a sheet stays readable.
-        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp).zIndex(Z.SHEETS + 1)) { snackbar() }
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = CockpitLayout.SkillBarClearance).zIndex(Z.SHEETS + 1)) { snackbar() }
     }
 }
 
@@ -130,14 +133,14 @@ private fun Band(vm: CockpitViewModel, onExit: () -> Unit, modifier: Modifier) {
 }
 
 @Composable
-private fun CompactLayout(vm: CockpitViewModel, width: WidthClass, density: CockpitDensity, bandBar: @Composable (Modifier) -> Unit) {
+private fun CompactLayout(vm: CockpitViewModel, width: WidthClass, density: CockpitDensity, insetWidth: Dp, bandBar: @Composable (Modifier) -> Unit) {
     val swapped by vm.minimapSwapped.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize()) {
         if (swapped) Minimap(vm, Modifier.fillMaxSize().zIndex(Z.VIDEO)) else VideoStage(vm, Modifier.fillMaxSize(), hudTopInset = true)
         Column(Modifier.fillMaxWidth().zIndex(Z.BAND)) {
             bandBar(Modifier)
             Row(Modifier.padding(AdosSpacing.S2), horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-                Inset(swapped, vm)
+                Inset(swapped, insetWidth, vm)
                 Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                     Tabs(vm)
                     if (density == CockpitDensity.Full) Strip(vm)
@@ -145,17 +148,20 @@ private fun CompactLayout(vm: CockpitViewModel, width: WidthClass, density: Cock
             }
         }
         Alerts(vm, Modifier.align(Alignment.TopCenter).padding(top = SafetyBandHeight + AdosSpacing.S2).zIndex(Z.ALERTS))
-        WidgetZones(vm, Modifier.fillMaxSize().padding(top = SafetyBandHeight + 140.dp, bottom = 120.dp).zIndex(Z.ZONES))
-        Radar(vm, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = 110.dp).zIndex(Z.ZONES))
-        Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = 110.dp).zIndex(Z.PIP))
+        WidgetZones(
+            vm,
+            Modifier.fillMaxSize().padding(top = SafetyBandHeight + CockpitLayout.ZoneTopClearance, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES),
+        )
+        Radar(vm, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+        Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.PIP))
         Bar(vm, width, Modifier.align(Alignment.BottomCenter).padding(AdosSpacing.S2).zIndex(Z.SKILL_BAR))
     }
 }
 
-/** The minimap inset; tapping swaps video and map. */
+/** The minimap inset, [width] wide at 16:10; tapping swaps video and map. */
 @Composable
-private fun Inset(swapped: Boolean, vm: CockpitViewModel) {
-    val m = Modifier.size(width = 200.dp, height = 130.dp).clip(RoundedCornerShape(AdosRadius.Xl)).zIndex(Z.ZONES)
+private fun Inset(swapped: Boolean, width: Dp, vm: CockpitViewModel) {
+    val m = Modifier.width(width).aspectRatio(CockpitLayout.INSET_ASPECT).clip(RoundedCornerShape(AdosRadius.Xl)).zIndex(Z.ZONES)
     if (swapped) {
         Box(m) {
             VideoStage(vm, Modifier.fillMaxSize(), hudTopInset = false, showHud = false)
@@ -182,6 +188,7 @@ private fun SplitLayout(
     bandBar: @Composable (Modifier) -> Unit,
 ) {
     var ratio by remember(savedRatio) { mutableFloatStateOf(savedRatio) }
+    val swapped by vm.minimapSwapped.collectAsStateWithLifecycle()
     val splitLabel = stringResource(R.string.cockpit_split_divider)
     Column(Modifier.fillMaxSize()) {
         bandBar(Modifier.zIndex(Z.BAND))
@@ -189,12 +196,13 @@ private fun SplitLayout(
             val total = constraints.maxWidth.toFloat()
             Row(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(ratio).fillMaxHeight()) {
-                    VideoStage(vm, Modifier.fillMaxSize(), hudTopInset = false)
+                    // Swapping moves the map into the main pane; the HUD stays with the video.
+                    if (swapped) Minimap(vm, Modifier.fillMaxSize()) else VideoStage(vm, Modifier.fillMaxSize(), hudTopInset = false)
                     Column(Modifier.padding(AdosSpacing.S2).zIndex(Z.BAND), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) { Tabs(vm) }
                     Alerts(vm, Modifier.align(Alignment.TopCenter).padding(top = AdosSpacing.S12).zIndex(Z.ALERTS))
-                    WidgetZones(vm, Modifier.fillMaxSize().padding(top = AdosSpacing.S12, bottom = 120.dp).zIndex(Z.ZONES))
-                    Radar(vm, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = 110.dp).zIndex(Z.ZONES))
-                    Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = 110.dp).zIndex(Z.PIP))
+                    WidgetZones(vm, Modifier.fillMaxSize().padding(top = AdosSpacing.S12, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+                    Radar(vm, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+                    Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.PIP))
                     Bar(vm, width, Modifier.align(Alignment.BottomCenter).padding(AdosSpacing.S2).zIndex(Z.SKILL_BAR))
                 }
                 // Draggable divider; the ratio is persisted when the drag ends.
@@ -216,7 +224,7 @@ private fun SplitLayout(
                     Box(Modifier.size(width = 4.dp, height = 40.dp).background(AdosTheme.colors.borderStrong, RoundedCornerShape(AdosRadius.Sm)))
                 }
                 Box(Modifier.weight(1f - ratio).fillMaxHeight()) {
-                    Minimap(vm, Modifier.fillMaxSize())
+                    if (swapped) VideoStage(vm, Modifier.fillMaxSize(), hudTopInset = false, showHud = false) else Minimap(vm, Modifier.fillMaxSize())
                 }
                 if (telemetryPane) {
                     Box(Modifier.padding(AdosSpacing.S2)) { Strip(vm, vertical = true) }
@@ -377,6 +385,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
     val video by vm.video.collectAsStateWithLifecycle()
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
+    val stickAllModes by vm.stickAllModes.collectAsStateWithLifecycle()
 
     Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
         QuickSettingsPanel(
@@ -388,6 +397,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
             recording = recording,
             pipAvailable = video.streams.count { it.live && it.switchKind == com.altnautica.gcs.core.model.StreamSwitchKind.Concurrent } > 1,
             pipOn = video.pip != null,
+            stickAllModes = stickAllModes,
             onDismiss = { vm.setQuickSettings(false) },
             onAltitudeReference = { vm.setAltitudeReference(it) },
             onDensity = { vm.setDensity(it) },
@@ -395,6 +405,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
             onTelemetryPane = { vm.setTelemetryPane(it) },
             onToggleRecording = vm::toggleRecording,
             onTogglePip = vm::togglePip,
+            onStickAllModes = vm::setStickAllModes,
             panels = { extNode?.let { ExtensionSlotHost(it, "cockpit.panel", Modifier.fillMaxWidth()) } },
         )
     }
