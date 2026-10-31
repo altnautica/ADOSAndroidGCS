@@ -55,13 +55,12 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
-import com.altnautica.gcs.feature.configure.params.ParametersRoute
-import com.altnautica.gcs.feature.configure.setup.SetupRoute
-import com.altnautica.gcs.feature.fleet.FleetViewModel
-import com.altnautica.gcs.feature.fleet.data.NodeVitals
-import com.altnautica.gcs.feature.fleet.ui.LivenessChip
-import com.altnautica.gcs.feature.fleet.ui.ReachBadge
-import com.altnautica.gcs.feature.fleet.ui.profileLabel
+import com.altnautica.gcs.core.link.node.NodeVitals
+import com.altnautica.gcs.core.link.node.canFly
+import com.altnautica.gcs.core.model.FcVariant
+import com.altnautica.gcs.core.designsystem.component.node.LivenessChip
+import com.altnautica.gcs.core.designsystem.component.node.ReachBadge
+import com.altnautica.gcs.core.designsystem.component.node.profileLabel
 import com.altnautica.gcs.feature.node.agent.AgentTab
 import com.altnautica.gcs.feature.node.groundstation.GroundStationTab
 import com.altnautica.gcs.feature.node.logs.NodeLogsTab
@@ -81,6 +80,8 @@ fun NodeDetailRoute(
     onOpenCockpit: (DeviceId) -> Unit,
     onOpenNode: (DeviceId) -> Unit,
     onPair: () -> Unit,
+    setupContent: @Composable (DeviceId, FcVariant) -> Unit,
+    parametersContent: @Composable (DeviceId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val vm = hiltViewModel<NodeDetailViewModel, NodeDetailViewModel.Factory>(key = "node-${nodeId.value}") { it.create(nodeId.value) }
@@ -99,6 +100,8 @@ fun NodeDetailRoute(
         onForget = vm::forgetLocally,
         onClearForget = vm::clearForget,
         onRetryForget = vm::retryForget,
+        setupContent = setupContent,
+        parametersContent = parametersContent,
         modifier = modifier,
     )
 }
@@ -117,6 +120,8 @@ fun NodeDetailScreen(
     onForget: () -> Unit,
     onClearForget: () -> Unit,
     onRetryForget: () -> Unit,
+    setupContent: @Composable (DeviceId, FcVariant) -> Unit,
+    parametersContent: @Composable (DeviceId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ready = state as? NodeDetailState.Ready
@@ -177,7 +182,7 @@ fun NodeDetailScreen(
                         modifier = Modifier.align(Alignment.Center),
                     )
                 } else {
-                    NodeBody(state.node, state.tabs, state.vitals, onOpenCockpit, onOpenNode)
+                    NodeBody(state.node, state.tabs, state.vitals, onOpenCockpit, onOpenNode, setupContent, parametersContent)
                 }
             }
         }
@@ -236,6 +241,8 @@ private fun NodeBody(
     vitals: NodeVitals,
     onOpenCockpit: (DeviceId) -> Unit,
     onOpenNode: (DeviceId) -> Unit,
+    setupContent: @Composable (DeviceId, FcVariant) -> Unit,
+    parametersContent: @Composable (DeviceId) -> Unit,
 ) {
     val extensionPages by rememberExtensionNodePages(node.id, ExtensionSlots.NODE_DETAIL_TAB)
     val items: List<TabItem> = tabs.map { TabItem.Builtin(it) } +
@@ -276,8 +283,8 @@ private fun NodeBody(
                         },
                     )
                     NodeTab.Cockpit -> CockpitLauncher(node, onOpenCockpit)
-                    NodeTab.Setup -> SetupRoute(nodeId = node.id, fcVariant = node.fcVariant)
-                    NodeTab.Parameters -> ParametersRoute(nodeId = node.id)
+                    NodeTab.Setup -> setupContent(node.id, node.fcVariant)
+                    NodeTab.Parameters -> parametersContent(node.id)
                     NodeTab.Capture -> VisorCaptureTab(node.id.value)
                     NodeTab.Sessions -> VisorSessionsTab(node.id.value)
                     NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh ->
@@ -308,7 +315,6 @@ private fun Header(node: NodeSummary, vitals: NodeVitals) {
 /** The Cockpit tab: the cockpit is full screen, so the tab launches it. */
 @Composable
 private fun CockpitLauncher(node: NodeSummary, onOpenCockpit: (DeviceId) -> Unit) {
-    val card = FleetViewModel.card(node, NodeVitals.UNKNOWN)
     Box(Modifier.fillMaxSize().padding(AdosSpacing.S6), contentAlignment = Alignment.Center) {
         if (node.profile == NodeProfile.GroundStation && node.carriedDroneId == null) {
             EmptyState(
@@ -329,7 +335,7 @@ private fun CockpitLauncher(node: NodeSummary, onOpenCockpit: (DeviceId) -> Unit
                 AdosButton(
                     label = stringResource(R.string.node_open_cockpit),
                     onClick = { onOpenCockpit(node.id) },
-                    enabled = card.canFly,
+                    enabled = node.canFly(),
                     icon = Icons.Outlined.SportsEsports,
                 )
             }

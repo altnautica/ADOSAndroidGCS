@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.fleet.data
+package com.altnautica.gcs.core.link.node
 
 import android.os.SystemClock
 import com.altnautica.gcs.core.agent.AgentClientFactory

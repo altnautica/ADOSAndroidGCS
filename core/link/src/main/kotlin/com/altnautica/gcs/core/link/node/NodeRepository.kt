@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.fleet.data
+package com.altnautica.gcs.core.link.node
 
 import android.util.Log
 import com.altnautica.gcs.core.model.DeviceId
@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.stateIn
  * tell "still looking" from "nothing found". Sources run only while observed.
  */
 @Singleton
-class NodeRepository internal constructor(
+class NodeRepository(
     sources: Set<NodeSource>,
     scope: CoroutineScope,
 ) {

@@ -63,11 +63,11 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.feature.fleet.ui.LivenessChip
-import com.altnautica.gcs.feature.fleet.ui.ReachBadge
-import com.altnautica.gcs.feature.fleet.ui.profileIcon
-import com.altnautica.gcs.feature.fleet.ui.profileLabel
-import com.altnautica.gcs.feature.fleet.ui.profileTint
+import com.altnautica.gcs.core.designsystem.component.node.LivenessChip
+import com.altnautica.gcs.core.designsystem.component.node.ReachBadge
+import com.altnautica.gcs.core.designsystem.component.node.profileIcon
+import com.altnautica.gcs.core.designsystem.component.node.profileLabel
+import com.altnautica.gcs.core.designsystem.component.node.profileTint
 import kotlinx.coroutines.flow.Flow
 
 @Composable

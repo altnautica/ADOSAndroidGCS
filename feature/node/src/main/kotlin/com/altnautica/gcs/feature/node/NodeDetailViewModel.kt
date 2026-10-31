@@ -7,9 +7,9 @@ import com.altnautica.gcs.core.agent.pairing.PairingOutcome
 import com.altnautica.gcs.core.agent.pairing.PairingService
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSummary
-import com.altnautica.gcs.feature.fleet.data.NodeRepository
-import com.altnautica.gcs.feature.fleet.data.NodeVitals
-import com.altnautica.gcs.feature.fleet.data.NodeVitalsRepository
+import com.altnautica.gcs.core.link.node.NodeRepository
+import com.altnautica.gcs.core.link.node.NodeVitals
+import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject

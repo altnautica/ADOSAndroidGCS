@@ -7,11 +7,11 @@ import com.altnautica.gcs.core.agent.groundstation.ApUpdate
 import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.feature.fleet.data.NodeRepository
+import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.feature.node.NodeTab
 import com.altnautica.gcs.feature.node.common.AgentWriteRunner
 import com.altnautica.gcs.core.agent.sensors.BaseModeRequest
-import com.altnautica.gcs.feature.fleet.data.NodeVitalsRepository
+import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import com.altnautica.gcs.feature.node.common.NodeApis
 import com.altnautica.gcs.feature.node.common.NodeClients
 import com.altnautica.gcs.feature.node.common.PageProblem

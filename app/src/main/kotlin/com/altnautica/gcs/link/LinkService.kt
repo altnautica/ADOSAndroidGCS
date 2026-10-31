@@ -20,9 +20,9 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
-import com.altnautica.gcs.feature.fleet.data.NodeRepository
-import com.altnautica.gcs.feature.fleet.data.NodeVitals
-import com.altnautica.gcs.feature.fleet.data.NodeVitalsRepository
+import com.altnautica.gcs.core.link.node.NodeRepository
+import com.altnautica.gcs.core.link.node.NodeVitals
+import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi

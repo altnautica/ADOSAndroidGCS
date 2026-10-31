@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.fleet.ui
+package com.altnautica.gcs.core.designsystem.component.node
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CellTower
@@ -26,7 +26,7 @@ import com.altnautica.gcs.core.model.BlockReason
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.Reach
-import com.altnautica.gcs.feature.fleet.R
+import com.altnautica.gcs.core.designsystem.R
 
 /** Reach badge: `DIRECT` / `LAN` / `VIA GROUND` / `CLOUD` / `PHONE RADIO`, or why the node is blocked. */
 @Composable

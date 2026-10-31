@@ -4,7 +4,7 @@ import com.altnautica.gcs.core.agent.capture.CaptureApi
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.link.direct.DemoNode
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.feature.fleet.data.NodeRepository
+import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.feature.node.demo.DemoCaptureApi
 import com.altnautica.gcs.feature.node.demo.DemoGroundSensors
 import com.altnautica.gcs.feature.node.demo.DemoVisorSensors

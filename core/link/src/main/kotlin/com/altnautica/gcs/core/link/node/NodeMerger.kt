@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.fleet.data
+package com.altnautica.gcs.core.link.node
 
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant

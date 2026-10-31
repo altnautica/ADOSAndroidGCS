@@ -12,8 +12,6 @@ dependencies {
     implementation(projects.core.video)
     implementation(projects.core.extensions)
     implementation(projects.radio.rx)
-    implementation(projects.feature.fleet)
-    implementation(projects.feature.configure)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

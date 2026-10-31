@@ -42,6 +42,8 @@ import com.altnautica.gcs.feature.fleet.FleetRoute
 import com.altnautica.gcs.feature.logs.detail.FlightDetailRoute
 import com.altnautica.gcs.feature.logs.history.LogsRoute
 import com.altnautica.gcs.feature.node.NodeDetailRoute
+import com.altnautica.gcs.feature.configure.params.ParametersRoute
+import com.altnautica.gcs.feature.configure.setup.SetupRoute
 import com.altnautica.gcs.feature.plan.PlanRoute
 import com.altnautica.gcs.feature.settings.SettingsRoute
 import com.altnautica.gcs.feature.settings.licences.LicencesRoute
@@ -143,6 +145,8 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onOpenCockpit = { fly(backStack, viewModel, it) },
                         onOpenNode = { BackStackOps.push(backStack, NodeKey(it.value)) },
                         onPair = { BackStackOps.push(backStack, ConnectKey()) },
+                        setupContent = { id, fc -> SetupRoute(nodeId = id, fcVariant = fc) },
+                        parametersContent = { ParametersRoute(nodeId = it) },
                     )
                 }
                 entry<CockpitKey> { key ->

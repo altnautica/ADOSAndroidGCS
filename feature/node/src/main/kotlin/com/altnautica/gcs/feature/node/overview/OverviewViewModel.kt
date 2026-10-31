@@ -15,7 +15,7 @@ import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VehicleProvider
-import com.altnautica.gcs.feature.fleet.data.NodeRepository
+import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.feature.node.NodeTabs
 import com.altnautica.gcs.feature.node.common.NodeClients
 import com.altnautica.gcs.feature.node.common.PageProblem

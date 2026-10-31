@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.feature.fleet.data.NodeRepository
+import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.feature.node.common.NodeClients
 import com.altnautica.gcs.feature.node.common.PageProblem
 import com.altnautica.gcs.feature.node.common.arr

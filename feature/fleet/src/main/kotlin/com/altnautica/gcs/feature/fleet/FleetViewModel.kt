@@ -8,9 +8,10 @@ import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
-import com.altnautica.gcs.feature.fleet.data.NodeRepository
-import com.altnautica.gcs.feature.fleet.data.NodeVitals
-import com.altnautica.gcs.feature.fleet.data.NodeVitalsRepository
+import com.altnautica.gcs.core.link.node.NodeRepository
+import com.altnautica.gcs.core.link.node.canFly
+import com.altnautica.gcs.core.link.node.NodeVitals
+import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -116,18 +117,11 @@ class FleetViewModel @Inject constructor(
         }
 
         fun card(node: NodeSummary, vitals: NodeVitals): FleetCard {
-            val usable = node.reaches.firstOrNull()?.let { it !is Reach.Blocked } == true
-            val flyable = when (node.profile) {
-                NodeProfile.Drone -> true
-                NodeProfile.GroundStation -> node.carriedDroneId != null
-                NodeProfile.Workstation, NodeProfile.Visor -> false
-                NodeProfile.Unknown -> Reach.DirectFc in node.reaches
-            }
             val agentReach = node.reaches.any { it == Reach.Lan || it is Reach.ViaGround }
             return FleetCard(
                 node = node,
                 vitals = vitals,
-                canFly = usable && flyable,
+                canFly = node.canFly(),
                 showThumbnail = node.profile == NodeProfile.Drone && node.liveness == Liveness.Live && agentReach,
             )
         }
