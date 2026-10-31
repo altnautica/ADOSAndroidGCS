@@ -32,7 +32,7 @@ import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.LoadingState
-import com.altnautica.gcs.core.designsystem.component.SectionHeader
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleScaffold
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.link.log.LogEntry
@@ -43,21 +43,32 @@ import java.io.File
 
 /** Onboard flight-controller logs of one node: list, download with resume, share. */
 @Composable
-fun DataflashRoute(nodeId: DeviceId, modifier: Modifier = Modifier) {
+fun DataflashRoute(nodeId: DeviceId, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val viewModel = hiltViewModel<DataflashViewModel, DataflashViewModel.Factory>(
         key = "dataflash-${nodeId.value}",
         creationCallback = { it.create(nodeId.value) },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    DataflashScreen(
-        state = state,
-        onRefresh = viewModel::refresh,
-        onDownload = viewModel::download,
-        onCancel = viewModel::cancel,
-        onShare = { shareLogFile(context, File(it)) },
+    ConsoleScaffold(
+        title = stringResource(R.string.logs_df_title),
+        onBack = onBack,
         modifier = modifier,
-    )
+        actions = {
+            IconButton(onClick = viewModel::refresh, enabled = state !is DataflashUiState.NoVehicle && state !is DataflashUiState.Listing) {
+                Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.logs_df_refresh))
+            }
+        },
+    ) { padding ->
+        DataflashScreen(
+            state = state,
+            onRefresh = viewModel::refresh,
+            onDownload = viewModel::download,
+            onCancel = viewModel::cancel,
+            onShare = { shareLogFile(context, File(it)) },
+            modifier = Modifier.padding(padding),
+        )
+    }
 }
 
 @Composable
@@ -70,12 +81,6 @@ fun DataflashScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            SectionHeader(stringResource(R.string.logs_df_title), Modifier.weight(1f))
-            IconButton(onClick = onRefresh, enabled = state !is DataflashUiState.NoVehicle && state !is DataflashUiState.Listing) {
-                Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.logs_df_refresh))
-            }
-        }
         when (state) {
             DataflashUiState.NoVehicle -> EmptyState(
                 icon = Icons.Outlined.LinkOff,

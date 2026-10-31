@@ -7,6 +7,9 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Per-app language. Android 13+ stores it in the system ([LocaleManager]) so
@@ -22,6 +25,14 @@ object AppLocales {
     private const val PREFS = "app_locale"
     private const val KEY = "tag"
 
+    private val tag = MutableStateFlow("")
+
+    /** The applied tag as a flow, refreshed from the platform on each call. */
+    fun observe(context: Context): StateFlow<String> {
+        tag.value = current(context)
+        return tag.asStateFlow()
+    }
+
     fun current(context: Context): String = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         context.getSystemService(LocaleManager::class.java)?.applicationLocales?.takeIf { !it.isEmpty }?.get(0)?.language.orEmpty()
     } else {
@@ -30,6 +41,7 @@ object AppLocales {
 
     /** Applies [tag] ("" = system); recreates [activity] where the platform does not. */
     fun apply(activity: Activity, tag: String) {
+        this.tag.value = tag
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             activity.getSystemService(LocaleManager::class.java)?.applicationLocales =
                 if (tag.isEmpty()) LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(tag)

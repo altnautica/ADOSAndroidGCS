@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -108,6 +109,8 @@ fun ExtensionFrame(
             Box(modifier) {
                 AndroidView(
                     factory = { ctx -> createRelayWebView(ctx, session, s.html) },
+                    // Extension pages are touch-only: controller focus never enters the page.
+                    modifier = Modifier.focusProperties { canFocus = false },
                     onRelease = { web ->
                         // Tear down the bridge handlers with the page: subscriptions,
                         // polls, marks and pending approvals end with the frame.
@@ -141,6 +144,8 @@ private fun createRelayWebView(context: Context, session: ExtensionFrameSession,
         setGeolocationEnabled(false)
         mediaPlaybackRequiresUserGesture = true
     }
+    web.isFocusable = false
+    web.isFocusableInTouchMode = false
     web.webViewClient = object : WebViewClient() {
         // Nothing in the relay or the extension frame may load from the network: the
         // bundle is inlined and every capability is a bridge method.

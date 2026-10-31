@@ -4,6 +4,7 @@ import android.net.Uri
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,28 +15,25 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +52,8 @@ import com.altnautica.gcs.core.designsystem.component.NumberSettingRow
 import com.altnautica.gcs.core.designsystem.component.SectionHeader
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
 import com.altnautica.gcs.core.designsystem.component.TextSettingRow
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleScaffold
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.map.AdosMap
@@ -113,7 +113,6 @@ fun OfflineMapsScreen(
     OfflineMapsContent(state, actions, modifier)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OfflineMapsContent(state: OfflineMapsUiState, actions: OfflineMapsActions, modifier: Modifier = Modifier) {
     val colors = AdosTheme.colors
@@ -128,21 +127,11 @@ fun OfflineMapsContent(state: OfflineMapsUiState, actions: OfflineMapsActions, m
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) actions.onImport(uri)
     }
-    Scaffold(
-        modifier = modifier,
-        containerColor = colors.bgCanvas,
-        snackbarHost = { SnackbarHost(snackbar) },
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.offline_maps_title)) },
-                navigationIcon = {
-                    IconButton(onClick = if (state.draft != null) actions.onCancelDraft else actions.onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.offline_maps_back))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.bgSurface, titleContentColor = colors.fgPrimary),
-            )
-        },
+    var pendingDelete by remember { mutableStateOf<PendingDelete?>(null) }
+    ConsoleScaffold(
+        title = stringResource(R.string.offline_maps_title),
+        onBack = if (state.draft != null) actions.onCancelDraft else actions.onBack,
+        modifier = modifier.background(colors.bgCanvas),
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             val draft = state.draft
@@ -159,12 +148,43 @@ fun OfflineMapsContent(state: OfflineMapsUiState, actions: OfflineMapsActions, m
                     state = state,
                     actions = actions,
                     onImport = { importLauncher.launch(arrayOf("application/octet-stream", "application/vnd.pmtiles", "*/*")) },
+                    onRequestDelete = { name, run -> pendingDelete = PendingDelete(name, run) },
+                )
+            }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+        }
+    }
+    pendingDelete?.let { pending ->
+        AdosConfirmSheet(
+            title = stringResource(R.string.offline_maps_delete_confirm_title),
+            message = stringResource(R.string.offline_maps_delete_confirm_message, pending.name),
+            onDismiss = { pendingDelete = null },
+            danger = true,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                AdosButton(
+                    stringResource(R.string.offline_maps_draft_cancel),
+                    onClick = { pendingDelete = null },
+                    modifier = Modifier.weight(1f),
+                    variant = AdosButtonVariant.Secondary,
+                )
+                AdosButton(
+                    stringResource(R.string.offline_maps_delete),
+                    onClick = {
+                        pendingDelete = null
+                        pending.run()
+                    },
+                    modifier = Modifier.weight(1f),
+                    variant = AdosButtonVariant.Danger,
+                    icon = Icons.Outlined.Delete,
                 )
             }
         }
     }
 }
 
+/** A delete waiting for the operator's confirmation. */
+private class PendingDelete(val name: String, val run: () -> Unit)
 @Composable
 private fun messageText(message: OfflineMapsMessage): String = when (message) {
     is OfflineMapsMessage.DownloadFailed -> stringResource(R.string.offline_maps_msg_download_failed, message.reason)
@@ -178,7 +198,12 @@ private fun messageText(message: OfflineMapsMessage): String = when (message) {
 }
 
 @Composable
-private fun PackList(state: OfflineMapsUiState, actions: OfflineMapsActions, onImport: () -> Unit) {
+private fun PackList(
+    state: OfflineMapsUiState,
+    actions: OfflineMapsActions,
+    onImport: () -> Unit,
+    onRequestDelete: (name: String, run: () -> Unit) -> Unit,
+) {
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(AdosSpacing.S4),
@@ -204,18 +229,22 @@ private fun PackList(state: OfflineMapsUiState, actions: OfflineMapsActions, onI
         LazyColumn(Modifier.fillMaxSize()) {
             if (state.packs.isNotEmpty()) {
                 item { SectionHeader(stringResource(R.string.offline_maps_section_downloads)) }
-                items(state.packs, key = { "pack-${it.id}" }) { pack -> PackRow(pack, actions) }
+                items(state.packs, key = { "pack-${it.id}" }) { pack ->
+                    PackRow(pack, actions, onDelete = { onRequestDelete(pack.name) { actions.onDelete(pack.id) } })
+                }
             }
             if (state.pmtiles.isNotEmpty()) {
                 item { SectionHeader(stringResource(R.string.offline_maps_section_packs)) }
-                items(state.pmtiles, key = { "pmtiles-${it.id}" }) { pack -> PmtilesRow(pack, actions) }
+                items(state.pmtiles, key = { "pmtiles-${it.id}" }) { pack ->
+                    PmtilesRow(pack, onDelete = { onRequestDelete(pack.name) { actions.onDeletePmtiles(pack.id) } })
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PackRow(pack: OfflinePack, actions: OfflineMapsActions) {
+private fun PackRow(pack: OfflinePack, actions: OfflineMapsActions, onDelete: () -> Unit) {
     val colors = AdosTheme.colors
     val context = LocalContext.current
     val size = Formatter.formatShortFileSize(context, pack.status.completedBytes)
@@ -259,14 +288,14 @@ private fun PackRow(pack: OfflinePack, actions: OfflineMapsActions) {
                 )
             }
         }
-        IconButton(onClick = { actions.onDelete(pack.id) }) {
+        IconButton(onClick = onDelete) {
             Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.offline_maps_delete_named, pack.name), tint = colors.fgSecondary)
         }
     }
 }
 
 @Composable
-private fun PmtilesRow(pack: PmtilesPack, actions: OfflineMapsActions) {
+private fun PmtilesRow(pack: PmtilesPack, onDelete: () -> Unit) {
     val colors = AdosTheme.colors
     val size = Formatter.formatShortFileSize(LocalContext.current, pack.sizeBytes)
     Row(
@@ -281,7 +310,7 @@ private fun PmtilesRow(pack: PmtilesPack, actions: OfflineMapsActions) {
                 color = colors.fgSecondary,
             )
         }
-        IconButton(onClick = { actions.onDeletePmtiles(pack.id) }) {
+        IconButton(onClick = onDelete) {
             Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.offline_maps_delete_named, pack.name), tint = colors.fgSecondary)
         }
     }

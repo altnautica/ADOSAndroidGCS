@@ -24,12 +24,16 @@ import com.altnautica.gcs.core.link.transport.UsbSerialTransport
 import com.altnautica.gcs.core.model.DeviceId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -58,6 +62,8 @@ sealed interface ConnectError {
 data class ConnectUiState(
     val page: ConnectPage = ConnectPage.Home,
     val discovered: List<DiscoveredRow> = emptyList(),
+    /** Discovery has run [ConnectViewModel.DISCOVERY_HELP_MS] without finding any node. */
+    val discoverySlow: Boolean = false,
     val busy: Boolean = false,
     val error: ConnectError? = null,
     /** A node answered as already paired; its API key is needed to add it here. */
@@ -78,7 +84,8 @@ data class ConnectUiState(
     val udpPort: String = DirectEndpoint.DEFAULT_UDP_PORT.toString(),
     val tcpHost: String = "",
     val tcpPort: String = DirectEndpoint.DEFAULT_TCP_PORT.toString(),
-    val portError: InputError? = null,
+    val udpPortError: InputError? = null,
+    val tcpPortError: InputError? = null,
     val tcpHostError: InputError? = null,
     // USB page
     val usbDevices: List<UsbFlightController> = emptyList(),
@@ -111,21 +118,39 @@ class ConnectViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(ConnectUiState())
 
+    /** Bumped by [retryDiscovery]; each value restarts the browse and its help timer. */
+    private val discoveryAttempt = MutableStateFlow(0)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val discoveryFlow = discoveryAttempt.flatMapLatest {
+        val found = discovery.browse().onStart { emit(emptyList()) }
+        val elapsed = flow {
+            emit(false)
+            delay(DISCOVERY_HELP_MS)
+            emit(true)
+        }
+        combine(found, elapsed) { agents, late -> agents to late }
+    }
+
     val state: StateFlow<ConnectUiState> = combine(
         _state,
-        discovery.browse().onStart { emit(emptyList()) },
+        discoveryFlow,
         vault.nodes,
         combine(usb.devices, directSettings.usbBaudRate, demo.enabled, wifi.connected) { d, b, on, w -> Extra(d, b, on, w) },
-    ) { s, found, stored, extra ->
+    ) { s, (found, late), stored, extra ->
         val keys = stored.map { it.deviceId }.toSet()
         s.copy(
             discovered = found.map { DiscoveredRow(it, it.deviceId != null && it.deviceId in keys) },
+            discoverySlow = late && found.isEmpty(),
             usbDevices = extra.usb,
             baudRate = extra.baud,
             demoEnabled = extra.demo,
             wifiJoined = extra.wifi,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), ConnectUiState())
+
+    /** Restarts LAN discovery and its help timer. */
+    fun retryDiscovery() = discoveryAttempt.update { it + 1 }
 
     private data class Extra(val usb: List<UsbFlightController>, val baud: Int, val demo: Boolean, val wifi: Boolean)
 
@@ -253,28 +278,30 @@ class ConnectViewModel @Inject constructor(
 
     // ---- UDP / TCP -----------------------------------------------------------
 
-    fun setUdp(udp: Boolean) = _state.update { it.copy(udp = udp, portError = null, tcpHostError = null) }
+    fun setUdp(udp: Boolean) = _state.update { it.copy(udp = udp, udpPortError = null, tcpPortError = null, tcpHostError = null) }
 
-    fun setUdpPort(v: String) = _state.update { it.copy(udpPort = v.filter(Char::isDigit), portError = null) }
+    fun setUdpPort(v: String) = _state.update { it.copy(udpPort = v.filter(Char::isDigit), udpPortError = null) }
 
     fun setTcpHost(v: String) = _state.update { it.copy(tcpHost = v, tcpHostError = null) }
 
-    fun setTcpPort(v: String) = _state.update { it.copy(tcpPort = v.filter(Char::isDigit), portError = null) }
+    fun setTcpPort(v: String) = _state.update { it.copy(tcpPort = v.filter(Char::isDigit), tcpPortError = null) }
 
     fun submitNetwork() {
         val s = _state.value
+        if (s.busy) return
         val endpoint: DirectEndpoint = if (s.udp) {
-            EndpointValidation.port(s.udpPort)?.let { return _state.update { st -> st.copy(portError = it) } }
+            EndpointValidation.port(s.udpPort)?.let { return _state.update { st -> st.copy(udpPortError = it) } }
             DirectEndpoint.Udp(s.udpPort.trim().toInt())
         } else {
             val hostErr = EndpointValidation.host(s.tcpHost, allowPort = false)
             val portErr = EndpointValidation.port(s.tcpPort)
-            if (hostErr != null || portErr != null) return _state.update { it.copy(tcpHostError = hostErr, portError = portErr) }
+            if (hostErr != null || portErr != null) return _state.update { it.copy(tcpHostError = hostErr, tcpPortError = portErr) }
             DirectEndpoint.Tcp(s.tcpHost.trim().removePrefix("[").removeSuffix("]"), s.tcpPort.trim().toInt())
         }
+        _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             directSettings.addEndpoint(endpoint)
-            _state.update { it.copy(connected = endpoint.nodeId) }
+            _state.update { it.copy(busy = false, connected = endpoint.nodeId) }
         }
     }
 
@@ -348,6 +375,8 @@ class ConnectViewModel @Inject constructor(
         private const val STOP_GRACE_MS = 5_000L
         /** How long a deep-linked code waits for LAN discovery to find its node. */
         const val DEEP_LINK_DISCOVERY_MS = 10_000L
+        /** How long discovery runs empty before the screen shows network help. */
+        const val DISCOVERY_HELP_MS = 10_000L
         private const val MIN_WPA = 8
 
         fun PairingFailure.toError(): ConnectError = when (this) {

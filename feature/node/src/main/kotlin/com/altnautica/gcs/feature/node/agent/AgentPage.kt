@@ -2,6 +2,10 @@ package com.altnautica.gcs.feature.node.agent
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.dp
+import com.altnautica.gcs.core.designsystem.component.console.AdosListItem
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleTwoPane
+import com.altnautica.gcs.core.designsystem.component.console.isLandscape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,7 +89,13 @@ fun AgentTab(nodeId: String, modifier: Modifier = Modifier) {
     val pages by rememberExtensionNodePages(DeviceId(nodeId), ExtensionSlots.NODE_AGENT_PAGE)
     val page = pages.firstOrNull { it.key == pageKey }
 
-    BackHandler(enabled = section != null || page != null) {
+    val landscape = isLandscape()
+    // Landscape always shows a section in the detail pane; back there leaves the
+    // vehicle surface unless a nested page or the config tree is open.
+    LaunchedEffect(landscape, sectionId, pageKey) {
+        if (landscape && sectionId == null && pageKey == null) sectionId = AgentSection.ALL.first().id
+    }
+    BackHandler(enabled = if (landscape) page != null || treeOpen else section != null || page != null) {
         when {
             page != null -> pageKey = null
             treeOpen -> treeOpen = false
@@ -93,84 +103,104 @@ fun AgentTab(nodeId: String, modifier: Modifier = Modifier) {
         }
     }
     LaunchedEffect(section) { section?.let(vm::openSection) }
+    val closeSection: (() -> Unit)? = if (landscape) null else ({ sectionId = null })
 
     Column(modifier.fillMaxSize()) {
         WriteStatus(write, vm.writes, Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1))
-        when {
-            page != null -> {
-                SectionTitle(page.contribution.title ?: page.pluginName) { pageKey = null }
-                ExtensionNodePage(node = DeviceId(nodeId), page = page, modifier = Modifier.fillMaxSize())
-            }
-            section == null -> SectionList(
-                loosePages = pages.filter { p -> AgentSection.ALL.none { it.id == p.contribution.section } },
-                onOpen = { sectionId = it.id },
-                onOpenPage = { pageKey = it.key },
-            )
-            section.isExtensions -> {
-                SectionTitle(stringResource(section.titleRes)) { sectionId = null }
-                NodeExtensionsScreen(node = DeviceId(nodeId), modifier = Modifier.fillMaxSize())
-            }
-            treeOpen -> ConfigTreeScreen(
-                state = state,
-                roots = section.subtreesFor(state.profile),
-                busy = write is WriteState.Running,
-                onWrite = vm::write,
-                onRetry = vm::reload,
-                onBack = { treeOpen = false },
-            )
-            else -> SectionScreen(
-                section = section,
-                state = state,
-                pages = pages.filter { it.contribution.section == section.id },
-                busy = write is WriteState.Running,
-                onWrite = vm::write,
-                onRestart = vm::restartService,
-                onRefreshLive = vm::refreshLive,
-                onRetry = vm::reload,
-                onOpenTree = { treeOpen = true },
-                onOpenPage = { pageKey = it.key },
-                onBack = { sectionId = null },
-            )
-        }
+        ConsoleTwoPane(
+            showDetailInPortrait = section != null || page != null,
+            list = {
+                SectionList(
+                    loosePages = pages.filter { p -> AgentSection.ALL.none { it.id == p.contribution.section } },
+                    selectedKey = pageKey ?: sectionId,
+                    onOpen = {
+                        pageKey = null
+                        treeOpen = false
+                        sectionId = it.id
+                    },
+                    onOpenPage = { pageKey = it.key },
+                )
+            },
+            detail = {
+                Column(Modifier.fillMaxSize()) {
+                    when {
+                        page != null -> {
+                            SectionTitle(page.contribution.title ?: page.pluginName) { pageKey = null }
+                            ExtensionNodePage(node = DeviceId(nodeId), page = page, modifier = Modifier.fillMaxSize())
+                        }
+                        section == null -> Unit
+                        section.isExtensions -> {
+                            SectionTitle(stringResource(section.titleRes), closeSection)
+                            NodeExtensionsScreen(node = DeviceId(nodeId), modifier = Modifier.fillMaxSize())
+                        }
+                        treeOpen -> ConfigTreeScreen(
+                            state = state,
+                            roots = section.subtreesFor(state.profile),
+                            busy = write is WriteState.Running,
+                            onWrite = vm::write,
+                            onRetry = vm::reload,
+                            onBack = { treeOpen = false },
+                        )
+                        else -> SectionScreen(
+                            section = section,
+                            state = state,
+                            pages = pages.filter { it.contribution.section == section.id },
+                            busy = write is WriteState.Running,
+                            onWrite = vm::write,
+                            onRestart = vm::restartService,
+                            onRefreshLive = vm::refreshLive,
+                            onRetry = vm::reload,
+                            onOpenTree = { treeOpen = true },
+                            onOpenPage = { pageKey = it.key },
+                            onBack = closeSection,
+                        )
+                    }
+                }
+            },
+        )
     }
 }
 
 @Composable
-private fun NavRow(title: String, onClick: () -> Unit, subtitle: String? = null) {
-    val colors = AdosTheme.colors
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = AdosTheme.touchMin)
-            .clickable(onClick = onClick)
-            .padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.fgTertiary) }
-        }
-        Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = colors.fgSecondary)
-    }
+private fun NavRow(title: String, onClick: () -> Unit, subtitle: String? = null, selected: Boolean = false) {
+    AdosListItem(
+        headline = title,
+        onClick = onClick,
+        supporting = subtitle,
+        selected = selected,
+        trailing = {
+            Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, contentDescription = null, tint = AdosTheme.colors.fgSecondary)
+        },
+    )
 }
 
 @Composable
-private fun SectionList(loosePages: List<SlotMount>, onOpen: (AgentSection) -> Unit, onOpenPage: (SlotMount) -> Unit) {
+private fun SectionList(
+    loosePages: List<SlotMount>,
+    selectedKey: String?,
+    onOpen: (AgentSection) -> Unit,
+    onOpenPage: (SlotMount) -> Unit,
+) {
     LazyColumn(contentPadding = PaddingValues(vertical = AdosSpacing.S2)) {
         items(AgentSection.ALL, key = { it.id }) { section ->
-            NavRow(stringResource(section.titleRes), onClick = { onOpen(section) })
+            NavRow(stringResource(section.titleRes), onClick = { onOpen(section) }, selected = section.id == selectedKey)
         }
         items(loosePages, key = { it.key }) { p ->
-            NavRow(p.contribution.title ?: p.pluginName, onClick = { onOpenPage(p) }, subtitle = p.pluginName)
+            NavRow(p.contribution.title ?: p.pluginName, onClick = { onOpenPage(p) }, subtitle = p.pluginName, selected = p.key == selectedKey)
         }
     }
 }
 
 @Composable
-private fun SectionTitle(title: String, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(end = AdosSpacing.S4)) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.node_back))
+private fun SectionTitle(title: String, onBack: (() -> Unit)?) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().heightIn(min = AdosTheme.touchMin).padding(start = if (onBack == null) AdosSpacing.S4 else 0.dp, end = AdosSpacing.S4),
+    ) {
+        if (onBack != null) {
+            IconButton(onClick = onBack) {
+                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.node_back))
+            }
         }
         Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
     }
@@ -188,7 +218,7 @@ private fun SectionScreen(
     onRetry: () -> Unit,
     onOpenTree: () -> Unit,
     onOpenPage: (SlotMount) -> Unit,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     Column(Modifier.fillMaxSize()) {
         SectionTitle(stringResource(section.titleRes), onBack)

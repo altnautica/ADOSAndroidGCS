@@ -180,13 +180,26 @@ class ConnectViewModelTest {
     }
 
     @Test
+    fun discoveryHelpAppearsAfterTimeoutAndRetryResetsIt() = runTest(dispatcher) {
+        val vm = vm(found = MutableStateFlow<List<DiscoveredAgent>>(emptyList()))
+        backgroundScope.launch { vm.state.collect {} }
+        assertEquals(false, vm.state.value.discoverySlow)
+        advanceTimeBy(ConnectViewModel.DISCOVERY_HELP_MS + 1)
+        runCurrent()
+        assertEquals(true, vm.state.value.discoverySlow)
+        vm.retryDiscovery()
+        assertEquals(false, vm.state.value.discoverySlow)
+    }
+
+    @Test
     fun udpAndTcpEndpointsValidateAndSave() = runTest(dispatcher) {
         val vm = vm()
         backgroundScope.launch { vm.state.collect {} }
 
         vm.setUdpPort("70000")
         vm.submitNetwork()
-        assertEquals(InputError.InvalidPort, vm.state.value.portError)
+        assertEquals(InputError.InvalidPort, vm.state.value.udpPortError)
+        assertNull(vm.state.value.tcpPortError)
 
         vm.setUdpPort("14550")
         vm.submitNetwork()

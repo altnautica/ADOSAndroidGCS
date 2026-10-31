@@ -25,6 +25,8 @@
     <string name="offline_maps_resume">Resume</string>
     <string name="offline_maps_delete">Delete</string>
     <string name="offline_maps_delete_named">Delete %1$s</string>
+    <string name="offline_maps_delete_confirm_title">Delete map pack?</string>
+    <string name="offline_maps_delete_confirm_message">%1$s is removed from this device. Offline maps that use it stop working.</string>
     <string name="offline_maps_pack_details">Raster · zoom %1$d–%2$d · %3$s</string>
 
     <string name="offline_maps_draft_hint">Pan and zoom the map to frame the area to download.</string>

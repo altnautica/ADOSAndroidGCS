@@ -25,6 +25,9 @@
     <string name="node_fly">Fly</string>
     <string name="node_setup">Setup</string>
     <string name="node_parameters">Parameters</string>
+    <string name="node_no_carried_title">No drone paired</string>
+    <string name="node_no_carried_message">This ground station has no drone to fly yet. Pair one to its radio link.</string>
+    <string name="node_pair_drone">Pair a drone</string>
 
     <string name="tab_overview">Overview</string>
     <string name="tab_carried_drones">Carried drones</string>

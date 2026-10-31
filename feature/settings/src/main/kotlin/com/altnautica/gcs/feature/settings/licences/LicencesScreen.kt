@@ -12,17 +12,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -34,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.LoadingState
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleScaffold
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
@@ -79,24 +72,13 @@ class LicencesViewModel @Inject constructor(@ApplicationContext private val cont
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LicencesRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: LicencesViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    Scaffold(
+    ConsoleScaffold(
+        title = stringResource(R.string.settings_licences),
+        onBack = onBack,
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_licences)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.settings_nav_back))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
-        },
     ) { padding ->
         when (val s = state) {
             NoticesState.Loading -> LoadingState(stringResource(R.string.settings_loading), Modifier.padding(padding))

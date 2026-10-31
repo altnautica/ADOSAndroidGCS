@@ -64,11 +64,12 @@ class CockpitSettingsRepository @Inject constructor(
         )
     }.distinctUntilChanged()
 
-    /** Sets both bands; the critical band is kept below the low band. */
+    /** Sets both bands: low in [BATTERY_LOW_MIN]..[BATTERY_LOW_MAX], critical in [criticalRange] of the low band. */
     suspend fun setBatteryBands(lowPct: Int, criticalPct: Int) = dataStore.edit {
-        val low = lowPct.coerceIn(5, 95)
+        val low = lowPct.coerceIn(BATTERY_LOW_MIN, BATTERY_LOW_MAX)
         it[BATT_LOW] = low
-        it[BATT_CRIT] = criticalPct.coerceIn(1, low - 1)
+        val critical = criticalRange(low)
+        it[BATT_CRIT] = criticalPct.coerceIn(critical.first, critical.last)
     }
 
     suspend fun setAudioCallouts(on: Boolean) = dataStore.edit { it[AUDIO] = on }
@@ -88,6 +89,13 @@ class CockpitSettingsRepository @Inject constructor(
     companion object {
         const val MIN_SPLIT = 0.2f
         const val MAX_SPLIT = 0.8f
+        const val BATTERY_LOW_MIN = 10
+        const val BATTERY_LOW_MAX = 60
+        const val BATTERY_CRITICAL_MIN = 5
+        const val BATTERY_STEP = 5
+
+        /** Critical band range for a given low band: at least one step below it. */
+        fun criticalRange(lowPct: Int): IntRange = BATTERY_CRITICAL_MIN..(lowPct - BATTERY_STEP).coerceAtLeast(BATTERY_CRITICAL_MIN)
         private val BATT_LOW = intPreferencesKey("cockpit.battery.lowPct")
         private val BATT_CRIT = intPreferencesKey("cockpit.battery.criticalPct")
         private val AUDIO = booleanPreferencesKey("cockpit.audio.callouts")

@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="connect_title">Connect</string>
+    <string name="connect_title">Add vehicle</string>
+    <string name="connect_hint_select">Select</string>
+    <plurals name="connect_discovered_count">
+        <item quantity="one">%1$d found</item>
+        <item quantity="other">%1$d found</item>
+    </plurals>
+    <string name="connect_discovery_help">No agents found on this network. Make sure the phone is on the same Wi-Fi as the vehicle or ground station; some access points block discovery.</string>
+    <string name="connect_retry">Retry</string>
     <string name="connect_back">Back</string>
     <string name="connect_discovered">On this network</string>
     <string name="connect_searching">Searching for ADOS nodes…</string>
@@ -29,6 +36,7 @@
     <string name="connect_usb_none">No USB serial device is attached. Plug in the flight controller with an OTG cable.</string>
     <string name="connect_usb_ready">Ready</string>
     <string name="connect_usb_permission">Tap to allow USB access</string>
+    <string name="connect_usb_refresh">Refresh</string>
     <string name="connect_baud">Baud rate</string>
 
     <string name="connect_network">UDP / TCP</string>
@@ -38,6 +46,8 @@
     <string name="connect_listen_port">Listen port</string>
     <string name="connect_port">Port</string>
     <string name="connect_add">Add</string>
+    <string name="connect_udp">UDP</string>
+    <string name="connect_tcp">TCP</string>
 
     <string name="connect_wifi">Ground station Wi-Fi</string>
     <string name="connect_wifi_summary">Join a ground station\'s access point</string>
@@ -49,6 +59,7 @@
     <string name="connect_wifi_rationale_nearby">Joining asks for the nearby Wi-Fi devices permission. It is used only to join this network, never for location.</string>
     <string name="connect_wifi_rationale_location">Android requires the location permission to join a Wi-Fi network. It is used only to join this network.</string>
     <string name="connect_wifi_denied">Permission denied. Allow it in system settings to join from the app.</string>
+    <string name="connect_open_settings">Open settings</string>
 
     <string name="connect_cloud">Cloud sign-in</string>
     <string name="connect_cloud_summary">Reach your drones over the internet with your account</string>

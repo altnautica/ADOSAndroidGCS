@@ -6,6 +6,8 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosThemeId
 import com.altnautica.gcs.core.demo.DemoSettings
 import com.altnautica.gcs.core.link.direct.DirectEndpoint
 import com.altnautica.gcs.core.link.direct.DirectLinkSettings
+import com.altnautica.gcs.core.data.cockpit.AltitudeReference
+import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,10 +52,16 @@ class SettingsViewModel @Inject constructor(
 
     fun setModeCallouts(on: Boolean) = launch { cockpit.setModeCallouts(on) }
 
+    fun setAltitudeReference(ref: AltitudeReference) = launch { cockpit.setAltitudeReference(ref) }
+
+    fun setDensity(density: CockpitDensity) = launch { cockpit.setDensity(density) }
+
+    fun setTelemetryPane(on: Boolean) = launch { cockpit.setTelemetryPane(on) }
+
     /** Moves the low band; the critical band is kept below it by the repository. */
     fun setBatteryLow(pct: Int) = launch {
         val bands = state.value.cockpit.batteryBands
-        cockpit.setBatteryBands(pct, minOf(bands.criticalPct, pct - 1))
+        cockpit.setBatteryBands(pct, bands.criticalPct)
     }
 
     fun setBatteryCritical(pct: Int) = launch {

@@ -1,37 +1,33 @@
 package com.altnautica.gcs.feature.node
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Tune
+import com.altnautica.gcs.core.designsystem.component.console.ConsoleScaffold
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
 import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
 import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryScrollableTabRow
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.EmptyState
@@ -109,7 +104,6 @@ fun NodeDetailRoute(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NodeDetailScreen(
     nodeId: DeviceId,
@@ -128,55 +122,54 @@ fun NodeDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val ready = state as? NodeDetailState.Ready
+    val paired = ready != null && ready.node.reaches.singleOrNull() != Reach.Blocked(BlockReason.NotPaired)
+    val items = if (ready != null && paired) rememberTabItems(ready.node, ready.tabs) else emptyList()
+    var selectedKey by rememberSaveable(nodeId.value) { mutableStateOf(NodeTab.Overview.name) }
+    // A tab that disappears (an extension unloads, the profile changes) resets the selection with it.
+    LaunchedEffect(items.map { it.key }) {
+        if (items.isNotEmpty() && items.none { it.key == selectedKey }) selectedKey = items.first().key
+    }
+    val selectedIndex = items.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0)
     val menu = rememberAdosMenuState()
     var confirmUnpair by rememberSaveable { mutableStateOf(false) }
-    Scaffold(
+    ConsoleScaffold(
+        title = ready?.node?.name ?: nodeId.value,
+        onBack = onBack,
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(ready?.node?.name ?: nodeId.value, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.node_back))
+        tabs = items.map { tabTitle(it) },
+        selectedTab = selectedIndex,
+        onSelectTab = { index -> items.getOrNull(index)?.let { selectedKey = it.key } },
+        actions = {
+            if (ready != null && ready.node.canFly()) {
+                IconButton(onClick = { onFly(ready.node.id) }) {
+                    Icon(Icons.Outlined.SportsEsports, contentDescription = stringResource(R.string.node_fly))
+                }
+            }
+            if (ready != null && NodeTabs.hasFlightController(ready.node)) {
+                IconButton(onClick = { onOpenSetup(ready.node.id) }) {
+                    Icon(Icons.Outlined.Build, contentDescription = stringResource(R.string.node_setup))
+                }
+                IconButton(onClick = { onOpenParams(ready.node.id) }) {
+                    Icon(Icons.Outlined.Tune, contentDescription = stringResource(R.string.node_parameters))
+                }
+            }
+            if (ready != null && NodeTabs.hasAgentLink(ready.node)) {
+                Box(Modifier.adosMenuAnchor(menu)) {
+                    IconButton(onClick = { menu.expanded = true }) {
+                        Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.node_more))
                     }
-                },
-                actions = {
-                    if (ready != null && ready.node.canFly()) {
-                        IconButton(onClick = { onFly(ready.node.id) }) {
-                            Icon(Icons.Outlined.SportsEsports, contentDescription = stringResource(R.string.node_fly))
-                        }
-                    }
-                    if (ready != null && NodeTabs.hasFlightController(ready.node)) {
-                        IconButton(onClick = { onOpenSetup(ready.node.id) }) {
-                            Icon(Icons.Outlined.Build, contentDescription = stringResource(R.string.node_setup))
-                        }
-                        IconButton(onClick = { onOpenParams(ready.node.id) }) {
-                            Icon(Icons.Outlined.Tune, contentDescription = stringResource(R.string.node_parameters))
-                        }
-                    }
-                    if (ready != null && NodeTabs.hasAgentLink(ready.node)) {
-                        Box(Modifier.adosMenuAnchor(menu)) {
-                            IconButton(onClick = { menu.expanded = true }) {
-                                Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.node_more))
-                            }
-                            AdosMenu(
-                                state = menu,
-                                items = listOf(
-                                    AdosMenuItem(
-                                        label = stringResource(R.string.node_unpair),
-                                        icon = Icons.Outlined.LinkOff,
-                                        onClick = { confirmUnpair = true },
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
-            )
+                    AdosMenu(
+                        state = menu,
+                        items = listOf(
+                            AdosMenuItem(
+                                label = stringResource(R.string.node_unpair),
+                                icon = Icons.Outlined.LinkOff,
+                                onClick = { confirmUnpair = true },
+                            ),
+                        ),
+                    )
+                }
+            }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
@@ -189,7 +182,7 @@ fun NodeDetailScreen(
                     action = EmptyStateAction(stringResource(R.string.node_back), onBack),
                     modifier = Modifier.align(Alignment.Center),
                 )
-                is NodeDetailState.Ready -> if (state.node.reaches.singleOrNull() == Reach.Blocked(BlockReason.NotPaired)) {
+                is NodeDetailState.Ready -> if (!paired) {
                     EmptyState(
                         icon = Icons.Outlined.Lock,
                         title = stringResource(R.string.node_unpaired_title),
@@ -198,7 +191,15 @@ fun NodeDetailScreen(
                         modifier = Modifier.align(Alignment.Center),
                     )
                 } else {
-                    NodeBody(state.node, state.tabs, state.vitals, onOpenNode)
+                    Column(Modifier.fillMaxSize()) {
+                        Header(state.node, state.vitals)
+                        TabContent(
+                            node = state.node,
+                            selected = items.getOrNull(selectedIndex),
+                            onOpenNode = onOpenNode,
+                            onPairDrone = { selectedKey = NodeTab.CarriedDrones.name },
+                        )
+                    }
                 }
             }
         }
@@ -251,43 +252,40 @@ private sealed interface TabItem {
 }
 
 @Composable
-private fun NodeBody(
-    node: NodeSummary,
-    tabs: List<NodeTab>,
-    vitals: NodeVitals,
-    onOpenNode: (DeviceId) -> Unit,
-) {
+private fun rememberTabItems(node: NodeSummary, tabs: List<NodeTab>): List<TabItem> {
     val extensionPages by rememberExtensionNodePages(node.id, ExtensionSlots.NODE_DETAIL_TAB)
-    val items: List<TabItem> = tabs.map { TabItem.Builtin(it) } +
+    return tabs.map { TabItem.Builtin(it) } +
         if (NodeTabs.hasAgentLink(node)) extensionPages.map { TabItem.Extension(it) } else emptyList()
-    var selectedKey by rememberSaveable(node.id.value) { mutableStateOf(NodeTab.Overview.name) }
-    val selectedIndex = items.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0)
-    val selected = items.getOrNull(selectedIndex)
+}
 
-    Column(Modifier.fillMaxSize()) {
-        Header(node, vitals)
-        PrimaryScrollableTabRow(selectedTabIndex = selectedIndex, edgePadding = AdosSpacing.S4) {
-            items.forEach { item ->
-                Tab(
-                    selected = item.key == selected?.key,
-                    onClick = { selectedKey = item.key },
-                    text = {
-                        Text(
-                            when (item) {
-                                is TabItem.Builtin -> stringResource(tabLabel(item.tab))
-                                is TabItem.Extension -> item.page.contribution.title ?: item.page.pluginName
-                            },
-                        )
-                    },
-                )
-            }
-        }
-        Box(Modifier.fillMaxSize()) {
-            when (selected) {
-                null -> Unit
-                is TabItem.Extension -> ExtensionNodePage(node = node.id, page = selected.page, modifier = Modifier.fillMaxSize())
-                is TabItem.Builtin -> when (val tab = selected.tab) {
-                    NodeTab.Overview -> OverviewTab(
+@Composable
+private fun tabTitle(item: TabItem): String = when (item) {
+    is TabItem.Builtin -> stringResource(tabLabel(item.tab))
+    is TabItem.Extension -> item.page.contribution.title ?: item.page.pluginName
+}
+
+@Composable
+private fun TabContent(
+    node: NodeSummary,
+    selected: TabItem?,
+    onOpenNode: (DeviceId) -> Unit,
+    onPairDrone: () -> Unit,
+) {
+    Box(Modifier.fillMaxSize()) {
+        when (selected) {
+            null -> Unit
+            is TabItem.Extension -> ExtensionNodePage(node = node.id, page = selected.page, modifier = Modifier.fillMaxSize())
+            is TabItem.Builtin -> when (val tab = selected.tab) {
+                NodeTab.Overview -> if (node.profile == NodeProfile.GroundStation && node.carriedDroneId == null) {
+                    EmptyState(
+                        icon = Icons.Outlined.FlightTakeoff,
+                        title = stringResource(R.string.node_no_carried_title),
+                        message = stringResource(R.string.node_no_carried_message),
+                        action = EmptyStateAction(stringResource(R.string.node_pair_drone), onPairDrone),
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                } else {
+                    OverviewTab(
                         node.id.value,
                         extra = if (node.profile == NodeProfile.Visor) {
                             { VisorOverviewCards(node.id.value) }
@@ -295,13 +293,13 @@ private fun NodeBody(
                             null
                         },
                     )
-                    NodeTab.Capture -> VisorCaptureTab(node.id.value)
-                    NodeTab.Sessions -> VisorSessionsTab(node.id.value)
-                    NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh ->
-                        GroundStationTab(node.id.value, tab, onOpenNode)
-                    NodeTab.Logs -> NodeLogsTab(node.id.value)
-                    NodeTab.Agent -> AgentTab(node.id.value)
                 }
+                NodeTab.Capture -> VisorCaptureTab(node.id.value)
+                NodeTab.Sessions -> VisorSessionsTab(node.id.value)
+                NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh ->
+                    GroundStationTab(node.id.value, tab, onOpenNode)
+                NodeTab.Logs -> NodeLogsTab(node.id.value)
+                NodeTab.Agent -> AgentTab(node.id.value)
             }
         }
     }
@@ -309,14 +307,17 @@ private fun NodeBody(
 
 @Composable
 private fun Header(node: NodeSummary, vitals: NodeVitals) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
         horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
-        verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         StatusChip(StatusLevel.Neutral, stringResource(profileLabel(node.profile)))
         LivenessChip(node.liveness)
-        ReachBadge(node.reaches.firstOrNull())
+        node.reaches.forEach { ReachBadge(it) }
         vitals.batteryPct?.let { StatusChip(StatusLevel.Neutral, stringResource(R.string.node_battery, it)) }
         vitals.modeName?.let { StatusChip(StatusLevel.Neutral, it) }
     }
