@@ -43,6 +43,13 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import com.altnautica.gcs.core.agent.http.AgentEndpoint
+import com.altnautica.gcs.core.agent.http.AgentResult
+import com.altnautica.gcs.core.agent.video.StreamSwitchOutcome
+import com.altnautica.gcs.core.model.StreamDescriptor
+import com.altnautica.gcs.core.model.StreamSwitchKind
+import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -91,6 +98,8 @@ class CockpitViewModelTest {
         open: String = "drone-1",
         services: VehicleServices? = null,
         vehicleDelayMs: Long = 0,
+        streamCatalog: StreamCatalog = mockk(relaxed = true),
+        agentBaseUrl: String? = null,
     ): CockpitViewModel {
         val clock = MonotonicClock { testScheduler.currentTime }
         val dataStore = MemoryPreferences()
@@ -99,7 +108,8 @@ class CockpitViewModelTest {
         every { router.gamepadConnected } returns gamepad
         every { router.events } returns events
         val activator = SkillActivator(clock)
-        return CockpitViewModel(
+        val endpoint = agentBaseUrl?.let { AgentEndpoint(null, it.toHttpUrl(), null) }
+        val vm = CockpitViewModel(
             nodeIdValue = open,
             nodeSources = setOf(object : NodeSource { override val nodes = flowOf(nodes) }),
             vehicles = object : VehicleProvider {
@@ -115,18 +125,54 @@ class CockpitViewModelTest {
             router = router,
             settingsRepo = CockpitSettingsRepository(dataStore),
             videoSelector = VideoSourceSelector(),
-            videoSessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns false },
-            endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns null },
-            streamCatalog = mockk<StreamCatalog>(relaxed = true),
+            videoSessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns (endpoint != null) },
+            endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns endpoint },
+            streamCatalog = streamCatalog,
             announcer = mockk<AlertAnnouncer>(relaxed = true),
             clock = clock,
             activator = activator,
             extensionSkills = mockk<ExtensionSkillContributor> { every { targetActions } returns flowOf(emptyList()) },
         )
+        // The screen-only flows run while collected; keep them hot like a visible cockpit.
+        listOf(
+            vm.status, vm.maxBrightness, vm.canRecord, vm.recordingActive, vm.slots, vm.drawerSkills,
+            vm.modePicker, vm.targetActions, vm.band, vm.strip, vm.minimap,
+        ).forEach { flow -> backgroundScope.launch { flow.collect {} } }
+        return vm
     }
 
     private fun FakeVehicle.beat(armed: Boolean, now: Long) {
         telemetry.heartbeat.value = HeartbeatState(armed, FlightMode(0, "STABILIZE"), vehicleType = 2, autopilot = 3, tMs = now)
+    }
+
+    @Test
+    fun `a later stream pick wins over a slower earlier switch`() = runTest(dispatcher) {
+        val drone = DeviceId("drone-1")
+        val catalog = mockk<StreamCatalog>()
+        every { catalog.streams(any()) } returns flowOf(
+            listOf("cam-a", "cam-b", "cam-c").map { StreamDescriptor(it, "main", "h264", live = true, switchKind = StreamSwitchKind.Switchable) },
+        )
+        coEvery { catalog.switch(drone, "cam-b") } coAnswers {
+            delay(2_000)
+            AgentResult.Ok(StreamSwitchOutcome.Switched)
+        }
+        coEvery { catalog.switch(drone, "cam-c") } coAnswers {
+            delay(100)
+            AgentResult.Ok(StreamSwitchOutcome.Switched)
+        }
+        val vm = vm(listOf(node("drone-1")), vehicle = null, streamCatalog = catalog, agentBaseUrl = "http://10.0.0.2:8080/")
+        runCurrent()
+        assertEquals("cam-a", vm.video.value.selectedStreamId)
+
+        vm.selectStream("cam-b")
+        runCurrent()
+        vm.selectStream("cam-c")
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        assertEquals("cam-c", vm.video.value.selectedStreamId)
+        assertNull(vm.video.value.switchingStreamId)
+        vm.viewModelScope.cancel()
     }
 
     @Test

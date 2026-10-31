@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
@@ -127,15 +126,11 @@ class CredentialVault(
         if (read is Read.Unreadable) throw VaultUnreadableException(read.cause)
     }
 
-    /**
-     * The API key for [id], or null when the node is not paired. Reads memory
-     * after the first load; the first call may block on disk once, so call it
-     * off the main thread (OkHttp interceptors and IO coroutines are fine).
-     */
-    fun apiKey(id: DeviceId): String? = current().nodes[id.value]?.apiKey
+    /** The API key for [id], or null when the node is not paired. Reads memory after the first load. */
+    suspend fun apiKey(id: DeviceId): String? = load().nodes[id.value]?.apiKey
 
-    /** The stored record for [id], or null. Same threading rule as [apiKey]. */
-    fun node(id: DeviceId): NodeCredential? = current().nodes[id.value]
+    /** The stored record for [id], or null. */
+    suspend fun node(id: DeviceId): NodeCredential? = load().nodes[id.value]
 
     /** Insert or replace a node record (keyed by device id). */
     suspend fun putNode(credential: NodeCredential) = mutate {
@@ -202,9 +197,6 @@ class CredentialVault(
 
     /** Remove every secret. */
     suspend fun wipe() = mutate { VaultDocument(installId = it.installId) }
-
-    private fun current(): VaultDocument =
-        document.value ?: runBlocking { load() }
 
     /** The document for reads: the last good one, or empty (not cached) while the store is unreadable. */
     private suspend fun load(): VaultDocument {

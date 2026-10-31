@@ -59,7 +59,7 @@ interface ConfirmActions {
 }
 
 /**
- * The CS-6 confirm sheet: hold, slide or guarded, with altitude stepper and checklist
+ * The confirm sheet: hold, slide or guarded, with altitude stepper and checklist
  * override when they apply. Drawn in the cockpit window so the gamepad button or Enter
  * that holds the confirm keeps reaching the input router. Place it in a full-size box.
  */

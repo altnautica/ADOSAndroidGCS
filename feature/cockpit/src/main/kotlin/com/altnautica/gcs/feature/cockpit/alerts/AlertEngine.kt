@@ -57,7 +57,7 @@ object FcStateDetail {
 
 enum class LinkHealth { None, Ok, Stale, Lost }
 
-/** Cockpit alert rules (CS-7). Pure apart from remembering when each alert first appeared. */
+/** Cockpit alert rules. Pure apart from remembering when each alert first appeared. */
 class AlertEngine {
     private val since = HashMap<String, Long>()
 

@@ -30,7 +30,7 @@ interface BarTraits {
     /** Hidden from the bar when the firmware is known to lack autonomous navigation. */
     val requiresAutonomousNav: Boolean
 
-    /** False when the vehicle is known to lack what the skill needs; the bar then hides it (CS-9 unsupported). */
+    /** False when the vehicle is known to lack what the skill needs; the bar then hides it (unsupported). */
     fun presentFor(ctx: SkillContext): Boolean = true
 }
 
@@ -264,7 +264,7 @@ object KillSkill : BuiltinSkill(
  * Mode presets. A preset names a behaviour, not a firmware mode: each resolves, per
  * [VehicleClass], to the first listed mode the vehicle advertises (a plane's Loiter is
  * LOITER, a hovering VTOL's is QLOITER). A preset with no mode for the vehicle is hidden.
- * [tierMode] fixes the confirm tier (CS-6): Loiter, Brake and Alt hold are tap.
+ * [tierMode] fixes the confirm tier: Loiter, Brake and Alt hold are tap.
  */
 enum class ModePreset(val skillId: String, val labelKey: String, val icon: String, val tierMode: String) {
     Loiter("mode.loiter", "skills.modeLoiter", "my_location", "LOITER"),

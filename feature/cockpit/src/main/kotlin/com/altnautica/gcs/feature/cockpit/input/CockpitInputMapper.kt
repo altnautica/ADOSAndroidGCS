@@ -13,7 +13,7 @@ sealed interface CockpitAction {
     data object TogglePip : CockpitAction
 }
 
-/** Maps cockpit hardware input (CS-8) to actions. Pure, so the whole map is unit-tested. */
+/** Maps cockpit hardware input to actions. Pure, so the whole map is unit-tested. */
 object CockpitInputMapper {
     private val QUICK_SETTINGS_CHORDS = setOf("shift+<", "shift+;")
     private val PALETTE_CHORDS = setOf("ctrl+k", "meta+k")

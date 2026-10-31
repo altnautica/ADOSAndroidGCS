@@ -70,6 +70,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -169,7 +170,7 @@ class CockpitViewModel @AssistedInject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val nodesLoaded: StateFlow<Boolean> = allNodes.map { true }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
 
     val status: StateFlow<CockpitStatus> = combine(node, vehicleNodeId, vehicle, nodesLoaded) { n, vid, v, loaded ->
         when {
@@ -178,7 +179,7 @@ class CockpitViewModel @AssistedInject constructor(
             n == null && loaded -> CockpitStatus.UnknownNode
             else -> CockpitStatus.Connecting
         }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, CockpitStatus.Connecting)
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), CockpitStatus.Connecting)
 
     /** The node whose extensions the cockpit mounts (the flown drone). */
     val extensionNodeId: StateFlow<DeviceId?> = vehicleNodeId
@@ -192,7 +193,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** Screen at full brightness; starts from the settings default. */
     val maxBrightness: StateFlow<Boolean> = combine(_maxBrightness, settings) { override, s -> override ?: s.maxBrightnessDefault }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
 
     fun setMaxBrightness(on: Boolean) {
         _maxBrightness.value = on
@@ -296,10 +297,15 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
+    private var switchJob: Job? = null
+
     fun selectStream(streamId: String) {
         val list = streams.value
         val target = list.firstOrNull { it.id == streamId } ?: return
         val node = (mainSource.value as? VideoSource.AgentWhep)?.node ?: return
+        switchJob?.cancel()
+        switchJob = null
+        switchingStream.value = null
         val previous = video.value.selectedStreamId
         if (target.id == previous) return
         if (target.switchKind == StreamSwitchKind.Concurrent) {
@@ -307,8 +313,9 @@ class CockpitViewModel @AssistedInject constructor(
             return
         }
         switchingStream.value = target.id
-        viewModelScope.launch {
+        switchJob = viewModelScope.launch {
             val result = withTimeoutOrNull(SWITCH_TIMEOUT_MS) { streamCatalog.switch(node, target.id) }
+            ensureActive()
             switchingStream.value = null
             when (result) {
                 is AgentResult.Ok -> selectedStream.value = when (val o = result.value) {
@@ -345,11 +352,11 @@ class CockpitViewModel @AssistedInject constructor(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** True when the current feed can record. */
-    val canRecord: StateFlow<Boolean> = recording.map { it != null }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val canRecord: StateFlow<Boolean> = recording.map { it != null }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
 
     /** True while the current feed records; quick settings read this rather than the whole band. */
     val recordingActive: StateFlow<Boolean> = recording.map { it is RecordingState.Recording }.distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
 
     fun toggleRecording() {
         val src = mainSource.value ?: return
@@ -408,13 +415,13 @@ class CockpitViewModel @AssistedInject constructor(
             val skill = slot.skillId?.let { id -> bar.firstOrNull { it.id == id } }
             SlotUi(slot.index, skill, skill?.let { states[it.id] }, slot.keyChord, slot.gamepadButton)
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /** The flight-mode picker entry, then every bar-eligible skill, with states: the drawer (the cockpit's palette). */
     val drawerSkills: StateFlow<List<SlotUi>> = combine(session.allSkills, session.barSkills, session.states) { all, bar, states ->
         val picker = all.firstOrNull { it.id == SetModeSkill.id }
         (listOfNotNull(picker) + bar).mapIndexed { i, s -> SlotUi(i, s, states[s.id], null, null) }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     val notices: SharedFlow<SkillNotice> = session.notices
 
@@ -457,7 +464,7 @@ class CockpitViewModel @AssistedInject constructor(
         if (!open) return@combine null
         val state = states[SetModeSkill.id]
         ModePickerUi(modeChoices(modes, current), enabled = state?.enabled == true, reasonKey = state?.takeIf { !it.enabled }?.reasonKey)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
 
     fun openModePicker() {
         _modePickerOpen.value = true
@@ -467,7 +474,7 @@ class CockpitViewModel @AssistedInject constructor(
         _modePickerOpen.value = false
     }
 
-    /** Requests [modeName] through the `set-mode` skill; its CS-6 tier decides the confirm. */
+    /** Requests [modeName] through the `set-mode` skill; its risk tier decides the confirm. */
     fun selectMode(modeName: String) {
         _modePickerOpen.value = false
         activate(SetModeSkill.id, mapOf(SkillArgs.TARGET_MODE to modeName))
@@ -478,7 +485,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** Extension target actions for the flown drone, with their states. */
     val targetActions: StateFlow<List<SlotUi>> = combine(extensionSkills.targetActions, session.context) { actions, ctx ->
         actions.mapIndexed { i, a -> SlotUi(i, a, activator.mergedState(ctx.vehicle?.id, a, ctx), null, null) }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /**
      * Runs a target action on a box drawn over the video. [bbox] is normalized to the
@@ -615,7 +622,7 @@ class CockpitViewModel @AssistedInject constructor(
                 recordingStartedAtMs = (r as? RecordingState.Recording)?.startedAtMs,
                 armedSinceMs = a,
             )
-        }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, BandState.Empty)
+        }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), BandState.Empty)
 
     private fun batteryBand(pct: Int?, s: CockpitSettings): BatteryBand = when {
         pct == null -> BatteryBand.Unknown
@@ -685,7 +692,7 @@ class CockpitViewModel @AssistedInject constructor(
                 hdop = gps?.hdop,
             )
         }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, EMPTY_STRIP)
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), EMPTY_STRIP)
 
     /** Minimap vehicle, home and trail, sampled at 2 Hz; the trail keeps points at least 2 m apart. */
     val minimap: StateFlow<MinimapState> = telemetry.flatMapLatest { t ->
@@ -708,7 +715,7 @@ class CockpitViewModel @AssistedInject constructor(
                 trail = trail.toList(),
             )
         }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.Eagerly, MinimapState(null, null, emptyList()))
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), MinimapState(null, null, emptyList()))
 
     private val _minimapSwapped = MutableStateFlow(false)
 
@@ -824,7 +831,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     override fun onCleared() {
         detachInput()
-        stopStreamer()
+        switchJob?.cancel()
         confirm.cancel()
         announcer.shutdown()
     }
@@ -876,6 +883,7 @@ class CockpitViewModel @AssistedInject constructor(
         /** Camera id of the agent's primary stream when no stream tab is selected. */
         private const val PRIMARY_CAMERA = "main"
         private const val SWITCH_TIMEOUT_MS = 3_000L
+        private const val UI_STOP_MS = 5_000L
         private const val TRAIL_MIN_STEP_M = 2f
         private const val TRAIL_MAX_POINTS = 600
         private val EMPTY_STRIP = StripValues(null, null, null, null, null, null, null, null)

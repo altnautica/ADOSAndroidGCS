@@ -60,7 +60,7 @@ import com.altnautica.gcs.feature.cockpit.SlotUi
 /** Window width class of the cockpit. */
 enum class WidthClass { Compact, Medium, Expanded }
 
-/** Slot size per width class (CS-8), scaled up in glove mode. */
+/** Slot size per width class, scaled up in glove mode. */
 @Composable
 fun slotSize(width: WidthClass): Dp {
     val base = when (width) {
@@ -101,7 +101,7 @@ fun gamepadButtonName(button: Int): String = when (button) {
     else -> "B$button"
 }
 
-/** The Skill Bar (CS-5): filled slots in loadout order, then the overflow drawer button. */
+/** The Skill Bar: filled slots in loadout order, then the overflow drawer button. */
 @Composable
 fun SkillBar(
     slots: List<SlotUi>,

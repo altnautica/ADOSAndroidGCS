@@ -69,7 +69,7 @@ import com.altnautica.gcs.feature.cockpit.StickChip
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
 import kotlinx.coroutines.delay
 
-/** Height of the safety band at every density (CS-2). */
+/** Height of the safety band at every density. */
 val SafetyBandHeight = 40.dp
 
 private const val DASH = "—"
@@ -162,7 +162,7 @@ private fun ElapsedChip(icon: ImageVector, startMs: Long, clock: () -> Long, ton
 }
 
 /**
- * The always-visible safety band (CS-2): exit, node and reach, arm, mode, battery,
+ * The always-visible safety band: exit, node and reach, arm, mode, battery,
  * GPS, link, video, stick control, preflight, recording, flight time, Kill.
  */
 @Composable

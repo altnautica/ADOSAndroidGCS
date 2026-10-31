@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.merge
 
 /**
- * The instrument HUD (CS-3) as one canvas. Telemetry is read inside the draw pass
+ * The instrument HUD as one canvas. Telemetry is read inside the draw pass
  * from the per-topic flows' current values; a new sample only bumps a draw-phase
  * counter (at most once per frame), so telemetry never recomposes this composable.
  * Readouts are not interactive: input passes through to the video below.

@@ -10,8 +10,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.shareIn
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -26,13 +28,20 @@ import javax.inject.Singleton
 class AgentStatusRepository @Inject constructor(
     private val clients: AgentClientFactory,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val pollers = ConcurrentHashMap<DeviceId, Flow<NodePoll>>()
+    internal var scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pollers = ConcurrentHashMap<DeviceId, SharedFlow<NodePoll>>()
 
     internal var clock: () -> Long = SystemClock::elapsedRealtime
 
-    fun observe(node: DeviceId): Flow<NodePoll> = pollers.getOrPut(node) {
-        poll(node).shareIn(scope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), replay = 1)
+    /** Nodes with a live poller entry; a poller leaves the map once its last observer has gone. */
+    internal val pollerCount: Int get() = pollers.size
+
+    fun observe(node: DeviceId): Flow<NodePoll> = pollers.computeIfAbsent(node) { id ->
+        lateinit var shared: SharedFlow<NodePoll>
+        shared = poll(id)
+            .onCompletion { pollers.remove(id, shared) }
+            .shareIn(scope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), replay = 1)
+        shared
     }
 
     private fun poll(node: DeviceId): Flow<NodePoll> = flow {

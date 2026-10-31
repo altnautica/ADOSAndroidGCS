@@ -48,8 +48,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -81,6 +83,7 @@ class PlannerViewModel @Inject constructor(
     private var services: VehicleServices? = null
     private var vehicleJob: Job? = null
     private var transferJob: Job? = null
+    private var startJob: Job? = null
 
     init {
         viewModelScope.launch { savedPlans.observeAll().collect { list -> _state.update { it.copy(library = list) } } }
@@ -105,6 +108,10 @@ class PlannerViewModel @Inject constructor(
     fun selectVehicle(nodeId: DeviceId?) {
         if (nodeId == _state.value.nodeId && vehicleJob != null) return
         vehicleJob?.cancel()
+        transferJob?.cancel()
+        transferJob = null
+        startJob?.cancel()
+        startJob = null
         services = null
         _state.update { s ->
             s.copy(
@@ -113,6 +120,7 @@ class PlannerViewModel @Inject constructor(
                 link = if (nodeId == null) VehicleLink.None else VehicleLink.Connecting,
                 vehiclePlan = null,
                 transfer = TransferState.Idle,
+                startSheet = null,
             )
         }
         if (nodeId == null) {
@@ -142,8 +150,8 @@ class PlannerViewModel @Inject constructor(
         combine(t.heartbeat, t.position, t.home, t.gps, svc.firmware) { hb, pos, home, gps, fw -> Snapshot(hb?.armed, hb?.tMs, pos, home, gps?.fix, fw) }
             .combine(t.vfr) { snap, vfr -> snap to vfr?.headingDeg }
             .combine(ticker) { pair, _ -> pair }
-            .collect { (snap, heading) ->
-                val link = VehicleLink.Connected(
+            .map { (snap, heading) ->
+                VehicleLink.Connected(
                     armed = snap.armed,
                     linkFresh = snap.heartbeatMs != null && clock.nowMs() - snap.heartbeatMs <= LINK_FRESH_MS,
                     position = snap.position?.let { GeoPoint(it.latDeg, it.lonDeg) },
@@ -153,6 +161,9 @@ class PlannerViewModel @Inject constructor(
                     gpsFix = snap.fix,
                     homeSlot = snap.firmware != null && snap.firmware != FirmwareFamily.Px4 && snap.firmware != FirmwareFamily.Unknown,
                 )
+            }
+            .distinctUntilChanged()
+            .collect { link ->
                 _state.update { s -> s.copy(link = link, startSheet = s.startSheet?.let { sheet -> refreshChecks(sheet, s.copy(link = link)) }) }
             }
     }
@@ -527,7 +538,7 @@ class PlannerViewModel @Inject constructor(
 
     fun dismissTransfer() = _state.update { if (it.transferring) it else it.copy(transfer = TransferState.Idle) }
 
-    // ── Start mission (CS-6 slide) ───────────────────────────
+    // ── Start mission (slide) ────────────────────────────────
 
     fun openStartMission() {
         val s = _state.value
@@ -546,7 +557,7 @@ class PlannerViewModel @Inject constructor(
         if (!sheet.canSlide) return
         val nodeId = _state.value.nodeId ?: return
         _state.update { it.copy(startSheet = sheet.copy(running = true, error = null)) }
-        viewModelScope.launch {
+        startJob = viewModelScope.launch {
             if (!sheet.armed) {
                 val armed = svc.vehicle.control.run(VehicleCommand.Arm())
                 if (armed != CommandResult.Accepted) {
@@ -621,6 +632,7 @@ class PlannerViewModel @Inject constructor(
     override fun onCleared() {
         vehicleJob?.cancel()
         transferJob?.cancel()
+        startJob?.cancel()
     }
 
     companion object {

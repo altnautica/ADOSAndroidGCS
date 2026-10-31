@@ -31,7 +31,7 @@ sealed interface Selection {
     data class Fence(val id: Long) : Selection
 }
 
-/** Connection to the vehicle the plan is for (CS-9 states). */
+/** Connection to the vehicle the plan is for (states). */
 sealed interface VehicleLink {
     /** No vehicle chosen. */
     data object None : VehicleLink
@@ -82,7 +82,7 @@ sealed interface StartError {
     data class StartRefused(val result: CommandResult) : StartError
 }
 
-/** "Start mission" confirm sheet (CS-6 slide tier). */
+/** "Start mission" confirm sheet (slide tier). */
 data class StartMissionSheet(
     val checks: List<StartCheck>,
     val armed: Boolean,

@@ -43,7 +43,7 @@ class ConnectViewModelTest {
     private val pairing = mockk<PairingService> { every { hasUnsavedClaim(any()) } returns false }
     private val vault = mockk<CredentialVault> {
         every { nodes } returns MutableStateFlow(emptyList())
-        every { node(any()) } returns null
+        coEvery { node(any()) } returns null
     }
     private val direct = mockk<DirectLinkSettings>(relaxed = true) {
         every { usbBaudRate } returns flowOf(57_600)

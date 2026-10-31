@@ -19,7 +19,7 @@ class NodeClients @Inject constructor(private val factory: AgentClientFactory) {
     }
 }
 
-/** What a node page shows when it cannot read the agent (CS-9). */
+/** What a node page shows when it cannot read the agent. */
 sealed interface PageProblem {
     /** The node has no agent link this app can use (not paired, cloud only, offline). */
     data object NoAgentLink : PageProblem

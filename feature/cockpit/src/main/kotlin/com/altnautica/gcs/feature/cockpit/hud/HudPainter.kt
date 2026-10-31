@@ -32,7 +32,7 @@ private const val DASH = "—"
 /** MAV_TYPE_FIXED_WING. */
 private const val MAV_TYPE_FIXED_WING = 1
 
-/** Draws CS-3 instruments from the current telemetry values. Allocation-light: one instance per theme. */
+/** Draws the instruments from the current telemetry values. Allocation-light: one instance per theme. */
 internal class HudPainter(
     private val measurer: TextMeasurer,
     private val colors: AdosColorRoles,

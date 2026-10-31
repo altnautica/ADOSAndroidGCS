@@ -61,7 +61,7 @@ import com.altnautica.gcs.feature.cockpit.skillbar.SkillBar
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillDrawer
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 
-/** Stacking order inside the cockpit (CS-1). */
+/** Stacking order inside the cockpit. */
 private object Z {
     const val VIDEO = 0f
     const val EXT_OVERLAY = 10f
@@ -247,7 +247,7 @@ private fun PortraitLayout(vm: CockpitViewModel, width: WidthClass, bandBar: @Co
     }
 }
 
-/** Video, extension overlay, marks, target designation and HUD, stacked per CS-1. */
+/** Video, extension overlay, marks, target designation and HUD. */
 @Composable
 private fun VideoStage(vm: CockpitViewModel, modifier: Modifier, hudTopInset: Boolean, showHud: Boolean = true) {
     val video by vm.video.collectAsStateWithLifecycle()
@@ -364,7 +364,7 @@ private fun WidgetZones(vm: CockpitViewModel, modifier: Modifier) {
     }
 }
 
-/** Quick settings and the sheets, all drawn in the cockpit window above the flight surface (CS-1 z 50). */
+/** Quick settings and the sheets, all drawn in the cockpit window above the flight surface (z 50). */
 @Composable
 private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
     val preflightOpen by vm.preflightOpen.collectAsStateWithLifecycle()

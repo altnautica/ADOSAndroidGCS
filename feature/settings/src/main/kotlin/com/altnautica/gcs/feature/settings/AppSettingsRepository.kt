@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.map
 /** App-wide appearance preferences. */
 data class AppearanceSettings(
     val theme: AdosThemeId = AdosThemeId.BrandDark,
-    /** Touch targets ×1.25 for gloved hands (CS-8). */
+    /** Touch targets ×1.25 for gloved hands. */
     val gloveMode: Boolean = false,
 )
 

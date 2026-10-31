@@ -36,10 +36,10 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.node.R
 import kotlinx.coroutines.delay
 
-/** Placeholder text for an unknown value (CS-9: never zero). */
+/** Placeholder text for an unknown value (never zero). */
 const val DASH = "—"
 
-/** CS-9 state for a page that cannot read its agent. */
+/** State for a page that cannot read its agent. */
 @Composable
 fun ProblemState(problem: PageProblem, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     when (problem) {

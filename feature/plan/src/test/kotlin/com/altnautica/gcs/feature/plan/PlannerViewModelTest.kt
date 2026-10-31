@@ -449,6 +449,27 @@ class PlannerViewModelTest {
     }
 
     @Test
+    fun `switching vehicle cancels an in-flight upload`() = runTest {
+        withViewModel { vm ->
+            connect(vm)
+            vm.onMapTap(a)
+            vm.onMapTap(b)
+            val gate = CompletableDeferred<Unit>()
+            mission.gate = gate
+            vm.upload()
+            assertTrue(vm.state.value.transferring)
+
+            vm.selectVehicle(DeviceId("other-vehicle"))
+            gate.complete(Unit)
+            runCurrent()
+
+            assertEquals(TransferState.Idle, vm.state.value.transfer)
+            assertNull(vm.state.value.vehiclePlan)
+            assertTrue(mission.uploads.isEmpty())
+        }
+    }
+
+    @Test
     fun `failed fence upload stops the sequence and names the list`() = runTest {
         withViewModel { vm ->
             connect(vm)

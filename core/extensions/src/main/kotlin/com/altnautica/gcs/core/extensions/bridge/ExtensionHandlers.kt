@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.extensions.data.WriteOutcome
 import com.altnautica.gcs.core.extensions.marks.CockpitMarksParser
 import com.altnautica.gcs.core.extensions.marks.CockpitMarksStore
 import com.altnautica.gcs.core.extensions.mission.ExtensionMissionPort
+import com.altnautica.gcs.core.extensions.ui.displayLabel
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Vehicle
@@ -20,9 +21,12 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
@@ -99,9 +103,10 @@ class ExtensionHandlersFactory @Inject constructor(
         val h = HashMap<String, BridgeHandler>()
 
         h["ping"] = { ok() }
-        // No extension locale bundles reach this app; the key is returned as-is.
+        // No extension locale bundles reach this app; the key is rendered as readable words.
         h["i18n.t"] = { args ->
-            JsonPrimitive(args.string("key") ?: throw BridgeException("schema_invalid", "i18n.t requires a string key"))
+            val key = args.string("key") ?: throw BridgeException("schema_invalid", "i18n.t requires a string key")
+            JsonPrimitive(displayLabel(key, key))
         }
 
         h["notify"] = { args ->
@@ -129,6 +134,8 @@ class ExtensionHandlersFactory @Inject constructor(
                 val job = scope.launch {
                     vehicles.vehicle(node)
                         .flatMapLatest { v -> v?.let { TelemetryTopics.flow(topic, it.telemetry) } ?: emptyFlow() }
+                        .conflate()
+                        .transform { emit(it); delay(TELEMETRY_INTERVAL_MS) }
                         .collect { postEvent(method, cap, it) }
                 }
                 telemetrySubs[topic] = { job.cancel() }
@@ -441,5 +448,8 @@ class ExtensionHandlersFactory @Inject constructor(
         const val RATE_LIMITED = "command rate limit exceeded"
         const val MAX_EVENT_PAYLOAD_BYTES = 64 * 1024
         private const val VEHICLE_WAIT_MS = 1_000L
+
+        /** Vehicle telemetry reaches an extension at most once per this interval (latest value wins). */
+        private const val TELEMETRY_INTERVAL_MS = 100L
     }
 }

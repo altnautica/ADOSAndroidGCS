@@ -49,7 +49,7 @@ private const val CRITICAL_HALF_PERIOD_MS = 125L
 private const val WARNING_HALF_PERIOD_MS = 250L
 
 /**
- * Alert stack under the safety band (CS-7). The border carries motion; the text never
+ * Alert stack under the safety band. The border carries motion; the text never
  * flashes; each level has its own icon and label. Reduced motion stops all flashing.
  */
 @Composable

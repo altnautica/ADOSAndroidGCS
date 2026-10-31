@@ -35,7 +35,7 @@ import com.altnautica.gcs.feature.cockpit.SheetBackHandler
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonText
 
-/** One row of the flight-mode picker: a mode the vehicle advertises and its CS-6 confirm tier. */
+/** One row of the flight-mode picker: a mode the vehicle advertises and its confirm tier. */
 data class ModeChoice(val name: String, val current: Boolean, val gesture: ConfirmGesture)
 
 /** The open picker; [enabled] and [reasonKey] come from the `set-mode` skill state. */

@@ -10,7 +10,7 @@ import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
 
-/** What the cockpit can show for the requested node (CS-9). */
+/** What the cockpit can show for the requested node. */
 sealed interface CockpitStatus {
     /** The node is not known to any link source. */
     data object UnknownNode : CockpitStatus
@@ -25,7 +25,7 @@ sealed interface CockpitStatus {
     data object Ready : CockpitStatus
 }
 
-/** Reach badge (CS-2). */
+/** Reach badge. */
 enum class ReachBadge { Direct, Lan, ViaGround, Cloud, PhoneRadio, Blocked }
 
 fun Reach.badge(): ReachBadge = when (this) {
@@ -37,7 +37,7 @@ fun Reach.badge(): ReachBadge = when (this) {
     is Reach.Blocked -> ReachBadge.Blocked
 }
 
-/** Stick-control chip state (CS-2). */
+/** Stick-control chip state. */
 sealed interface StickChip {
     /** No gamepad attached: the chip is hidden. */
     data object NoGamepad : StickChip
@@ -99,7 +99,7 @@ data class SlotUi(
     val gamepadButton: Int?,
 )
 
-/** Video sources for the main feed and picture-in-picture, plus the stream tabs (CS-11). */
+/** Video sources for the main feed and picture-in-picture, plus the stream tabs. */
 data class VideoUi(
     val main: VideoSource?,
     val pip: VideoSource?,
@@ -109,7 +109,7 @@ data class VideoUi(
     val switchingStreamId: String?,
 )
 
-/** CS-4 telemetry strip values, sampled at 2 Hz. Null fields render as a dash. */
+/** Telemetry strip values, sampled at 2 Hz. Null fields render as a dash. */
 data class StripValues(
     val homeDistanceM: Float?,
     val homeBearingDeg: Float?,

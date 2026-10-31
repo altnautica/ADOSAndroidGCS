@@ -57,7 +57,7 @@ import kotlin.math.roundToInt
 
 private const val DASH = "—"
 
-/** Stream tabs under the band (CS-11); shown only with more than one stream. */
+/** Stream tabs under the band; shown only with more than one stream. */
 @Composable
 fun StreamTabs(
     streams: List<StreamDescriptor>,
@@ -102,7 +102,7 @@ fun StreamTabs(
     }
 }
 
-/** CS-4 telemetry strip: distance and bearing home, climb, throttle, waypoint, satellites/HDOP. */
+/** Telemetry strip: distance and bearing home, climb, throttle, waypoint, satellites/HDOP. */
 @Composable
 fun TelemetryStrip(values: StripValues, modifier: Modifier = Modifier, vertical: Boolean = false) {
     val items = listOf(

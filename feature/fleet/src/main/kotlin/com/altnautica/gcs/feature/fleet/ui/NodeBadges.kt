@@ -28,7 +28,7 @@ import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.feature.fleet.R
 
-/** CS-2 reach badge: `DIRECT` / `LAN` / `VIA GROUND` / `CLOUD` / `PHONE RADIO`, or why the node is blocked. */
+/** Reach badge: `DIRECT` / `LAN` / `VIA GROUND` / `CLOUD` / `PHONE RADIO`, or why the node is blocked. */
 @Composable
 fun ReachBadge(reach: Reach?, modifier: Modifier = Modifier) {
     val level = when (reach) {
