@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.logs
+package com.altnautica.gcs.core.flightlog
 
 import android.content.Context
 import android.util.Log
@@ -26,7 +26,7 @@ import javax.inject.Singleton
 /**
  * Records raw MAVLink frames to `.tlog` files: sequential records of an 8-byte
  * big-endian timestamp (microseconds since the epoch) followed by one MAVLink
- * frame, the common ground-station layout read by [com.altnautica.gcs.feature.logs.tlog.TlogReader].
+ * frame, the common ground-station layout read by [com.altnautica.gcs.core.flightlog.tlog.TlogReader].
  *
  * [FlightSessionTracker] starts one [TlogRecording] per armed period of each
  * vehicle and feeds it every frame from that vehicle's link. Files land in the

@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.logs
+package com.altnautica.gcs.core.flightlog
 
 import com.altnautica.gcs.core.database.FlightSessionDao
 import com.altnautica.gcs.core.database.FlightSessionEntity
@@ -30,7 +30,7 @@ import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.model.Vfr
 import com.altnautica.gcs.core.model.VibrationState
 import com.altnautica.gcs.core.model.WindState
-import com.altnautica.gcs.feature.logs.tlog.TlogReader
+import com.altnautica.gcs.core.flightlog.tlog.TlogReader
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow

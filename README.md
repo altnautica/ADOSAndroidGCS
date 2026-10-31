@@ -157,7 +157,6 @@ Reusable libraries from the ADOS Drone Agent, published on crates.io. Versioning
 | [`ados-mavlink-tunnel`](https://crates.io/crates/ados-mavlink-tunnel) | Send large messages over MAVLink TUNNEL frames with chunking and bounded reassembly. | [docs.rs](https://docs.rs/ados-mavlink-tunnel) |
 | [`ados-display-driver`](https://crates.io/crates/ados-display-driver) | Small-display output on Linux: SSD1306/SH1106 OLED over I2C, pixel packers and a framebuffer writer. | [docs.rs](https://docs.rs/ados-display-driver) |
 | [`ados-hmi`](https://crates.io/crates/ados-hmi) | Front-panel input: touchscreen calibration and gestures, button presses and rotary encoders. | [docs.rs](https://docs.rs/ados-hmi) |
-| [`ados-term`](https://crates.io/crates/ados-term) | Full-screen terminal toolkit for installers and wizards: themed frames, raw tty backends, live step progress. | [docs.rs](https://docs.rs/ados-term) |
 <!-- /ados-family:crates -->
 
 ## Link families

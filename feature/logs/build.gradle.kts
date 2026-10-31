@@ -8,6 +8,7 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.designsystem)
     implementation(projects.core.database)
+    implementation(projects.core.flightlog)
     implementation(projects.core.mavlink)
     implementation(projects.core.link)
     implementation(projects.core.map)

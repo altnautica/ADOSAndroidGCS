@@ -4,7 +4,7 @@ import com.altnautica.gcs.core.link.vehicle.MavlinkVehicle
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Vehicle
-import com.altnautica.gcs.feature.logs.FlightSessionTracker
+import com.altnautica.gcs.core.flightlog.FlightSessionTracker
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope

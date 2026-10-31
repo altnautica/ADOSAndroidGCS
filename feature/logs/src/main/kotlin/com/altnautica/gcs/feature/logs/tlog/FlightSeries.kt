@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.logs.tlog
 
+import com.altnautica.gcs.core.flightlog.tlog.TlogReader
 import com.altnautica.gcs.core.mavlink.MavlinkFrameParser
 import com.altnautica.gcs.core.mavlink.messages.GlobalPositionInt
 import com.altnautica.gcs.core.mavlink.messages.Heartbeat

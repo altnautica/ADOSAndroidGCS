@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.logs.tlog
+package com.altnautica.gcs.core.flightlog.tlog
 
 import java.io.DataInputStream
 import java.io.EOFException

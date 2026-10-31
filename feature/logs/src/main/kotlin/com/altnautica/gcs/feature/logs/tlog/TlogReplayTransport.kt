@@ -1,5 +1,7 @@
 package com.altnautica.gcs.feature.logs.tlog
 
+import com.altnautica.gcs.core.flightlog.tlog.TlogReader
+import com.altnautica.gcs.core.flightlog.tlog.TlogFormatException
 import com.altnautica.gcs.core.model.MavlinkByteTransport
 import com.altnautica.gcs.core.model.TransportState
 import com.altnautica.gcs.core.model.WriteResult

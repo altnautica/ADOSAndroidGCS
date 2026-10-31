@@ -114,6 +114,7 @@ dependencies {
     implementation(projects.core.skills)
     implementation(projects.core.extensions)
     implementation(projects.core.cloud)
+    implementation(projects.core.flightlog)
     implementation(projects.radio.rx)
     implementation(projects.radio.usb)
     implementation(projects.feature.connect)

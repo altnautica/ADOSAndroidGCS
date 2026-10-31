@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.logs
+package com.altnautica.gcs.core.flightlog
 
 import android.util.Log
 import com.altnautica.gcs.core.database.FlightSessionDao
