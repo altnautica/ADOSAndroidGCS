@@ -3,7 +3,7 @@
     <string name="plan_untitled">Untitled plan</string>
     <string name="plan_pair_label">%1$s · %2$s</string>
     <string name="plan_unsaved">Unsaved changes</string>
-    <string name="plan_map_description">Mission map. Tap to add, drag to move, long-press a waypoint for more actions.</string>
+    <string name="plan_map_description">Mission map. Tap to add, drag to move, long-press for more actions.</string>
 
     <!-- Tools -->
     <string name="plan_tool_waypoint">Waypoints</string>
@@ -197,7 +197,6 @@
         <item quantity="one">Altitude profile: %1$d item, highest %2$d m, lowest %3$d m</item>
         <item quantity="other">Altitude profile: %1$d items, highest %2$d m, lowest %3$d m</item>
     </plurals>
-    <string name="plan_profile_empty">Add waypoints to see the altitude profile.</string>
 
     <!-- Library -->
     <string name="plan_library_title">Plan library</string>
@@ -230,4 +229,72 @@
     <string name="plan_msg_survey_empty">The survey outline produced no waypoints.</string>
     <string name="plan_msg_vehicle_empty">The vehicle has no mission stored.</string>
     <string name="plan_msg_download_partial">Mission downloaded; the %1$s could not be read.</string>
+
+    <!-- Editing guards, validation, verify and stats -->
+    <string name="plan_discard_title">Discard unsaved changes?</string>
+    <string name="plan_discard_message">The open plan has edits that are not saved. They are lost if you continue.</string>
+    <string name="plan_discard_confirm">Discard</string>
+    <string name="plan_delete_saved_title">Delete %1$s?</string>
+    <string name="plan_delete_saved_message">The plan is removed from this device. This cannot be undone.</string>
+    <string name="plan_delete_saved_confirm">Delete</string>
+    <string name="plan_terrain_hint">Needs terrain data on the vehicle; the profile shows the altitude above the mission\'s terrain reference, not ground clearance</string>
+    <string name="plan_verifying">Verifying %1$s</string>
+    <string name="plan_error_verify">the %1$s read back from the vehicle differs from what was sent</string>
+    <string name="plan_retry">Retry</string>
+    <string name="plan_issues_title">Before upload</string>
+    <string name="plan_issues_blocking">Fix the blocking issues to upload</string>
+    <string name="plan_issue_empty">The plan is empty</string>
+    <string name="plan_issue_no_takeoff">The mission does not start with a takeoff</string>
+    <string name="plan_issue_no_end">The mission does not end with a land or return to launch</string>
+    <plurals name="plan_issue_alt_high">
+        <item quantity="one">%1$d item is above 120 m relative</item>
+        <item quantity="other">%1$d items are above 120 m relative</item>
+    </plurals>
+    <plurals name="plan_issue_outside_fence">
+        <item quantity="one">%1$d item is outside the inclusion fence</item>
+        <item quantity="other">%1$d items are outside the inclusion fence</item>
+    </plurals>
+    <plurals name="plan_issue_inside_exclusion">
+        <item quantity="one">%1$d item is inside an exclusion zone</item>
+        <item quantity="other">%1$d items are inside an exclusion zone</item>
+    </plurals>
+    <string name="plan_item_shoot">Take a photo</string>
+    <string name="plan_item_speed_type">Speed type</string>
+    <string name="plan_speed_airspeed">Airspeed</string>
+    <string name="plan_speed_groundspeed">Ground speed</string>
+    <string name="plan_speed_climb">Climb</string>
+    <string name="plan_speed_descent">Descent</string>
+    <string name="plan_stats_distance_km">%1$.2f km</string>
+    <string name="plan_stats_distance_m">%1$d m</string>
+    <plurals name="plan_stats_items">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <string name="plan_stats_max_alt">max %1$d m</string>
+
+    <!-- Planner layout, controller and long-press -->
+    <string name="plan_back">Back</string>
+    <string name="plan_action_undo">Undo</string>
+    <string name="plan_action_redo">Redo</string>
+    <string name="plan_action_zoom_in">Zoom in</string>
+    <string name="plan_action_zoom_out">Zoom out</string>
+    <string name="plan_action_inspector">Show or hide the editor panel</string>
+    <string name="plan_rename_title">Rename plan</string>
+    <string name="plan_rename_label">Plan name</string>
+    <string name="plan_rename_confirm">Rename</string>
+    <string name="plan_rename_action">Rename plan</string>
+    <string name="plan_vehicle_action">Choose the vehicle for this plan</string>
+    <string name="plan_profile_expand">Expand altitude profile</string>
+    <string name="plan_profile_collapse">Collapse altitude profile</string>
+    <string name="plan_longpress_add_waypoint">Add waypoint here</string>
+    <string name="plan_longpress_add_rally">Add rally point here</string>
+    <string name="plan_longpress_survey_start">Set survey start here</string>
+    <string name="plan_longpress_survey_corner">Add survey corner here</string>
+    <string name="plan_hint_place">Place</string>
+    <string name="plan_hint_actions">Actions</string>
+    <string name="plan_hint_move">Hold to move</string>
+    <string name="plan_hint_waypoints">Waypoints</string>
+    <string name="plan_hint_zoom">Zoom</string>
+    <string name="plan_hint_menu">Menu</string>
+    <string name="plan_tools_description">Editing tools</string>
 </resources>

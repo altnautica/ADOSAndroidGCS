@@ -19,7 +19,7 @@ import com.altnautica.gcs.feature.plan.model.PlanCommand
 import com.altnautica.gcs.feature.plan.survey.SurveyMode
 import kotlin.math.roundToInt
 
-/** Editor column: tool hint, selection or tool editor, vehicle transfer and altitude profile. */
+/** Inspector body: tool hint, then the selection's editor or the active tool's settings. */
 @Composable
 internal fun PlannerPanel(state: PlannerUiState, actions: PlannerActions) {
     val colors = AdosTheme.colors
@@ -36,8 +36,6 @@ internal fun PlannerPanel(state: PlannerUiState, actions: PlannerActions) {
             else -> DefaultsPanel(state, actions)
         }
     }
-    TransferBar(state, actions)
-    AltitudeProfile(state)
 }
 
 @Composable

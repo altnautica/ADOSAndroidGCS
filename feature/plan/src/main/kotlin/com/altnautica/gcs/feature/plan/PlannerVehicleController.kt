@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.plan
 
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
+import com.altnautica.gcs.core.link.mission.MissionError
 import com.altnautica.gcs.core.link.mission.MissionItem
 import com.altnautica.gcs.core.link.mission.MissionResult
 import com.altnautica.gcs.core.link.mission.MissionTransfer
@@ -22,6 +23,7 @@ import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.feature.plan.model.MissionPlan
 import com.altnautica.gcs.feature.plan.model.MissionWire
+import com.altnautica.gcs.feature.plan.model.MissionVerify
 import com.altnautica.gcs.feature.plan.model.PlanHome
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -114,7 +116,7 @@ internal class PlannerVehicleController(
                 delay(1_000)
             }
         }
-        combine(t.heartbeat, t.position, t.home, t.gps, svc.firmware) { hb, pos, home, gps, fw -> Snapshot(hb?.armed, hb?.tMs, pos, home, gps?.fix, fw) }
+        combine(t.heartbeat, t.position, t.home, t.gps, svc.firmware) { hb, pos, home, gps, fw -> Snapshot(hb?.armed, hb?.tMs, hb?.vehicleType, pos, home, gps?.fix, fw) }
             .combine(t.vfr) { snap, vfr -> snap to vfr?.headingDeg }
             .combine(ticker) { pair, _ -> pair }
             .map { (snap, heading) ->
@@ -127,6 +129,7 @@ internal class PlannerVehicleController(
                     homeAltMslM = snap.home?.altMslM,
                     gpsFix = snap.fix,
                     homeSlot = snap.firmware != null && snap.firmware != FirmwareFamily.Px4 && snap.firmware != FirmwareFamily.Unknown,
+                    vehicleType = snap.vehicleType,
                 )
             }
             .distinctUntilChanged()
@@ -138,6 +141,7 @@ internal class PlannerVehicleController(
     private data class Snapshot(
         val armed: Boolean?,
         val heartbeatMs: Long?,
+        val vehicleType: Int?,
         val position: PositionFix?,
         val home: HomePosition?,
         val fix: GpsFix?,
@@ -146,11 +150,16 @@ internal class PlannerVehicleController(
 
     // ── Vehicle transfer ─────────────────────────────────────
 
-    /** Uploads mission, then fence, then rally; an empty fence or rally list clears it on the vehicle. */
+    /**
+     * Uploads mission, then fence, then rally (an empty fence or rally list clears it on the
+     * vehicle), then reads each list back and compares it with what was sent. The plan counts
+     * as on the vehicle only when every list matches. Blocking plan issues stop the upload.
+     */
     fun upload() {
         val svc = services ?: return
-        if (state.value.transferring) return
-        val plan = state.value.plan
+        val s = state.value
+        if (s.transferring || s.issues.any { it.kind.blocking }) return
+        val plan = s.plan
         val wire = MissionWire.toWire(plan, homeSlot())
         runTransfer(svc, TransferDirection.Upload) {
             val steps = listOf(MissionType.Mission to wire.mission, MissionType.Fence to wire.fence, MissionType.Rally to wire.rally)
@@ -158,6 +167,17 @@ internal class PlannerVehicleController(
                 val result = if (items.isEmpty() && type != MissionType.Mission) svc.mission.clear(type) else svc.mission.upload(type, items)
                 if (result is MissionResult.Failure) {
                     state.update { it.copy(transfer = TransferState.Failed(TransferDirection.Upload, type, result.error)) }
+                    return@runTransfer
+                }
+            }
+            for ((type, sent) in steps) {
+                state.update { it.copy(transfer = TransferState.Verifying(type)) }
+                val error = when (val readBack = svc.mission.download(type)) {
+                    is MissionResult.Failure -> readBack.error
+                    is MissionResult.Success -> if (MissionVerify.matches(sent, readBack.value.items)) null else MissionError.VerifyMismatch(type)
+                }
+                if (error != null) {
+                    state.update { it.copy(transfer = TransferState.Failed(TransferDirection.Upload, type, error)) }
                     return@runTransfer
                 }
             }

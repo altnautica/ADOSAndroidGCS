@@ -88,7 +88,7 @@ internal class MapController(private val density: Float) {
                 true
             }
             m.addOnCameraIdleListener { state.onCameraIdle(m) }
-            state.attach(m)
+            state.attach(m, this)
             applyFollow()
             requestedStyle?.let { loadStyle(m, it) }
         }
@@ -98,6 +98,7 @@ internal class MapController(private val density: Float) {
         handler.removeCallbacks(longPress)
         followCamera.reset()
         mapView?.setOnTouchListener(null)
+        state.detach()
         mapView = null
         map = null
         style = null
@@ -198,6 +199,25 @@ internal class MapController(private val density: Float) {
             }
         }
         return best
+    }
+
+    /** The interactive point under the view centre (the controller cursor). */
+    internal fun hitTestCenter(): InteractivePoint? {
+        val m = map ?: return null
+        return hitTest(m.width / 2f, m.height / 2f)
+    }
+
+    /** A tap at the view centre, routed like a touch tap. */
+    fun tapCenter() {
+        val m = map ?: return
+        val cb = callbacks ?: return
+        val hit = if (interactive && mode == AdosMapMode.Full) hitTestCenter() else null
+        if (hit != null && cb.onFeatureClick != null) {
+            cb.onFeatureClick.invoke(hit.ref)
+            return
+        }
+        val target = m.cameraPosition.target ?: return
+        cb.onMapClick?.invoke(GeoPoint(target.latitude, target.longitude))
     }
 
     private fun onTouch(event: MotionEvent): Boolean {

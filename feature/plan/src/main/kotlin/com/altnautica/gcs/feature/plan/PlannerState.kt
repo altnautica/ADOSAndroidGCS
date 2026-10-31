@@ -6,6 +6,7 @@ import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.mission.TransferDirection
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.MapBasemap
+import com.altnautica.gcs.core.map.MapFeatureRef
 import com.altnautica.gcs.core.map.MapProvider
 import com.altnautica.gcs.core.map.PmtilesPack
 import com.altnautica.gcs.core.model.CommandResult
@@ -16,6 +17,9 @@ import com.altnautica.gcs.feature.plan.io.PlanFileFormat
 import com.altnautica.gcs.feature.plan.io.PlanFormatException
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
 import com.altnautica.gcs.feature.plan.model.MissionPlan
+import com.altnautica.gcs.feature.plan.model.MissionValidator
+import com.altnautica.gcs.feature.plan.model.PlanIssue
+import com.altnautica.gcs.feature.plan.model.PlanStats
 import com.altnautica.gcs.feature.plan.survey.SurveyPlan
 import com.altnautica.gcs.feature.plan.survey.SurveySettings
 
@@ -53,6 +57,8 @@ sealed interface VehicleLink {
         val gpsFix: GpsFix?,
         /** ArduPilot keeps home in mission slot 0; PX4 does not. */
         val homeSlot: Boolean,
+        /** HEARTBEAT `type` (MAV_TYPE); null before the first heartbeat. */
+        val vehicleType: Int? = null,
     ) : VehicleLink
 }
 
@@ -61,6 +67,9 @@ sealed interface TransferState {
     data object Idle : TransferState
 
     data class Running(val direction: TransferDirection, val type: MissionType, val done: Int, val total: Int) : TransferState
+
+    /** Upload finished; reading [type] back to compare it with what was sent. */
+    data class Verifying(val type: MissionType) : TransferState
 
     data class Done(val direction: TransferDirection, val itemCount: Int) : TransferState
 
@@ -124,11 +133,29 @@ sealed interface PlannerMessage {
     data class DownloadPartial(val failed: MissionType) : PlannerMessage
 }
 
+/** An action that drops unsaved edits; asked for first while the plan is dirty. */
+sealed interface DiscardAction {
+    data object New : DiscardAction
+
+    data class Load(val id: String) : DiscardAction
+
+    data object Import : DiscardAction
+
+    /** Leaving the planner. */
+    data object Leave : DiscardAction
+}
+
+/** A feature being dragged: drawn at [point] until the drag ends and commits once. */
+data class DragPreview(val ref: MapFeatureRef, val point: GeoPoint)
+
 data class PlannerUiState(
     val plan: MissionPlan = MissionPlan(),
     val name: String = "",
     val savedId: String? = null,
     val dirty: Boolean = false,
+    val canUndo: Boolean = false,
+    val canRedo: Boolean = false,
+    val dragPreview: DragPreview? = null,
     val selection: Selection? = null,
     val tool: EditTool = EditTool.Waypoint,
     val defaultAltM: Float = 30f,
@@ -146,10 +173,18 @@ data class PlannerUiState(
     val nodes: List<NodeSummary> = emptyList(),
     val link: VehicleLink = VehicleLink.None,
     val transfer: TransferState = TransferState.Idle,
-    /** The plan as last uploaded to or downloaded from the vehicle. */
+    /** The plan as last uploaded (and read back) or downloaded from the vehicle. */
     val vehiclePlan: MissionPlan? = null,
     val confirmReplaceWithDownload: Boolean = false,
     val library: List<SavedPlanEntity> = emptyList(),
+    /** A discarding action waiting for the operator's confirm. */
+    val pendingDiscard: DiscardAction? = null,
+    /** One-shot: the screen opens the import file picker, then calls `importPickerShown`. */
+    val pickImport: Boolean = false,
+    /** One-shot: leaving was confirmed; the screen pops, then calls `leaveHandled`. */
+    val leaveApproved: Boolean = false,
+    /** A library plan waiting for the delete confirm. */
+    val pendingDelete: SavedPlanEntity? = null,
     val startSheet: StartMissionSheet? = null,
     /** Set once the mission started; the screen routes to the cockpit and clears it. */
     val missionStartedFor: DeviceId? = null,
@@ -160,5 +195,14 @@ data class PlannerUiState(
             vehiclePlan.items == plan.items &&
             vehiclePlan.fence == plan.fence &&
             vehiclePlan.rally == plan.rally
-    val transferring: Boolean get() = transfer is TransferState.Running
+    val transferring: Boolean get() = transfer is TransferState.Running || transfer is TransferState.Verifying
+
+    /** The plan as drawn: [plan] with an active drag applied. */
+    val displayPlan: MissionPlan get() = dragPreview?.applyTo(plan) ?: plan
+
+    /** Pre-upload findings for the current plan. */
+    val issues: List<PlanIssue>
+        get() = MissionValidator.validate(plan, MissionValidator.takeoffExpected((link as? VehicleLink.Connected)?.vehicleType))
+
+    val stats: PlanStats get() = PlanStats.of(plan)
 }

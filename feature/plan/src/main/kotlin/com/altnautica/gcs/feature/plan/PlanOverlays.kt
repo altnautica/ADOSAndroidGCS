@@ -4,8 +4,6 @@ import com.altnautica.gcs.core.map.AreaKind
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.LineKind
 import com.altnautica.gcs.core.map.MapCircle
-import com.altnautica.gcs.core.map.MapFeatureRef
-import com.altnautica.gcs.core.map.MapFeatureType
 import com.altnautica.gcs.core.map.MapHandle
 import com.altnautica.gcs.core.map.MapLine
 import com.altnautica.gcs.core.map.MapOverlays
@@ -53,7 +51,7 @@ sealed interface HandleTarget {
 
 /** Map overlays for the planner state. */
 fun PlannerUiState.toOverlays(): MapOverlays {
-    val plan = plan
+    val plan = displayPlan
     val selectedItem = (selection as? Selection.Item)?.id
     val selectedRally = (selection as? Selection.Rally)?.id
     val selectedFence = (selection as? Selection.Fence)?.id
@@ -121,18 +119,3 @@ fun PlannerUiState.toOverlays(): MapOverlays {
 
 /** Home marker position: the plan home, else the vehicle's. */
 fun PlannerUiState.homeMarker(): GeoPoint? = plan.home?.position ?: (link as? VehicleLink.Connected)?.home
-
-/** Routes a map feature event to the planner. */
-internal fun PlannerViewModel.onFeatureMoved(ref: MapFeatureRef, point: GeoPoint) {
-    when (ref.type) {
-        MapFeatureType.Waypoint -> ref.id.toLongOrNull()?.let { moveItem(it, point) }
-        MapFeatureType.Rally -> ref.id.toLongOrNull()?.let { moveRally(it, point) }
-        MapFeatureType.Handle -> when (val target = HandleTarget.parse(ref.id)) {
-            is HandleTarget.SurveyVertex -> moveSurveyVertex(target.index, point)
-            is HandleTarget.DraftVertex -> moveFenceDraftVertex(target.index, point)
-            is HandleTarget.FenceVertex -> moveFenceVertex(target.zoneId, target.index, point)
-            is HandleTarget.FenceCenter -> moveFenceVertex(target.zoneId, 0, point)
-            null -> Unit
-        }
-    }
-}

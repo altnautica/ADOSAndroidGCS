@@ -305,4 +305,23 @@ class AdosInputRouterTest {
         r.onMotion(motion(1, MotionEvent.AXIS_HAT_Y to 1f))
         assertEquals(listOf(UiInput.Activate(true), UiInput.Activate(false), UiInput.Direction(NavDirection.Down)), ui)
     }
+
+    @Test
+    fun `analog triggers read 0 to 1 and fall back to brake and gas`() = runTest {
+        val r = router(capture = null)
+        r.onMotion(motion(1, MotionEvent.AXIS_BRAKE to 0.5f, MotionEvent.AXIS_GAS to 1f))
+        assertEquals(0.5f, r.axes.value.leftTrigger, 0.001f)
+        assertEquals(1f, r.axes.value.rightTrigger, 0.001f)
+    }
+
+    @Test
+    fun `suppressed stick navigation keeps the stick reading but moves no focus`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        r.suppressStickNavigation = true
+        r.onMotion(stick(0.9f, device = 1))
+        assertEquals(0.9f, r.axes.value.leftX, 0.001f)
+        r.onMotion(motion(1, MotionEvent.AXIS_HAT_X to 1f))
+        assertEquals(listOf<UiInput>(UiInput.Direction(NavDirection.Right)), ui)
+    }
 }

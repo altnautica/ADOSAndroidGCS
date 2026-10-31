@@ -27,11 +27,12 @@ import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.NumberSettingRow
 import com.altnautica.gcs.core.designsystem.component.SectionHeader
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
+import com.altnautica.gcs.core.designsystem.component.SwitchSettingRow
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
 import com.altnautica.gcs.feature.plan.model.MavCmd
-import com.altnautica.gcs.feature.plan.model.PlanCommand
 import com.altnautica.gcs.feature.plan.model.PlanItem
+import com.altnautica.gcs.feature.plan.model.SpeedType
 import kotlin.math.roundToInt
 
 @Composable
@@ -64,8 +65,19 @@ private fun refLabel(ref: AltitudeRef) = stringResource(
 )
 
 @Composable
+private fun speedTypeLabel(type: SpeedType) = stringResource(
+    when (type) {
+        SpeedType.Airspeed -> R.string.plan_speed_airspeed
+        SpeedType.Groundspeed -> R.string.plan_speed_groundspeed
+        SpeedType.Climb -> R.string.plan_speed_climb
+        SpeedType.Descent -> R.string.plan_speed_descent
+    },
+)
+
+/** REL, MSL or terrain-relative altitude; terrain explains what it needs and what the profile shows. */
+@Composable
 internal fun AltitudeRefSelector(selected: AltitudeRef?, onSelect: (AltitudeRef) -> Unit) {
-    val options = listOf(AltitudeRef.Relative, AltitudeRef.Msl) + if (selected == AltitudeRef.Terrain) listOf(AltitudeRef.Terrain) else emptyList()
+    val options = AltitudeRef.entries
     Column {
         Text(stringResource(R.string.plan_item_altitude_ref), style = MaterialTheme.typography.labelMedium, color = AdosTheme.colors.fgSecondary)
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -78,6 +90,9 @@ internal fun AltitudeRefSelector(selected: AltitudeRef?, onSelect: (AltitudeRef)
                 )
             }
         }
+        if (selected == AltitudeRef.Terrain) {
+            Text(stringResource(R.string.plan_terrain_hint), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+        }
     }
 }
 
@@ -87,10 +102,12 @@ internal fun ItemEditor(item: PlanItem, number: Int, actions: PlannerActions) {
     EditorHeader(stringResource(R.string.plan_item_title, number)) { actions.onSelect(null) }
     val known = item.planCommand
     if (known != null) {
-        val labels = PlanCommand.entries.associateWith { commandLabel(it) }
+        // Only commands of the item's own class: a positional item never turns into a non-positional one.
+        val options = known.swappable
+        val labels = options.associateWith { commandLabel(it) }
         SelectSettingRow(
             title = stringResource(R.string.plan_item_command),
-            options = PlanCommand.entries,
+            options = options,
             selected = known,
             optionLabel = { labels.getValue(it) },
             onSelect = { actions.onSetCommand(item.id, it) },
@@ -128,12 +145,19 @@ internal fun ItemEditor(item: PlanItem, number: Int, actions: PlannerActions) {
             format = { if (it == 0) noSpeed else speedFmt(it) },
         )
     }
+    CommandParams(item, actions)
+    AdosButton(stringResource(R.string.plan_item_delete), onClick = { actions.onDeleteItem(item.id) }, variant = AdosButtonVariant.Danger)
+}
+
+/** Per-command parameters: hold and loiter times, turns, speed changes and the camera shutter. */
+@Composable
+private fun CommandParams(item: PlanItem, actions: PlannerActions) {
     val secondsFmt = unitFormatter(R.string.plan_unit_s)
     when (item.command) {
         MavCmd.NAV_WAYPOINT, MavCmd.NAV_LOITER_TIME -> NumberSettingRow(
             title = stringResource(if (item.command == MavCmd.NAV_WAYPOINT) R.string.plan_item_hold else R.string.plan_item_loiter_time),
             value = item.param1.takeIf { it.isFinite() }?.roundToInt() ?: 0,
-            onValueChange = { actions.onSetParam(item.id, 1, it.toFloat()) },
+            onValueChange = { actions.onSetParam(item.id, 1, it.toDouble()) },
             range = 0..3600,
             decrementDescription = stringResource(R.string.plan_decrease),
             incrementDescription = stringResource(R.string.plan_increase),
@@ -142,23 +166,36 @@ internal fun ItemEditor(item: PlanItem, number: Int, actions: PlannerActions) {
         MavCmd.NAV_LOITER_TURNS -> NumberSettingRow(
             title = stringResource(R.string.plan_item_turns),
             value = item.param1.takeIf { it.isFinite() }?.roundToInt() ?: 1,
-            onValueChange = { actions.onSetParam(item.id, 1, it.toFloat()) },
+            onValueChange = { actions.onSetParam(item.id, 1, it.toDouble()) },
             range = 1..100,
             decrementDescription = stringResource(R.string.plan_decrease),
             incrementDescription = stringResource(R.string.plan_increase),
         )
         MavCmd.DO_CHANGE_SPEED -> {
-            val fmt = unitFormatter(R.string.plan_unit_ms)
+            val types = SpeedType.entries
+            val labels = types.associateWith { speedTypeLabel(it) }
+            SelectSettingRow(
+                title = stringResource(R.string.plan_item_speed_type),
+                options = types,
+                selected = SpeedType.fromCode(item.param1),
+                optionLabel = { labels.getValue(it) },
+                onSelect = { actions.onSetParam(item.id, 1, it.code.toDouble()) },
+            )
             NumberSettingRow(
                 title = stringResource(R.string.plan_item_new_speed),
                 value = item.param2.takeIf { it.isFinite() }?.roundToInt() ?: 0,
-                onValueChange = { actions.onSetParam(item.id, 2, it.toFloat()) },
+                onValueChange = { actions.onSetParam(item.id, 2, it.toDouble()) },
                 range = 1..60,
                 decrementDescription = stringResource(R.string.plan_decrease),
                 incrementDescription = stringResource(R.string.plan_increase),
-                format = fmt,
+                format = unitFormatter(R.string.plan_unit_ms),
             )
         }
+        // DO_DIGICAM_CONTROL param5 (x) is "shoot": 1 takes a picture, 0 does not.
+        MavCmd.DO_DIGICAM_CONTROL -> SwitchSettingRow(
+            title = stringResource(R.string.plan_item_shoot),
+            checked = item.x != 0.0,
+            onCheckedChange = { actions.onSetParam(item.id, 5, if (it) 1.0 else 0.0) },
+        )
     }
-    AdosButton(stringResource(R.string.plan_item_delete), onClick = { actions.onDeleteItem(item.id) }, variant = AdosButtonVariant.Danger)
 }

@@ -84,8 +84,10 @@ object PlanEditor {
         item.copy(frame = ref.mavFrame, z = z)
     }
 
-    /** Swaps the command of an item, keeping its position and altitude. */
+    /** Swaps the command of an item, keeping its position and altitude; only within the item's positional class. */
     fun setCommand(plan: MissionPlan, id: Long, command: PlanCommand, defaultRef: AltitudeRef): MissionPlan = update(plan, id) { item ->
+        val current = item.planCommand
+        if (current != null && current.isPositional != command.isPositional) return@update item
         val fresh = newItem(item.id, command, item.position, item.z, item.altitudeRef ?: defaultRef)
         fresh.copy(speedMs = item.speedMs)
     }

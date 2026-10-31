@@ -3,19 +3,22 @@ package com.altnautica.gcs.feature.plan
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.core.data.plan.PlannerSettingsRepository
 import com.altnautica.gcs.core.database.SavedPlanDao
-import com.altnautica.gcs.core.database.SavedPlanEntity
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
+import com.altnautica.gcs.core.map.DragPhase
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.MapBasemap
+import com.altnautica.gcs.core.map.MapFeatureRef
+import com.altnautica.gcs.core.map.MapFeatureType
 import com.altnautica.gcs.core.map.offline.OfflineMapRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSource
+import com.altnautica.gcs.core.skills.input.AdosInputRouter
+import com.altnautica.gcs.core.skills.input.GamepadAxes
 import com.altnautica.gcs.feature.plan.io.PlanDocuments
 import com.altnautica.gcs.feature.plan.io.PlanFileFormat
-import com.altnautica.gcs.feature.plan.io.PlanFiles
-import com.altnautica.gcs.feature.plan.io.PlanFormatException
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
 import com.altnautica.gcs.feature.plan.model.FenceZone
 import com.altnautica.gcs.feature.plan.model.MissionPlan
@@ -28,41 +31,55 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
 /**
- * Mission planner: edits a [MissionPlan] (path, survey, fence, rally), keeps the plan
- * library, reads and writes plan files, and transfers plans to and from the vehicle.
+ * Mission planner: edits a [MissionPlan] (path, survey, fence, rally) with undo and redo,
+ * keeps the plan library, reads and writes plan files, and transfers plans to and from
+ * the vehicle.
  */
 @HiltViewModel
 class PlannerViewModel @Inject constructor(
     servicesProvider: VehicleServicesProvider,
     nodeSources: Set<@JvmSuppressWildcards NodeSource>,
-    private val savedPlans: SavedPlanDao,
-    private val documents: PlanDocuments,
+    savedPlans: SavedPlanDao,
+    documents: PlanDocuments,
     clock: ElapsedClock,
     private val offlineMaps: OfflineMapRepository,
+    private val plannerSettings: PlannerSettingsRepository,
+    private val inputRouter: AdosInputRouter,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PlannerUiState())
     val state: StateFlow<PlannerUiState> = _state.asStateFlow()
 
+    /** Controller stick and trigger positions; the map cursor reads them every frame. */
+    val axes: StateFlow<GamepadAxes> = inputRouter.axes
+
+    /** While the map holds controller focus the left stick pans it instead of moving focus. */
+    fun setStickNavigationSuppressed(suppressed: Boolean) {
+        inputRouter.suppressStickNavigation = suppressed
+    }
+
     private val ids = AtomicLong(1)
     private val nextId: () -> Long = { ids.getAndIncrement() }
 
-    /** Plan as last saved or loaded; drives [PlannerUiState.dirty]. */
-    private var savedPlan = MissionPlan()
+    private val session = PlanSession(_state)
     private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId) { plan, name, savedId, dirty ->
-        replacePlan(plan, name = name, savedId = savedId, dirty = dirty)
+        session.replacePlan(plan, name = name, savedId = savedId, dirty = dirty)
     }
+    private val library = PlannerLibrary(viewModelScope, _state, savedPlans, documents, session, nextId) { vehicle.planWithHome() }
 
     init {
-        viewModelScope.launch { savedPlans.observeAll().collect { list -> _state.update { it.copy(library = list) } } }
-        viewModelScope.launch { offlineMaps.pmtiles.collect { packs -> _state.update { it.copy(packs = packs) } } }
+        library.observe()
+        viewModelScope.launch {
+            combine(plannerSettings.settings, offlineMaps.pmtiles) { settings, packs -> packs to BasemapCodec.decode(settings.basemap, packs) }
+                .collect { (packs, basemap) -> _state.update { it.copy(packs = packs, basemap = basemap) } }
+        }
         viewModelScope.launch { offlineMaps.refresh() }
         vehicle.observeNodes(nodeSources)
     }
@@ -80,28 +97,73 @@ class PlannerViewModel @Inject constructor(
     fun onMapTap(point: GeoPoint) {
         val s = _state.value
         when (s.tool) {
-            EditTool.Waypoint -> {
-                val command = if (s.plan.items.none { it.position != null }) PlanCommand.Takeoff else PlanCommand.Waypoint
-                val item = PlanEditor.newItem(nextId(), command, point, s.defaultAltM, s.defaultRef)
-                edit { PlanEditor.append(it, item) }
-                _state.update { it.copy(selection = Selection.Item(item.id)) }
-            }
-            EditTool.Survey -> updateSurvey(s.survey + point)
+            EditTool.Waypoint -> addWaypointAt(point)
+            EditTool.Survey -> addSurveyPointAt(point)
             EditTool.FencePolygon -> _state.update { it.copy(fenceDraft = it.fenceDraft + point) }
             EditTool.FenceCircle -> {
                 val zone = FenceZone.Circle(nextId(), s.fenceDraftInclusion, point, DEFAULT_FENCE_RADIUS_M)
                 edit { PlanEditor.addFence(it, zone) }
                 _state.update { it.copy(selection = Selection.Fence(zone.id)) }
             }
-            EditTool.Rally -> {
-                val rally = RallyPoint(nextId(), point, s.defaultAltM)
-                edit { PlanEditor.addRally(it, rally) }
-                _state.update { it.copy(selection = Selection.Rally(rally.id)) }
+            EditTool.Rally -> addRallyAt(point)
+        }
+    }
+
+    /** Appends a waypoint (a takeoff when the plan has no located item yet) and selects it. */
+    fun addWaypointAt(point: GeoPoint) {
+        val s = _state.value
+        val command = if (s.plan.items.none { it.position != null }) PlanCommand.Takeoff else PlanCommand.Waypoint
+        val item = PlanEditor.newItem(nextId(), command, point, s.defaultAltM, s.defaultRef)
+        edit { PlanEditor.append(it, item) }
+        _state.update { it.copy(selection = Selection.Item(item.id)) }
+    }
+
+    fun addRallyAt(point: GeoPoint) {
+        val rally = RallyPoint(nextId(), point, _state.value.defaultAltM)
+        edit { PlanEditor.addRally(it, rally) }
+        _state.update { it.copy(selection = Selection.Rally(rally.id)) }
+    }
+
+    /** Adds the next survey outline vertex (the first one starts the outline). */
+    fun addSurveyPointAt(point: GeoPoint) = updateSurvey(_state.value.survey + point)
+
+    fun select(selection: Selection?) = _state.update { it.copy(selection = selection) }
+
+    fun undo() = session.undo()
+
+    fun redo() = session.redo()
+
+    /**
+     * A map feature drag. Plan features preview while moving and commit one edit (one undo
+     * step) on [DragPhase.End]; survey and fence-draft handles are not plan content and
+     * follow the finger directly.
+     */
+    fun onFeatureDrag(ref: MapFeatureRef, point: GeoPoint, phase: DragPhase) {
+        if (!ref.editsPlan()) {
+            if (ref.type == MapFeatureType.Handle) {
+                when (val target = HandleTarget.parse(ref.id)) {
+                    is HandleTarget.SurveyVertex -> moveSurveyVertex(target.index, point)
+                    is HandleTarget.DraftVertex -> moveFenceDraftVertex(target.index, point)
+                    else -> Unit
+                }
+            }
+            return
+        }
+        when (phase) {
+            DragPhase.Start, DragPhase.Move -> _state.update { it.copy(dragPreview = DragPreview(ref, point)) }
+            DragPhase.End -> {
+                _state.update { it.copy(dragPreview = null) }
+                edit { DragPreview(ref, point).applyTo(it) }
             }
         }
     }
 
-    fun select(selection: Selection?) = _state.update { it.copy(selection = selection) }
+    /** Controller grab: drags the selected waypoint, rally point or circle fence to [point]. */
+    fun grabSelected(point: GeoPoint, phase: DragPhase) {
+        val s = _state.value
+        val ref = s.dragPreview?.ref ?: s.plan.grabRef(s.selection) ?: return
+        onFeatureDrag(ref, point, phase)
+    }
 
     fun moveItem(id: Long, point: GeoPoint) = edit { PlanEditor.move(it, id, point) }
 
@@ -134,6 +196,7 @@ class PlannerViewModel @Inject constructor(
         _state.update { s -> if (s.selection == Selection.Item(id)) s.copy(selection = null) else s }
     }
 
+    /** Swaps the item's command within its positional class; a cross-class swap is ignored. */
     fun setCommand(id: Long, command: PlanCommand) = edit { PlanEditor.setCommand(it, id, command, _state.value.defaultRef) }
 
     fun setAltitude(id: Long, altM: Float) = edit { plan -> PlanEditor.update(plan, id) { it.copy(z = altM) } }
@@ -143,14 +206,16 @@ class PlannerViewModel @Inject constructor(
     /** Leg speed into the item; null removes the speed change. */
     fun setSpeed(id: Long, speedMs: Float?) = edit { plan -> PlanEditor.update(plan, id) { it.copy(speedMs = speedMs?.takeIf { s -> s > 0f }) } }
 
-    fun setParam(id: Long, index: Int, value: Float) = edit { plan ->
+    /** Sets MAVLink param [index] (1..6); 5 and 6 are `x`/`y`, kept at double precision. */
+    fun setParam(id: Long, index: Int, value: Double) = edit { plan ->
         PlanEditor.update(plan, id) {
             when (index) {
-                1 -> it.copy(param1 = value)
-                2 -> it.copy(param2 = value)
-                3 -> it.copy(param3 = value)
-                4 -> it.copy(param4 = value)
-                5 -> it.copy(x = value.toDouble())
+                1 -> it.copy(param1 = value.toFloat())
+                2 -> it.copy(param2 = value.toFloat())
+                3 -> it.copy(param3 = value.toFloat())
+                4 -> it.copy(param4 = value.toFloat())
+                5 -> it.copy(x = value)
+                6 -> it.copy(y = value)
                 else -> it
             }
         }
@@ -160,7 +225,11 @@ class PlannerViewModel @Inject constructor(
 
     fun setDefaultRef(ref: AltitudeRef) = _state.update { it.copy(defaultRef = ref) }
 
-    fun setBasemap(basemap: MapBasemap) = _state.update { it.copy(basemap = basemap) }
+    /** Shows [basemap] and remembers it for the next planner session. */
+    fun setBasemap(basemap: MapBasemap) {
+        _state.update { it.copy(basemap = basemap) }
+        viewModelScope.launch { plannerSettings.setBasemap(BasemapCodec.encode(basemap)) }
+    }
 
     // Survey
 
@@ -233,110 +302,51 @@ class PlannerViewModel @Inject constructor(
         _state.update { s -> if (s.selection == Selection.Rally(id)) s.copy(selection = null) else s }
     }
 
-    // ── Library ──────────────────────────────────────────────
+    // ── Library and files ────────────────────────────────────
 
     fun setName(name: String) = _state.update { it.copy(name = name) }
 
-    fun newPlan() {
-        savedPlan = MissionPlan()
-        _state.update {
-            it.copy(plan = MissionPlan(), name = "", savedId = null, dirty = false, selection = null, survey = emptyList(), surveyPreview = null, fenceDraft = emptyList())
-        }
-    }
+    /** Runs [action] now, or asks first ([PlannerUiState.pendingDiscard]) while there are unsaved edits. */
+    fun requestDiscard(action: DiscardAction) = library.requestDiscard(action)
 
-    fun save(defaultName: String) {
-        val s = _state.value
-        val name = s.name.ifBlank { defaultName }
-        val id = s.savedId ?: UUID.randomUUID().toString()
-        val now = System.currentTimeMillis()
-        val createdAt = s.library.firstOrNull { it.id == id }?.createdAtMs ?: now
-        val plan = s.plan
-        viewModelScope.launch {
-            savedPlans.upsert(
-                SavedPlanEntity(
-                    id = id,
-                    name = name,
-                    createdAtMs = createdAt,
-                    updatedAtMs = now,
-                    itemCount = plan.items.size,
-                    homeLatDeg = plan.home?.position?.latDeg,
-                    homeLonDeg = plan.home?.position?.lonDeg,
-                    planJson = PlanFiles.exportPlan(plan),
-                ),
-            )
-            savedPlan = plan
-            _state.update { it.copy(name = name, savedId = id, dirty = it.plan != plan, message = PlannerMessage.Saved(name)) }
-        }
-    }
+    fun confirmDiscard() = library.confirmDiscard()
 
-    fun load(id: String) {
-        viewModelScope.launch {
-            val entity = savedPlans.getById(id) ?: return@launch
-            val imported = runCatching { PlanFiles.parsePlan(entity.planJson, nextId) }.getOrElse { e ->
-                _state.update { it.copy(message = PlannerMessage.ImportFailed((e as? PlanFormatException)?.reason, e.message)) }
-                return@launch
-            }
-            replacePlan(imported.plan, name = entity.name, savedId = entity.id)
-            _state.update { it.copy(message = PlannerMessage.Loaded(entity.name)) }
-        }
-    }
+    fun cancelDiscard() = library.cancelDiscard()
 
-    fun deleteSaved(id: String) {
-        viewModelScope.launch {
-            savedPlans.delete(id)
-            _state.update { s -> if (s.savedId == id) s.copy(savedId = null, dirty = true, message = PlannerMessage.Deleted) else s.copy(message = PlannerMessage.Deleted) }
-        }
-    }
+    fun importPickerShown() = library.importPickerShown()
 
-    // ── Files ────────────────────────────────────────────────
+    fun leaveHandled() = library.leaveHandled()
 
-    fun importDocument(uri: Uri) {
-        viewModelScope.launch {
-            val doc = runCatching { documents.read(uri) }.getOrElse { e ->
-                _state.update { it.copy(message = PlannerMessage.ImportFailed(null, e.message)) }
-                return@launch
-            }
-            importText(doc.name, doc.text)
-        }
-    }
+    /** Starts an empty plan, dropping any unsaved edits; the screen asks first through [requestDiscard]. */
+    fun newPlan() = library.newPlan()
+
+    fun save(defaultName: String) = library.save(defaultName)
+
+    /** Opens a library plan, dropping any unsaved edits; the screen asks first through [requestDiscard]. */
+    fun load(id: String) = library.load(id)
+
+    fun requestDeleteSaved(id: String) = library.requestDeleteSaved(id)
+
+    fun confirmDeleteSaved() = library.confirmDeleteSaved()
+
+    fun cancelDeleteSaved() = library.cancelDeleteSaved()
+
+    fun importDocument(uri: Uri) = library.importDocument(uri)
 
     /** Parses [text] as the format named by [fileName] (content sniffed when the name has no known extension). */
-    fun importText(fileName: String, text: String) {
-        val format = PlanFileFormat.fromFileName(fileName)
-            ?: if (text.trimStart().startsWith("{")) PlanFileFormat.QgcPlan else PlanFileFormat.Waypoints
-        val result = runCatching {
-            when (format) {
-                PlanFileFormat.QgcPlan -> PlanFiles.parsePlan(text, nextId)
-                PlanFileFormat.Waypoints -> PlanFiles.parseWaypoints(text, nextId)
-            }
-        }
-        result.onSuccess { imported ->
-            val name = fileName.substringBeforeLast('.').ifBlank { fileName }
-            replacePlan(imported.plan, name = name, savedId = null, dirty = true)
-            _state.update { it.copy(message = PlannerMessage.Imported(name, imported.warnings.size)) }
-        }.onFailure { e ->
-            _state.update { it.copy(message = PlannerMessage.ImportFailed((e as? PlanFormatException)?.reason, e.message)) }
-        }
-    }
+    fun importText(fileName: String, text: String) = library.importText(fileName, text)
 
-    fun exportText(format: PlanFileFormat): String = when (format) {
-        PlanFileFormat.QgcPlan -> PlanFiles.exportPlan(vehicle.planWithHome())
-        PlanFileFormat.Waypoints -> PlanFiles.exportWaypoints(vehicle.planWithHome())
-    }
+    fun exportText(format: PlanFileFormat): String = library.exportText(format)
 
-    fun exportDocument(uri: Uri, format: PlanFileFormat) {
-        val text = exportText(format)
-        viewModelScope.launch {
-            runCatching { documents.write(uri, text) }
-                .onSuccess { _state.update { it.copy(message = PlannerMessage.Exported(format)) } }
-                .onFailure { e -> _state.update { it.copy(message = PlannerMessage.ExportFailed(e.message ?: e.javaClass.simpleName)) } }
-        }
-    }
+    fun exportDocument(uri: Uri, format: PlanFileFormat) = library.exportDocument(uri, format)
 
     // ── Vehicle transfer ─────────────────────────────────────
 
-    /** Uploads mission, then fence, then rally; an empty fence or rally list clears it on the vehicle. */
+    /** Uploads mission, then fence, then rally, then reads each back to verify it. */
     fun upload() = vehicle.upload()
+
+    /** Re-runs the upload after a failure. */
+    fun retryUpload() = vehicle.upload()
 
     /** Downloads from the vehicle; asks first when the open plan has unsaved edits. */
     fun download() = vehicle.download()
@@ -364,28 +374,7 @@ class PlannerViewModel @Inject constructor(
 
     fun messageShown() = _state.update { it.copy(message = null) }
 
-    private fun edit(transform: (MissionPlan) -> MissionPlan) {
-        _state.update { s ->
-            val plan = transform(s.plan)
-            s.copy(plan = plan, dirty = plan != savedPlan)
-        }
-    }
-
-    private fun replacePlan(plan: MissionPlan, name: String, savedId: String?, dirty: Boolean = false) {
-        if (!dirty) savedPlan = plan
-        _state.update {
-            it.copy(
-                plan = plan,
-                name = name,
-                savedId = savedId,
-                dirty = dirty,
-                selection = null,
-                survey = emptyList(),
-                surveyPreview = null,
-                fenceDraft = emptyList(),
-            )
-        }
-    }
+    private fun edit(transform: (MissionPlan) -> MissionPlan) = session.edit(transform)
 
     override fun onCleared() {
         vehicle.cancel()

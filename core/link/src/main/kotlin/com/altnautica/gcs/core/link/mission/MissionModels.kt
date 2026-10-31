@@ -85,6 +85,9 @@ sealed interface MissionError {
 
     /** `MISSION_ACK` with a non-accepted `MAV_MISSION_RESULT` code. */
     data class Rejected(val code: Int) : MissionError
+
+    /** The list read back after an upload differs from what was sent. */
+    data class VerifyMismatch(val type: MissionType) : MissionError
 }
 
 sealed interface MissionResult<out T> {

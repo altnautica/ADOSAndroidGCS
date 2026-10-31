@@ -77,21 +77,40 @@ enum class AltitudeRef(val mavFrame: Int) {
     }
 }
 
-/** Commands the planner can insert from its menus. */
-enum class PlanCommand(val mavCmd: Int) {
-    Waypoint(MavCmd.NAV_WAYPOINT),
-    Takeoff(MavCmd.NAV_TAKEOFF),
-    Land(MavCmd.NAV_LAND),
-    ReturnToLaunch(MavCmd.NAV_RETURN_TO_LAUNCH),
-    LoiterTime(MavCmd.NAV_LOITER_TIME),
-    LoiterTurns(MavCmd.NAV_LOITER_TURNS),
-    ChangeSpeed(MavCmd.DO_CHANGE_SPEED),
-    SetRoiLocation(MavCmd.DO_SET_ROI_LOCATION),
-    DigicamControl(MavCmd.DO_DIGICAM_CONTROL),
+/**
+ * Commands the planner can insert from its menus. [isPositional] commands sit at a map
+ * position; the command picker only swaps an item among commands of its own class.
+ */
+enum class PlanCommand(val mavCmd: Int, val isPositional: Boolean) {
+    Waypoint(MavCmd.NAV_WAYPOINT, isPositional = true),
+    Takeoff(MavCmd.NAV_TAKEOFF, isPositional = true),
+    Land(MavCmd.NAV_LAND, isPositional = true),
+    ReturnToLaunch(MavCmd.NAV_RETURN_TO_LAUNCH, isPositional = false),
+    LoiterTime(MavCmd.NAV_LOITER_TIME, isPositional = true),
+    LoiterTurns(MavCmd.NAV_LOITER_TURNS, isPositional = true),
+    ChangeSpeed(MavCmd.DO_CHANGE_SPEED, isPositional = false),
+    SetRoiLocation(MavCmd.DO_SET_ROI_LOCATION, isPositional = true),
+    DigicamControl(MavCmd.DO_DIGICAM_CONTROL, isPositional = false),
     ;
+
+    /** Commands this one may be swapped to: the same positional class. */
+    val swappable: List<PlanCommand> get() = entries.filter { it.isPositional == isPositional }
 
     companion object {
         fun fromMavCmd(cmd: Int) = entries.firstOrNull { it.mavCmd == cmd }
+    }
+}
+
+/** `DO_CHANGE_SPEED` param1: which speed the change applies to. */
+enum class SpeedType(val code: Int) {
+    Airspeed(0),
+    Groundspeed(1),
+    Climb(2),
+    Descent(3),
+    ;
+
+    companion object {
+        fun fromCode(code: Float): SpeedType = entries.firstOrNull { it.code.toFloat() == code } ?: Groundspeed
     }
 }
 

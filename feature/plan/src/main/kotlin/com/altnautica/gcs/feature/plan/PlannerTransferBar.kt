@@ -51,6 +51,7 @@ private fun missionErrorLabel(error: MissionError) = when (error) {
     MissionError.Timeout -> stringResource(R.string.plan_error_timeout)
     is MissionError.WriteFailed -> stringResource(R.string.plan_error_write, error.reason)
     is MissionError.Rejected -> stringResource(R.string.plan_error_rejected, error.code)
+    is MissionError.VerifyMismatch -> stringResource(R.string.plan_error_verify, missionTypeLabel(error.type))
 }
 
 @Composable
@@ -66,6 +67,8 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
         else -> null
     }
     val canTransfer = connected != null && !state.transferring
+    val issues = state.issues
+    val uploadBlocked = issues.any { it.kind.blocking }
     Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         if (reason != null) Text(reason, style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
         if (connected != null) {
@@ -74,8 +77,12 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
                 label = stringResource(if (state.inSyncWithVehicle) R.string.plan_in_sync else R.string.plan_not_in_sync),
             )
         }
+        PlanIssueList(issues)
+        if (uploadBlocked && connected != null) {
+            Text(stringResource(R.string.plan_issues_blocking), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-            AdosButton(stringResource(R.string.plan_upload), onClick = actions.onUpload, enabled = canTransfer && !state.plan.isEmpty, icon = Icons.Outlined.CloudUpload)
+            AdosButton(stringResource(R.string.plan_upload), onClick = actions.onUpload, enabled = canTransfer && !uploadBlocked, icon = Icons.Outlined.CloudUpload)
             AdosButton(stringResource(R.string.plan_download), onClick = actions.onDownload, enabled = canTransfer, variant = AdosButtonVariant.Secondary, icon = Icons.Outlined.CloudDownload)
         }
         when (val t = state.transfer) {
@@ -98,6 +105,10 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
                 } else {
                     LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.accentPrimary, trackColor = colors.borderDefault)
                 }
+            }
+            is TransferState.Verifying -> {
+                Text(stringResource(R.string.plan_verifying, missionTypeLabel(t.type)), style = MaterialTheme.typography.bodySmall, color = colors.hudInk)
+                LinearProgressIndicator(Modifier.fillMaxWidth(), color = colors.accentPrimary, trackColor = colors.borderDefault)
             }
             is TransferState.Done -> Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusChip(
@@ -126,6 +137,14 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
                     label = stringResource(R.string.plan_transfer_failed, verb, missionTypeLabel(t.type), missionErrorLabel(t.error)),
                     modifier = Modifier.weight(1f, fill = false),
                 )
+                if (t.direction == TransferDirection.Upload) {
+                    AdosButton(
+                        stringResource(R.string.plan_retry),
+                        onClick = actions.onRetryUpload,
+                        enabled = connected != null && !uploadBlocked,
+                        variant = AdosButtonVariant.Secondary,
+                    )
+                }
                 IconButton(onClick = actions.onDismissTransfer) {
                     Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.plan_transfer_dismiss), tint = colors.fgSecondary)
                 }

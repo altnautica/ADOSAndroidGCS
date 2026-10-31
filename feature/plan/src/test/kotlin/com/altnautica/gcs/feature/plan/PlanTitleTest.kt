@@ -24,9 +24,9 @@ class PlanTitleTest {
     val compose = createComposeRule()
 
     @Test
-    fun `unsaved marker keeps its one-line height when the top bar leaves the title almost no width`() {
-        // On a compact portrait phone the vehicle chip and five icon buttons leave the title a sliver;
-        // the marker used to wrap one character per line and stretch the whole bar down the map.
+    fun `unsaved marker keeps the title one line high when the chip leaves it almost no width`() {
+        // On a compact portrait phone the vehicle chip and map actions leave the title a sliver;
+        // the title must ellipsize rather than wrap and stretch the chip down the map.
         compose.setContent {
             AdosTheme {
                 Column {

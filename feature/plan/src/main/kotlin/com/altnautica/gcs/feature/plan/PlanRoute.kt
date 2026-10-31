@@ -11,6 +11,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.altnautica.gcs.core.map.DragPhase
+import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.MapBasemap
 import com.altnautica.gcs.core.map.MapFeatureRef
 import com.altnautica.gcs.core.map.MapFeatureType
@@ -26,16 +28,19 @@ import com.altnautica.gcs.feature.plan.survey.SurveySettings
  * @param nodeId vehicle to plan for; null lets the operator pick one in the screen.
  * @param onStartMission called with the vehicle id once "Start mission" has been confirmed
  *   and the vehicle accepted it; the host navigates to that vehicle's cockpit.
+ * @param onBack leaves the planner; called once unsaved changes were discarded or there were none.
  */
 @Composable
 fun PlanRoute(
     nodeId: DeviceId?,
     onStartMission: (DeviceId) -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlannerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val startCallback by rememberUpdatedState(onStartMission)
+    val backCallback by rememberUpdatedState(onBack)
 
     LaunchedEffect(nodeId) {
         if (nodeId != null) viewModel.selectVehicle(nodeId)
@@ -56,13 +61,28 @@ fun PlanRoute(
         if (uri != null) viewModel.exportDocument(uri, PlanFileFormat.Waypoints)
     }
 
+    LaunchedEffect(state.pickImport) {
+        if (!state.pickImport) return@LaunchedEffect
+        viewModel.importPickerShown()
+        importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
+    }
+    LaunchedEffect(state.leaveApproved) {
+        if (!state.leaveApproved) return@LaunchedEffect
+        viewModel.leaveHandled()
+        backCallback()
+    }
+
     val actions = remember(viewModel) {
         PlannerActions(
             onSelectVehicle = viewModel::selectVehicle,
             onTool = viewModel::setTool,
             onMapTap = viewModel::onMapTap,
             onFeatureClick = { ref -> ref.toSelection()?.let(viewModel::select) },
-            onFeatureMoved = { ref, point -> viewModel.onFeatureMoved(ref, point) },
+            onFeatureDrag = viewModel::onFeatureDrag,
+            onGrab = viewModel::grabSelected,
+            onAddWaypointAt = viewModel::addWaypointAt,
+            onAddRallyAt = viewModel::addRallyAt,
+            onAddSurveyPointAt = viewModel::addSurveyPointAt,
             onSelect = viewModel::select,
             onInsertNear = viewModel::insertNear,
             onInsertCommandAfter = viewModel::insertCommandAfter,
@@ -86,12 +106,19 @@ fun PlanRoute(
             onDeleteFence = viewModel::deleteFence,
             onRallyAltitude = viewModel::setRallyAltitude,
             onDeleteRally = viewModel::deleteRally,
+            onUndo = viewModel::undo,
+            onRedo = viewModel::redo,
             onName = viewModel::setName,
-            onNew = viewModel::newPlan,
+            onNew = { viewModel.requestDiscard(DiscardAction.New) },
             onSave = viewModel::save,
-            onLoad = viewModel::load,
-            onDeleteSaved = viewModel::deleteSaved,
-            onImport = { importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*")) },
+            onLoad = { id -> viewModel.requestDiscard(DiscardAction.Load(id)) },
+            onDeleteSaved = viewModel::requestDeleteSaved,
+            onConfirmDeleteSaved = viewModel::confirmDeleteSaved,
+            onCancelDeleteSaved = viewModel::cancelDeleteSaved,
+            onImport = { viewModel.requestDiscard(DiscardAction.Import) },
+            onConfirmDiscard = viewModel::confirmDiscard,
+            onCancelDiscard = viewModel::cancelDiscard,
+            onLeave = { viewModel.requestDiscard(DiscardAction.Leave) },
             onExport = { format, name ->
                 val file = "${name.ifBlank { "mission" }}.${format.extension}"
                 when (format) {
@@ -100,6 +127,7 @@ fun PlanRoute(
                 }
             },
             onUpload = viewModel::upload,
+            onRetryUpload = viewModel::retryUpload,
             onDownload = viewModel::download,
             onConfirmDownload = viewModel::confirmDownload,
             onCancelDownload = viewModel::cancelDownload,
@@ -109,18 +137,25 @@ fun PlanRoute(
             onStart = viewModel::startMission,
             onDismissStart = viewModel::dismissStartMission,
             onMessageShown = viewModel::messageShown,
+            onStickNavigationSuppressed = viewModel::setStickNavigationSuppressed,
         )
     }
-    PlannerScreen(state = state, actions = actions, modifier = modifier)
+    PlannerScreen(state = state, actions = actions, axes = viewModel.axes, modifier = modifier)
 }
 
 /** Operator actions on the planner; the screen stays stateless. */
 class PlannerActions(
     val onSelectVehicle: (DeviceId?) -> Unit,
     val onTool: (EditTool) -> Unit,
-    val onMapTap: (com.altnautica.gcs.core.map.GeoPoint) -> Unit,
+    val onMapTap: (GeoPoint) -> Unit,
     val onFeatureClick: (MapFeatureRef) -> Unit,
-    val onFeatureMoved: (MapFeatureRef, com.altnautica.gcs.core.map.GeoPoint) -> Unit,
+    /** Touch drag of a map feature; every phase, Start included. */
+    val onFeatureDrag: (MapFeatureRef, GeoPoint, DragPhase) -> Unit,
+    /** Controller grab: moves the current selection to the crosshair. */
+    val onGrab: (GeoPoint, DragPhase) -> Unit,
+    val onAddWaypointAt: (GeoPoint) -> Unit,
+    val onAddRallyAt: (GeoPoint) -> Unit,
+    val onAddSurveyPointAt: (GeoPoint) -> Unit,
     val onSelect: (Selection?) -> Unit,
     val onInsertNear: (id: Long, after: Boolean) -> Unit,
     val onInsertCommandAfter: (id: Long, command: PlanCommand) -> Unit,
@@ -129,7 +164,7 @@ class PlannerActions(
     val onSetAltitude: (Long, Float) -> Unit,
     val onSetAltitudeRef: (Long, AltitudeRef) -> Unit,
     val onSetSpeed: (Long, Float?) -> Unit,
-    val onSetParam: (id: Long, index: Int, value: Float) -> Unit,
+    val onSetParam: (id: Long, index: Int, value: Double) -> Unit,
     val onDefaultAltitude: (Float) -> Unit,
     val onDefaultRef: (AltitudeRef) -> Unit,
     val onBasemap: (MapBasemap) -> Unit,
@@ -144,14 +179,25 @@ class PlannerActions(
     val onDeleteFence: (Long) -> Unit,
     val onRallyAltitude: (Long, Float) -> Unit,
     val onDeleteRally: (Long) -> Unit,
+    val onUndo: () -> Unit,
+    val onRedo: () -> Unit,
     val onName: (String) -> Unit,
+    /** New, Load and Import ask to discard unsaved changes first. */
     val onNew: () -> Unit,
     val onSave: (defaultName: String) -> Unit,
     val onLoad: (String) -> Unit,
+    /** Asks for confirmation before deleting a saved plan. */
     val onDeleteSaved: (String) -> Unit,
+    val onConfirmDeleteSaved: () -> Unit,
+    val onCancelDeleteSaved: () -> Unit,
     val onImport: () -> Unit,
+    val onConfirmDiscard: () -> Unit,
+    val onCancelDiscard: () -> Unit,
+    /** Leaves the planner, asking first when the plan has unsaved changes. */
+    val onLeave: () -> Unit,
     val onExport: (PlanFileFormat, name: String) -> Unit,
     val onUpload: () -> Unit,
+    val onRetryUpload: () -> Unit,
     val onDownload: () -> Unit,
     val onConfirmDownload: () -> Unit,
     val onCancelDownload: () -> Unit,
@@ -161,6 +207,8 @@ class PlannerActions(
     val onStart: () -> Unit,
     val onDismissStart: () -> Unit,
     val onMessageShown: () -> Unit,
+    /** While the map has controller focus the left stick pans instead of moving focus. */
+    val onStickNavigationSuppressed: (Boolean) -> Unit,
 )
 
 private fun MapFeatureRef.toSelection(): Selection? = when (type) {

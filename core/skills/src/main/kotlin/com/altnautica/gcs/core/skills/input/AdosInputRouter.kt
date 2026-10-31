@@ -82,6 +82,20 @@ class AdosInputRouter @Inject constructor(
             if (value != null && !value.uiNavigation) setDirection(null)
         }
 
+    /**
+     * While true the left stick no longer moves UI focus; a screen that reads [axes]
+     * directly (the planner map cursor) sets it while it has focus. The hat still navigates.
+     */
+    @Volatile
+    var suppressStickNavigation: Boolean = false
+        set(value) {
+            field = value
+            if (value) {
+                stickNav.reset()
+                setDirection(null)
+            }
+        }
+
     private val inputManager = context.getSystemService(InputManager::class.java)
 
     init {
@@ -149,11 +163,19 @@ class AdosInputRouter @Inject constructor(
             val flat = device?.getMotionRange(axis, event.source)?.flat ?: 0f
             return applyDeadZone(raw, flat, extra)
         }
+        fun trigger(primary: Int, fallback: Int): Float {
+            val axis = if (device?.getMotionRange(primary, event.source) != null) primary else fallback
+            val raw = if (pos < 0) event.getAxisValue(axis) else event.getHistoricalAxisValue(axis, pos)
+            val flat = device?.getMotionRange(axis, event.source)?.flat ?: 0f
+            return applyDeadZone(raw, flat, 0f).coerceIn(0f, 1f)
+        }
         _axes.value = GamepadAxes(
             leftX = read(MotionEvent.AXIS_X),
             leftY = -read(MotionEvent.AXIS_Y),
             rightX = read(MotionEvent.AXIS_Z),
             rightY = -read(MotionEvent.AXIS_RZ),
+            leftTrigger = trigger(MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE),
+            rightTrigger = trigger(MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS),
         )
         // Controllers that report the D-pad as a hat axis instead of key events.
         val hatX = if (pos < 0) event.getAxisValue(MotionEvent.AXIS_HAT_X) else event.getHistoricalAxisValue(MotionEvent.AXIS_HAT_X, pos)
@@ -176,7 +198,7 @@ class AdosInputRouter @Inject constructor(
             return
         }
         val hat = hatDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y))
-        val stick = if (cap == null) {
+        val stick = if (cap == null && !suppressStickNavigation) {
             _axes.value.let { stickNav.update(it.leftX, it.leftY) }
         } else {
             stickNav.reset()
