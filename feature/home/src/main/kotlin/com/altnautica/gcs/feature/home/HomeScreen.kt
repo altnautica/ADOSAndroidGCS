@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -94,7 +95,15 @@ internal fun HomeScreen(
     // touch users get no focus ring.
     val focusSurface = (cards.firstOrNull { it.surface == HomeSurface.Fly && it.enabled } ?: cards.firstOrNull { it.enabled })?.surface
     val initialFocus = remember { FocusRequester() }
-    LaunchedEffect(selectedId, controllerUi.active) { if (controllerUi.active) initialFocus.requestFocus() }
+    // Rotation swaps the surface row for the grid without recreating the activity, so the
+    // orientation is a key too: the focused card leaves the tree with the old layout.
+    val landscape = isLandscape()
+    LaunchedEffect(selectedId, controllerUi.active, focusSurface, landscape) {
+        if (!controllerUi.active) return@LaunchedEffect
+        // The lazy surface row composes its cards during the first layout pass.
+        withFrameNanos { }
+        initialFocus.requestFocus()
+    }
 
     ConsoleCommandHandler { command ->
         when (command) {
@@ -123,7 +132,8 @@ internal fun HomeScreen(
             HeroBackground(selected, thumbnails)
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 topStrip()
-                vehicleRow()
+                // With no vehicles the hero carries both add actions; the row would only repeat one.
+                if (state.vehicles.isNotEmpty()) vehicleRow()
                 hero(Modifier.weight(1f))
                 SurfaceRow(cards, focusSurface, initialFocus, open)
                 HintBar(hints)
@@ -165,7 +175,7 @@ private fun HeroContent(
                 state.loading -> LoadingState(stringResource(R.string.home_loading))
                 // No vehicle listed because the saved ones cannot be read is not "no vehicles".
                 selected == null && state.savedNodesUnreadable -> Unit
-                selected == null -> HeroEmpty(onAddVehicle, onEnableDemo)
+                selected == null -> HeroEmpty(onAddVehicle, onEnableDemo, compact = landscape)
                 else -> HeroInfo(selected, cards.firstOrNull { it.surface == HomeSurface.Fly }, Modifier.adosMenuAnchor(vehicleMenu))
             }
         }

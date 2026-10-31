@@ -192,7 +192,8 @@ internal fun SurfaceRow(
         modifier = modifier.fillMaxWidth().focusRestorer().focusGroup(),
         contentPadding = PaddingValues(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S3),
         horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
-        verticalAlignment = Alignment.Bottom,
+        // Top-aligned so the taller Fly card never sits "above" its neighbours for D-pad up.
+        verticalAlignment = Alignment.Top,
     ) {
         items(cards, key = { it.surface.name }) { card ->
             SurfaceLaunchCard(card, card.surface == focusSurface, focusRequester, onOpen)

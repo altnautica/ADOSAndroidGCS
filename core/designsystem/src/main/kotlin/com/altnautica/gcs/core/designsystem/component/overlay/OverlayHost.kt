@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalContext
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
@@ -17,8 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
 
 /** One overlay drawn by the host: its content and the composition locals of the screen that opened it. */
 internal class OverlayEntry(locals: CompositionLocalContext, private val content: State<@Composable () -> Unit>) {
@@ -36,6 +41,30 @@ internal class OverlayEntry(locals: CompositionLocalContext, private val content
 @Stable
 class OverlayHost {
     internal val entries = mutableStateListOf<OverlayEntry>()
+    private var lastFocused: FocusRequester? = null
+    private var restoreTarget: FocusRequester? = null
+
+    /** Records the screen control that holds focus while no overlay is open. */
+    internal fun focusedOutsideOverlay(requester: FocusRequester) {
+        if (entries.isEmpty()) lastFocused = requester
+    }
+
+    /** Opens [entry]; the first overlay to open fixes the control focus returns to. */
+    internal fun open(entry: OverlayEntry) {
+        if (entries.isEmpty()) restoreTarget = lastFocused
+        entries += entry
+    }
+
+    /**
+     * Returns focus to the control that held it before the overlays opened. The
+     * window may already have moved focus to a default control when the last
+     * overlay left, so the target is the one fixed in [open], not the latest.
+     */
+    internal fun restoreFocus(): Boolean {
+        val target = restoreTarget ?: return false
+        lastFocused = target
+        return runCatching { target.requestFocus() }.getOrDefault(false)
+    }
 }
 
 /** The window's overlay host; null outside [ProvideOverlayHost] (previews, tests). */
@@ -43,11 +72,25 @@ val LocalOverlayHost = staticCompositionLocalOf<OverlayHost?> { null }
 
 /**
  * Hosts in-window overlays for [content]. Wrap the app root once, inside the
- * theme and controller locals, so overlays draw above every surface.
+ * theme and controller locals, so overlays draw above every surface. When the
+ * last overlay closes while a controller is the active input, focus returns to
+ * the control that held it before the overlay opened.
  */
 @Composable
 fun ProvideOverlayHost(content: @Composable () -> Unit) {
     val host = remember { OverlayHost() }
+    val controllerActive by rememberUpdatedState(LocalControllerUi.current.active)
+    LaunchedEffect(host) {
+        var open = false
+        snapshotFlow { host.entries.isNotEmpty() }.collect { nowOpen ->
+            if (open && !nowOpen && controllerActive) {
+                // The closed overlay's focus trap leaves the tree on the next frame.
+                withFrameNanos { }
+                host.restoreFocus()
+            }
+            open = nowOpen
+        }
+    }
     CompositionLocalProvider(LocalOverlayHost provides host) {
         Box(Modifier.fillMaxSize()) {
             content()
@@ -78,7 +121,7 @@ fun Overlay(key: Any = Unit, content: @Composable () -> Unit) {
     val entry = remember(key) { OverlayEntry(locals, current) }
     SideEffect { entry.locals = locals }
     DisposableEffect(host, entry) {
-        host.entries += entry
+        host.open(entry)
         onDispose { host.entries -= entry }
     }
 }

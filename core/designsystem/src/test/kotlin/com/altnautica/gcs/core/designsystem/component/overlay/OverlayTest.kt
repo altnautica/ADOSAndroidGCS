@@ -19,10 +19,13 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
+import com.altnautica.gcs.core.designsystem.component.console.ControllerUi
+import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -109,6 +112,33 @@ class OverlayTest {
             )
         }
         compose.onNodeWithText("Confirm").assertIsFocused()
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Test
+    fun closingTheLastOverlayReturnsFocusToTheControlThatHeldIt() {
+        var open by mutableStateOf(false)
+        compose.setContent {
+            LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
+            CompositionLocalProvider(LocalControllerUi provides ControllerUi(active = true)) {
+                AdosTheme {
+                    ProvideOverlayHost {
+                        Column {
+                            AdosButton("Behind", onClick = {})
+                            AdosButton("Opener", onClick = { open = true })
+                            if (open) AdosSheet(onDismiss = { open = false }) { AdosButton("Inside", onClick = {}) }
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Opener").requestFocus()
+        compose.runOnIdle { open = true }
+        compose.onNodeWithText("Inside").assertIsFocused()
+        compose.runOnIdle { open = false }
+        compose.waitForIdle()
+        // Not "Behind", the first control the window would fall back to.
+        compose.onNodeWithText("Opener").assertIsFocused()
     }
 
     @Test

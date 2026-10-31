@@ -4,6 +4,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -134,21 +135,27 @@ internal fun PlannerMapPane(
             )
             if (mapFocused && controllerActive) MapCrosshair(Modifier.align(Alignment.Center))
         }
-        PlanTitleChip(
-            state = state,
-            onBack = actions.onLeave,
-            onVehicle = sheets.onVehicle,
-            onRename = sheets.onRename,
-            modifier = Modifier.align(Alignment.TopStart).padding(AdosSpacing.S2),
-        )
-        MapActionsChip(
-            state = state,
-            actions = actions,
-            overflow = overflow,
-            onLibrary = sheets.onLibrary,
-            onToggleInspector = onToggleInspector,
-            modifier = Modifier.align(Alignment.TopEnd).padding(AdosSpacing.S2),
-        )
+        // One row so the title chip yields width to the actions chip on narrow maps.
+        Row(
+            Modifier.align(Alignment.TopStart).fillMaxWidth().padding(AdosSpacing.S2),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            PlanTitleChip(
+                state = state,
+                onBack = actions.onLeave,
+                onVehicle = sheets.onVehicle,
+                onRename = sheets.onRename,
+                modifier = Modifier.weight(1f, fill = false).padding(end = AdosSpacing.S2),
+            )
+            MapActionsChip(
+                state = state,
+                actions = actions,
+                overflow = overflow,
+                onLibrary = sheets.onLibrary,
+                onToggleInspector = onToggleInspector,
+            )
+        }
         Column(
             Modifier.align(Alignment.BottomStart).fillMaxWidth(BOTTOM_OVERLAY_WIDTH).padding(AdosSpacing.S2),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),

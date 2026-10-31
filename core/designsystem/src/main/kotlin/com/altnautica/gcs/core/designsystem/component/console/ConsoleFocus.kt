@@ -10,6 +10,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
@@ -17,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.debugInspectorInfo
 import androidx.compose.ui.unit.dp
+import com.altnautica.gcs.core.designsystem.component.overlay.LocalOverlayHost
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
 import com.altnautica.gcs.core.designsystem.tokens.AdosMotion
@@ -30,7 +33,8 @@ private val GlowWidth = 6.dp
  * The single focus indication of the app: a 2 dp focus-ring border on [shape] with a
  * soft outer glow while the element below this modifier holds focus. With
  * [scaleOnFocus] the element also grows slightly. Place it before the focus target
- * (`clickable`, `focusable`) in the chain so it observes that target.
+ * (`clickable`, `focusable`) in the chain so it observes that target. The element
+ * also tells the overlay host it held focus, so closing an overlay can return there.
  */
 fun Modifier.consoleFocus(shape: Shape, scaleOnFocus: Boolean = false): Modifier = composed(
     inspectorInfo = debugInspectorInfo {
@@ -40,6 +44,8 @@ fun Modifier.consoleFocus(shape: Shape, scaleOnFocus: Boolean = false): Modifier
     },
 ) {
     var focused by remember { mutableStateOf(false) }
+    val host = LocalOverlayHost.current
+    val requester = remember { FocusRequester() }
     val ring = AdosTheme.colors.focusRing
     val reduced = rememberReducedMotion()
     val scale by animateFloatAsState(
@@ -47,7 +53,11 @@ fun Modifier.consoleFocus(shape: Shape, scaleOnFocus: Boolean = false): Modifier
         animationSpec = if (reduced) snap() else tween(AdosMotion.QuickMs, easing = AdosMotion.Standard),
         label = "focusScale",
     )
-    onFocusChanged { focused = it.isFocused }
+    focusRequester(requester)
+        .onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) host?.focusedOutsideOverlay(requester)
+        }
         .graphicsLayer {
             scaleX = scale
             scaleY = scale

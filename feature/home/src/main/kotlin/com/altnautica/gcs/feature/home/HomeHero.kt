@@ -186,9 +186,28 @@ private fun Readiness(fly: SurfaceCard) {
     }
 }
 
-/** No vehicles yet: add one, or try the demo drone. */
+/**
+ * No vehicles yet: add one, or try the demo drone. [compact] (landscape, short
+ * height) puts the text left-aligned and both actions on one row so they stay
+ * above the surface row.
+ */
 @Composable
-internal fun HeroEmpty(onAddVehicle: () -> Unit, onEnableDemo: () -> Unit, modifier: Modifier = Modifier) {
+internal fun HeroEmpty(onAddVehicle: () -> Unit, onEnableDemo: () -> Unit, compact: Boolean, modifier: Modifier = Modifier) {
+    if (compact) {
+        val colors = AdosTheme.colors
+        Column(
+            modifier = modifier.padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S2),
+            verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
+        ) {
+            Text(stringResource(R.string.home_empty_title), style = MaterialTheme.typography.titleLarge, color = colors.fgPrimary)
+            Text(stringResource(R.string.home_empty_message), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
+                AdosButton(stringResource(R.string.home_try_demo), onClick = onEnableDemo)
+                AdosButton(stringResource(R.string.home_add_vehicle), onClick = onAddVehicle, variant = AdosButtonVariant.Secondary)
+            }
+        }
+        return
+    }
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
