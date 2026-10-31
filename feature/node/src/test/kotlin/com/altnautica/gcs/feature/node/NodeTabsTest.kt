@@ -18,7 +18,7 @@ class NodeTabsTest {
     @Test
     fun droneOnLanHasFullSet() {
         assertEquals(
-            listOf(NodeTab.Overview, NodeTab.Cockpit, NodeTab.Setup, NodeTab.Parameters, NodeTab.Logs, NodeTab.Agent),
+            listOf(NodeTab.Overview, NodeTab.Logs, NodeTab.Agent),
             NodeTabs.tabsFor(node(NodeProfile.Drone, Reach.Lan)),
         )
     }
@@ -27,7 +27,7 @@ class NodeTabsTest {
     fun groundStationHasStationTabs() {
         assertEquals(
             listOf(
-                NodeTab.Overview, NodeTab.Cockpit, NodeTab.CarriedDrones, NodeTab.Radio,
+                NodeTab.Overview, NodeTab.CarriedDrones, NodeTab.Radio,
                 NodeTab.Network, NodeTab.Mesh, NodeTab.Logs, NodeTab.Agent,
             ),
             NodeTabs.tabsFor(node(NodeProfile.GroundStation, Reach.Lan)),
@@ -42,7 +42,7 @@ class NodeTabsTest {
     @Test
     fun directFlightControllerDropsAgentTabsAndIsADrone() {
         assertEquals(
-            listOf(NodeTab.Overview, NodeTab.Cockpit, NodeTab.Setup, NodeTab.Parameters),
+            listOf(NodeTab.Overview),
             NodeTabs.tabsFor(node(NodeProfile.Unknown, Reach.DirectFc)),
         )
     }
@@ -56,7 +56,7 @@ class NodeTabsTest {
     @Test
     fun cloudOnlyDroneHasNoAgentTabs() {
         assertEquals(
-            listOf(NodeTab.Overview, NodeTab.Cockpit, NodeTab.Setup, NodeTab.Parameters),
+            listOf(NodeTab.Overview),
             NodeTabs.tabsFor(node(NodeProfile.Drone, Reach.CloudLive)),
         )
     }
@@ -78,7 +78,7 @@ class NodeTabsTest {
     fun groundStationGainsGnssAndLoraWhenFitted() {
         assertEquals(
             listOf(
-                NodeTab.Overview, NodeTab.Cockpit, NodeTab.CarriedDrones, NodeTab.Radio,
+                NodeTab.Overview, NodeTab.CarriedDrones, NodeTab.Radio,
                 NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh, NodeTab.Logs, NodeTab.Agent,
             ),
             NodeTabs.tabsFor(node(NodeProfile.GroundStation, Reach.Lan), StationFeatures(gnss = true, lora = true)),
@@ -91,5 +91,14 @@ class NodeTabsTest {
     @Test
     fun unknownAgentIsNotADroneAndGetsAgentOnly() {
         assertEquals(listOf(NodeTab.Agent), NodeTabs.tabsFor(node(NodeProfile.Unknown, Reach.Lan)))
+    }
+
+    @Test
+    fun flightControllerSurfacesFollowProfileAndReach() {
+        assertEquals(true, NodeTabs.hasFlightController(node(NodeProfile.Drone, Reach.CloudLive)))
+        assertEquals(true, NodeTabs.hasFlightController(node(NodeProfile.Unknown, Reach.DirectFc)))
+        assertEquals(false, NodeTabs.hasFlightController(node(NodeProfile.Unknown, Reach.Lan)))
+        assertEquals(false, NodeTabs.hasFlightController(node(NodeProfile.GroundStation, Reach.Lan)))
+        assertEquals(false, NodeTabs.hasFlightController(node(NodeProfile.Visor, Reach.DirectFc)))
     }
 }

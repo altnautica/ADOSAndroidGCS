@@ -4,8 +4,8 @@ import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
 
-/** Built-in node detail tabs; extension tabs are appended after these. */
-enum class NodeTab { Overview, Cockpit, Setup, Parameters, Capture, Sessions, CarriedDrones, Radio, Network, Gnss, Lora, Mesh, Logs, Agent }
+/** Built-in vehicle detail tabs; extension tabs are appended after these. */
+enum class NodeTab { Overview, Capture, Sessions, CarriedDrones, Radio, Network, Gnss, Lora, Mesh, Logs, Agent }
 
 /** Optional ground-station services the node reported as fitted (`present: true`). */
 data class StationFeatures(val gnss: Boolean = false, val lora: Boolean = false) {
@@ -20,10 +20,20 @@ object NodeTabs {
     fun hasAgentLink(node: NodeSummary): Boolean = node.reaches.any { it == Reach.Lan || it is Reach.ViaGround }
 
     /**
-     * Tabs per node profile, mirroring the desktop node surfaces:
-     * Drone = Overview, Cockpit, Setup, Parameters, Logs, Agent;
+     * The node has a flight controller the Setup and Parameters surfaces can
+     * talk to: a drone, or a node reached over a direct flight-controller link.
+     * Visors and workstations never do.
+     */
+    fun hasFlightController(node: NodeSummary): Boolean =
+        node.profile != NodeProfile.Visor && node.profile != NodeProfile.Workstation &&
+            (node.profile == NodeProfile.Drone || Reach.DirectFc in node.reaches)
+
+    /**
+     * Tabs per node profile, mirroring the desktop node surfaces. The cockpit,
+     * Setup and Parameters are their own surfaces, launched from Home or the header:
+     * Drone = Overview, Logs, Agent;
      * Visor = Overview, Capture, Sessions, Logs, Agent;
-     * Ground station = Overview, Cockpit, Carried drones, Radio, Network, GNSS and
+     * Ground station = Overview, Carried drones, Radio, Network, GNSS and
      * LoRa (when fitted), Mesh, Logs, Agent;
      * Workstation = Overview, Logs, Agent.
      * Agent-backed tabs need an agent link; a flight controller reached directly
@@ -38,9 +48,9 @@ object NodeTabs {
             else -> NodeProfile.Unknown
         }
         val tabs = when (profile) {
-            NodeProfile.Drone -> listOf(NodeTab.Overview, NodeTab.Cockpit, NodeTab.Setup, NodeTab.Parameters, NodeTab.Logs, NodeTab.Agent)
+            NodeProfile.Drone -> listOf(NodeTab.Overview, NodeTab.Logs, NodeTab.Agent)
             NodeProfile.GroundStation -> buildList {
-                addAll(listOf(NodeTab.Overview, NodeTab.Cockpit, NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network))
+                addAll(listOf(NodeTab.Overview, NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network))
                 if (station.gnss) add(NodeTab.Gnss)
                 if (station.lora) add(NodeTab.Lora)
                 addAll(listOf(NodeTab.Mesh, NodeTab.Logs, NodeTab.Agent))

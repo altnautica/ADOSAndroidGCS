@@ -66,7 +66,7 @@ Sources live in `<module>/src/main/kotlin/`, unit tests in
 - `:core:agent`: ADOS agent client, discovery, pairing, Wi-Fi join.
 - `:core:video`, `:core:map`, `:core:skills`, `:core:extensions`, `:core:cloud`.
 - `:radio:rx`, `:radio:usb`: phone radio receive path and USB radio service.
-- `:feature:{connect,fleet,node,settings,cockpit,plan,configure,logs}`: screens.
+- `:feature:{connect,home,node,settings,cockpit,plan,configure,logs}`: screens.
 - `:baselineprofile`: baseline profile generator.
 
 Link families plug in through Hilt set multibindings of `NodeSource`,
@@ -92,8 +92,12 @@ sources own protocol, persistence, and network details.
 ## UI Rules
 
 - User-visible strings belong in resources, not inline Compose text.
-- The app supports portrait and landscape on phones, tablets and controller
-  displays; adapt with `currentWindowAdaptiveInfo()` width classes.
+- The app is landscape-first: design every surface for compact height and keep
+  a working portrait fallback; use `isLandscape()` and
+  `currentWindowAdaptiveInfo()` from the design system.
+- Every control is reachable by touch, D-pad focus and a controller button;
+  overlays use `AdosSheet`/`AdosDialog`/`AdosMenu`, never dialog or popup
+  windows.
 - Keep command, telemetry, video, and map surfaces stable under live updates.
 - Colours, radius, spacing and motion come from `AdosTheme` and the generated
   `AdosTokens.kt` (`core/designsystem/.../tokens/AdosTokens.kt`). That file is

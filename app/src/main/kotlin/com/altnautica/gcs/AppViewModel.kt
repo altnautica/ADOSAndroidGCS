@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.core.data.home.SelectedVehicleStore
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.replay.ReplayLauncher
@@ -19,12 +20,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** App-shell state: whether to ask for the notification permission, and log replays. */
+/** App-shell state: whether to ask for the notification permission, log replays, and the post-connect selection. */
 @HiltViewModel
 class AppViewModel @Inject constructor(
     private val vehicles: VehicleRepository,
     private val dataStore: DataStore<Preferences>,
     private val replays: ReplayLauncher,
+    private val selectedVehicle: SelectedVehicleStore,
 ) : ViewModel() {
 
     /**
@@ -53,6 +55,14 @@ class AppViewModel @Inject constructor(
 
     /** Flying a node again lifts any Disconnect the notification applied. */
     fun reconnect(id: DeviceId) = vehicles.connect(id)
+
+    /** A new connection becomes Home's selected vehicle; [onSelected] then returns to Home. */
+    fun connected(id: DeviceId, onSelected: () -> Unit) {
+        viewModelScope.launch {
+            selectedVehicle.select(id)
+            onSelected()
+        }
+    }
 
     private companion object {
         val NOTIFICATIONS_ASKED = booleanPreferencesKey("app.notificationsAsked")

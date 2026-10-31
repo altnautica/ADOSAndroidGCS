@@ -4,7 +4,6 @@
 
     <!-- Navigation -->
     <string name="nav_settings">Settings</string>
-    <string name="nav_fleet">Fleet</string>
     <string name="nav_plan">Plan</string>
     <string name="nav_logs">Logs</string>
     <string name="nav_cloud">Cloud</string>

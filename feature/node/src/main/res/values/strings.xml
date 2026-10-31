@@ -22,16 +22,11 @@
     <string name="node_forget">Forget on this phone</string>
     <string name="node_credential_store_title">Could not update this phone\'s keys</string>
     <string name="node_credential_store_message">This phone\'s credential store could not be read just now, so the node key is still stored here. Nothing was lost. Try again in a moment.</string>
-    <string name="node_open_cockpit">Open cockpit</string>
-    <string name="node_cockpit_message">The cockpit opens full screen with video, HUD and the Skill Bar.</string>
-    <string name="node_cockpit_carried">Flies the drone this ground station carries: %1$s</string>
-    <string name="node_cockpit_no_drone_title">No drone linked</string>
-    <string name="node_cockpit_no_drone_message">No drone is linked to this ground station. See the Carried drones tab.</string>
+    <string name="node_fly">Fly</string>
+    <string name="node_setup">Setup</string>
+    <string name="node_parameters">Parameters</string>
 
     <string name="tab_overview">Overview</string>
-    <string name="tab_cockpit">Cockpit</string>
-    <string name="tab_setup">Setup</string>
-    <string name="tab_parameters">Parameters</string>
     <string name="tab_carried_drones">Carried drones</string>
     <string name="tab_radio">Radio</string>
     <string name="tab_network">Network</string>

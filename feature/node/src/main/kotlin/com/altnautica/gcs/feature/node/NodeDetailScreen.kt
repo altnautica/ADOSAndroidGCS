@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Tune
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
@@ -42,7 +44,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.EmptyStateAction
 import com.altnautica.gcs.core.designsystem.component.LoadingState
@@ -59,7 +60,6 @@ import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.link.node.canFly
-import com.altnautica.gcs.core.model.FcVariant
 import com.altnautica.gcs.core.designsystem.component.node.LivenessChip
 import com.altnautica.gcs.core.designsystem.component.node.ReachBadge
 import com.altnautica.gcs.core.designsystem.component.node.profileLabel
@@ -72,18 +72,19 @@ import com.altnautica.gcs.feature.node.visor.VisorOverviewCards
 import com.altnautica.gcs.feature.node.visor.VisorSessionsTab
 
 /**
- * Node detail: header (profile, liveness, reach, vitals) and the tab set for
- * the node's profile, plus any extension `node.detail.tab` pages.
+ * Vehicle detail: header (profile, liveness, reach, vitals, and Fly, Setup and
+ * Parameters actions) and the tab set for the node's profile, plus any extension
+ * `node.detail.tab` pages.
  */
 @Composable
 fun NodeDetailRoute(
     nodeId: DeviceId,
     onBack: () -> Unit,
-    onOpenCockpit: (DeviceId) -> Unit,
+    onFly: (DeviceId) -> Unit,
+    onOpenSetup: (DeviceId) -> Unit,
+    onOpenParams: (DeviceId) -> Unit,
     onOpenNode: (DeviceId) -> Unit,
     onPair: () -> Unit,
-    setupContent: @Composable (DeviceId, FcVariant) -> Unit,
-    parametersContent: @Composable (DeviceId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val vm = hiltViewModel<NodeDetailViewModel, NodeDetailViewModel.Factory>(key = "node-${nodeId.value}") { it.create(nodeId.value) }
@@ -95,15 +96,15 @@ fun NodeDetailRoute(
         state = state,
         forget = forget,
         onBack = onBack,
-        onOpenCockpit = onOpenCockpit,
+        onFly = onFly,
+        onOpenSetup = onOpenSetup,
+        onOpenParams = onOpenParams,
         onOpenNode = onOpenNode,
         onPair = onPair,
         onUnpair = vm::unpair,
         onForget = vm::forgetLocally,
         onClearForget = vm::clearForget,
         onRetryForget = vm::retryForget,
-        setupContent = setupContent,
-        parametersContent = parametersContent,
         modifier = modifier,
     )
 }
@@ -115,15 +116,15 @@ fun NodeDetailScreen(
     state: NodeDetailState,
     forget: ForgetState,
     onBack: () -> Unit,
-    onOpenCockpit: (DeviceId) -> Unit,
+    onFly: (DeviceId) -> Unit,
+    onOpenSetup: (DeviceId) -> Unit,
+    onOpenParams: (DeviceId) -> Unit,
     onOpenNode: (DeviceId) -> Unit,
     onPair: () -> Unit,
     onUnpair: () -> Unit,
     onForget: () -> Unit,
     onClearForget: () -> Unit,
     onRetryForget: () -> Unit,
-    setupContent: @Composable (DeviceId, FcVariant) -> Unit,
-    parametersContent: @Composable (DeviceId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ready = state as? NodeDetailState.Ready
@@ -143,6 +144,19 @@ fun NodeDetailScreen(
                     }
                 },
                 actions = {
+                    if (ready != null && ready.node.canFly()) {
+                        IconButton(onClick = { onFly(ready.node.id) }) {
+                            Icon(Icons.Outlined.SportsEsports, contentDescription = stringResource(R.string.node_fly))
+                        }
+                    }
+                    if (ready != null && NodeTabs.hasFlightController(ready.node)) {
+                        IconButton(onClick = { onOpenSetup(ready.node.id) }) {
+                            Icon(Icons.Outlined.Build, contentDescription = stringResource(R.string.node_setup))
+                        }
+                        IconButton(onClick = { onOpenParams(ready.node.id) }) {
+                            Icon(Icons.Outlined.Tune, contentDescription = stringResource(R.string.node_parameters))
+                        }
+                    }
                     if (ready != null && NodeTabs.hasAgentLink(ready.node)) {
                         Box(Modifier.adosMenuAnchor(menu)) {
                             IconButton(onClick = { menu.expanded = true }) {
@@ -184,7 +198,7 @@ fun NodeDetailScreen(
                         modifier = Modifier.align(Alignment.Center),
                     )
                 } else {
-                    NodeBody(state.node, state.tabs, state.vitals, onOpenCockpit, onOpenNode, setupContent, parametersContent)
+                    NodeBody(state.node, state.tabs, state.vitals, onOpenNode)
                 }
             }
         }
@@ -241,10 +255,7 @@ private fun NodeBody(
     node: NodeSummary,
     tabs: List<NodeTab>,
     vitals: NodeVitals,
-    onOpenCockpit: (DeviceId) -> Unit,
     onOpenNode: (DeviceId) -> Unit,
-    setupContent: @Composable (DeviceId, FcVariant) -> Unit,
-    parametersContent: @Composable (DeviceId) -> Unit,
 ) {
     val extensionPages by rememberExtensionNodePages(node.id, ExtensionSlots.NODE_DETAIL_TAB)
     val items: List<TabItem> = tabs.map { TabItem.Builtin(it) } +
@@ -284,9 +295,6 @@ private fun NodeBody(
                             null
                         },
                     )
-                    NodeTab.Cockpit -> CockpitLauncher(node, onOpenCockpit)
-                    NodeTab.Setup -> setupContent(node.id, node.fcVariant)
-                    NodeTab.Parameters -> parametersContent(node.id)
                     NodeTab.Capture -> VisorCaptureTab(node.id.value)
                     NodeTab.Sessions -> VisorSessionsTab(node.id.value)
                     NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh ->
@@ -314,42 +322,8 @@ private fun Header(node: NodeSummary, vitals: NodeVitals) {
     }
 }
 
-/** The Cockpit tab: the cockpit is full screen, so the tab launches it. */
-@Composable
-private fun CockpitLauncher(node: NodeSummary, onOpenCockpit: (DeviceId) -> Unit) {
-    Box(Modifier.fillMaxSize().padding(AdosSpacing.S6), contentAlignment = Alignment.Center) {
-        if (node.profile == NodeProfile.GroundStation && node.carriedDroneId == null) {
-            EmptyState(
-                icon = Icons.Outlined.LinkOff,
-                title = stringResource(R.string.node_cockpit_no_drone_title),
-                message = stringResource(R.string.node_cockpit_no_drone_message),
-            )
-        } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
-                Text(
-                    if (node.profile == NodeProfile.GroundStation) {
-                        stringResource(R.string.node_cockpit_carried, node.carriedDroneId?.value.orEmpty())
-                    } else {
-                        stringResource(R.string.node_cockpit_message)
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                AdosButton(
-                    label = stringResource(R.string.node_open_cockpit),
-                    onClick = { onOpenCockpit(node.id) },
-                    enabled = node.canFly(),
-                    icon = Icons.Outlined.SportsEsports,
-                )
-            }
-        }
-    }
-}
-
 private fun tabLabel(tab: NodeTab): Int = when (tab) {
     NodeTab.Overview -> R.string.tab_overview
-    NodeTab.Cockpit -> R.string.tab_cockpit
-    NodeTab.Setup -> R.string.tab_setup
-    NodeTab.Parameters -> R.string.tab_parameters
     NodeTab.Capture -> R.string.tab_capture
     NodeTab.Sessions -> R.string.tab_sessions
     NodeTab.CarriedDrones -> R.string.tab_carried_drones

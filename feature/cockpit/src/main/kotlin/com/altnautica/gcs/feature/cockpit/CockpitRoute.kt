@@ -25,7 +25,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -47,6 +46,7 @@ import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.EmptyStateAction
+import com.altnautica.gcs.core.designsystem.component.console.LocalLeaveGuard
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
@@ -70,12 +70,21 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
     val maxBrightness by vm.maxBrightness.collectAsStateWithLifecycle()
     val extensionNode by vm.extensionNodeId.collectAsStateWithLifecycle()
     val currentExit by rememberUpdatedState(onExit)
-    var confirmLeave by rememberSaveable { mutableStateOf(false) }
+    // The leave waiting on the armed confirm: back out of the cockpit, or an app-level move.
+    var pendingLeave by remember { mutableStateOf<(() -> Unit)?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val resources = LocalResources.current
 
-    fun requestExit() {
-        if (vm.vehicle.value?.telemetry?.heartbeat?.value?.armed == true) confirmLeave = true else currentExit()
+    fun guardLeave(proceed: () -> Unit) {
+        if (vm.vehicle.value?.telemetry?.heartbeat?.value?.armed == true) pendingLeave = proceed else proceed()
+    }
+
+    fun requestExit() = guardLeave { currentExit() }
+
+    val leaveGuard = LocalLeaveGuard.current
+    DisposableEffect(leaveGuard) {
+        leaveGuard.intercept = { proceed -> guardLeave(proceed) }
+        onDispose { leaveGuard.intercept = null }
     }
 
     KeepScreenOn()
@@ -144,25 +153,25 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
             )
         }
 
-        if (confirmLeave) {
+        pendingLeave?.let { leave ->
             AdosConfirmSheet(
                 title = stringResource(R.string.cockpit_leave_armed_title),
                 message = stringResource(R.string.cockpit_leave_armed_message),
-                onDismiss = { confirmLeave = false },
+                onDismiss = { pendingLeave = null },
                 danger = true,
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                     AdosButton(
                         stringResource(R.string.cockpit_stay),
-                        onClick = { confirmLeave = false },
+                        onClick = { pendingLeave = null },
                         modifier = Modifier.weight(1f),
                         variant = AdosButtonVariant.Secondary,
                     )
                     AdosButton(
                         stringResource(R.string.cockpit_leave),
                         onClick = {
-                            confirmLeave = false
-                            currentExit()
+                            pendingLeave = null
+                            leave()
                         },
                         modifier = Modifier.weight(1f),
                         variant = AdosButtonVariant.Danger,

@@ -1,6 +1,12 @@
-package com.altnautica.gcs.feature.fleet
+package com.altnautica.gcs.feature.home
 
 import com.altnautica.gcs.core.agent.node.LanNodeSource
+import com.altnautica.gcs.core.data.home.SelectedVehicleStore
+import com.altnautica.gcs.core.demo.DemoIds
+import com.altnautica.gcs.core.demo.DemoSettings
+import com.altnautica.gcs.core.link.node.NodeRepository
+import com.altnautica.gcs.core.link.node.NodeVitals
+import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import com.altnautica.gcs.core.model.BlockReason
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant
@@ -9,13 +15,11 @@ import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
-import com.altnautica.gcs.core.link.node.NodeRepository
-import com.altnautica.gcs.core.link.node.NodeVitals
-import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -30,14 +34,18 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class FleetViewModelTest {
+class HomeViewModelTest {
 
     private val dispatcher = UnconfinedTestDispatcher()
+    private val prefs = MemoryPreferences()
+    private val store = SelectedVehicleStore(prefs)
+    private val demo = DemoSettings(prefs)
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -65,17 +73,27 @@ class FleetViewModelTest {
     private fun lanNodes(unreadable: MutableStateFlow<Boolean> = MutableStateFlow(false)) =
         mockk<LanNodeSource> { every { savedNodesUnreadable } returns unreadable }
 
+    private fun CoroutineScope.vm(
+        nodes: List<NodeSummary>,
+        vitals: NodeVitalsRepository = vitals(),
+        lan: LanNodeSource = lanNodes(),
+    ): HomeViewModel {
+        val repo = NodeRepository(setOf(Source(MutableStateFlow(nodes))), this)
+        return HomeViewModel(repo, vitals, lan, store, demo).also { vm -> launch { vm.uiState.collect {} } }
+    }
+
+    private suspend fun HomeViewModel.loaded(): HomeUiState = uiState.first { !it.loading }
+
     @Test
-    fun emptySourcesGiveEmptyState() = runTest(dispatcher) {
-        val repo = NodeRepository(setOf(Source(MutableStateFlow(emptyList()))), backgroundScope)
-        val vm = FleetViewModel(repo, vitals(), lanNodes())
-        backgroundScope.launch { vm.uiState.collect {} }
-        assertEquals(FleetUiState.Empty, vm.uiState.first { it !is FleetUiState.Loading })
+    fun emptySourcesGiveNoVehicles() = runTest(dispatcher) {
+        val state = backgroundScope.vm(emptyList()).loaded()
+        assertTrue(state.vehicles.isEmpty())
+        assertNull(state.selected)
     }
 
     @Test
     fun cardsCarryVitalsAndFlyability() = runTest(dispatcher) {
-        val state = MutableStateFlow(
+        val vm = backgroundScope.vm(
             listOf(
                 node("drone", NodeProfile.Drone, listOf(Reach.Lan)),
                 node("gs-empty", NodeProfile.GroundStation, listOf(Reach.Lan)),
@@ -84,22 +102,21 @@ class FleetViewModelTest {
                 node("locked", NodeProfile.Drone, listOf(Reach.Blocked(BlockReason.NotPaired))),
                 node("usb", NodeProfile.Unknown, listOf(Reach.DirectFc)),
             ),
+            vitals = vitals(mapOf("drone" to NodeVitals(76, "LOITER", true))),
         )
-        val repo = NodeRepository(setOf(Source(state)), backgroundScope)
-        val vm = FleetViewModel(repo, vitals(mapOf("drone" to NodeVitals(76, "LOITER", true))), lanNodes())
-        backgroundScope.launch { vm.uiState.collect {} }
 
-        val cards = (vm.uiState.first { it is FleetUiState.Nodes && it.cards.any { c -> c.vitals.batteryPct != null } } as FleetUiState.Nodes)
-            .cards.associateBy { it.node.id.value }
+        val cards = vm.uiState.first { s -> s.vehicles.any { it.vitals.batteryPct != null } }.vehicles.associateBy { it.node.id.value }
         assertEquals(NodeVitals(76, "LOITER", true), cards.getValue("drone").vitals)
         assertTrue(cards.getValue("drone").canFly)
         assertTrue(cards.getValue("drone").showThumbnail)
+        assertTrue(cards.getValue("drone").hasAgentLink)
         assertFalse(cards.getValue("gs-empty").canFly)
         assertTrue(cards.getValue("gs-carrying").canFly)
         assertFalse(cards.getValue("ws").canFly)
         assertFalse(cards.getValue("locked").canFly)
         assertTrue(cards.getValue("usb").canFly)
         assertFalse(cards.getValue("usb").showThumbnail)
+        assertFalse(cards.getValue("usb").hasAgentLink)
     }
 
     @Test
@@ -107,25 +124,24 @@ class FleetViewModelTest {
         val unreadable = MutableStateFlow(true)
         val lan = lanNodes(unreadable)
         coEvery { lan.retrySavedNodes() } coAnswers { unreadable.value = false; true }
-        val repo = NodeRepository(setOf(Source(MutableStateFlow(emptyList()))), backgroundScope)
-        val vm = FleetViewModel(repo, vitals(), lan)
+        val vm = backgroundScope.vm(emptyList(), lan = lan)
 
-        assertTrue(vm.savedNodesUnreadable.value)
+        assertTrue(vm.loaded().savedNodesUnreadable)
         vm.retrySavedNodes()
         coVerify(exactly = 1) { lan.retrySavedNodes() }
-        assertFalse(vm.savedNodesUnreadable.value)
+        assertFalse(vm.loaded().savedNodesUnreadable)
     }
 
     @Test
     fun staleDroneHasNoThumbnail() {
-        val card = FleetViewModel.card(node("d", NodeProfile.Drone, listOf(Reach.Lan), Liveness.Stale), NodeVitals.UNKNOWN)
+        val card = HomeViewModel.card(node("d", NodeProfile.Drone, listOf(Reach.Lan), Liveness.Stale), NodeVitals.UNKNOWN)
         assertFalse(card.showThumbnail)
         assertTrue(card.canFly)
     }
 
     @Test
     fun liveNodesOrderByProfileThenName() = runTest(dispatcher) {
-        val state = MutableStateFlow(
+        val vm = backgroundScope.vm(
             listOf(
                 node("a-gs", NodeProfile.GroundStation, listOf(Reach.Lan)),
                 node("b-unknown", NodeProfile.Unknown, listOf(Reach.Lan)),
@@ -134,12 +150,49 @@ class FleetViewModelTest {
                 node("e-drone", NodeProfile.Drone, listOf(Reach.Lan)),
             ),
         )
-        val repo = NodeRepository(setOf(Source(state)), backgroundScope)
-        val vm = FleetViewModel(repo, vitals(), lanNodes())
-        backgroundScope.launch { vm.uiState.collect {} }
-        val cards = (vm.uiState.first { it is FleetUiState.Nodes } as FleetUiState.Nodes).cards
+        val cards = vm.loaded().vehicles
         assertEquals(listOf("e-drone", "d-visor", "c-ws", "a-gs", "b-unknown"), cards.map { it.node.id.value })
         assertFalse(cards.first { it.node.profile == NodeProfile.Visor }.canFly)
         assertFalse(cards.first { it.node.profile == NodeProfile.Unknown }.canFly)
+    }
+
+    @Test
+    fun selectionFallsBackToFirstVehicle() = runTest(dispatcher) {
+        store.select(DeviceId("gone"))
+        val vm = backgroundScope.vm(listOf(node("b", NodeProfile.Drone, listOf(Reach.Lan)), node("a", NodeProfile.GroundStation, listOf(Reach.Lan))))
+        assertEquals("b", vm.loaded().selected?.node?.id?.value)
+    }
+
+    @Test
+    fun storedSelectionIsKept() = runTest(dispatcher) {
+        store.select(DeviceId("a"))
+        val vm = backgroundScope.vm(listOf(node("b", NodeProfile.Drone, listOf(Reach.Lan)), node("a", NodeProfile.GroundStation, listOf(Reach.Lan))))
+        assertEquals("a", vm.loaded().selected?.node?.id?.value)
+    }
+
+    @Test
+    fun selectNextWrapsBothWays() = runTest(dispatcher) {
+        val vm = backgroundScope.vm(
+            listOf(
+                node("a", NodeProfile.Drone, listOf(Reach.Lan)),
+                node("b", NodeProfile.Drone, listOf(Reach.Lan)),
+                node("c", NodeProfile.Drone, listOf(Reach.Lan)),
+            ),
+        )
+        assertEquals("a", vm.loaded().selected?.node?.id?.value)
+        vm.selectNext(-1)
+        assertEquals("c", vm.uiState.first { it.selected?.node?.id?.value == "c" }.selected?.node?.id?.value)
+        vm.selectNext(1)
+        assertEquals("a", vm.uiState.first { it.selected?.node?.id?.value == "a" }.selected?.node?.id?.value)
+        assertEquals(DeviceId("a"), store.selected.first())
+    }
+
+    @Test
+    fun enableDemoTurnsDemoOnAndSelectsTheDemoDrone() = runTest(dispatcher) {
+        val vm = backgroundScope.vm(emptyList())
+        assertFalse(vm.loaded().demoEnabled)
+        vm.enableDemo()
+        assertTrue(vm.uiState.first { it.demoEnabled }.demoEnabled)
+        assertEquals(DemoIds.DRONE, store.selected.first())
     }
 }

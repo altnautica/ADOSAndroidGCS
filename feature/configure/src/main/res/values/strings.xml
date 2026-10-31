@@ -13,6 +13,9 @@
     <string name="cfg_retry">Retry</string>
     <string name="cfg_cancel">Cancel</string>
     <string name="cfg_back">Back</string>
+    <string name="cfg_setup_surface_title">Setup · %1$s</string>
+    <string name="cfg_params_surface_title">Parameters · %1$s</string>
+    <string name="cfg_surface_loading">Loading vehicle…</string>
 
     <!-- Motor test -->
     <string name="cfg_motor_title">Motor test</string>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_wordmark" translatable="false">ADOS</string>
+    <string name="home_loading">Looking for vehicles…</string>
+    <string name="home_empty_title">No vehicles yet</string>
+    <string name="home_empty_message">Drones, ground stations and flight controllers you connect to appear here.</string>
+    <string name="home_add_vehicle">Add vehicle</string>
+    <string name="home_try_demo">Try the demo drone</string>
+    <string name="home_demo_vehicle">Demo vehicle</string>
+    <string name="home_battery">Battery %1$d%%</string>
+    <string name="home_battery_unknown">Battery —</string>
+    <string name="home_mode_unknown">Mode —</string>
+    <string name="home_armed">Armed</string>
+    <string name="home_disarmed">Disarmed</string>
+    <string name="home_carries">Carries %1$s</string>
+    <string name="home_thumbnail">Live video still from %1$s</string>
+    <string name="home_saved_nodes_unreadable">The keys of your paired nodes could not be read from this phone\'s credential store just now, so some nodes may be missing. Nothing was deleted.</string>
+    <string name="home_retry">Try again</string>
+    <string name="home_ready">Ready to fly</string>
+    <string name="home_vehicle_tile">%1$s, %2$s</string>
+    <string name="home_vehicle_tile_selected">%1$s, %2$s, selected</string>
+    <string name="home_controller_battery">Controller battery %1$d%%</string>
+    <string name="home_controller_battery_unknown">Controller connected</string>
+
+    <string name="home_surface_home">Home</string>
+    <string name="home_surface_fly">Fly</string>
+    <string name="home_surface_plan">Plan</string>
+    <string name="home_surface_setup">Setup</string>
+    <string name="home_surface_parameters">Parameters</string>
+    <string name="home_surface_vehicle">Vehicle</string>
+    <string name="home_surface_logs">Logs</string>
+    <string name="home_surface_settings">Settings</string>
+
+    <string name="home_reason_offline">Vehicle offline</string>
+    <string name="home_reason_no_carried">No drone paired to this ground station</string>
+    <string name="home_reason_no_vehicle">No vehicle selected</string>
+    <string name="home_reason_no_fc">No flight controller</string>
+    <string name="home_reason_no_link">No usable link</string>
+
+    <string name="home_hint_open">Open</string>
+    <string name="home_hint_details">Vehicle details</string>
+    <string name="home_hint_more">More</string>
+    <string name="home_hint_switch">Switch vehicle</string>
+    <string name="home_hint_menu">Menu</string>
+
+    <string name="home_menu_vehicle_details">Vehicle details</string>
+    <string name="home_menu_plan_for">Plan for this vehicle</string>
+    <string name="home_menu_unpair">Unpair</string>
+
+    <string name="home_quick_close">Close</string>
+    <string name="home_quick_select">Select</string>
+    <string name="home_quick_no_vehicle">No vehicle selected</string>
+    <string name="home_quick_preflight">Preflight %1$d/%2$d</string>
+    <string name="home_quick_controller">Controller</string>
+    <string name="home_quick_no_controller">No controller connected</string>
+    <string name="home_quick_battery_unknown">Battery —</string>
+    <string name="home_quick_charging">Charging</string>
+    <string name="home_quick_stick_on">Stick control on</string>
+    <string name="home_quick_stick_off">Stick control off</string>
+    <string name="home_quick_alerts">Alerts</string>
+    <plurals name="home_quick_alert_count">
+        <item quantity="one">%1$d active alert</item>
+        <item quantity="other">%1$d active alerts</item>
+    </plurals>
+</resources>
