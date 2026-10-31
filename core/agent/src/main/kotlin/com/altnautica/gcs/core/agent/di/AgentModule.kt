@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.agent.di
 
 import com.altnautica.gcs.core.agent.mavlink.AgentMavlinkTransportProvider
+import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.node.LanNodeSource
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.TransportProvider
@@ -10,6 +11,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
+import dagger.multibindings.Multibinds
 import okhttp3.OkHttpClient
 import javax.inject.Singleton
 
@@ -37,4 +39,7 @@ abstract class AgentBindingsModule {
     @Binds
     @IntoSet
     abstract fun bindAgentMavlinkTransport(provider: AgentMavlinkTransportProvider): TransportProvider
+
+    @Multibinds
+    abstract fun localNodeApis(): Set<LocalNodeApis>
 }

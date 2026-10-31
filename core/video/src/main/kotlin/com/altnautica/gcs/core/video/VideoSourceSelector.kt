@@ -7,7 +7,6 @@ import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VideoSource
-import com.altnautica.gcs.core.video.demo.DemoVideoFactory
 import javax.inject.Inject
 
 /**
@@ -16,10 +15,13 @@ import javax.inject.Inject
  * Video prefers a different order from commands: the phone's own radio first
  * (lowest latency, no network), then the agent's WHEP endpoint (on the LAN, or
  * through the ground station that carries the drone), then the cloud
- * peer-to-peer path, then the cloud relay. Pure: the caller supplies agent
- * base URLs, so a JVM test drives the whole decision.
+ * peer-to-peer path, then the cloud relay. A registered factory may claim a
+ * node outright through [VideoSourceFactory.candidates]. Otherwise pure: the
+ * caller supplies agent base URLs, so a JVM test drives the whole decision.
  */
-class VideoSourceSelector @Inject constructor() {
+class VideoSourceSelector @Inject constructor(
+    private val factories: Set<@JvmSuppressWildcards VideoSourceFactory>,
+) {
 
     /**
      * Sources worth trying for [node], best first. [agentBaseUrl] answers the
@@ -32,7 +34,7 @@ class VideoSourceSelector @Inject constructor() {
         streamId: String?,
         agentBaseUrl: (DeviceId) -> String?,
     ): List<VideoSource> {
-        if (node.id == DemoVideoFactory.DEMO_NODE) return listOf(DemoVideoFactory.SOURCE)
+        factories.firstNotNullOfOrNull { f -> f.candidates(node, streamId).takeIf { it.isNotEmpty() } }?.let { return it }
         val reaches = node.reaches
         val out = ArrayList<VideoSource>(4)
         if (reaches.any { it is Reach.PhoneRadio }) out += VideoSource.PhoneRadio(node.id)

@@ -1,6 +1,5 @@
 package com.altnautica.gcs.core.video.whep
 
-import com.altnautica.gcs.core.video.demo.DemoVideoFactory
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.video.VideoClock
@@ -39,7 +38,7 @@ class WhepVideoFactory @Inject constructor(
     )
 
     override fun supports(src: VideoSource): Boolean =
-        src is VideoSource.AgentWhep && src.node != DemoVideoFactory.DEMO_NODE
+        src is VideoSource.AgentWhep && (src.baseUrl.startsWith("http://") || src.baseUrl.startsWith("https://"))
 
     override fun create(src: VideoSource): VideoSessionHandle {
         val whep = src as VideoSource.AgentWhep

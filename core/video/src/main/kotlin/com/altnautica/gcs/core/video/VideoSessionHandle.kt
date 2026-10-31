@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.video
 
 import android.view.Surface
+import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
 import kotlinx.coroutines.flow.StateFlow
@@ -59,6 +60,10 @@ interface VideoSessionHandle {
  */
 interface VideoSourceFactory {
     fun supports(src: VideoSource): Boolean
+
+    /** Sources this factory claims for [node] ahead of the normal fallback order; empty for most factories. */
+    fun candidates(node: NodeSummary, stream: String?): List<VideoSource> = emptyList()
+
     fun create(src: VideoSource): VideoSessionHandle
 }
 

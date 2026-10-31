@@ -8,7 +8,6 @@ import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VideoSource
-import com.altnautica.gcs.core.video.demo.DemoVideoFactory
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -17,7 +16,7 @@ class VideoSourceSelectorTest {
     private val drone = DeviceId("drone-1")
     private val ground = DeviceId("gs-1")
     private val urls = mapOf(drone to "http://192.168.1.50:8080/", ground to "http://192.168.1.60:8080/")
-    private val selector = VideoSourceSelector()
+    private val selector = VideoSourceSelector(emptySet())
 
     private fun node(vararg reaches: Reach, id: DeviceId = drone, liveness: Liveness = Liveness.Live) =
         NodeSummary(id, "n", NodeProfile.Drone, reaches.toList(), liveness, null, FcVariant.Unknown, null, null)
@@ -59,11 +58,18 @@ class VideoSourceSelectorTest {
     }
 
     @Test
-    fun `demo node plays the demo pattern`() {
-        assertEquals(
-            listOf(DemoVideoFactory.SOURCE),
-            selector.candidates(node(Reach.DirectFc, id = DemoVideoFactory.DEMO_NODE), null) { null },
-        )
+    fun `a factory that claims a node supplies its sources first`() {
+        val claimed = VideoSource.AgentWhep(drone, "test://claimed/", "main")
+        val claiming = object : VideoSourceFactory {
+            override fun supports(src: VideoSource) = src == claimed
+            override fun candidates(node: NodeSummary, stream: String?) =
+                if (node.id == drone) listOf(claimed) else emptyList()
+            override fun create(src: VideoSource): VideoSessionHandle = error("not played here")
+        }
+        val withClaim = VideoSourceSelector(setOf(claiming))
+        assertEquals(listOf(claimed), withClaim.candidates(node(Reach.Lan, Reach.CloudLive), "main") { urls[it] })
+        val other = node(Reach.Lan, id = ground)
+        assertEquals(selector.candidates(other, "main") { urls[it] }, withClaim.candidates(other, "main") { urls[it] })
     }
 
     @Test

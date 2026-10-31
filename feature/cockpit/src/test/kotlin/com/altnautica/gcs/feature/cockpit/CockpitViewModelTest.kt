@@ -124,7 +124,7 @@ class CockpitViewModelTest {
             bindings = BindingStore(dataStore),
             router = router,
             settingsRepo = CockpitSettingsRepository(dataStore),
-            videoSelector = VideoSourceSelector(),
+            videoSelector = VideoSourceSelector(emptySet()),
             videoSessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns (endpoint != null) },
             endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns endpoint },
             streamCatalog = streamCatalog,

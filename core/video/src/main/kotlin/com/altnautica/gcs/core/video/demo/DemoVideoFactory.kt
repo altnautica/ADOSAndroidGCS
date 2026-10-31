@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.view.Surface
 import androidx.core.graphics.withRotation
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.video.FrameWatchdog
@@ -39,7 +40,11 @@ class DemoVideoFactory @Inject constructor(
     @VideoScope private val scope: CoroutineScope,
 ) : VideoSourceFactory {
 
-    override fun supports(src: VideoSource): Boolean = src.nodeId() == DEMO_NODE
+    override fun supports(src: VideoSource): Boolean =
+        src is VideoSource.AgentWhep && src.baseUrl.startsWith(DEMO_BASE_URL)
+
+    override fun candidates(node: NodeSummary, stream: String?): List<VideoSource> =
+        if (node.id == DEMO_NODE) listOf(source(stream)) else emptyList()
 
     override fun create(src: VideoSource): VideoSessionHandle = DemoVideoSession(src, scope, VideoClock.Elapsed)
 
@@ -50,8 +55,11 @@ class DemoVideoFactory @Inject constructor(
         /** The source the selector offers for the demo node. */
         val SOURCE: VideoSource = source(null)
 
+        /** Not an HTTP base, so only this factory plays a demo source. */
+        const val DEMO_BASE_URL: String = "demo://local/"
+
         /** A demo source for one named stream; the pattern is labelled with it so a switch is visible. */
-        fun source(stream: String?): VideoSource = VideoSource.AgentWhep(DEMO_NODE, "http://127.0.0.1/", stream)
+        fun source(stream: String?): VideoSource = VideoSource.AgentWhep(DEMO_NODE, DEMO_BASE_URL, stream)
     }
 }
 
