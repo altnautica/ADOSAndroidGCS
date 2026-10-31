@@ -78,11 +78,12 @@ object ReservedInputs {
 }
 
 /**
- * Removes the stick's resting noise: values within [flat] of centre read 0 and the
- * remaining travel is rescaled so full deflection still reads ±1.
+ * Removes the stick's resting noise: values within [flat] plus the operator's [extra]
+ * dead zone of centre read 0 and the remaining travel is rescaled so full deflection
+ * still reads ±1.
  */
-fun applyDeadZone(value: Float, flat: Float): Float {
-    val f = flat.coerceIn(0f, 0.99f)
+fun applyDeadZone(value: Float, flat: Float, extra: Float): Float {
+    val f = (flat.coerceAtLeast(0f) + extra.coerceAtLeast(0f)).coerceAtMost(0.99f)
     val v = value.coerceIn(-1f, 1f)
     if (abs(v) <= f) return 0f
     return sign(v) * (abs(v) - f) / (1f - f)

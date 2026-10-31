@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.manual
 
+import com.altnautica.gcs.core.data.controller.ControllerSettings
 import com.altnautica.gcs.core.link.manual.ManualControlInput
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.model.Reach
@@ -9,12 +10,14 @@ import com.altnautica.gcs.core.skills.input.ReservedInputs
 import com.altnautica.gcs.feature.cockpit.StickChip
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -26,6 +29,7 @@ internal class CockpitManualControl(
     vehicle: StateFlow<Vehicle?>,
     vehicleServices: StateFlow<VehicleServices?>,
     router: AdosInputRouter,
+    controllerSettings: Flow<ControllerSettings>,
 ) {
     private val stickOn = MutableStateFlow(false)
 
@@ -41,13 +45,16 @@ internal class CockpitManualControl(
         }
     }.stateIn(scope, SharingStarted.Eagerly, StickChip.NoGamepad)
 
-    private val manualInput: StateFlow<ManualControlInput> = combine(router.axes, router.buttons) { axes, pressed ->
-        // Mode 2: left stick throttle/yaw, right stick pitch/roll.
+    private val expo: StateFlow<Float> = controllerSettings.map { it.expoPct / 100f }
+        .stateIn(scope, SharingStarted.Eagerly, 0f)
+
+    private val manualInput: StateFlow<ManualControlInput> = combine(router.axes, router.buttons, expo) { axes, pressed, e ->
+        // Mode 2: left stick throttle/yaw, right stick pitch/roll. Throttle takes no expo.
         ManualControlInput(
-            pitch = axes.rightY,
-            roll = axes.rightX,
+            pitch = applyExpo(axes.rightY, e),
+            roll = applyExpo(axes.rightX, e),
             throttle = ((axes.leftY + 1f) / 2f).coerceIn(0f, 1f),
-            yaw = axes.leftX,
+            yaw = applyExpo(axes.leftX, e),
             buttons = ReservedInputs.manualControlButtonMask(pressed),
         )
     }.stateIn(scope, SharingStarted.Eagerly, ManualControlInput.NEUTRAL)
@@ -90,3 +97,6 @@ internal class CockpitManualControl(
         stopStreamer()
     }
 }
+
+/** Stick expo: softens the centre while keeping full deflection; [e] is 0 (linear) to 1 (cubic). */
+internal fun applyExpo(x: Float, e: Float): Float = (1f - e) * x + e * x * x * x

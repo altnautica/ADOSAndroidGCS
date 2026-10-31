@@ -39,6 +39,7 @@ import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
+import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -124,6 +125,7 @@ class CockpitViewModelTest {
             bindings = BindingStore(dataStore),
             router = router,
             settingsRepo = CockpitSettingsRepository(dataStore),
+            controllerSettings = ControllerSettingsRepository(dataStore),
             videoSelector = VideoSourceSelector(emptySet()),
             videoSessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns (endpoint != null) },
             endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns endpoint },

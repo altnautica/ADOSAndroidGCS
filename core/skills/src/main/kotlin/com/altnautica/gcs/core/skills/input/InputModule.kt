@@ -9,6 +9,16 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.Multibinds
+import javax.inject.Qualifier
+import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+
+/** Process-lifetime main-thread scope that owns controller hardware (battery, rumble, light bar). */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class InputScope
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -23,5 +33,10 @@ abstract class InputModule {
     companion object {
         @Provides
         fun provideMonotonicClock(): MonotonicClock = MonotonicClock { SystemClock.elapsedRealtime() }
+
+        @Provides
+        @Singleton
+        @InputScope
+        fun inputScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     }
 }

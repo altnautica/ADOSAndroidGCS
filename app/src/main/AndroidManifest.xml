@@ -30,6 +30,11 @@
         android:name="android.hardware.usb.host"
         android:required="false" />
 
+    <!-- Game controllers drive navigation and flight; the app also works without one. -->
+    <uses-feature
+        android:name="android.hardware.gamepad"
+        android:required="false" />
+
     <application
         android:name=".AdosApplication"
         android:allowBackup="false"

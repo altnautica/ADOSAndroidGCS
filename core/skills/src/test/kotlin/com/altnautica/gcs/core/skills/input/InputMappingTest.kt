@@ -8,16 +8,24 @@ import org.junit.Test
 class InputMappingTest {
     @Test
     fun `values inside the flat range read zero`() {
-        assertEquals(0f, applyDeadZone(0.08f, 0.1f), 0f)
-        assertEquals(0f, applyDeadZone(-0.1f, 0.1f), 0f)
+        assertEquals(0f, applyDeadZone(0.08f, 0.1f, 0f), 0f)
+        assertEquals(0f, applyDeadZone(-0.1f, 0.1f, 0f), 0f)
     }
 
     @Test
     fun `travel outside the flat range is rescaled to full deflection`() {
-        assertEquals(1f, applyDeadZone(1f, 0.1f), 1e-6f)
-        assertEquals(-1f, applyDeadZone(-1f, 0.1f), 1e-6f)
-        assertEquals(0.5f, applyDeadZone(0.55f, 0.1f), 1e-6f)
-        assertEquals(0.3f, applyDeadZone(0.3f, 0f), 1e-6f)
+        assertEquals(1f, applyDeadZone(1f, 0.1f, 0f), 1e-6f)
+        assertEquals(-1f, applyDeadZone(-1f, 0.1f, 0f), 1e-6f)
+        assertEquals(0.5f, applyDeadZone(0.55f, 0.1f, 0f), 1e-6f)
+        assertEquals(0.3f, applyDeadZone(0.3f, 0f, 0f), 1e-6f)
+    }
+
+    @Test
+    fun `the operator dead zone adds to the hardware flat range and is capped`() {
+        assertEquals(0f, applyDeadZone(0.25f, 0.1f, 0.15f), 0f)
+        assertEquals(0.5f, applyDeadZone(0.625f, 0.1f, 0.15f), 1e-6f)
+        assertEquals(0f, applyDeadZone(0.98f, 0.9f, 0.2f), 0f)
+        assertEquals(1f, applyDeadZone(1f, 0.9f, 0.2f), 1e-6f)
     }
 
     @Test

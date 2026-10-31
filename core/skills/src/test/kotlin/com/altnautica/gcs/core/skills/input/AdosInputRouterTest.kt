@@ -12,6 +12,7 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -33,14 +34,17 @@ class AdosInputRouterTest {
     @After
     fun tearDown() = unmockkStatic(InputDevice::class)
 
-    private fun router(): AdosInputRouter {
+    private var now = 0L
+
+    private fun capture(uiNavigation: Boolean = false) = object : InputCapture {
+        override fun consumesChord(chord: String) = false
+        override val capturesEnter = true
+        override val uiNavigation = uiNavigation
+    }
+
+    private fun router(capture: InputCapture? = capture()): AdosInputRouter {
         val context = mockk<Context>(relaxed = true) { every { getSystemService(InputManager::class.java) } returns null }
-        return AdosInputRouter(context, MonotonicClock { 0L }).also {
-            it.capture = object : InputCapture {
-                override fun consumesChord(chord: String) = false
-                override val capturesEnter = true
-            }
-        }
+        return AdosInputRouter(context, MonotonicClock { now }).also { it.capture = capture }
     }
 
     private fun key(action: Int, code: Int, repeat: Int, gamepad: Boolean = false, device: Int = 1) = mockk<KeyEvent> {
@@ -49,18 +53,36 @@ class AdosInputRouterTest {
         every { repeatCount } returns repeat
         every { isFromSource(any()) } returns gamepad
         every { metaState } returns 0
+        every { getUnicodeChar(any()) } returns 0
         every { deviceId } returns device
     }
 
-    /** A joystick move with the left stick X at [leftX] and every other axis centred. */
-    private fun stick(leftX: Float, device: Int) = mockk<MotionEvent> {
+    /** Presses and releases a gamepad key after [holdMs]; returns whether down and up were consumed. */
+    private fun press(r: AdosInputRouter, code: Int, holdMs: Long = 50): Pair<Boolean, Boolean> {
+        val down = r.onKey(key(KeyEvent.ACTION_DOWN, code, repeat = 0, gamepad = true))
+        now += holdMs
+        val up = r.onKey(key(KeyEvent.ACTION_UP, code, repeat = 0, gamepad = true))
+        return down to up
+    }
+
+    /** A joystick move with the given axes and every other axis centred. */
+    private fun motion(device: Int, vararg values: Pair<Int, Float>) = mockk<MotionEvent> {
         every { isFromSource(InputDevice.SOURCE_JOYSTICK) } returns true
         every { actionMasked } returns MotionEvent.ACTION_MOVE
         every { this@mockk.device } returns null
         every { deviceId } returns device
         every { historySize } returns 0
         every { getAxisValue(any()) } returns 0f
-        every { getAxisValue(MotionEvent.AXIS_X) } returns leftX
+        values.forEach { (axis, v) -> every { getAxisValue(axis) } returns v }
+    }
+
+    /** A joystick move with the left stick X at [leftX] and every other axis centred. */
+    private fun stick(leftX: Float, device: Int) = motion(device, MotionEvent.AXIS_X to leftX)
+
+    private fun TestScope.collectUi(r: AdosInputRouter): MutableList<UiInput> {
+        val out = mutableListOf<UiInput>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { r.uiInput.collect { out += it } }
+        return out
     }
 
     private fun gamepadDevice(): InputDevice = mockk {
@@ -142,5 +164,145 @@ class AdosInputRouterTest {
         every { InputDevice.getDeviceIds() } returns IntArray(0)
         r.refreshDevices()
         assertFalse(r.gamepadConnected.value)
+    }
+
+    @Test
+    fun `outside the cockpit Y is consumed and emits Details, never a click`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        assertEquals(true to true, press(r, KeyEvent.KEYCODE_BUTTON_Y))
+        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.Details)), ui)
+        assertTrue(r.lastInputController.value)
+    }
+
+    @Test
+    fun `outside the cockpit A activates and B goes back`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        assertEquals(true to true, press(r, KeyEvent.KEYCODE_BUTTON_A))
+        assertEquals(true to true, press(r, KeyEvent.KEYCODE_BUTTON_B))
+        assertEquals(listOf(UiInput.Activate(true), UiInput.Activate(false), UiInput.Back), ui)
+    }
+
+    @Test
+    fun `Home tap opens the Quick menu and a hold goes Home`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        press(r, KeyEvent.KEYCODE_BUTTON_MODE, holdMs = 200)
+        press(r, KeyEvent.KEYCODE_BUTTON_MODE, holdMs = 700)
+        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.QuickMenu), UiInput.Command(UiCommand.Home)), ui)
+    }
+
+    @Test
+    fun `Start tap is the screen menu and a hold the Quick menu`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        press(r, KeyEvent.KEYCODE_BUTTON_START, holdMs = 100)
+        press(r, KeyEvent.KEYCODE_BUTTON_START, holdMs = 650)
+        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.Menu), UiInput.Command(UiCommand.QuickMenu)), ui)
+    }
+
+    @Test
+    fun `X tap is More and a hold only ends with More up`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        press(r, KeyEvent.KEYCODE_BUTTON_X, holdMs = 100)
+        press(r, KeyEvent.KEYCODE_BUTTON_X, holdMs = 400)
+        val c = { u: UiCommand -> UiInput.Command(u) }
+        assertEquals(
+            listOf(c(UiCommand.MoreDown), c(UiCommand.MoreUp), c(UiCommand.More), c(UiCommand.MoreDown), c(UiCommand.MoreUp)),
+            ui,
+        )
+    }
+
+    @Test
+    fun `stick buttons and repeats are consumed without UI input`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        assertEquals(true to true, press(r, KeyEvent.KEYCODE_BUTTON_THUMBL))
+        assertEquals(true to true, press(r, KeyEvent.KEYCODE_BUTTON_1))
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_L1, repeat = 0, gamepad = true))
+        assertTrue(r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_L1, repeat = 1, gamepad = true)))
+        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.PrevTab)), ui)
+    }
+
+    @Test
+    fun `a gamepad D-pad key is left to focus navigation but still updates the bitmask`() = runTest {
+        val r = router(capture = null)
+        assertFalse(r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN, repeat = 0, gamepad = true)))
+        assertEquals(1 shl GamepadButton.DPAD_DOWN, r.buttons.value)
+    }
+
+    @Test
+    fun `a keyboard centre key is not consumed`() = runTest {
+        val r = router(capture = null)
+        assertFalse(r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 0, gamepad = false)))
+        assertFalse(r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, repeat = 0, gamepad = false)))
+    }
+
+    @Test
+    fun `the hat holds a navigation direction until it centres`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        assertTrue(r.onMotion(motion(1, MotionEvent.AXIS_HAT_X to -1f)))
+        assertTrue(r.onMotion(motion(1, MotionEvent.AXIS_HAT_X to -1f)))
+        assertTrue(r.onMotion(motion(1)))
+        assertEquals(listOf(UiInput.Direction(NavDirection.Left), UiInput.Direction(null)), ui)
+    }
+
+    @Test
+    fun `the left stick navigates with hysteresis`() = runTest {
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        r.onMotion(motion(1, MotionEvent.AXIS_Y to 0.5f))
+        r.onMotion(motion(1, MotionEvent.AXIS_Y to 0.7f))
+        r.onMotion(motion(1, MotionEvent.AXIS_Y to 0.45f))
+        r.onMotion(motion(1, MotionEvent.AXIS_Y to 0.3f))
+        // Axis Y is positive with the stick pulled down.
+        assertEquals(listOf(UiInput.Direction(NavDirection.Down), UiInput.Direction(null)), ui)
+    }
+
+    @Test
+    fun `touch makes touch the last input`() = runTest {
+        val r = router(capture = null)
+        press(r, KeyEvent.KEYCODE_BUTTON_A)
+        assertTrue(r.lastInputController.value)
+        r.onTouch()
+        assertFalse(r.lastInputController.value)
+    }
+
+    @Test
+    fun `with a flight capture A is a button event and no UI input`() = runTest {
+        val r = router()
+        val ui = collectUi(r)
+        val events = mutableListOf<InputEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { r.events.collect { events += it } }
+        assertEquals(true to true, press(r, KeyEvent.KEYCODE_BUTTON_A, holdMs = 30))
+        assertEquals(listOf(InputEvent.Button(GamepadButton.A, true, 0), InputEvent.Button(GamepadButton.A, false, 30)), events)
+        assertTrue(ui.isEmpty())
+        // The sticks fly, so they never navigate.
+        r.onMotion(stick(0.9f, device = 1))
+        assertTrue(ui.isEmpty())
+    }
+
+    @Test
+    fun `with a flight capture Home still reaches the app`() = runTest {
+        val r = router()
+        val ui = collectUi(r)
+        press(r, KeyEvent.KEYCODE_BUTTON_MODE, holdMs = 100)
+        press(r, KeyEvent.KEYCODE_BUTTON_START, holdMs = 100)
+        press(r, KeyEvent.KEYCODE_BUTTON_START, holdMs = 700)
+        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.QuickMenu), UiInput.Command(UiCommand.QuickMenu)), ui)
+    }
+
+    @Test
+    fun `a capture overlay navigates with buttons while the sticks keep flying`() = runTest {
+        val r = router(capture(uiNavigation = true))
+        val ui = collectUi(r)
+        press(r, KeyEvent.KEYCODE_BUTTON_A)
+        r.onMotion(stick(0.9f, device = 1))
+        assertEquals(0.9f, r.axes.value.leftX, 0.001f)
+        r.onMotion(motion(1, MotionEvent.AXIS_HAT_Y to 1f))
+        assertEquals(listOf(UiInput.Activate(true), UiInput.Activate(false), UiInput.Direction(NavDirection.Down)), ui)
     }
 }

@@ -50,6 +50,7 @@ import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
+import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -95,6 +96,7 @@ class CockpitViewModel @AssistedInject constructor(
     private val bindings: BindingStore,
     private val router: AdosInputRouter,
     private val settingsRepo: CockpitSettingsRepository,
+    controllerSettings: ControllerSettingsRepository,
     videoSelector: VideoSourceSelector,
     videoSessions: VideoSessionManager,
     endpoints: AgentEndpoints,
@@ -305,7 +307,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Manual control ---------------------------------------------------------------
 
-    private val manual = CockpitManualControl(viewModelScope, vehicle, nodeFlows.vehicleServices, router)
+    private val manual = CockpitManualControl(viewModelScope, vehicle, nodeFlows.vehicleServices, router, controllerSettings.settings)
 
     fun toggleStickControl() = manual.toggle()
 
@@ -368,6 +370,9 @@ class CockpitViewModel @AssistedInject constructor(
     private val capture = object : InputCapture {
         override fun consumesChord(chord: String) = CockpitInputMapper.consumesChord(chord, loadout.value)
         override val capturesEnter: Boolean get() = confirm.isOpen
+
+        // Every controller button belongs to the cockpit while it captures input.
+        override val uiNavigation: Boolean get() = false
     }
 
     /** Starts taking hardware input while the cockpit is visible. */

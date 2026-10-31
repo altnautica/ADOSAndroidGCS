@@ -67,6 +67,7 @@ class SkillBindingsViewModel @Inject constructor(
     private val inputCapture = object : InputCapture {
         override fun consumesChord(chord: String) = capture.value?.kind == CaptureKind.Key
         override val capturesEnter: Boolean get() = false
+        override val uiNavigation: Boolean get() = false
     }
 
     fun assign(slotIndex: Int, skillId: String?) {
