@@ -96,24 +96,18 @@ fun profileLabel(profile: NodeProfile): Int = when (profile) {
 }
 
 /**
- * Categorical identity hue per node profile, the same values Mission Control
- * uses for its node accents. These are identity colours, not status: a status
- * still pairs its own colour with an icon and a label. An unknown profile gets
- * the neutral secondary foreground.
+ * Identity hue per node profile, taken from the active theme's colour roles so
+ * every theme (NVG included) keeps its own palette. These are identity colours,
+ * not status: a status still pairs its own colour with an icon and a label.
  */
 @Composable
-fun profileTint(profile: NodeProfile): Color = when (profile) {
-    NodeProfile.Drone -> NodeAccent.DRONE
-    NodeProfile.GroundStation -> NodeAccent.GROUND_STATION
-    NodeProfile.Workstation -> NodeAccent.WORKSTATION
-    NodeProfile.Visor -> NodeAccent.VISOR
-    NodeProfile.Unknown -> AdosTheme.colors.fgSecondary
-}
-
-/** Node identity accents, mirrored from Mission Control's `--node-accent-*` values. */
-object NodeAccent {
-    val DRONE = Color(0xFF3B82F6)
-    val GROUND_STATION = Color(0xFFA78BFA)
-    val WORKSTATION = Color(0xFF2DD4BF)
-    val VISOR = Color(0xFFF9A8D4)
+fun profileTint(profile: NodeProfile): Color {
+    val colors = AdosTheme.colors
+    return when (profile) {
+        NodeProfile.Drone -> colors.accentPrimary
+        NodeProfile.GroundStation -> colors.statusInfo
+        NodeProfile.Workstation -> colors.fgSecondary
+        NodeProfile.Visor -> colors.statusSuccess
+        NodeProfile.Unknown -> colors.fgTertiary
+    }
 }

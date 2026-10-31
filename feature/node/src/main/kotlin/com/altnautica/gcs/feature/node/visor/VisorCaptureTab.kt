@@ -17,7 +17,7 @@ import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material3.AlertDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
@@ -227,17 +227,17 @@ private fun ControlsCard(c: CaptureUi, busy: Boolean, vm: VisorViewModel) {
         }
     }
     if (confirmStop) {
-        AlertDialog(
-            onDismissRequest = { confirmStop = false },
-            title = { Text(stringResource(R.string.visor_stop_title)) },
+        AdosDialog(
+            onDismiss = { confirmStop = false },
+            title = stringResource(R.string.visor_stop_title),
             text = { Text(stringResource(R.string.visor_stop_message)) },
-            confirmButton = {
+            confirm = {
                 TextButton(onClick = {
                     confirmStop = false
                     vm.stop()
                 }) { Text(stringResource(R.string.visor_action_stop)) }
             },
-            dismissButton = { TextButton(onClick = { confirmStop = false }) { Text(stringResource(R.string.node_cancel)) } },
+            dismiss = { TextButton(onClick = { confirmStop = false }) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
 }

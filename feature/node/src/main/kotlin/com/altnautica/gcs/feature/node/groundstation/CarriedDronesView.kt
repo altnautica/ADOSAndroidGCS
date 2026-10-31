@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Flight
 import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material3.AlertDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -83,17 +83,17 @@ internal fun CarriedView(c: CarriedDrones, busy: Boolean, onOpenNode: (DeviceId)
         }
     }
     releasing?.let { id ->
-        AlertDialog(
-            onDismissRequest = { releasing = null },
-            title = { Text(stringResource(R.string.gs_carried_release_title)) },
+        AdosDialog(
+            onDismiss = { releasing = null },
+            title = stringResource(R.string.gs_carried_release_title),
             text = { Text(stringResource(R.string.gs_carried_release_message, id)) },
-            confirmButton = {
+            confirm = {
                 TextButton(onClick = {
                     onRelease(id)
                     releasing = null
                 }) { Text(stringResource(R.string.gs_carried_release)) }
             },
-            dismissButton = { TextButton(onClick = { releasing = null }) { Text(stringResource(R.string.node_cancel)) } },
+            dismiss = { TextButton(onClick = { releasing = null }) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
 }

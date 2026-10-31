@@ -14,9 +14,11 @@ import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.SportsEsports
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -125,7 +127,7 @@ fun NodeDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     val ready = state as? NodeDetailState.Ready
-    var menu by rememberSaveable { mutableStateOf(false) }
+    val menu = rememberAdosMenuState()
     var confirmUnpair by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         modifier = modifier,
@@ -142,20 +144,20 @@ fun NodeDetailScreen(
                 },
                 actions = {
                     if (ready != null && NodeTabs.hasAgentLink(ready.node)) {
-                        Box {
-                            IconButton(onClick = { menu = true }) {
+                        Box(Modifier.adosMenuAnchor(menu)) {
+                            IconButton(onClick = { menu.expanded = true }) {
                                 Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.node_more))
                             }
-                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.node_unpair)) },
-                                    leadingIcon = { Icon(Icons.Outlined.LinkOff, contentDescription = null) },
-                                    onClick = {
-                                        menu = false
-                                        confirmUnpair = true
-                                    },
-                                )
-                            }
+                            AdosMenu(
+                                state = menu,
+                                items = listOf(
+                                    AdosMenuItem(
+                                        label = stringResource(R.string.node_unpair),
+                                        icon = Icons.Outlined.LinkOff,
+                                        onClick = { confirmUnpair = true },
+                                    ),
+                                ),
+                            )
                         }
                     }
                 },
@@ -188,35 +190,35 @@ fun NodeDetailScreen(
         }
     }
     if (confirmUnpair) {
-        AlertDialog(
-            onDismissRequest = { confirmUnpair = false },
-            title = { Text(stringResource(R.string.node_unpair_title)) },
+        AdosDialog(
+            onDismiss = { confirmUnpair = false },
+            title = stringResource(R.string.node_unpair_title),
             text = { Text(stringResource(R.string.node_unpair_message)) },
-            confirmButton = {
+            confirm = {
                 TextButton(onClick = {
                     confirmUnpair = false
                     onUnpair()
                 }) { Text(stringResource(R.string.node_unpair)) }
             },
-            dismissButton = { TextButton(onClick = { confirmUnpair = false }) { Text(stringResource(R.string.node_cancel)) } },
+            dismiss = { TextButton(onClick = { confirmUnpair = false }) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
     if (forget is ForgetState.Failed) {
-        AlertDialog(
-            onDismissRequest = onClearForget,
-            title = { Text(stringResource(R.string.node_unpair_failed_title)) },
+        AdosDialog(
+            onDismiss = onClearForget,
+            title = stringResource(R.string.node_unpair_failed_title),
             text = { Text(stringResource(R.string.node_unpair_failed_message)) },
-            confirmButton = { TextButton(onClick = onForget) { Text(stringResource(R.string.node_forget)) } },
-            dismissButton = { TextButton(onClick = onClearForget) { Text(stringResource(R.string.node_cancel)) } },
+            confirm = { TextButton(onClick = onForget) { Text(stringResource(R.string.node_forget)) } },
+            dismiss = { TextButton(onClick = onClearForget) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
     if (forget == ForgetState.CredentialStoreUnavailable) {
-        AlertDialog(
-            onDismissRequest = onClearForget,
-            title = { Text(stringResource(R.string.node_credential_store_title)) },
+        AdosDialog(
+            onDismiss = onClearForget,
+            title = stringResource(R.string.node_credential_store_title),
             text = { Text(stringResource(R.string.node_credential_store_message)) },
-            confirmButton = { TextButton(onClick = onRetryForget) { Text(stringResource(R.string.node_retry)) } },
-            dismissButton = { TextButton(onClick = onClearForget) { Text(stringResource(R.string.node_cancel)) } },
+            confirm = { TextButton(onClick = onRetryForget) { Text(stringResource(R.string.node_retry)) } },
+            dismiss = { TextButton(onClick = onClearForget) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
 }

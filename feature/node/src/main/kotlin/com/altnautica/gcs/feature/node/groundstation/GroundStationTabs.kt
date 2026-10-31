@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Wifi
-import androidx.compose.material3.AlertDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -174,12 +174,12 @@ private fun NetworkView(
     WifiClientCard(n.client, scan, busy, vm)
     n.modem?.let { m -> ModemCard(m, busy, vm) }
     joinNeedsForce?.let { join ->
-        AlertDialog(
-            onDismissRequest = vm::cancelJoin,
-            title = { Text(stringResource(R.string.gs_net_join_force_title)) },
+        AdosDialog(
+            onDismiss = vm::cancelJoin,
+            title = stringResource(R.string.gs_net_join_force_title),
             text = { Text(stringResource(R.string.gs_net_join_force_message, join.ssid)) },
-            confirmButton = { TextButton(onClick = { vm.join(join.ssid, join.passphrase, standDownAccessPoint = true) }) { Text(stringResource(R.string.gs_net_join)) } },
-            dismissButton = { TextButton(onClick = vm::cancelJoin) { Text(stringResource(R.string.node_cancel)) } },
+            confirm = { TextButton(onClick = { vm.join(join.ssid, join.passphrase, standDownAccessPoint = true) }) { Text(stringResource(R.string.gs_net_join)) } },
+            dismiss = { TextButton(onClick = vm::cancelJoin) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
 }
@@ -272,9 +272,9 @@ private fun WifiClientCard(client: WifiClient?, scan: Load<List<ScannedNetwork>>
     joining?.let { ssid ->
         val open = (scan as? Load.Ready)?.value?.firstOrNull { it.ssid == ssid }?.open == true
         var pass by rememberSaveable(ssid) { mutableStateOf("") }
-        AlertDialog(
-            onDismissRequest = { joining = null },
-            title = { Text(stringResource(R.string.gs_net_join_title, ssid)) },
+        AdosDialog(
+            onDismiss = { joining = null },
+            title = stringResource(R.string.gs_net_join_title, ssid),
             text = {
                 if (!open) {
                     OutlinedTextField(
@@ -287,7 +287,7 @@ private fun WifiClientCard(client: WifiClient?, scan: Load<List<ScannedNetwork>>
                     )
                 }
             },
-            confirmButton = {
+            confirm = {
                 TextButton(
                     onClick = {
                         vm.join(ssid, pass.ifEmpty { null })
@@ -296,7 +296,7 @@ private fun WifiClientCard(client: WifiClient?, scan: Load<List<ScannedNetwork>>
                     enabled = open || pass.length >= MIN_PASSPHRASE,
                 ) { Text(stringResource(R.string.gs_net_join)) }
             },
-            dismissButton = { TextButton(onClick = { joining = null }) { Text(stringResource(R.string.node_cancel)) } },
+            dismiss = { TextButton(onClick = { joining = null }) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
 }
@@ -354,17 +354,17 @@ private fun MeshView(m: MeshState, window: PairWindow?, busy: Boolean, vm: Groun
         KeyValueRow(stringResource(R.string.gs_mesh_configured), m.configuredRole?.let { roleLabel(it) })
     }
     pendingRole?.let { role ->
-        AlertDialog(
-            onDismissRequest = { pendingRole = null },
-            title = { Text(stringResource(R.string.gs_mesh_role_change_title, roleLabel(role))) },
+        AdosDialog(
+            onDismiss = { pendingRole = null },
+            title = stringResource(R.string.gs_mesh_role_change_title, roleLabel(role)),
             text = { Text(stringResource(R.string.gs_mesh_role_change_message)) },
-            confirmButton = {
+            confirm = {
                 TextButton(onClick = {
                     vm.setRole(role)
                     pendingRole = null
                 }) { Text(stringResource(R.string.gs_apply)) }
             },
-            dismissButton = { TextButton(onClick = { pendingRole = null }) { Text(stringResource(R.string.node_cancel)) } },
+            dismiss = { TextButton(onClick = { pendingRole = null }) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
     if (m.role == "direct" || m.up == null) {

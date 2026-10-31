@@ -32,7 +32,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.database.FlightSessionEntity
 import com.altnautica.gcs.core.database.TlogFileEntity
-import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.GlassSurface
@@ -115,7 +115,7 @@ fun FlightHistoryScreen(
         }
     }
     pendingDelete?.let { session ->
-        ConfirmSheet(
+        AdosConfirmSheet(
             title = stringResource(R.string.logs_delete_title),
             message = stringResource(R.string.logs_delete_message),
             onDismiss = { pendingDelete = null },

@@ -30,7 +30,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.altnautica.gcs.core.designsystem.component.InWindowConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.SlideToConfirm
 import com.altnautica.gcs.core.designsystem.component.SwitchSettingRow
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
@@ -41,7 +41,6 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.builtin.TakeoffAltitude
-import com.altnautica.gcs.feature.cockpit.SheetBackHandler
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
 import com.altnautica.gcs.feature.cockpit.skillbar.confirmMessage
@@ -69,8 +68,7 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
     val policy = state.request.policy
     val skill = state.request.skill
     val targetMode = state.request.args[SkillArgs.TARGET_MODE] as? String
-    SheetBackHandler(actions::cancel)
-    InWindowConfirmSheet(
+    AdosConfirmSheet(
         title = confirmTitle(policy.titleKey, skillLabel(skill)),
         message = targetMode?.let { stringResource(R.string.cockpit_confirm_mode_to, it) } ?: confirmMessage(policy.messageKey),
         onDismiss = actions::cancel,

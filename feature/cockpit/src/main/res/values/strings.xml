@@ -20,7 +20,6 @@
     <string name="cockpit_split_divider">Resize video and map</string>
     <string name="cockpit_hud_description">Flight instruments</string>
     <string name="cockpit_radar_description">Proximity radar</string>
-    <string name="cockpit_target_actions">Target actions</string>
     <string name="cockpit_tts_mode">Mode %1$s</string>
 
     <!-- Safety band -->

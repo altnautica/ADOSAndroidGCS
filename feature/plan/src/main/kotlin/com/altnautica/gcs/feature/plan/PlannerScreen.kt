@@ -34,14 +34,10 @@ import androidx.compose.material.icons.outlined.Pentagon
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Route
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -74,6 +70,12 @@ import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import com.altnautica.gcs.core.map.AdosMap
 import com.altnautica.gcs.core.map.DragPhase
 import com.altnautica.gcs.core.map.MapBasemap
@@ -153,12 +155,12 @@ fun PlannerScreen(state: PlannerUiState, actions: PlannerActions, modifier: Modi
     }
     state.startSheet?.let { StartMissionSheetView(it, actions) }
     if (state.confirmReplaceWithDownload) {
-        AlertDialog(
-            onDismissRequest = actions.onCancelDownload,
-            title = { Text(stringResource(R.string.plan_download_replace_title)) },
+        AdosDialog(
+            title = stringResource(R.string.plan_download_replace_title),
+            onDismiss = actions.onCancelDownload,
             text = { Text(stringResource(R.string.plan_download_replace_message)) },
-            confirmButton = { TextButton(onClick = actions.onConfirmDownload) { Text(stringResource(R.string.plan_download_replace_confirm)) } },
-            dismissButton = { TextButton(onClick = actions.onCancelDownload) { Text(stringResource(R.string.plan_cancel)) } },
+            confirm = { TextButton(onClick = actions.onConfirmDownload) { Text(stringResource(R.string.plan_download_replace_confirm)) } },
+            dismiss = { TextButton(onClick = actions.onCancelDownload) { Text(stringResource(R.string.plan_cancel)) } },
         )
     }
 }
@@ -288,66 +290,44 @@ private fun VehicleChip(state: PlannerUiState) {
 
 @Composable
 private fun BasemapMenu(state: PlannerUiState, actions: PlannerActions) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(Icons.Outlined.Layers, contentDescription = stringResource(R.string.plan_action_basemap), tint = AdosTheme.colors.hudInk)
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            MapProvider.entries.forEach { provider ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(provider.titleRes)) },
-                    onClick = {
-                        actions.onBasemap(MapBasemap.Online(provider))
-                        open = false
-                    },
-                    trailingIcon = if ((state.basemap as? MapBasemap.Online)?.provider == provider) {
-                        { Icon(Icons.Outlined.Flag, contentDescription = null) }
-                    } else {
-                        null
-                    },
-                )
-            }
-            state.packs.forEach { pack ->
-                DropdownMenuItem(
-                    text = { Text(pack.name) },
-                    onClick = {
-                        actions.onBasemap(MapBasemap.Pack(pack))
-                        open = false
-                    },
-                    trailingIcon = if ((state.basemap as? MapBasemap.Pack)?.pack?.id == pack.id) {
-                        { Icon(Icons.Outlined.Flag, contentDescription = null) }
-                    } else {
-                        null
-                    },
-                )
-            }
-        }
+    val menu = rememberAdosMenuState()
+    IconButton(onClick = { menu.expanded = true }, modifier = Modifier.adosMenuAnchor(menu)) {
+        Icon(Icons.Outlined.Layers, contentDescription = stringResource(R.string.plan_action_basemap), tint = AdosTheme.colors.hudInk)
     }
+    val onlineItems = MapProvider.entries.map { provider ->
+        AdosMenuItem(
+            label = stringResource(provider.titleRes),
+            icon = if ((state.basemap as? MapBasemap.Online)?.provider == provider) Icons.Outlined.Flag else null,
+        ) { actions.onBasemap(MapBasemap.Online(provider)) }
+    }
+    val packItems = state.packs.map { pack ->
+        AdosMenuItem(
+            label = pack.name,
+            icon = if ((state.basemap as? MapBasemap.Pack)?.pack?.id == pack.id) Icons.Outlined.Flag else null,
+        ) { actions.onBasemap(MapBasemap.Pack(pack)) }
+    }
+    AdosMenu(menu, onlineItems + packItems)
 }
 
 @Composable
 private fun OverflowMenu(state: PlannerUiState, actions: PlannerActions) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.plan_action_more), tint = AdosTheme.colors.hudInk)
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text(stringResource(R.string.plan_action_new)) }, onClick = { actions.onNew(); open = false })
-            DropdownMenuItem(text = { Text(stringResource(R.string.plan_action_import)) }, onClick = { actions.onImport(); open = false })
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.plan_action_export_plan)) },
-                onClick = { actions.onExport(PlanFileFormat.QgcPlan, state.name); open = false },
-                enabled = !state.plan.isEmpty,
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.plan_action_export_waypoints)) },
-                onClick = { actions.onExport(PlanFileFormat.Waypoints, state.name); open = false },
-                enabled = state.plan.items.isNotEmpty(),
-            )
-        }
+    val menu = rememberAdosMenuState()
+    IconButton(onClick = { menu.expanded = true }, modifier = Modifier.adosMenuAnchor(menu)) {
+        Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.plan_action_more), tint = AdosTheme.colors.hudInk)
     }
+    AdosMenu(
+        menu,
+        listOf(
+            AdosMenuItem(stringResource(R.string.plan_action_new)) { actions.onNew() },
+            AdosMenuItem(stringResource(R.string.plan_action_import)) { actions.onImport() },
+            AdosMenuItem(stringResource(R.string.plan_action_export_plan), enabled = !state.plan.isEmpty) {
+                actions.onExport(PlanFileFormat.QgcPlan, state.name)
+            },
+            AdosMenuItem(stringResource(R.string.plan_action_export_waypoints), enabled = state.plan.items.isNotEmpty()) {
+                actions.onExport(PlanFileFormat.Waypoints, state.name)
+            },
+        ),
+    )
 }
 
 @Composable
@@ -377,7 +357,7 @@ private fun ToolRow(tool: EditTool, onTool: (EditTool) -> Unit) {
 @Composable
 private fun VehiclePickerSheet(state: PlannerUiState, onPick: (com.altnautica.gcs.core.model.DeviceId?) -> Unit, onDismiss: () -> Unit) {
     val colors = AdosTheme.colors
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgSurface) {
+    AdosSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             Text(stringResource(R.string.plan_vehicle_picker_title), style = MaterialTheme.typography.titleMedium, color = colors.fgPrimary)
             if (state.nodes.isEmpty()) {
@@ -413,7 +393,7 @@ private fun VehiclePickerSheet(state: PlannerUiState, onPick: (com.altnautica.gc
 private fun LibrarySheet(state: PlannerUiState, actions: PlannerActions, onDismiss: () -> Unit) {
     val colors = AdosTheme.colors
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgSurface) {
+    AdosSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4)) {
             Text(stringResource(R.string.plan_library_title), style = MaterialTheme.typography.titleMedium, color = colors.fgPrimary)
             if (state.library.isEmpty()) {
@@ -464,7 +444,7 @@ private fun ItemActionsSheet(state: PlannerUiState, id: Long, actions: PlannerAc
         LaunchedEffect(id) { onDismiss() }
         return
     }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgSurface) {
+    AdosSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4)) {
             Text(stringResource(R.string.plan_item_title, index + 1), style = MaterialTheme.typography.titleMedium, color = colors.fgPrimary)
             SheetAction(stringResource(R.string.plan_item_insert_before)) { actions.onInsertNear(id, false); onDismiss() }

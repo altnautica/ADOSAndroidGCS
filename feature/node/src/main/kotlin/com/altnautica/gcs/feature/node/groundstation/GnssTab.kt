@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SatelliteAlt
-import androidx.compose.material3.AlertDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -124,17 +124,17 @@ private fun BaseCard(base: BaseUi?, here: PositionUi?, busy: Boolean, onBase: (B
         }
     }
     if (confirmFixed && here != null) {
-        AlertDialog(
-            onDismissRequest = { confirmFixed = false },
-            title = { Text(stringResource(R.string.gs_gnss_set_fixed)) },
+        AdosDialog(
+            onDismiss = { confirmFixed = false },
+            title = stringResource(R.string.gs_gnss_set_fixed),
             text = { Text(stringResource(R.string.gs_gnss_set_fixed_message, position(here))) },
-            confirmButton = {
+            confirm = {
                 TextButton(onClick = {
                     confirmFixed = false
                     onBase(BaseModeRequest.Fixed(here.latDeg, here.lonDeg, here.hEllipsoidM))
                 }) { Text(stringResource(R.string.gs_gnss_set_fixed)) }
             },
-            dismissButton = { TextButton(onClick = { confirmFixed = false }) { Text(stringResource(R.string.node_cancel)) } },
+            dismiss = { TextButton(onClick = { confirmFixed = false }) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
 }

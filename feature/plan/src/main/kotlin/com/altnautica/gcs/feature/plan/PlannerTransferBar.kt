@@ -21,7 +21,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
-import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.SlideToConfirm
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
@@ -154,7 +154,7 @@ private fun commandResultLabel(result: CommandResult) = when (result) {
 @Composable
 internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerActions) {
     val colors = AdosTheme.colors
-    ConfirmSheet(
+    AdosConfirmSheet(
         title = stringResource(R.string.plan_start_title),
         message = stringResource(if (sheet.armed) R.string.plan_start_message_armed else R.string.plan_start_message_disarmed),
         onDismiss = actions.onDismissStart,

@@ -34,9 +34,6 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -50,7 +47,7 @@ import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.EmptyStateAction
-import com.altnautica.gcs.core.designsystem.component.InWindowConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
@@ -82,7 +79,6 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
     }
 
     KeepScreenOn()
-    ImmersiveBars()
     MaxBrightness(maxBrightness)
     HardwareInput(onAttach = vm::attachInput, onDetach = vm::detachInput)
     WindowFocusLoss(vm::onWindowFocusLost)
@@ -149,8 +145,7 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
         }
 
         if (confirmLeave) {
-            SheetBackHandler { confirmLeave = false }
-            InWindowConfirmSheet(
+            AdosConfirmSheet(
                 title = stringResource(R.string.cockpit_leave_armed_title),
                 message = stringResource(R.string.cockpit_leave_armed_message),
                 onDismiss = { confirmLeave = false },
@@ -195,23 +190,6 @@ private fun KeepScreenOn() {
         val before = view.keepScreenOn
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = before }
-    }
-}
-
-/** Hides the status and navigation bars while the cockpit shows; a swipe reveals them briefly. */
-@Composable
-private fun ImmersiveBars() {
-    val view = LocalView.current
-    val activity = LocalContext.current.findActivity() ?: return
-    DisposableEffect(activity, view) {
-        val controller = WindowCompat.getInsetsController(activity.window, view)
-        val behavior = controller.systemBarsBehavior
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        onDispose {
-            controller.show(WindowInsetsCompat.Type.systemBars())
-            controller.systemBarsBehavior = behavior
-        }
     }
 }
 

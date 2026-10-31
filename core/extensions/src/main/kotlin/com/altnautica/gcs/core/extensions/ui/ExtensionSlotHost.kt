@@ -22,7 +22,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.viewModelScope
-import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.extensions.R
 import com.altnautica.gcs.core.extensions.bridge.ConfirmBroker
@@ -183,7 +183,7 @@ internal fun ExtensionPromptHost(
     val list by prompts.collectAsStateWithLifecycle()
     val head = list.firstOrNull() ?: return
     if (!claim(head.id)) return
-    ConfirmSheet(
+    AdosConfirmSheet(
         title = head.title,
         message = head.body,
         onDismiss = { answer(head.id, false) },

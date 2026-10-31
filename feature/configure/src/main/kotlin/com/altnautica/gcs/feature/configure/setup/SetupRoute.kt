@@ -31,7 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
@@ -122,7 +122,7 @@ fun SetupRoute(nodeId: DeviceId, fcVariant: FcVariant, modifier: Modifier = Modi
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
     pending?.let { p ->
-        ConfirmSheet(
+        AdosConfirmSheet(
             title = stringResource(R.string.cfg_param_armed_title),
             message = stringResource(R.string.cfg_param_armed_message, p.name, ParamFile.formatValue(p.value)),
             onDismiss = params::dismissPendingWrite,

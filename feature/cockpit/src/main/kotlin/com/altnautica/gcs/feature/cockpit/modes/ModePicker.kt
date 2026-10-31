@@ -3,13 +3,13 @@ package com.altnautica.gcs.feature.cockpit.modes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -23,7 +23,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.altnautica.gcs.core.designsystem.component.InWindowSheet
+import androidx.compose.foundation.layout.width
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
@@ -31,7 +32,6 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.skills.builtin.modeChangeConfirm
-import com.altnautica.gcs.feature.cockpit.SheetBackHandler
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonText
 
@@ -51,11 +51,11 @@ fun modeChoices(available: List<FlightMode>, currentMode: String?): List<ModeCho
 }
 
 /** Flight-mode picker opened from the band's mode chip and the drawer's Set mode entry; place it in a full-size box. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ModePickerSheet(state: ModePickerUi, onPick: (String) -> Unit, onDismiss: () -> Unit) {
     val colors = AdosTheme.colors
-    SheetBackHandler(onDismiss)
-    InWindowSheet(onDismiss) {
+    AdosSheet(onDismiss) {
         Column(Modifier.padding(horizontal = AdosSpacing.S6), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
             Text(stringResource(R.string.cockpit_mode_picker_title), style = MaterialTheme.typography.titleMedium)
             when {
@@ -63,14 +63,15 @@ fun ModePickerSheet(state: ModePickerUi, onPick: (String) -> Unit, onDismiss: ()
                 state.choices.isEmpty() -> Text(stringResource(R.string.cockpit_mode_picker_empty), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
             }
         }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(132.dp),
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(AdosSpacing.S4),
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
         ) {
-            items(state.choices, key = { it.name }) { choice ->
-                ModeTile(choice, state.enabled) { onPick(choice.name) }
+            state.choices.forEach { choice ->
+                Box(Modifier.width(132.dp)) {
+                    ModeTile(choice, state.enabled) { onPick(choice.name) }
+                }
             }
         }
     }

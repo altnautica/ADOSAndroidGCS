@@ -20,13 +20,12 @@ import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,7 +43,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
-import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
@@ -98,7 +97,7 @@ fun ParametersRoute(nodeId: DeviceId, modifier: Modifier = Modifier) {
         modifier = modifier,
     )
     pending?.let { p ->
-        ConfirmSheet(
+        AdosConfirmSheet(
             title = stringResource(R.string.cfg_param_armed_title),
             message = stringResource(R.string.cfg_param_armed_message, p.name, ParamFile.formatValue(p.value)),
             onDismiss = viewModel::dismissPendingWrite,
@@ -300,7 +299,6 @@ private fun MessageLine(message: ParamMessage, rows: Map<String, ParamRow>, onDi
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ImportReviewSheet(
     review: ImportReview,
@@ -309,7 +307,7 @@ private fun ImportReviewSheet(
     onDismiss: () -> Unit,
 ) {
     val colors = AdosTheme.colors
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.bgSurface, contentColor = colors.fgPrimary) {
+    AdosSheet(onDismiss = onDismiss) {
         Column(Modifier.fillMaxWidth().padding(AdosSpacing.S6), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             Text(stringResource(R.string.cfg_import_title), style = MaterialTheme.typography.titleLarge)
             Text(

@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.altnautica.gcs.core.designsystem.component.console.consoleFocus
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
@@ -63,7 +64,7 @@ fun AdosButton(
     when (variant) {
         AdosButtonVariant.Secondary -> OutlinedButton(
             onClick = onClick,
-            modifier = modifier.then(minSize),
+            modifier = modifier.consoleFocus(shape).then(minSize),
             enabled = enabled,
             shape = shape,
             contentPadding = padding,
@@ -75,7 +76,7 @@ fun AdosButton(
             val content = if (variant == AdosButtonVariant.Danger) colors.statusOn else colors.accentForeground
             Button(
                 onClick = onClick,
-                modifier = modifier.then(minSize),
+                modifier = modifier.consoleFocus(shape).then(minSize),
                 enabled = enabled,
                 shape = shape,
                 contentPadding = padding,

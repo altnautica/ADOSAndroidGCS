@@ -14,7 +14,7 @@ import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FolderOff
 import androidx.compose.material.icons.outlined.ViewInAr
-import androidx.compose.material3.AlertDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -173,9 +173,9 @@ private fun UploadChip(s: SessionUi) {
  */
 @Composable
 private fun DeleteDialog(s: SessionUi, onDismiss: () -> Unit, onConfirm: (force: Boolean) -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.visor_delete_title)) },
+    AdosDialog(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.visor_delete_title),
         text = {
             Text(
                 if (s.uploaded) {
@@ -185,12 +185,12 @@ private fun DeleteDialog(s: SessionUi, onDismiss: () -> Unit, onConfirm: (force:
                 },
             )
         },
-        confirmButton = {
+        confirm = {
             TextButton(onClick = { onConfirm(!s.uploaded) }) {
                 Text(stringResource(if (s.uploaded) R.string.visor_action_delete else R.string.visor_delete_anyway))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.node_cancel)) } },
+        dismiss = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.node_cancel)) } },
     )
 }
 

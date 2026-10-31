@@ -10,7 +10,7 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.AlertDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,6 +33,8 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import com.altnautica.gcs.core.designsystem.component.console.ImmersiveSystemBars
+import com.altnautica.gcs.core.designsystem.component.console.isLandscape
 import com.altnautica.gcs.core.map.offline.OfflineMapsScreen
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.cockpit.CockpitRoute
@@ -82,6 +84,7 @@ private val TOP_LEVEL = listOf(
 @Composable
 fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()) {
     val backStack = rememberNavBackStack(FleetKey)
+    ImmersiveSystemBars(enabled = isLandscape())
     LaunchedEffect(pairLinks) {
         pairLinks.collect { link -> BackStackOps.push(backStack, ConnectKey(link.code, link.host)) }
     }
@@ -203,15 +206,15 @@ private fun NotificationPermissionPrompt(viewModel: AppViewModel) {
         LaunchedEffect(Unit) { viewModel.notificationsAsked() }
         return
     }
-    AlertDialog(
-        onDismissRequest = viewModel::notificationsAsked,
-        title = { Text(stringResource(R.string.permission_notifications_title)) },
+    AdosDialog(
+        title = stringResource(R.string.permission_notifications_title),
+        onDismiss = viewModel::notificationsAsked,
         text = { Text(stringResource(R.string.permission_notifications_message)) },
-        confirmButton = {
+        confirm = {
             TextButton(onClick = { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
                 Text(stringResource(R.string.permission_continue))
             }
         },
-        dismissButton = { TextButton(onClick = viewModel::notificationsAsked) { Text(stringResource(R.string.permission_not_now)) } },
+        dismiss = { TextButton(onClick = viewModel::notificationsAsked) { Text(stringResource(R.string.permission_not_now)) } },
     )
 }

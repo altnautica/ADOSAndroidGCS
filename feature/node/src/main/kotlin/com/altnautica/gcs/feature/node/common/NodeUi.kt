@@ -24,7 +24,7 @@ import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.agent.http.AgentError
-import com.altnautica.gcs.core.designsystem.component.ConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
@@ -98,7 +98,7 @@ fun agentErrorText(error: AgentError?, message: String?): String = when (error) 
 @Composable
 fun WriteStatus(state: WriteState, runner: AgentWriteRunner, modifier: Modifier = Modifier) {
     when (state) {
-        is WriteState.ForceRequired -> ConfirmSheet(
+        is WriteState.ForceRequired -> AdosConfirmSheet(
             title = stringResource(R.string.node_force_title),
             message = stringResource(R.string.node_force_message, state.label),
             onDismiss = runner::cancelForce,

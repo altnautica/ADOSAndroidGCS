@@ -10,21 +10,20 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import com.altnautica.gcs.core.designsystem.component.InWindowSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,7 +52,6 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.skills.input.GamepadButton
-import com.altnautica.gcs.feature.cockpit.SheetBackHandler
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.SlotUi
 
@@ -221,24 +219,25 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
  * The flight-mode picker entry and every bar-eligible skill (the overflow drawer, also
  * opened by Select and Ctrl+K). Drawn in the cockpit window; place it in a full-size box.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SkillDrawer(skills: List<SlotUi>, width: WidthClass, onActivate: (String) -> Unit, onDismiss: () -> Unit) {
     val size = slotSize(width)
-    SheetBackHandler(onDismiss)
-    InWindowSheet(onDismiss) {
+    AdosSheet(onDismiss) {
         Text(
             stringResource(R.string.cockpit_skill_drawer),
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = AdosSpacing.S6),
         )
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(size + AdosSpacing.S2),
+        FlowRow(
             modifier = Modifier.fillMaxWidth().padding(AdosSpacing.S4),
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
         ) {
-            items(skills, key = { it.skill!!.id }) { slot ->
-                SkillSlot(slot, size, { id -> onDismiss(); onActivate(id) })
+            skills.forEach { slot ->
+                Box(Modifier.width(size + AdosSpacing.S2), contentAlignment = Alignment.Center) {
+                    SkillSlot(slot, size, { id -> onDismiss(); onActivate(id) })
+                }
             }
         }
     }

@@ -22,4 +22,61 @@
     <string name="profile_workstation">Workstation</string>
     <string name="profile_visor">Visor</string>
     <string name="profile_unknown">Node</string>
+    <!-- Spoken controller button names (content descriptions). -->
+    <string name="console_button_cross">Cross button</string>
+    <string name="console_button_circle">Circle button</string>
+    <string name="console_button_triangle">Triangle button</string>
+    <string name="console_button_square">Square button</string>
+    <string name="console_button_l1">L1 button</string>
+    <string name="console_button_r1">R1 button</string>
+    <string name="console_button_l2">L2 trigger</string>
+    <string name="console_button_r2">R2 trigger</string>
+    <string name="console_button_options">Options button</string>
+    <string name="console_button_share">Share button</string>
+    <string name="console_button_ps">PS button</string>
+    <string name="console_button_l3">Left stick press</string>
+    <string name="console_button_r3">Right stick press</string>
+    <string name="console_button_a">A button</string>
+    <string name="console_button_b">B button</string>
+    <string name="console_button_y">Y button</string>
+    <string name="console_button_x">X button</string>
+    <string name="console_button_lb">Left bumper</string>
+    <string name="console_button_rb">Right bumper</string>
+    <string name="console_button_lt">Left trigger</string>
+    <string name="console_button_rt">Right trigger</string>
+    <string name="console_button_menu">Menu button</string>
+    <string name="console_button_view">View button</string>
+    <string name="console_button_home">Home button</string>
+    <string name="console_button_ls">Left stick press</string>
+    <string name="console_button_rs">Right stick press</string>
+    <!-- Legends printed on controller buttons; hardware markings, not translated. -->
+    <string name="console_glyph_l1" translatable="false">L1</string>
+    <string name="console_glyph_r1" translatable="false">R1</string>
+    <string name="console_glyph_l2" translatable="false">L2</string>
+    <string name="console_glyph_r2" translatable="false">R2</string>
+    <string name="console_glyph_options" translatable="false">OPTIONS</string>
+    <string name="console_glyph_share" translatable="false">SHARE</string>
+    <string name="console_glyph_ps" translatable="false">PS</string>
+    <string name="console_glyph_l3" translatable="false">L3</string>
+    <string name="console_glyph_r3" translatable="false">R3</string>
+    <string name="console_glyph_a" translatable="false">A</string>
+    <string name="console_glyph_b" translatable="false">B</string>
+    <string name="console_glyph_y" translatable="false">Y</string>
+    <string name="console_glyph_x" translatable="false">X</string>
+    <string name="console_glyph_lb" translatable="false">LB</string>
+    <string name="console_glyph_rb" translatable="false">RB</string>
+    <string name="console_glyph_lt" translatable="false">LT</string>
+    <string name="console_glyph_rt" translatable="false">RT</string>
+    <string name="console_glyph_menu" translatable="false">MENU</string>
+    <string name="console_glyph_view" translatable="false">VIEW</string>
+    <string name="console_glyph_home" translatable="false">HOME</string>
+    <string name="console_glyph_ls" translatable="false">LS</string>
+    <string name="console_glyph_rs" translatable="false">RS</string>
+    <string name="console_back">Back</string>
+    <string name="console_hint_select">Select</string>
+    <string name="console_hint_close">Close</string>
+    <string name="console_dismiss">Dismiss</string>
+    <string name="number_entry_set">Set</string>
+    <string name="number_entry_cancel">Cancel</string>
+    <string name="number_entry_range">Enter a whole number from %1$d to %2$d</string>
 </resources>

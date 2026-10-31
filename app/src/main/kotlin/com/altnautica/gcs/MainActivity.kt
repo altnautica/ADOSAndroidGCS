@@ -3,10 +3,12 @@ package com.altnautica.gcs
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
@@ -19,8 +21,10 @@ import com.altnautica.gcs.core.designsystem.component.console.ControllerUi
 import com.altnautica.gcs.core.designsystem.component.console.GlyphSet
 import com.altnautica.gcs.core.designsystem.component.console.LocalConsoleCommands
 import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
+import com.altnautica.gcs.core.designsystem.component.overlay.ProvideOverlayHost
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosColors
+import com.altnautica.gcs.core.designsystem.tokens.AdosThemeId
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.InputRouter
 import com.altnautica.gcs.core.skills.input.controller.ControllerFamily
@@ -81,9 +85,27 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(pad?.deviceId, playStation, appearance.theme) {
                 if (playStation) controllerManager.setLightbar(AdosColors.forTheme(appearance.theme).accentPrimary.toArgb())
             }
+            // System bar icons follow the theme: dark icons on the light theme only.
+            LaunchedEffect(appearance.theme) {
+                val light = appearance.theme == AdosThemeId.BrandLight
+                enableEdgeToEdge(
+                    statusBarStyle = if (light) {
+                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.dark(Color.TRANSPARENT)
+                    },
+                    navigationBarStyle = if (light) {
+                        SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                    } else {
+                        SystemBarStyle.dark(Color.TRANSPARENT)
+                    },
+                )
+            }
             CompositionLocalProvider(LocalConsoleCommands provides consoleCommands, LocalControllerUi provides controllerUi) {
                 AdosTheme(themeId = appearance.theme, gloveMode = appearance.gloveMode) {
-                    AppRoot(pairLinks = pairLinkFlow)
+                    ProvideOverlayHost {
+                        AppRoot(pairLinks = pairLinkFlow)
+                    }
                 }
             }
         }

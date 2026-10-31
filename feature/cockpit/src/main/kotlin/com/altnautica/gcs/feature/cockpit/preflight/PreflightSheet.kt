@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.HelpOutline
@@ -23,8 +21,7 @@ import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.core.designsystem.component.InWindowSheet
-import com.altnautica.gcs.feature.cockpit.SheetBackHandler
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.feature.cockpit.R
 
 /** Label of a check; [known] false appends "not reported". */
@@ -47,10 +44,9 @@ fun preflightItemLabel(item: PreflightItem, known: Boolean): String {
 @Composable
 fun PreflightSheet(result: PreflightResult, onDismiss: () -> Unit) {
     val colors = AdosTheme.colors
-    SheetBackHandler(onDismiss)
-    InWindowSheet(onDismiss) {
+    AdosSheet(onDismiss) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S4),
+            Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S4),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
         ) {
             Text(

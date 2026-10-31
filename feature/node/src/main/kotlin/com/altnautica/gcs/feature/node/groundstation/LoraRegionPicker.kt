@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.material3.AlertDialog
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -60,12 +60,12 @@ internal fun LoraRegionPicker(
     }
     val chosenCode = choice.ifEmpty { null }
     val changed = chosenCode != (if (followsCountry) null else current)
-    AlertDialog(
-        onDismissRequest = {
+    AdosDialog(
+        onDismiss = {
             vm.lanes.dismissRegionWrite()
             onDismiss()
         },
-        title = { Text(stringResource(R.string.gs_lora_picker_title)) },
+        title = stringResource(R.string.gs_lora_picker_title),
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                 when (val load = lanes.regions) {
@@ -95,13 +95,13 @@ internal fun LoraRegionPicker(
                 regionWriteText(write)?.let { StatusChip(if (write is RegionWrite.Running) StatusLevel.Info else StatusLevel.Error, it) }
             }
         },
-        confirmButton = {
+        confirm = {
             TextButton(
                 onClick = { confirming = true },
                 enabled = changed && !lanes.armed && write != RegionWrite.Running,
             ) { Text(stringResource(R.string.gs_lora_picker_apply)) }
         },
-        dismissButton = {
+        dismiss = {
             TextButton(onClick = {
                 vm.lanes.dismissRegionWrite()
                 onDismiss()
@@ -110,9 +110,9 @@ internal fun LoraRegionPicker(
     )
     if (confirming) {
         val follow = stringResource(R.string.gs_lora_picker_follow)
-        AlertDialog(
-            onDismissRequest = { confirming = false },
-            title = { Text(stringResource(R.string.gs_lora_confirm_title)) },
+        AdosDialog(
+            onDismiss = { confirming = false },
+            title = stringResource(R.string.gs_lora_confirm_title),
             text = {
                 Text(
                     stringResource(
@@ -122,13 +122,13 @@ internal fun LoraRegionPicker(
                     ),
                 )
             },
-            confirmButton = {
+            confirm = {
                 TextButton(onClick = {
                     confirming = false
                     vm.lanes.setRegion(chosenCode)
                 }, enabled = !lanes.armed) { Text(stringResource(R.string.gs_lora_picker_apply)) }
             },
-            dismissButton = { TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.node_cancel)) } },
+            dismiss = { TextButton(onClick = { confirming = false }) { Text(stringResource(R.string.node_cancel)) } },
         )
     }
 }

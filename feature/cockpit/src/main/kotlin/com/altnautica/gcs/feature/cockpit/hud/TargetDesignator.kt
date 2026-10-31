@@ -4,11 +4,9 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,12 +19,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.extensions.skills.ExtensionTargetActionSkill
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.SlotUi
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonText
 import com.altnautica.gcs.feature.cockpit.skillbar.skillIcon
@@ -68,6 +68,14 @@ fun TargetDesignator(
     var end by remember { mutableStateOf<Offset?>(null) }
     var box by remember { mutableStateOf<Map<String, Float>?>(null) }
     val density = LocalDensity.current
+    val menu = rememberAdosMenuState()
+    LaunchedEffect(menu.expanded) {
+        if (!menu.expanded && box != null) {
+            box = null
+            start = null
+            end = null
+        }
+    }
     Box(
         modifier
             .fillMaxSize()
@@ -84,6 +92,7 @@ fun TargetDesignator(
                         val a = start
                         val b = end
                         box = if (a != null && b != null) TargetBox.normalize(a, b, frame) else null
+                        menu.expanded = box != null
                         if (box == null) {
                             start = null
                             end = null
@@ -104,44 +113,31 @@ fun TargetDesignator(
             },
     ) {
         val anchor = end
-        if (box != null && anchor != null) {
-            Box(Modifier.offset(with(density) { anchor.x.toDp() }, with(density) { anchor.y.toDp() })) {
-                DropdownMenu(
-                    expanded = true,
-                    onDismissRequest = {
+        val current = box
+        if (current != null && anchor != null) {
+            Box(
+                Modifier
+                    .offset(with(density) { anchor.x.toDp() }, with(density) { anchor.y.toDp() })
+                    .size(1.dp)
+                    .adosMenuAnchor(menu),
+            )
+            val items = actions.mapNotNull { slot ->
+                val skill = slot.skill as? ExtensionTargetActionSkill ?: return@mapNotNull null
+                val state = slot.state
+                val enabled = state?.enabled ?: false
+                AdosMenuItem(
+                    label = skillLabel(skill) + (state?.reasonKey?.takeIf { !enabled }?.let { " · " + reasonText(it) } ?: ""),
+                    icon = skillIcon(skill.icon),
+                    enabled = enabled,
+                    onClick = {
                         box = null
                         start = null
                         end = null
+                        onAction(skill, current)
                     },
-                ) {
-                    Text(
-                        stringResource(R.string.cockpit_target_actions),
-                        modifier = Modifier.offset(x = 12.dp),
-                        color = colors.fgSecondary,
-                    )
-                    for (slot in actions) {
-                        val skill = slot.skill as? ExtensionTargetActionSkill ?: continue
-                        val state = slot.state
-                        val enabled = state?.enabled ?: false
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    skillLabel(skill) + (state?.reasonKey?.takeIf { !enabled }?.let { " · " + reasonText(it) } ?: ""),
-                                )
-                            },
-                            leadingIcon = { Icon(skillIcon(skill.icon), contentDescription = null) },
-                            enabled = enabled,
-                            onClick = {
-                                val b = box
-                                box = null
-                                start = null
-                                end = null
-                                if (b != null) onAction(skill, b)
-                            },
-                        )
-                    }
-                }
+                )
             }
+            AdosMenu(menu, items)
         }
     }
 }
