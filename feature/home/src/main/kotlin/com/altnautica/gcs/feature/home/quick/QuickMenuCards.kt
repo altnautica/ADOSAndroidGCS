@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.home.quick
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -24,9 +25,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.altnautica.gcs.core.designsystem.component.console.consoleFocus
 import com.altnautica.gcs.core.designsystem.component.node.profileIcon
 import com.altnautica.gcs.core.designsystem.component.node.profileTint
 import com.altnautica.gcs.core.designsystem.component.node.reachLabel
@@ -68,13 +71,14 @@ internal fun VehicleStatusCard(vehicle: FleetCard?, cockpit: CockpitSummary?) {
     }
 }
 
-/** The controller in use: name, battery and, while a cockpit is open, stick control. */
+/** The controller in use: name, battery and, while a cockpit is open, stick control. Opens the controller surface. */
 @Composable
-internal fun ControllerStatusCard(controller: ControllerInfo?, cockpit: CockpitSummary?) {
+internal fun ControllerStatusCard(controller: ControllerInfo?, cockpit: CockpitSummary?, onClick: () -> Unit) {
     StatusCard(
         title = stringResource(R.string.home_quick_controller),
         icon = Icons.Outlined.SportsEsports,
         iconTint = if (controller != null) AdosTheme.colors.fgPrimary else AdosTheme.colors.fgTertiary,
+        onClick = onClick,
     ) {
         if (controller == null) {
             Line(stringResource(R.string.home_quick_no_controller))
@@ -105,21 +109,24 @@ internal fun AlertsStatusCard(cockpit: CockpitSummary?) {
     }
 }
 
-/** Read-only status card, sized like a large launch card; not focusable. */
+/** Status card sized like a large launch card; focusable and clickable only with [onClick]. */
 @Composable
 private fun StatusCard(
     title: String,
     icon: ImageVector,
     iconTint: Color,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = AdosTheme.colors
+    val shape = RoundedCornerShape(AdosRadius.Xl)
+    val base = Modifier
+        .width(CardWidth)
+        .heightIn(min = CardMinHeight)
+    val interactive = if (onClick != null) base.consoleFocus(shape, scaleOnFocus = true) else base
+    val clipped = interactive.clip(shape).background(colors.bgRaised)
     Column(
-        modifier = Modifier
-            .width(CardWidth)
-            .heightIn(min = CardMinHeight)
-            .clip(RoundedCornerShape(AdosRadius.Xl))
-            .background(colors.bgRaised)
+        modifier = (if (onClick != null) clipped.clickable(role = Role.Button, onClick = onClick) else clipped)
             .semantics(mergeDescendants = true) {}
             .padding(AdosSpacing.S3),
         verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1),

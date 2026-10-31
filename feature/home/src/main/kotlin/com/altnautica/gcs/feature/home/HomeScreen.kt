@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.Flow
 fun HomeRoute(
     onOpenSurface: (surface: HomeSurface, nodeId: DeviceId?) -> Unit,
     onAddVehicle: () -> Unit,
+    onOpenController: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -62,6 +64,7 @@ fun HomeRoute(
         onRetrySavedNodes = viewModel::retrySavedNodes,
         onOpenSurface = onOpenSurface,
         onAddVehicle = onAddVehicle,
+        onOpenController = onOpenController,
     )
 }
 
@@ -75,6 +78,7 @@ internal fun HomeScreen(
     onRetrySavedNodes: () -> Unit,
     onOpenSurface: (HomeSurface, DeviceId?) -> Unit,
     onAddVehicle: () -> Unit,
+    onOpenController: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val selected = state.selected
@@ -139,7 +143,7 @@ internal fun HomeScreen(
     }
 
     VehicleMenu(vehicleMenu, selected, onOpenSurface)
-    HomeMenu(homeMenu, state.demoEnabled, onAddVehicle, onEnableDemo, onOpenSettings = { open(HomeSurface.Settings) })
+    HomeMenu(homeMenu, state.demoEnabled, onAddVehicle, onEnableDemo, onOpenController, onOpenSettings = { open(HomeSurface.Settings) })
 }
 
 /** Loading, empty or the selected vehicle, with the unreadable-keys banner over it. */
@@ -215,11 +219,13 @@ private fun HomeMenu(
     demoEnabled: Boolean,
     onAddVehicle: () -> Unit,
     onEnableDemo: () -> Unit,
+    onOpenController: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val items = buildList {
         add(AdosMenuItem(stringResource(R.string.home_add_vehicle), Icons.Outlined.Add, onClick = onAddVehicle))
         if (!demoEnabled) add(AdosMenuItem(stringResource(R.string.home_demo_vehicle), Icons.Outlined.Science, onClick = onEnableDemo))
+        add(AdosMenuItem(stringResource(R.string.home_quick_controller), Icons.Outlined.SportsEsports, onClick = onOpenController))
         add(AdosMenuItem(stringResource(R.string.home_surface_settings), Icons.Outlined.Settings, onClick = onOpenSettings))
     }
     AdosMenu(state, items)

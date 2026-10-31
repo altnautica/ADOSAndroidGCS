@@ -85,19 +85,31 @@ class ControllerManager internal constructor(
         _controllers.value = list
     }
 
-    /** Rumbles the active controller; silent when rumble is off or unsupported. */
-    fun rumble(pattern: Rumble) {
-        if (!current.rumble) return
+    /**
+     * Rumbles the active controller; silent when unsupported, and when rumble is off
+     * unless [force] (the controller test page) asks for it anyway.
+     */
+    fun rumble(pattern: Rumble, force: Boolean = false) {
+        if (!force && !current.rumble) return
         val id = active.value?.deviceId ?: return
         platform?.rumble(id, pattern)
     }
 
-    /** Colours the active controller's light bar; null restores its default. No-op when the light bar setting is off. */
-    fun setLightbar(argb: Int?) {
-        if (!current.lightbar) return
+    /**
+     * Colours the active controller's light bar; null restores its default. No-op when
+     * the light bar setting is off, unless [force] (the controller test page).
+     */
+    fun setLightbar(argb: Int?, force: Boolean = false) {
+        if (!force && !current.lightbar) return
         val id = active.value?.deviceId ?: return
         platform?.setLightbar(id, argb)
     }
+
+    /** Whether [deviceId] exposes a vibrator and an RGB input light to this app. */
+    fun capabilities(deviceId: Int): ControllerCapabilities = platform?.capabilities(deviceId) ?: ControllerCapabilities.None
+
+    /** The joystick motion axes [deviceId] reports, with their raw ranges. */
+    fun motionRanges(deviceId: Int): List<AxisRange> = platform?.motionRanges(deviceId).orEmpty()
 
     private fun pick(list: List<ControllerInfo>, activeId: Int?): ControllerInfo? =
         list.firstOrNull { it.deviceId == activeId } ?: list.firstOrNull()

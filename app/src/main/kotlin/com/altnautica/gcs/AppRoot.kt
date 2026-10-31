@@ -37,7 +37,6 @@ import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
 import com.altnautica.gcs.core.map.offline.OfflineMapsScreen
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.cockpit.CockpitRoute
-import com.altnautica.gcs.feature.cockpit.bindings.SkillBindingsScreen
 import com.altnautica.gcs.feature.configure.params.ParametersSurfaceRoute
 import com.altnautica.gcs.feature.configure.setup.SetupSurfaceRoute
 import com.altnautica.gcs.feature.connect.ConnectRoute
@@ -45,17 +44,21 @@ import com.altnautica.gcs.feature.home.HomeRoute
 import com.altnautica.gcs.feature.home.HomeSurface
 import com.altnautica.gcs.feature.home.quick.QuickDestination
 import com.altnautica.gcs.feature.home.quick.QuickMenu
+import com.altnautica.gcs.feature.logs.dataflash.DataflashRoute
 import com.altnautica.gcs.feature.logs.detail.FlightDetailRoute
 import com.altnautica.gcs.feature.logs.history.LogsRoute
 import com.altnautica.gcs.feature.node.NodeDetailRoute
 import com.altnautica.gcs.feature.plan.PlanRoute
 import com.altnautica.gcs.feature.settings.SettingsRoute
+import com.altnautica.gcs.feature.settings.controller.ControllerRoute
 import com.altnautica.gcs.feature.settings.licences.LicencesRoute
 import com.altnautica.gcs.navigation.BackStackOps
 import com.altnautica.gcs.navigation.CloudKey
 import com.altnautica.gcs.navigation.CockpitKey
 import com.altnautica.gcs.navigation.ConnectKey
+import com.altnautica.gcs.navigation.ControllerKey
 import com.altnautica.gcs.navigation.FlightKey
+import com.altnautica.gcs.navigation.DataflashKey
 import com.altnautica.gcs.navigation.HomeKey
 import com.altnautica.gcs.navigation.LicencesKey
 import com.altnautica.gcs.navigation.LogsKey
@@ -68,7 +71,6 @@ import com.altnautica.gcs.navigation.PhoneRadioKey
 import com.altnautica.gcs.navigation.PlanKey
 import com.altnautica.gcs.navigation.SettingsKey
 import com.altnautica.gcs.navigation.SetupKey
-import com.altnautica.gcs.navigation.SkillBindingsKey
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -136,19 +138,31 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                             }
                         },
                         onAddVehicle = { BackStackOps.push(backStack, ConnectKey()) },
+                        onOpenController = { BackStackOps.push(backStack, ControllerKey) },
                     )
                 }
                 entry<PlanKey> { key ->
-                    PlanRoute(nodeId = key.nodeId?.let(::DeviceId), onStartMission = { fly(backStack, viewModel, it) })
+                    PlanRoute(
+                        nodeId = key.nodeId?.let(::DeviceId),
+                        onBack = { BackStackOps.pop(backStack) },
+                        onStartMission = { fly(backStack, viewModel, it) },
+                    )
                 }
                 entry<SetupKey> { key -> SetupSurfaceRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }) }
                 entry<ParamsKey> { key -> ParametersSurfaceRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }) }
                 entry<LogsKey> {
-                    LogsRoute(onOpenFlight = { BackStackOps.push(backStack, FlightKey(it)) })
+                    LogsRoute(
+                        onBack = { BackStackOps.pop(backStack) },
+                        onOpenFlight = { BackStackOps.push(backStack, FlightKey(it)) },
+                        onOpenDataflash = { BackStackOps.push(backStack, DataflashKey(it.value)) },
+                        onReplay = { path -> viewModel.startReplay(path) { id -> BackStackOps.push(backStack, CockpitKey(id.value)) } },
+                    )
                 }
+                entry<DataflashKey> { key -> DataflashRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }) }
                 entry<SettingsKey> {
                     SettingsRoute(
-                        onOpenSkillBindings = { BackStackOps.push(backStack, SkillBindingsKey) },
+                        onBack = { BackStackOps.pop(backStack) },
+                        onOpenController = { BackStackOps.push(backStack, ControllerKey) },
                         onOpenOfflineMaps = { BackStackOps.push(backStack, OfflineMapsKey) },
                         onOpenLicences = { BackStackOps.push(backStack, LicencesKey) },
                         onOpenCloud = { BackStackOps.push(backStack, CloudKey) },
@@ -193,7 +207,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onReplay = { path -> viewModel.startReplay(path) { id -> BackStackOps.push(backStack, CockpitKey(id.value)) } },
                     )
                 }
-                entry<SkillBindingsKey> { SkillBindingsScreen(onBack = { BackStackOps.pop(backStack) }) }
+                entry<ControllerKey> { ControllerRoute(onBack = { BackStackOps.pop(backStack) }) }
                 entry<OfflineMapsKey> { OfflineMapsScreen(onBack = { BackStackOps.pop(backStack) }) }
                 entry<LicencesKey> { LicencesRoute(onBack = { BackStackOps.pop(backStack) }) }
                 entry<CloudKey> { CloudRoute(onBack = { BackStackOps.pop(backStack) }) }
@@ -208,6 +222,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                     quickMenuOpen = false
                     val target = when (destination) {
                         QuickDestination.Home -> HomeKey
+                        QuickDestination.Controller -> ControllerKey
                         is QuickDestination.Surface -> surfaceKey(destination.surface, destination.nodeId)
                     }
                     // Already there: nothing to leave, so nothing to confirm.

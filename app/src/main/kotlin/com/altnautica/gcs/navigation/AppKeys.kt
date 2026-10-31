@@ -33,6 +33,10 @@ data object LogsKey : NavKey
 @Serializable
 data class FlightKey(val sessionId: Long) : NavKey
 
+/** Onboard flight-controller logs of a vehicle: list and download. */
+@Serializable
+data class DataflashKey(val id: String) : NavKey
+
 @Serializable
 data object SettingsKey : NavKey
 
@@ -40,8 +44,9 @@ data object SettingsKey : NavKey
 @Serializable
 data class ConnectKey(val code: String? = null, val host: String? = null) : NavKey
 
+/** The controller surface: status, button maps with bindings, and the live input test. */
 @Serializable
-data object SkillBindingsKey : NavKey
+data object ControllerKey : NavKey
 
 @Serializable
 data object OfflineMapsKey : NavKey

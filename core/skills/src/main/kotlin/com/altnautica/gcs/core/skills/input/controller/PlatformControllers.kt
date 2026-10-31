@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
 import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.annotation.RequiresApi
 import kotlin.math.roundToInt
 
@@ -77,6 +78,17 @@ internal class PlatformControllers(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) lights?.retain(deviceIds)
     }
 
+    fun capabilities(deviceId: Int): ControllerCapabilities {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return ControllerCapabilities.None
+        val device = InputDevice.getDevice(deviceId) ?: return ControllerCapabilities.None
+        return runCatching { Api31.capabilities(device) }.getOrDefault(ControllerCapabilities.None)
+    }
+
+    fun motionRanges(deviceId: Int): List<AxisRange> = InputDevice.getDevice(deviceId)?.motionRanges.orEmpty()
+        .filter { it.isFromSource(InputDevice.SOURCE_CLASS_JOYSTICK) }
+        .map { AxisRange(MotionEvent.axisToString(it.axis), it.min, it.max, it.flat) }
+        .distinctBy { it.name }
+
     @RequiresApi(Build.VERSION_CODES.S)
     private object Api31 {
         /** Battery percent (null when unknown) and charging, or null when no battery is present. */
@@ -102,6 +114,11 @@ internal class PlatformControllers(context: Context) {
             }
             vibrator.vibrate(effect)
         }
+
+        fun capabilities(device: InputDevice) = ControllerCapabilities(
+            rumble = device.vibratorManager.vibratorIds.isNotEmpty(),
+            lightbar = device.lightsManager.lights.any { it.type == Light.LIGHT_TYPE_INPUT && it.hasRgbControl() },
+        )
     }
 
     /** One open lights session per device; closing it restores the controller's default colour. */

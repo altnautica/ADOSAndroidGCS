@@ -22,6 +22,16 @@ data class ControllerInfo(
 
 fun ControllerInfo.isDualShock4(): Boolean = vendorId == PLAYSTATION_VENDOR_ID && productId in DUALSHOCK4_PRODUCT_IDS
 
+/** Optional controller hardware the platform exposes to apps. */
+data class ControllerCapabilities(val rumble: Boolean, val lightbar: Boolean) {
+    companion object {
+        val None = ControllerCapabilities(rumble = false, lightbar = false)
+    }
+}
+
+/** One motion axis as the platform reports it: its constant name and raw range. */
+data class AxisRange(val name: String, val min: Float, val max: Float, val flat: Float)
+
 /** Controller family from the vendor id; device names are never used. */
 fun controllerFamily(vendorId: Int): ControllerFamily =
     if (vendorId == PLAYSTATION_VENDOR_ID) ControllerFamily.PlayStation else ControllerFamily.Generic

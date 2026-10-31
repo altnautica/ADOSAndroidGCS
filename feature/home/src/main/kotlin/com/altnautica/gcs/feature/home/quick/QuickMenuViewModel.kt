@@ -35,6 +35,9 @@ import kotlinx.coroutines.flow.stateIn
 sealed interface QuickDestination {
     data object Home : QuickDestination
     data class Surface(val surface: HomeSurface, val nodeId: DeviceId?) : QuickDestination
+
+    /** The controller surface: status, button maps and the input test. */
+    data object Controller : QuickDestination
 }
 
 data class QuickMenuUiState(

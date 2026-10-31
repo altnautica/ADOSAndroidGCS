@@ -117,7 +117,7 @@ private fun QuickMenuContent(
                 horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
             ) {
                 VehicleStatusCard(state.vehicle, state.cockpit)
-                ControllerStatusCard(state.controller, state.cockpit)
+                ControllerStatusCard(state.controller, state.cockpit, onClick = { onNavigate(QuickDestination.Controller) })
                 AlertsStatusCard(state.cockpit)
             }
             Spacer(Modifier.weight(1f))

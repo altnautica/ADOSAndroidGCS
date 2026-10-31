@@ -1,4 +1,4 @@
-package com.altnautica.gcs.feature.cockpit.bindings
+package com.altnautica.gcs.feature.settings.controller.bindings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

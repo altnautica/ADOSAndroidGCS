@@ -1,6 +1,6 @@
-package com.altnautica.gcs.feature.cockpit.bindings
+package com.altnautica.gcs.feature.settings.controller.bindings
 
-import com.altnautica.gcs.feature.cockpit.MemoryPreferences
+import com.altnautica.gcs.feature.settings.MemoryPreferences
 import app.cash.turbine.test
 import com.altnautica.gcs.core.skills.SkillRegistry
 import com.altnautica.gcs.core.skills.binding.BindingStore
