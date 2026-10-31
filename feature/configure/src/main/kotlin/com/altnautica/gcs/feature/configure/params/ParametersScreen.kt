@@ -118,7 +118,6 @@ fun ParametersRoute(nodeId: DeviceId, modifier: Modifier = Modifier) {
             it,
             armed = (state as? ParametersUiState.Content)?.armed == true,
             onApply = viewModel::applyImport,
-            onConfirmArmed = viewModel::confirmArmedImport,
             onDismiss = viewModel::dismissImport,
         )
     }
@@ -264,30 +263,34 @@ fun ParamRowItem(row: ParamRow, onClick: () -> Unit) {
     }
 }
 
+/** Operator text and status level for a [ParamMessage]; shared by the parameter and setup pages. */
+@Composable
+internal fun paramMessageText(message: ParamMessage, rows: Map<String, ParamRow>): Pair<String, StatusLevel> = when (message) {
+    is ParamMessage.Saved -> stringResource(
+        if (message.rebootRequired) R.string.cfg_param_saved_reboot else R.string.cfg_param_saved,
+        message.name, ParamFile.formatValue(message.value),
+    ) to StatusLevel.Success
+    is ParamMessage.Clamped -> stringResource(
+        R.string.cfg_param_clamped, message.name, ParamFile.formatValue(message.requested), ParamFile.formatValue(message.actual),
+    ) to StatusLevel.Warning
+    is ParamMessage.WriteFailed -> stringResource(
+        when (message.reason) {
+            ParamWriteFailure.Timeout -> R.string.cfg_param_write_timeout
+            ParamWriteFailure.UnknownParam -> R.string.cfg_param_write_unknown
+            ParamWriteFailure.NoLink -> R.string.cfg_param_write_nolink
+            ParamWriteFailure.Other -> R.string.cfg_param_write_failed
+        },
+        message.name,
+    ) to StatusLevel.Error
+    is ParamMessage.Invalid -> "${message.name}: ${invalidReasonText(message.reason, rows[message.name]?.meta)}" to StatusLevel.Error
+    is ParamMessage.LoadIncomplete -> stringResource(R.string.cfg_param_incomplete, message.missing) to StatusLevel.Warning
+    is ParamMessage.FileUnreadable -> stringResource(R.string.cfg_param_file_unreadable) to StatusLevel.Error
+}
+
 @Composable
 private fun MessageLine(message: ParamMessage, rows: Map<String, ParamRow>, onDismiss: () -> Unit) {
     val colors = AdosTheme.colors
-    val (text, level) = when (message) {
-        is ParamMessage.Saved -> stringResource(
-            if (message.rebootRequired) R.string.cfg_param_saved_reboot else R.string.cfg_param_saved,
-            message.name, ParamFile.formatValue(message.value),
-        ) to StatusLevel.Success
-        is ParamMessage.Clamped -> stringResource(
-            R.string.cfg_param_clamped, message.name, ParamFile.formatValue(message.requested), ParamFile.formatValue(message.actual),
-        ) to StatusLevel.Warning
-        is ParamMessage.WriteFailed -> stringResource(
-            when (message.reason) {
-                ParamWriteFailure.Timeout -> R.string.cfg_param_write_timeout
-                ParamWriteFailure.UnknownParam -> R.string.cfg_param_write_unknown
-                ParamWriteFailure.NoLink -> R.string.cfg_param_write_nolink
-                ParamWriteFailure.Other -> R.string.cfg_param_write_failed
-            },
-            message.name,
-        ) to StatusLevel.Error
-        is ParamMessage.Invalid -> "${message.name}: ${invalidReasonText(message.reason, rows[message.name]?.meta)}" to StatusLevel.Error
-        is ParamMessage.LoadIncomplete -> stringResource(R.string.cfg_param_incomplete, message.missing) to StatusLevel.Warning
-        is ParamMessage.FileUnreadable -> stringResource(R.string.cfg_param_file_unreadable) to StatusLevel.Error
-    }
+    val (text, level) = paramMessageText(message, rows)
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onDismiss).padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1),
         verticalAlignment = Alignment.CenterVertically,
@@ -303,7 +306,6 @@ private fun ImportReviewSheet(
     review: ImportReview,
     armed: Boolean,
     onApply: () -> Unit,
-    onConfirmArmed: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = AdosTheme.colors
@@ -326,24 +328,13 @@ private fun ImportReviewSheet(
             if (review.running || review.applied > 0 || review.failed.isNotEmpty()) {
                 Text(stringResource(R.string.cfg_import_progress, review.applied, review.comparison.changed.size, review.failed.size))
             }
-            val canWrite = !review.running && review.comparison.changed.isNotEmpty()
+            val canWrite = !armed && !review.running && review.comparison.changed.isNotEmpty()
             if (armed) {
-                Text(stringResource(R.string.cfg_import_armed_warning), color = colors.statusWarning)
-                if (canWrite) {
-                    HoldToConfirmButton(
-                        label = stringResource(R.string.cfg_import_apply_armed),
-                        holdMs = 800,
-                        danger = true,
-                        onConfirmed = onConfirmArmed,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                Text(stringResource(R.string.cfg_import_disarm_first), color = colors.statusWarning)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                AdosButton(stringResource(R.string.cfg_import_apply), onClick = onApply, enabled = canWrite)
                 AdosButton(stringResource(R.string.cfg_close), onClick = onDismiss, variant = AdosButtonVariant.Secondary)
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-                    AdosButton(stringResource(R.string.cfg_import_apply), onClick = onApply, enabled = canWrite)
-                    AdosButton(stringResource(R.string.cfg_close), onClick = onDismiss, variant = AdosButtonVariant.Secondary)
-                }
             }
         }
     }

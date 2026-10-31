@@ -18,7 +18,11 @@
     <string name="cfg_motor_title">Motor test</string>
     <string name="cfg_motor_props_off">I have removed all propellers.</string>
     <string name="cfg_motor_throttle">Throttle %1$.0f%%</string>
-    <string name="cfg_motor_duration">Duration %1$.1f s</string>
+    <string name="cfg_motor_count">Motors</string>
+    <string name="cfg_motor_count_decrease">Fewer motors</string>
+    <string name="cfg_motor_count_increase">More motors</string>
+    <string name="cfg_motor_count_unknown">Frame unknown: set the motor count before testing</string>
+    <string name="cfg_motor_hold_hint">Hold a motor button to spin it. It stops when you let go.</string>
     <string name="cfg_motor_block_ack">Confirm the propellers are removed to enable the motor buttons.</string>
     <string name="cfg_motor_block_running">A motor test is running.</string>
     <string name="cfg_motor_n">Motor %1$d</string>
@@ -67,8 +71,7 @@
     <string name="cfg_import_summary">%1$d values differ from the vehicle. %2$d names in the file do not exist on it and are skipped.</string>
     <string name="cfg_import_progress">Written %1$d of %2$d, %3$d failed</string>
     <string name="cfg_import_apply">Write changes</string>
-    <string name="cfg_import_armed_warning">The vehicle is armed. Writing these values changes its behaviour in flight.</string>
-    <string name="cfg_import_apply_armed">Hold to write while armed</string>
+    <string name="cfg_import_disarm_first">Disarm to apply a parameter file</string>
 
     <!-- Calibration -->
     <string name="cfg_cal_title">Calibration</string>

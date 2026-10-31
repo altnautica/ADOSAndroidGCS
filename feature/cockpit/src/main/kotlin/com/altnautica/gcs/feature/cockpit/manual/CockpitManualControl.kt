@@ -65,6 +65,14 @@ internal class CockpitManualControl(
                     }
                 }
         }
+        scope.launch {
+            // Losing the controller turns stick control off; a reconnect never resumes it.
+            var wasConnected = router.gamepadConnected.value
+            router.gamepadConnected.collect { connected ->
+                if (wasConnected && !connected) forceOff()
+                wasConnected = connected
+            }
+        }
     }
 
     private fun stopStreamer() {

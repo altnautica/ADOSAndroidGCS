@@ -19,6 +19,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -53,13 +54,15 @@ class MotorTestViewModelTest {
     private fun vm() = MotorTestViewModel(DeviceId("d"), provider, { clock }, flowOf(Unit))
 
     @Test
-    fun testsRunOnlyAfterPropsOffAcknowledgementWhileDisarmedAndFresh() = runTest(dispatcher) {
+    fun blockedStatesSendNothing() = runTest(dispatcher) {
         val vm = vm()
         assertEquals(MotorTestBlock.NoVehicle, vm.state.value.block)
 
         heartbeat.value = hb(armed = false)
         assertEquals(MotorTestBlock.NotAcknowledged, vm.state.value.block)
-        vm.test(1)
+        vm.startHold(1)
+        advanceTimeBy(2_000)
+        vm.endHold()
         coVerify(exactly = 0) { control.run(any()) }
 
         vm.setAcknowledged(true)
@@ -67,24 +70,97 @@ class MotorTestViewModelTest {
 
         heartbeat.value = hb(armed = true)
         assertEquals(MotorTestBlock.Armed, vm.state.value.block)
-        vm.test(1)
+        vm.startHold(1)
+        advanceTimeBy(2_000)
+        vm.endHold()
         coVerify(exactly = 0) { control.run(any()) }
 
         heartbeat.value = hb(armed = false, tMs = clock - 5_000)
         assertEquals(MotorTestBlock.LinkStale, vm.state.value.block)
+        vm.startHold(1)
+        advanceTimeBy(2_000)
+        vm.endHold()
+        coVerify(exactly = 0) { control.run(any()) }
+    }
 
+    @Test
+    fun holdResendsUntilReleased() = runTest(dispatcher) {
+        heartbeat.value = hb(armed = false)
+        coEvery { control.run(any()) } returns CommandResult.Accepted
+        val vm = vm()
+        vm.setAcknowledged(true)
+        vm.setThrottle(50f)
+
+        vm.startHold(3)
+        val command = VehicleCommand.MotorTest(3, 20f, 1f)
+        coVerify(exactly = 1) { control.run(command) }
+        assertEquals(MotorTestBlock.Running, vm.state.value.block)
+        assertEquals(3, vm.state.value.runningMotor)
+        vm.startHold(2) // ignored while another motor is held
+
+        advanceTimeBy(MotorTestViewModel.HOLD_RESEND_MS + 1)
+        coVerify(exactly = 2) { control.run(command) }
+        advanceTimeBy(MotorTestViewModel.HOLD_RESEND_MS)
+        coVerify(exactly = 3) { control.run(command) }
+
+        vm.endHold()
+        assertNull(vm.state.value.runningMotor)
+        assertNull(vm.state.value.block)
+        advanceTimeBy(10_000)
+        coVerify(exactly = 3) { control.run(any()) }
+        assertEquals(CommandResult.Accepted, vm.state.value.lastResult)
+    }
+
+    @Test
+    fun armingDuringAHoldStopsTheResends() = runTest(dispatcher) {
+        heartbeat.value = hb(armed = false)
+        coEvery { control.run(any()) } returns CommandResult.Accepted
+        val vm = vm()
+        vm.setAcknowledged(true)
+        vm.startHold(1)
+        coVerify(exactly = 1) { control.run(any()) }
+
+        heartbeat.value = hb(armed = true)
+        advanceTimeBy(5_000)
+        coVerify(exactly = 1) { control.run(any()) }
+        assertNull(vm.state.value.runningMotor)
+        vm.endHold()
+    }
+
+    @Test
+    fun aRejectedTestEndsTheHold() = runTest(dispatcher) {
+        heartbeat.value = hb(armed = false)
+        coEvery { control.run(any()) } returns CommandResult.Unsupported
+        val vm = vm()
+        vm.setAcknowledged(true)
+        vm.startHold(1)
+        advanceTimeBy(5_000)
+        coVerify(exactly = 1) { control.run(any()) }
+        assertNull(vm.state.value.runningMotor)
+        assertEquals(CommandResult.Unsupported, vm.state.value.lastResult)
+    }
+
+    @Test
+    fun aSendAwaitingItsAckIsNotStacked() = runTest(dispatcher) {
         heartbeat.value = hb(armed = false)
         val reply = CompletableDeferred<CommandResult>()
         coEvery { control.run(any()) } coAnswers { reply.await() }
-        vm.setThrottle(50f)
-        vm.test(3)
-        assertEquals(MotorTestBlock.Running, vm.state.value.block)
-        assertEquals(3, vm.state.value.runningMotor)
-        vm.test(2) // ignored while running
-        reply.complete(CommandResult.Accepted)
-        assertEquals(CommandResult.Accepted, vm.state.value.lastResult)
-        assertNull(vm.state.value.block)
-        coVerify(exactly = 1) { control.run(VehicleCommand.MotorTest(3, 20f, 2f)) }
+        val vm = vm()
+        vm.setAcknowledged(true)
+        vm.startHold(1)
+        advanceTimeBy(3_000)
+        coVerify(exactly = 1) { control.run(any()) }
+        vm.endHold()
+    }
+
+    @Test
+    fun leavingResetsTheAcknowledgement() = runTest(dispatcher) {
+        heartbeat.value = hb(armed = false)
+        val vm = vm()
+        vm.setAcknowledged(true)
+        vm.resetAcknowledgement()
+        assertEquals(false, vm.state.value.acknowledged)
+        assertEquals(MotorTestBlock.NotAcknowledged, vm.state.value.block)
     }
 
     @Test
@@ -92,7 +168,7 @@ class MotorTestViewModelTest {
         heartbeat.value = hb(armed = false)
         val vm = vm()
         vm.setAcknowledged(true)
-        vm.test(5)
+        vm.startHold(5)
         coVerify(exactly = 0) { control.run(any()) }
     }
 }

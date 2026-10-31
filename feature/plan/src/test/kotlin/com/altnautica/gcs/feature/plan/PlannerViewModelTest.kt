@@ -449,6 +449,26 @@ class PlannerViewModelTest {
     }
 
     @Test
+    fun `a fence-only edit after upload is out of sync and fails the start check`() = runTest {
+        withViewModel { vm ->
+            connect(vm)
+            vm.onMapTap(a)
+            vm.onMapTap(b)
+            vm.upload()
+            runCurrent()
+            assertTrue(vm.state.value.inSyncWithVehicle)
+
+            vm.setTool(EditTool.FenceCircle)
+            vm.onMapTap(c)
+            assertFalse(vm.state.value.inSyncWithVehicle)
+
+            vm.openStartMission()
+            val check = vm.state.value.startSheet!!.checks.single { it.kind == StartCheckKind.PlanOnVehicle }
+            assertFalse(check.ok)
+        }
+    }
+
+    @Test
     fun `switching vehicle cancels an in-flight upload`() = runTest {
         withViewModel { vm ->
             connect(vm)

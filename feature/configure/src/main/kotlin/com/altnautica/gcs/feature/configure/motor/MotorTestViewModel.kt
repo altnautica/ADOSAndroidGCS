@@ -14,6 +14,8 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,7 +33,6 @@ enum class MotorTestBlock { NoVehicle, LinkStale, Armed, NotAcknowledged, Runnin
 data class MotorTestUiState(
     val acknowledged: Boolean = false,
     val throttlePct: Float = MotorTestViewModel.DEFAULT_THROTTLE_PCT,
-    val durationS: Float = MotorTestViewModel.DEFAULT_DURATION_S,
     val motorCount: Int = 4,
     val runningMotor: Int? = null,
     val lastResult: CommandResult? = null,
@@ -81,28 +82,65 @@ class MotorTestViewModel internal constructor(
 
     fun setThrottle(pct: Float) = form.update { it.copy(throttlePct = pct.coerceIn(0f, MAX_THROTTLE_PCT)) }
 
-    fun setDuration(seconds: Float) = form.update { it.copy(durationS = seconds.coerceIn(0.5f, MAX_DURATION_S)) }
-
     fun setMotorCount(count: Int) = form.update { it.copy(motorCount = count.coerceIn(1, MAX_MOTORS)) }
 
-    /** Spins one motor (1-based, in the flight controller's test order). Ignored while blocked. */
-    fun test(motor: Int) {
+    private var holdJob: Job? = null
+
+    /**
+     * Spins one motor (1-based, in the flight controller's test order) while the button is
+     * held: the test command goes out at once and again every [HOLD_RESEND_MS] with a 1 s
+     * duration, so the motor stops within a second of [endHold]. Ignored while blocked.
+     */
+    fun startHold(motor: Int) {
         val current = state.value
         val v: Vehicle = vehicle.value ?: return
         if (current.block != null || motor !in 1..current.motorCount) return
         form.update { it.copy(runningMotor = motor, lastResult = null) }
-        viewModelScope.launch {
-            val result = v.control.run(VehicleCommand.MotorTest(motor, current.throttlePct, current.durationS))
-            form.update { it.copy(runningMotor = null, lastResult = result) }
+        holdJob = viewModelScope.launch {
+            var inFlight: Job? = null
+            while (true) {
+                val s = state.value
+                // Arming, a stale link or a withdrawn acknowledgement ends the hold.
+                if (form.value.runningMotor != motor || (s.block != null && s.block != MotorTestBlock.Running)) break
+                // One exchange at a time: a send still waiting for its ACK is not stacked behind.
+                if (inFlight?.isActive != true) {
+                    inFlight = launch {
+                        val result = v.control.run(VehicleCommand.MotorTest(motor, s.throttlePct, HOLD_COMMAND_DURATION_S))
+                        form.update { it.copy(lastResult = result) }
+                        if (result != CommandResult.Accepted) form.update { it.copy(runningMotor = null) }
+                    }
+                }
+                delay(HOLD_RESEND_MS)
+            }
+            inFlight?.cancel()
+            form.update { if (it.runningMotor == motor) it.copy(runningMotor = null) else it }
         }
+    }
+
+    /** The operator released the motor button: no further test commands go out. */
+    fun endHold() {
+        holdJob?.cancel()
+        holdJob = null
+        form.update { it.copy(runningMotor = null) }
+    }
+
+    /** Leaving the motor test withdraws the propellers-off acknowledgement. */
+    fun resetAcknowledgement() {
+        endHold()
+        form.update { it.copy(acknowledged = false) }
+    }
+
+    override fun onCleared() {
+        resetAcknowledgement()
+        super.onCleared()
     }
 
     companion object {
         const val DEFAULT_THROTTLE_PCT = 5f
         const val MAX_THROTTLE_PCT = 20f
-        const val DEFAULT_DURATION_S = 2f
-        const val MAX_DURATION_S = 10f
         const val MAX_MOTORS = 12
         const val LINK_FRESH_MS = 3_000L
+        const val HOLD_RESEND_MS = 800L
+        const val HOLD_COMMAND_DURATION_S = 1.0f
     }
 }

@@ -53,6 +53,7 @@ class AdosInputRouter @Inject constructor(
     private val _axes = MutableStateFlow(GamepadAxes.Neutral)
     private val _buttons = MutableStateFlow(0)
     private val _gamepadConnected = MutableStateFlow(false)
+    private val _activeDeviceId = MutableStateFlow<Int?>(null)
     private val _events = MutableSharedFlow<InputEvent>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val pressedAt = LongArray(GamepadButton.HOME + 1)
     private var enterHeld = false
@@ -65,6 +66,12 @@ class AdosInputRouter @Inject constructor(
 
     /** True while at least one gamepad or joystick is attached. */
     val gamepadConnected: StateFlow<Boolean> = _gamepadConnected.asStateFlow()
+
+    /**
+     * The gamepad whose sticks and buttons drive input. The first gamepad event sets it;
+     * a button press on another gamepad takes over; it clears when that device is removed.
+     */
+    val activeDeviceId: StateFlow<Int?> = _activeDeviceId.asStateFlow()
 
     val events: SharedFlow<InputEvent> = _events.asSharedFlow()
 
@@ -85,8 +92,15 @@ class AdosInputRouter @Inject constructor(
         refreshDevices()
     }
 
-    private fun refreshDevices() {
-        val connected = InputDevice.getDeviceIds().any { id -> InputDevice.getDevice(id)?.isGamepad() == true }
+    internal fun refreshDevices() {
+        val ids = InputDevice.getDeviceIds()
+        val connected = ids.any { id -> InputDevice.getDevice(id)?.isGamepad() == true }
+        val active = _activeDeviceId.value
+        if (active != null && active !in ids) {
+            // The active pad is gone: centre everything even if another pad remains.
+            neutralize()
+            _activeDeviceId.value = null
+        }
         _gamepadConnected.value = connected
         if (!connected) {
             _axes.value = GamepadAxes.Neutral
@@ -100,6 +114,13 @@ class AdosInputRouter @Inject constructor(
     override fun onMotion(event: MotionEvent): Boolean {
         if (!event.isFromSource(InputDevice.SOURCE_JOYSTICK) || event.actionMasked != MotionEvent.ACTION_MOVE) return false
         val device = event.device
+        val active = _activeDeviceId.value
+        if (active == null) {
+            _activeDeviceId.value = event.deviceId
+        } else if (active != event.deviceId) {
+            // Motion from a non-active pad never moves the sticks.
+            return capture != null
+        }
         for (i in 0 until event.historySize) applySample(event, device, i)
         applySample(event, device, -1)
         return capture != null
@@ -134,6 +155,15 @@ class AdosInputRouter @Inject constructor(
         // The window swallows the first down of a navigation key (Enter, D-pad) when it
         // leaves touch mode, so a repeated down that finds the key up starts the press.
         if (button != null && fromGamepad) {
+            val active = _activeDeviceId.value
+            if (active == null) {
+                _activeDeviceId.value = event.deviceId
+            } else if (active != event.deviceId) {
+                // Only a deliberate press lets a second pad take over.
+                if (!down) return capture != null
+                neutralize()
+                _activeDeviceId.value = event.deviceId
+            }
             setButton(button, down)
             return capture != null
         }

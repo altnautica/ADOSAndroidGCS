@@ -155,6 +155,10 @@ data class PlannerUiState(
     val missionStartedFor: DeviceId? = null,
     val message: PlannerMessage? = null,
 ) {
-    val inSyncWithVehicle: Boolean get() = vehiclePlan != null && vehiclePlan.items == plan.items
+    val inSyncWithVehicle: Boolean
+        get() = vehiclePlan != null &&
+            vehiclePlan.items == plan.items &&
+            vehiclePlan.fence == plan.fence &&
+            vehiclePlan.rally == plan.rally
     val transferring: Boolean get() = transfer is TransferState.Running
 }

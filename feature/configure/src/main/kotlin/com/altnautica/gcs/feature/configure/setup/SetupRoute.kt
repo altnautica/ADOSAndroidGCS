@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.configure.setup
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,15 +14,19 @@ import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -46,6 +51,7 @@ import com.altnautica.gcs.feature.configure.params.ParamRowItem
 import com.altnautica.gcs.feature.configure.params.ParametersUiState
 import com.altnautica.gcs.feature.configure.params.ParametersViewModel
 import com.altnautica.gcs.feature.configure.params.paramLoadReason
+import com.altnautica.gcs.feature.configure.params.paramMessageText
 
 private enum class SetupPage(val label: Int) {
     Calibration(R.string.cfg_setup_calibration),
@@ -76,31 +82,44 @@ fun SetupRoute(nodeId: DeviceId, fcVariant: FcVariant, modifier: Modifier = Modi
     )
     val state by params.state.collectAsStateWithLifecycle()
     val pending by params.pendingWrite.collectAsStateWithLifecycle()
+    val message by params.message.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableIntStateOf(0) }
-    Column(modifier.fillMaxSize()) {
-        PrimaryScrollableTabRow(selectedTabIndex = page) {
-            SetupPage.entries.forEachIndexed { i, p ->
-                Tab(selected = page == i, onClick = { page = i }, text = { Text(stringResource(p.label)) })
-            }
+    // Write results from the curated parameter pages; the message is consumed once shown.
+    val snackbar = remember { SnackbarHostState() }
+    val messageText = message?.let { paramMessageText(it, (state as? ParametersUiState.Content)?.byName.orEmpty()).first }
+    LaunchedEffect(message) {
+        if (messageText != null) {
+            snackbar.showSnackbar(messageText)
+            params.consumeMessage()
         }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            when (SetupPage.entries[page]) {
-                SetupPage.Calibration -> CalibrationRoute(nodeId)
-                SetupPage.FlightModes -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
-                    SetupCatalog.flightModes(variant, mav)?.let { it.slots + it.channelParam }.orEmpty()
+    }
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            PrimaryScrollableTabRow(selectedTabIndex = page) {
+                SetupPage.entries.forEachIndexed { i, p ->
+                    Tab(selected = page == i, onClick = { page = i }, text = { Text(stringResource(p.label)) })
                 }
-                SetupPage.Failsafe -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
-                    SetupCatalog.failsafe(variant, mav)
-                }
-                SetupPage.Frame -> {
-                    CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, _ ->
-                        SetupCatalog.frame(variant)
+            }
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                when (SetupPage.entries[page]) {
+                    SetupPage.Calibration -> CalibrationRoute(nodeId)
+                    SetupPage.FlightModes -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
+                        SetupCatalog.flightModes(variant, mav)?.let { it.slots + it.channelParam }.orEmpty()
                     }
-                    val motors = (state as? ParametersUiState.Content)?.byName?.mapValues { it.value.value }?.let(SetupCatalog::motorCount)
-                    MotorTestRoute(nodeId, motors)
+                    SetupPage.Failsafe -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
+                        SetupCatalog.failsafe(variant, mav)
+                    }
+                    SetupPage.Frame -> {
+                        CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, _ ->
+                            SetupCatalog.frame(variant)
+                        }
+                        val motors = (state as? ParametersUiState.Content)?.byName?.mapValues { it.value.value }?.let(SetupCatalog::motorCount)
+                        MotorTestRoute(nodeId, motors)
+                    }
                 }
             }
         }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
     pending?.let { p ->
         ConfirmSheet(

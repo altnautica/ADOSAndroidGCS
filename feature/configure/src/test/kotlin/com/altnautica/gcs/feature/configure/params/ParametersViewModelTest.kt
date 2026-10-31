@@ -157,7 +157,7 @@ class ParametersViewModelTest {
     }
 
     @Test
-    fun armedImportNeedsTheHoldConfirm() = runTest(dispatcher) {
+    fun armedImportIsRefusedUntilDisarmed() = runTest(dispatcher) {
         val vm = vm()
         val params = FakeParamService(mapOf("RATE" to 5.0, "REBOOT" to 0.0))
         val vehicle = FakeVehicle()
@@ -168,8 +168,10 @@ class ParametersViewModelTest {
         vm.applyImport()
         assertTrue(params.writes.isEmpty())
         assertEquals(0, vm.importReview.value!!.applied)
+        assertEquals(false, vm.importReview.value!!.running)
 
-        vm.confirmArmedImport()
+        vehicle.setArmed(false)
+        vm.applyImport()
         assertEquals(listOf("RATE" to 8.0, "REBOOT" to 1.0), params.writes)
         assertEquals(2, vm.importReview.value!!.applied)
     }
