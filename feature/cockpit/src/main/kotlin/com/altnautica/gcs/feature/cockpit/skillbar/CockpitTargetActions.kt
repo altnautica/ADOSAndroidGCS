@@ -33,8 +33,8 @@ internal class CockpitTargetActions(
     }.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /**
-     * Runs a target action on a box drawn over the video. [bbox] is normalized to the
-     * video frame (x, y, width, height in 0..1); the camera is the selected stream.
+     * Runs a target action on a box drawn over the video. [bbox] is in the camera
+     * frame's pixels (x, y, width, height); the camera is the selected stream.
      */
     fun activate(skill: ExtensionTargetActionSkill, bbox: Map<String, Float>) {
         scope.launch {

@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- HUD target tags. The uppercase words stay uppercase in every locale. -->
+    <string name="hud_target_candidate">%1$s %2$d%%</string>
+    <string name="hud_target_tracked">%1$s #%2$d</string>
+    <string name="hud_target_track">TRACK %1$d%%</string>
+    <string name="hud_target_lock">LOCK #%1$d %2$d%%</string>
+    <string name="hud_target_acquiring">ACQUIRING #%1$d</string>
+    <string name="hud_target_coast">COAST %1$s s</string>
+    <string name="hud_target_searching">SEARCHING</string>
+    <string name="hud_target_searching_bearing">SEARCHING · %1$s°</string>
+    <string name="hud_target_lost">LOST</string>
+    <string name="hud_target_hold">HOLD · %1$s</string>
+    <string name="hud_target_hold_bare">HOLD</string>
+    <string name="hud_target_follow_stale">FOLLOW STALE</string>
+    <string name="hud_target_est">%1$s m EST</string>
+    <string name="hud_target_uncertain">%1$s ?</string>
+    <string name="hud_target_range">%1$s m</string>
+    <string name="hud_target_sigma">±%1$s m</string>
+    <string name="hud_toast_reacquired">Re-acquired #%1$d · %2$s · %3$s s gap</string>
+    <string name="hud_menu_lock">Lock</string>
+    <string name="hud_overlay_description">Detected targets</string>
+
+    <!-- Spoken descriptions of targets. -->
+    <string name="hud_a11y_target">%1$s %2$s, %3$s</string>
+    <string name="hud_a11y_target_range">%1$s, %2$s metres</string>
+    <string name="hud_a11y_candidate">candidate</string>
+    <string name="hud_a11y_tracked">tracked</string>
+    <string name="hud_a11y_locked">locked</string>
+    <string name="hud_a11y_acquiring">acquiring</string>
+    <string name="hud_a11y_following">tracking</string>
+    <string name="hud_a11y_holding">holding</string>
+    <string name="hud_a11y_coasting">coasting</string>
+    <string name="hud_a11y_searching">searching</string>
+    <string name="hud_a11y_lost">lost</string>
+
+    <!-- What's-locked chip. -->
+    <string name="hud_lock_who">%1$s · #%2$d</string>
+    <string name="hud_lock_following">Following</string>
+    <string name="hud_lock_acquiring">Acquiring</string>
+    <string name="hud_lock_coasting">Coasting %1$s s</string>
+    <string name="hud_lock_searching">Searching</string>
+    <string name="hud_lock_holding">Holding · %1$s</string>
+    <string name="hud_lock_lost">Lost</string>
+    <string name="hud_lock_reacquired">Re-acquired · %1$s</string>
+    <string name="hud_lock_locked">Locked</string>
+    <string name="hud_lock_uncertain">Uncertain</string>
+    <string name="hud_lock_not_in_view">Not in view</string>
+    <string name="hud_lock_waiting">Waiting for feed</string>
+    <string name="hud_lock_release">Release target</string>
+
+    <!-- Range panel. -->
+    <string name="hud_range_following">FOLLOWING</string>
+    <string name="hud_range_acquiring">ACQUIRING</string>
+    <string name="hud_range_coasting">COASTING</string>
+    <string name="hud_range_searching">SEARCHING</string>
+    <string name="hud_range_hold">HOLD</string>
+    <string name="hud_range_lost">LOST</string>
+    <string name="hud_range_stale">STALE</string>
+    <string name="hud_range_agl">AGL %1$s m · %2$s</string>
+    <string name="hud_range_rng">RNG</string>
+    <string name="hud_range_baro">BARO</string>
+    <string name="hud_range_geometry">DEP %1$s° · BRG %2$s° · %3$s m/s</string>
+    <string name="hud_range_cue_ground">GND</string>
+    <string name="hud_range_cue_box">BOX</string>
+    <string name="hud_range_cue_lidar">LIDAR</string>
+    <string name="hud_range_latency">LAT %1$s ms</string>
+    <string name="hud_range_compact">%1$s m ±%2$s · AGL %3$s %4$s</string>
+    <string name="hud_range_description">Follow range</string>
+
+    <!-- Right rail. -->
+    <string name="hud_rail_follow">FOLLOW</string>
+    <string name="hud_rail_tracking">TRACKING</string>
+    <string name="hud_rail_strict">STRICT</string>
+    <string name="hud_rail_smart">SMART</string>
+    <string name="hud_rail_cam_swap">%1$s ⇄ %2$s</string>
+    <string name="hud_rail_rec">REC</string>
+    <string name="hud_rail_hold">HOLD</string>
+    <string name="hud_rail_rtl">RTL</string>
+    <string name="hud_rail_land">LAND</string>
+    <string name="hud_rail_more">More</string>
+    <string name="hud_rail_mode_not_applied">Re-acquire mode not applied</string>
+    <string name="hud_rail_reacquire_description">Re-acquire mode</string>
+    <string name="hud_rail_pending">pending</string>
+    <string name="hud_leg_front">FRONT</string>
+    <string name="hud_leg_belly">BELLY</string>
+
+    <!-- Nav-source chip and its popover. -->
+    <string name="hud_nav_dr">DR</string>
+    <string name="hud_nav_ext">EXT NAV</string>
+    <string name="hud_nav_gps">GPS %1$s·%2$s</string>
+    <string name="hud_nav_flow">FLOW</string>
+    <string name="hud_nav_stale">NAV —</string>
+    <string name="hud_nav_fix_3d">3D</string>
+    <string name="hud_nav_fix_dgps">DGPS</string>
+    <string name="hud_nav_fix_rtk_float">RTK FLT</string>
+    <string name="hud_nav_fix_rtk_fixed">RTK FIX</string>
+    <string name="hud_nav_fix_none">NO FIX</string>
+    <string name="hud_nav_q_good">GOOD</string>
+    <string name="hud_nav_q_fair">FAIR</string>
+    <string name="hud_nav_q_poor">POOR</string>
+    <string name="hud_nav_q_degraded">DEGRADED</string>
+    <string name="hud_nav_q_lost">LOST</string>
+    <string name="hud_nav_q_no_fix">NO FIX</string>
+    <string name="hud_nav_q_glitch">GLITCH</string>
+    <string name="hud_nav_q_hold_ok">HOLD OK</string>
+    <string name="hud_nav_q_no_flow">NO FLOW</string>
+    <string name="hud_nav_q_drift">DRIFT</string>
+    <string name="hud_nav_auto_switch">Vision-nav switches sets automatically; a manual switch may be overridden.</string>
+    <string name="hud_nav_title">Navigation source</string>
+    <string name="hud_nav_set">Set %1$d</string>
+    <string name="hud_nav_active">ACTIVE</string>
+    <string name="hud_nav_posxy">Position</string>
+    <string name="hud_nav_velxy">Velocity</string>
+    <string name="hud_nav_yaw">Yaw</string>
+    <string name="hud_nav_src_none">None</string>
+    <string name="hud_nav_src_gps">GPS</string>
+    <string name="hud_nav_src_beacon">Beacon</string>
+    <string name="hud_nav_src_flow">Optical flow</string>
+    <string name="hud_nav_src_extnav">External nav</string>
+    <string name="hud_nav_src_wheel">Wheel encoder</string>
+    <string name="hud_nav_src_other">Other</string>
+    <string name="hud_nav_src_unknown">—</string>
+    <string name="hud_nav_use_set">Use set %1$d</string>
+    <string name="hud_nav_extnav_readout">External nav %1$s · %2$s Hz</string>
+    <string name="hud_nav_gps_readout">GPS %1$s · %2$s sats · HDOP %3$s</string>
+    <string name="hud_nav_ekf_readout">EKF %1$s</string>
+    <string name="hud_nav_flag_vel_h">VEL H</string>
+    <string name="hud_nav_flag_pos_rel">POS REL</string>
+    <string name="hud_nav_flag_pos_abs">POS ABS</string>
+    <string name="hud_nav_flag_const_pos">CONST POS</string>
+    <string name="hud_nav_flag_glitch">GPS GLITCH</string>
+
+    <!-- Lidar radar. -->
+    <string name="hud_radar_clear">CLEAR</string>
+    <string name="hud_radar_caution">CAUTION</string>
+    <string name="hud_radar_danger">DANGER</string>
+    <string name="hud_radar_header">LIDAR %1$s Hz</string>
+    <string name="hud_radar_scan_none">SCAN —</string>
+    <string name="hud_radar_scale">%1$d m</string>
+    <string name="hud_radar_scale_auto">AUTO %1$d m</string>
+    <string name="hud_radar_cycle">Change radar range</string>
+
+    <!-- Minimap local frame. -->
+    <string name="hud_map_local">LOCAL · N/E m</string>
+    <string name="hud_map_fc_pos">FC POS</string>
+    <string name="hud_map_toast_local">Minimap: local frame (no GNSS position)</string>
+    <string name="hud_map_origin">ORIGIN</string>
+    <string name="hud_map_pin_auto">AUTO</string>
+    <string name="hud_map_pin_local">LOCAL</string>
+    <string name="hud_map_pin_map">MAP</string>
+    <string name="hud_map_scale">%1$d m</string>
+    <string name="hud_map_zoom_in">Zoom in</string>
+    <string name="hud_map_zoom_out">Zoom out</string>
+    <string name="hud_map_description">Local map</string>
+
+    <!-- EKF source-set switch. -->
+    <string name="cockpit_confirm_ekf_set_title">Switch nav source</string>
+    <string name="cockpit_confirm_ekf_set_message">The flight controller switches its position and velocity sources to the selected set.</string>
+    <string name="cockpit_reason_ekf_set">Choose a source set from 1 to 3</string>
+</resources>

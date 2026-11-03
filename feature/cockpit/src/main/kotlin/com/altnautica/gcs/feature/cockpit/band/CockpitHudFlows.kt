@@ -3,7 +3,6 @@ package com.altnautica.gcs.feature.cockpit.band
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.MapVehicle
-import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
@@ -72,8 +71,8 @@ internal class CockpitHudFlows(
 
     val band: StateFlow<BandState> = telemetry.flatMapLatest { t ->
         val coarse = if (t == null) flowOf(BandTelemetry.Empty) else combine(
-            t.heartbeat, t.battery, t.gps, t.linkQuality, tick500,
-        ) { hb, batt, gps, lq, _ ->
+            t.heartbeat, t.battery, t.linkQuality, tick500,
+        ) { hb, batt, lq, _ ->
             val now = clock.nowMs()
             val age = hb?.let { heartbeatAgeMs(it.tMs, now) }
             BandTelemetry(
@@ -81,8 +80,6 @@ internal class CockpitHudFlows(
                 mode = hb?.mode?.name,
                 battery = batt?.remainingPct?.takeIf { it >= 0 },
                 ttr = batt?.timeToReserveS,
-                gpsFix = gps?.fix,
-                sats = gps?.satellites,
                 link = AlertEngine.linkHealth(hb?.tMs, now),
                 ageDeci = age?.let { (it / 100).toInt().coerceAtMost(999) },
                 rssi = lq?.rssiDbm,
@@ -105,8 +102,6 @@ internal class CockpitHudFlows(
                 batteryPct = t.battery,
                 timeToReserveS = t.ttr,
                 batteryLevel = batteryBand(t.battery, c.settings),
-                gpsFix = t.gpsFix,
-                satellites = t.sats,
                 link = t.link,
                 linkAgeDeciS = t.ageDeci,
                 rssiDbm = t.rssi,
@@ -186,15 +181,13 @@ internal class CockpitHudFlows(
         val mode: String?,
         val battery: Int?,
         val ttr: Int?,
-        val gpsFix: GpsFix?,
-        val sats: Int?,
         val link: LinkHealth,
         val ageDeci: Int?,
         val rssi: Int?,
         val lq: Int?,
     ) {
         companion object {
-            val Empty = BandTelemetry(null, null, null, null, null, null, LinkHealth.None, null, null, null)
+            val Empty = BandTelemetry(null, null, null, null, LinkHealth.None, null, null, null)
         }
     }
 

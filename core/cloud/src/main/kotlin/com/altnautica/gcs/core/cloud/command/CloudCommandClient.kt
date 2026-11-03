@@ -80,6 +80,7 @@ class CloudCommandClient @Inject constructor(
             VehicleCommand.PauseMission -> "pausemission" to emptyList()
             VehicleCommand.ResumeMission -> "resumemission" to emptyList()
             VehicleCommand.Kill -> "killswitch" to emptyList()
+            is VehicleCommand.SetEkfSourceSet -> "ekfsourceset" to listOf(command.set)
             is VehicleCommand.FlyTo, is VehicleCommand.MotorTest, VehicleCommand.RebootAutopilot -> null
         }
 

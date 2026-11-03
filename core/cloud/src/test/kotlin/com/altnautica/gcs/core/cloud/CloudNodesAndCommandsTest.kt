@@ -100,6 +100,7 @@ class CloudNodesAndCommandsTest {
         assertEquals("resumemission", CloudCommandClient.verbOf(VehicleCommand.ResumeMission)?.first)
         assertEquals("rtl", CloudCommandClient.verbOf(VehicleCommand.ReturnToLaunch)?.first)
         assertEquals(null, CloudCommandClient.verbOf(VehicleCommand.FlyTo(0.0, 0.0, 10f)))
+        assertEquals("ekfsourceset" to listOf<Any?>(3), CloudCommandClient.verbOf(VehicleCommand.SetEkfSourceSet(3)))
     }
 
     @Test

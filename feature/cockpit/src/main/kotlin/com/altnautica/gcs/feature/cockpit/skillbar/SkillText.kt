@@ -64,6 +64,7 @@ private val CONFIRM_TITLES = mapOf(
     "skills.kill.confirm.title" to R.string.cockpit_confirm_kill_title,
     "skills.modeChange.confirm.title" to R.string.cockpit_confirm_mode_title,
     "skills.flyHere.confirm.title" to R.string.cockpit_confirm_fly_here_title,
+    "skills.ekfSourceSet.confirm.title" to R.string.cockpit_confirm_ekf_set_title,
 )
 
 private val CONFIRM_MESSAGES = mapOf(
@@ -77,6 +78,7 @@ private val CONFIRM_MESSAGES = mapOf(
     "skills.kill.confirm.message" to R.string.cockpit_confirm_kill_message,
     "skills.modeChange.confirm.message" to R.string.cockpit_confirm_mode_message,
     "skills.flyHere.confirm.message" to R.string.cockpit_confirm_fly_here_message,
+    "skills.ekfSourceSet.confirm.message" to R.string.cockpit_confirm_ekf_set_message,
 )
 
 private val REASONS = mapOf(
@@ -96,6 +98,7 @@ private val REASONS = mapOf(
     SkillReason.COMMAND_FAILED to R.string.cockpit_reason_command_failed,
     SkillReason.STATE_ERROR to R.string.cockpit_reason_state_error,
     SkillReason.FLY_HERE_TARGET to R.string.cockpit_reason_fly_here_target,
+    SkillReason.EKF_SOURCE_SET to R.string.cockpit_reason_ekf_set,
 )
 
 /** Built-in labels are localized; an extension's label is shown as the extension provides it. */

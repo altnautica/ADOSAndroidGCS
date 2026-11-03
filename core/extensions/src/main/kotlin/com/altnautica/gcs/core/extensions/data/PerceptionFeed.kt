@@ -111,8 +111,11 @@ class PerceptionFeed @Inject constructor(
         }
     }
 
-    /** Wire batch (snake_case) → the camelCase batch extensions receive; null for another version. */
-    internal fun mapBatch(text: String): JsonObject? {
+    /**
+     * Wire batch (snake_case) → the camelCase batch extensions receive; null for another
+     * version. Also maps batches from an in-process autonomy source.
+     */
+    fun mapBatch(text: String): JsonObject? {
         val raw = runCatching { json.parseToJsonElement(text) }.getOrNull() as? JsonObject ?: return null
         val v = (raw["v"] as? JsonPrimitive)?.doubleOrNull
         if (raw.containsKey("v") && v != SUPPORTED_VERSION) return null

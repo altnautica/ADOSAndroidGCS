@@ -16,6 +16,9 @@ sealed interface VehicleCommand {
     data class FlyTo(val latDeg: Double, val lonDeg: Double, val altRelM: Float) : VehicleCommand
     data class MotorTest(val motor: Int, val throttlePct: Float, val durationS: Float) : VehicleCommand
     data object RebootAutopilot : VehicleCommand
+
+    /** `MAV_CMD_SET_EKF_SOURCE_SET`: make EKF3 source set [set] (1-3) active. */
+    data class SetEkfSourceSet(val set: Int) : VehicleCommand
 }
 
 sealed interface CommandResult {

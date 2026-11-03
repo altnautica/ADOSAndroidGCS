@@ -50,8 +50,7 @@ import com.altnautica.gcs.feature.cockpit.band.SafetyBand
 import com.altnautica.gcs.feature.cockpit.band.SafetyBandHeight
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmHost
 import com.altnautica.gcs.feature.cockpit.hud.HudCanvas
-import com.altnautica.gcs.feature.cockpit.hud.ProximityRadar
-import com.altnautica.gcs.feature.cockpit.hud.TargetDesignator
+import com.altnautica.gcs.feature.cockpit.autonomy.MinimapFrame
 import com.altnautica.gcs.feature.cockpit.panels.QuickSettingsPanel
 import com.altnautica.gcs.feature.cockpit.panels.StreamTabs
 import com.altnautica.gcs.feature.cockpit.panels.TelemetryStrip
@@ -98,7 +97,7 @@ internal fun CockpitScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val portrait = !isLandscape()
         val insetWidth = CockpitLayout.insetWidth(maxWidth)
-        val bandBar: @Composable (Modifier) -> Unit = { m -> Band(vm, onExit, m) }
+        val bandBar: @Composable (Modifier) -> Unit = { m -> Band(vm, width, onExit, m) }
         when {
             portrait -> PortraitLayout(vm, width, bandBar)
             width == WidthClass.Compact -> CompactLayout(vm, width, settings.density, insetWidth, bandBar)
@@ -118,7 +117,7 @@ internal fun CockpitScreen(
 
 /** The safety band; it alone collects the band state, so a band change recomposes only the band. */
 @Composable
-private fun Band(vm: CockpitViewModel, onExit: () -> Unit, modifier: Modifier) {
+private fun Band(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit, modifier: Modifier) {
     val band by vm.band.collectAsStateWithLifecycle()
     SafetyBand(
         state = band,
@@ -128,6 +127,7 @@ private fun Band(vm: CockpitViewModel, onExit: () -> Unit, modifier: Modifier) {
         onOpenQuickSettings = { vm.setQuickSettings(true) },
         onOpenModes = vm::openModePicker,
         onKill = { vm.activate("kill") },
+        navChip = { NavChipSlot(vm, width) },
         modifier = modifier,
     )
 }
@@ -152,7 +152,8 @@ private fun CompactLayout(vm: CockpitViewModel, width: WidthClass, density: Cock
             vm,
             Modifier.fillMaxSize().padding(top = SafetyBandHeight + CockpitLayout.ZoneTopClearance, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES),
         )
-        Radar(vm, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+        Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+        FollowChrome(vm, width, topInset = SafetyBandHeight, modifier = Modifier.zIndex(Z.ZONES))
         Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.PIP))
         Bar(vm, width, Modifier.align(Alignment.BottomCenter).padding(AdosSpacing.S2).zIndex(Z.SKILL_BAR))
     }
@@ -201,7 +202,8 @@ private fun SplitLayout(
                     Column(Modifier.padding(AdosSpacing.S2).zIndex(Z.BAND), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) { Tabs(vm) }
                     Alerts(vm, Modifier.align(Alignment.TopCenter).padding(top = AdosSpacing.S12).zIndex(Z.ALERTS))
                     WidgetZones(vm, Modifier.fillMaxSize().padding(top = AdosSpacing.S12, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
-                    Radar(vm, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+                    Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+                    FollowChrome(vm, width, topInset = AdosSpacing.S12, modifier = Modifier.zIndex(Z.ZONES))
                     Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.PIP))
                     Bar(vm, width, Modifier.align(Alignment.BottomCenter).padding(AdosSpacing.S2).zIndex(Z.SKILL_BAR))
                 }
@@ -240,6 +242,7 @@ private fun PortraitLayout(vm: CockpitViewModel, width: WidthClass, bandBar: @Co
         bandBar(Modifier.zIndex(Z.BAND))
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             VideoStage(vm, Modifier.fillMaxSize(), hudTopInset = false)
+            FollowChrome(vm, width, topInset = 0.dp, modifier = Modifier.zIndex(Z.ZONES))
             Pip(vm, Modifier.align(Alignment.BottomStart).padding(AdosSpacing.S2).zIndex(Z.PIP))
         }
         Column(Modifier.padding(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
@@ -249,7 +252,7 @@ private fun PortraitLayout(vm: CockpitViewModel, width: WidthClass, bandBar: @Co
         }
         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = AdosSpacing.S2)) {
             Minimap(vm, Modifier.fillMaxSize().clip(RoundedCornerShape(AdosRadius.Xl)))
-            Radar(vm, Modifier.align(Alignment.BottomEnd).padding(AdosSpacing.S2), diameter = 96.dp)
+            Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(AdosSpacing.S2))
         }
         Bar(vm, width, Modifier.align(Alignment.CenterHorizontally).padding(AdosSpacing.S2))
     }
@@ -263,7 +266,6 @@ private fun VideoStage(vm: CockpitViewModel, modifier: Modifier, hudTopInset: Bo
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
-    val targetActions by vm.targetActions.collectAsStateWithLifecycle()
     Box(modifier.background(AdosTheme.colors.mediaLetterbox)) {
         VideoSurface(video.main, Modifier.fillMaxSize().zIndex(Z.VIDEO))
         if (videoState !is VideoState.Live) {
@@ -279,7 +281,7 @@ private fun VideoStage(vm: CockpitViewModel, modifier: Modifier, hudTopInset: Bo
             ExtensionSlotHost(node, "video.overlay", Modifier.fillMaxSize().zIndex(Z.EXT_OVERLAY))
             ExtensionMarksLayer(node, Modifier.fillMaxSize().zIndex(Z.MARKS))
         }
-        TargetDesignator(targetActions, vm::activateTarget, Modifier.fillMaxSize().zIndex(Z.MARKS))
+        TargetLayers(vm, vm.autonomy.mainCamera(video), pip = false, modifier = Modifier.fillMaxSize().zIndex(Z.MARKS))
         if (showHud) {
             HudCanvas(
                 telemetry = telemetry,
@@ -298,6 +300,12 @@ private fun VideoStage(vm: CockpitViewModel, modifier: Modifier, hudTopInset: Bo
 private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {
     val state by vm.minimap.collectAsStateWithLifecycle()
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
+    val frame by vm.autonomy.minimapFrame.collectAsStateWithLifecycle()
+    if (frame == MinimapFrame.Local) {
+        // Pan and pinch are drag gestures, so a plain tap still swaps video and map.
+        AutonomyLocalMinimap(vm, onClick?.let { modifier.clickable(onClick = it) } ?: modifier)
+        return
+    }
     Box(modifier) {
         AdosMinimap(state.vehicle, state.home, state.trail, Modifier.fillMaxSize(), zoom = MINIMAP_ZOOM, onClick = onClick)
         extNode?.let { node ->
@@ -333,26 +341,25 @@ private fun Alerts(vm: CockpitViewModel, modifier: Modifier) {
 }
 
 @Composable
-private fun Radar(vm: CockpitViewModel, modifier: Modifier, diameter: androidx.compose.ui.unit.Dp = 120.dp) {
-    val telemetry by vm.telemetry.collectAsStateWithLifecycle()
-    ProximityRadar(telemetry, modifier, diameter)
+private fun Radar(vm: CockpitViewModel, width: WidthClass, modifier: Modifier) {
+    AutonomyRadar(vm, modifier, radarDiameter(width))
 }
 
 @Composable
 private fun Pip(vm: CockpitViewModel, modifier: Modifier) {
     val video by vm.video.collectAsStateWithLifecycle()
     val pip = video.pip ?: return
-    VideoSurface(
-        pip,
-        modifier.size(width = 192.dp, height = 108.dp).clip(RoundedCornerShape(AdosRadius.Lg)),
-        role = VideoSurfaceRole.Pip,
-    )
+    Box(modifier.size(width = 192.dp, height = 108.dp).clip(RoundedCornerShape(AdosRadius.Lg))) {
+        VideoSurface(pip, Modifier.fillMaxSize(), role = VideoSurfaceRole.Pip)
+        vm.autonomy.pipCamera(video)?.let { camera -> TargetLayers(vm, camera, pip = true, modifier = Modifier.fillMaxSize()) }
+    }
 }
 
 @Composable
 private fun Bar(vm: CockpitViewModel, width: WidthClass, modifier: Modifier) {
     val slots by vm.slots.collectAsStateWithLifecycle()
-    SkillBar(slots, width, onActivate = { vm.activate(it) }, onOpenDrawer = { vm.setDrawer(true) }, modifier = modifier)
+    val reacquire = rememberReacquireUi(vm)
+    SkillBar(slots, width, onActivate = { vm.activate(it) }, onOpenDrawer = { vm.setDrawer(true) }, modifier = modifier, reacquire = reacquire)
 }
 
 @Composable

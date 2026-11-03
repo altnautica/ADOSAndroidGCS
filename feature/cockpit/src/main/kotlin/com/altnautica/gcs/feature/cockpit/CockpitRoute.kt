@@ -114,6 +114,16 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
                 CockpitEvent.ChecklistOverridden -> snackbar.showSnackbar(resources.getString(R.string.cockpit_checklist_overridden))
                 is CockpitEvent.TargetRefused ->
                     snackbar.showSnackbar(reasonRes(event.reasonKey)?.let(resources::getString) ?: event.reasonKey)
+                is CockpitEvent.Reacquired -> snackbar.showSnackbar(
+                    resources.getString(
+                        R.string.hud_toast_reacquired,
+                        event.trackId,
+                        String.format(java.util.Locale.ROOT, "%.2f", event.similarity),
+                        String.format(java.util.Locale.ROOT, "%.1f", event.gapS),
+                    ),
+                )
+                CockpitEvent.ReacquireModeNotApplied -> snackbar.showSnackbar(resources.getString(R.string.hud_rail_mode_not_applied))
+                CockpitEvent.MinimapLocal -> snackbar.showSnackbar(resources.getString(R.string.hud_map_toast_local))
             }
         }
     }

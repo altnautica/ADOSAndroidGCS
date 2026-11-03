@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.agent.node
 
 import com.altnautica.gcs.core.agent.capture.CaptureApi
+import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.VideoSource
@@ -15,4 +16,11 @@ interface LocalNodeApis {
     fun capture(id: DeviceId): CaptureApi?
     fun sensors(id: DeviceId): SensorsApi?
     fun capturePreview(id: DeviceId, camera: String?): VideoSource?
+
+    /**
+     * Autonomy feeds (detections, navigation stream, live map) served in-process for
+     * [id]. Independent of [handles]: a simulated vehicle can serve these while its
+     * other pages come from its own source. Null when this entry has none for [id].
+     */
+    fun autonomy(id: DeviceId): AutonomyFeedApi? = null
 }

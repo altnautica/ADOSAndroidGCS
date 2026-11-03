@@ -62,5 +62,6 @@ class MiscAgentTest {
         assertEquals("killSwitch", SnapshotMapping.commandOf(VehicleCommand.Kill)!!.first)
         assertEquals("mode" to listOf(JsonPrimitive("RTL")), SnapshotMapping.commandOf(VehicleCommand.SetMode(FlightMode(6, "RTL"))))
         assertNull(SnapshotMapping.commandOf(VehicleCommand.MotorTest(1, 10f, 1f)))
+        assertEquals("ekfSourceSet" to listOf(JsonPrimitive(2)), SnapshotMapping.commandOf(VehicleCommand.SetEkfSourceSet(2)))
     }
 }

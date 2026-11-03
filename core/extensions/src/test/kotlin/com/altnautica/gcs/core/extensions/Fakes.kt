@@ -1,5 +1,7 @@
 package com.altnautica.gcs.core.extensions
 
+import com.altnautica.gcs.core.agent.http.AgentError
+import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.extensions.data.ApiResult
 import com.altnautica.gcs.core.extensions.data.ExtensionApi
 import com.altnautica.gcs.core.extensions.data.ExtensionFailure
@@ -102,6 +104,8 @@ class FakeExtensionApi(
     override suspend fun stopRecording(): ApiResult<JsonElement> = ok()
     override suspend fun perceptionInfo(): ApiResult<PerceptionInfo> = ApiResult.Ok(PerceptionInfo(null, null))
     override fun detections(): Flow<String> = emptyFlow()
+    override fun navStream(): Flow<String> = emptyFlow()
+    override suspend fun mapLive(since: Long): AgentResult<JsonObject> = AgentResult.Err(AgentError.FeatureAbsent)
     override fun installJob(jobId: String): Flow<String> = emptyFlow()
     override suspend fun cameras(): ApiResult<List<RosterCamera>> = ApiResult.Ok(
         listOf(RosterCamera("cam0", "Front", listOf("video"), true), RosterCamera("cam1", "Down", listOf("detect"), true)),

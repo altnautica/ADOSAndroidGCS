@@ -28,6 +28,7 @@ import com.altnautica.gcs.core.agent.pairing.ClaimRequest
 import com.altnautica.gcs.core.agent.pairing.ClaimResponse
 import com.altnautica.gcs.core.agent.pairing.PairingInfo
 import com.altnautica.gcs.core.agent.pairing.UnpairResponse
+import com.altnautica.gcs.core.agent.nav.NavApi
 import com.altnautica.gcs.core.agent.plugins.PluginApi
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.serialization.DeserializationStrategy
@@ -65,6 +66,9 @@ class AgentClient internal constructor(
 
     /** World Engine capture routes (extension plugin mount). */
     val capture: CaptureApi = AgentCaptureApi(this)
+
+    /** Host navigation and live map routes (`/api/v1/nav/...`, `/api/v1/map/...`). */
+    val nav: NavApi = NavApi(this)
 
     // ---- identity and status -------------------------------------------------
 

@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.agent.capture.CaptureApi
+import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.demo.DemoIds
@@ -16,6 +17,7 @@ class DemoNodeApis @Inject constructor() : LocalNodeApis {
     private val capture by lazy { DemoCaptureApi() }
     private val visorSensors by lazy { DemoVisorSensors() }
     private val groundSensors by lazy { DemoGroundSensors() }
+    private val autonomy by lazy { DemoAutonomy() }
 
     override fun handles(id: DeviceId): Boolean = id == DemoIds.VISOR || id == DemoIds.GROUND
 
@@ -30,4 +32,7 @@ class DemoNodeApis @Inject constructor() : LocalNodeApis {
     /** A labelled test pattern per camera. */
     override fun capturePreview(id: DeviceId, camera: String?): VideoSource? =
         if (id == DemoIds.VISOR) DemoVideoFactory.source(id, camera) else null
+
+    /** Scripted detections, navigation stream and live map for the demo drone. */
+    override fun autonomy(id: DeviceId): AutonomyFeedApi? = if (id == DemoIds.DRONE) autonomy else null
 }

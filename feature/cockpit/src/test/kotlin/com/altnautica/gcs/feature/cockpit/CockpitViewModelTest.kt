@@ -3,6 +3,8 @@ package com.altnautica.gcs.feature.cockpit
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.video.StreamCatalog
+import com.altnautica.gcs.core.extensions.data.ExtensionRepository
+import com.altnautica.gcs.core.extensions.data.PerceptionFeed
 import com.altnautica.gcs.core.extensions.skills.ExtensionSkillContributor
 import com.altnautica.gcs.core.link.manual.ManualControlInput
 import com.altnautica.gcs.core.link.manual.ManualControlStreamer
@@ -143,6 +145,12 @@ class CockpitViewModelTest {
             clock = clock,
             activator = activator,
             extensionSkills = mockk<ExtensionSkillContributor> { every { targetActions } returns flowOf(emptyList()) },
+            extensions = mockk<ExtensionRepository> { coEvery { api(any()) } returns null },
+            perception = mockk<PerceptionFeed> {
+                every { acquire(any()) } returns {}
+                every { batches(any()) } returns null
+            },
+            localApis = emptySet(),
         )
         // The screen-only flows run while collected; keep them hot like a visible cockpit.
         listOf(

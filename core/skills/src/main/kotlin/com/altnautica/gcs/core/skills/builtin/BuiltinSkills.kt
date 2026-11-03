@@ -41,6 +41,9 @@ object SkillArgs {
     const val LAT = "lat"
     const val LON = "lon"
 
+    /** EKF3 source set (1-3) for [EkfSourceSetSkill]. */
+    const val EKF_SOURCE_SET = "ekfSourceSet"
+
     /** Standard-mapping gamepad button that triggered the activation; its hold satisfies the confirm. */
     const val GAMEPAD_BUTTON = "gamepadButton"
 }
@@ -377,6 +380,22 @@ object FlyHereSkill : BuiltinSkill(
     }
 }
 
+/** Makes an EKF3 source set active; dispatched from the nav-source chip's popover. */
+object EkfSourceSetSkill : BuiltinSkill(
+    id = "ekf-source-set", labelKey = "skills.ekfSourceSet", icon = "swap_horiz", category = SkillCategory.Flight,
+    armRequirement = ArmRequirement.Any,
+    confirm = builtinConfirm("ekfSourceSet", ConfirmGesture.Hold, danger = false),
+    bindable = false,
+) {
+    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: IDLE_STATE
+
+    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
+        val set = (args[SkillArgs.EKF_SOURCE_SET] as? Number)?.toInt()
+        if (set == null || set !in 1..3) return CommandResult.Rejected(-1, SkillReason.EKF_SOURCE_SET)
+        return send(ctx, VehicleCommand.SetEkfSourceSet(set))
+    }
+}
+
 /**
  * Every built-in skill in registration order. Held in its own object so its
  * initialisation never runs inside a skill object's initialiser (a cycle that
@@ -385,6 +404,6 @@ object FlyHereSkill : BuiltinSkill(
 object BuiltinSkills {
     val all: List<Skill> by lazy {
         listOf(ArmSkill, DisarmSkill, TakeoffSkill, LandSkill, RthSkill, PauseSkill, ResumeSkill, AbortSkill, KillSkill) +
-            ModePreset.entries.map(::ModeSkill) + listOf(SetModeSkill, FlyHereSkill)
+            ModePreset.entries.map(::ModeSkill) + listOf(SetModeSkill, FlyHereSkill, EkfSourceSetSkill)
     }
 }

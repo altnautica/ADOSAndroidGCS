@@ -86,6 +86,11 @@ class CockpitSettingsRepository @Inject constructor(
 
     suspend fun setTelemetryPane(on: Boolean) = dataStore.edit { it[TELEMETRY_PANE] = on }
 
+    /** The minimap frame pin for one vehicle: `auto`, `local` or `map`; `auto` when unset. */
+    fun minimapMode(vehicleId: String): Flow<String> = dataStore.data.map { it[minimapKey(vehicleId)] ?: MINIMAP_AUTO }
+
+    suspend fun setMinimapMode(vehicleId: String, mode: String) = dataStore.edit { it[minimapKey(vehicleId)] = mode }
+
     companion object {
         const val MIN_SPLIT = 0.2f
         const val MAX_SPLIT = 0.8f
@@ -105,5 +110,9 @@ class CockpitSettingsRepository @Inject constructor(
         private val DENSITY = stringPreferencesKey("cockpit.density")
         private val SPLIT = floatPreferencesKey("cockpit.splitRatio")
         private val TELEMETRY_PANE = booleanPreferencesKey("cockpit.telemetryPane")
+        private fun minimapKey(vehicleId: String) = stringPreferencesKey("cockpit.minimap.mode.$vehicleId")
+        const val MINIMAP_AUTO = "auto"
+        const val MINIMAP_LOCAL = "local"
+        const val MINIMAP_MAP = "map"
     }
 }

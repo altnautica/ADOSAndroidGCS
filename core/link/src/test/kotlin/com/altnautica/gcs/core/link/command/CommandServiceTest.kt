@@ -147,6 +147,15 @@ class CommandServiceTest {
     }
 
     @Test
+    fun `ekf source set sends SET_EKF_SOURCE_SET with the set in param1`() = runTest {
+        val link = ScriptedLink { m -> if (m is CommandLong) reply(m.ack) }
+        service(link, backgroundScope).run(VehicleCommand.SetEkfSourceSet(2))
+        val sent = link.sent.single() as CommandLong
+        assertEquals(42007, sent.command)
+        assertEquals(2f, sent.param1)
+    }
+
+    @Test
     fun `takeoff on ardupilot switches to guided first`() = runTest {
         val link = ScriptedLink { m -> if (m is CommandLong) reply(m.ack) }
         assertEquals(CommandResult.Accepted, service(link, backgroundScope).run(VehicleCommand.Takeoff(12f)))

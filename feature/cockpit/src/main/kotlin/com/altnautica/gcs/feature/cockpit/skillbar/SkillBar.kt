@@ -5,7 +5,13 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -102,6 +108,9 @@ fun gamepadButtonName(button: Int): String = when (button) {
     else -> "B$button"
 }
 
+/** The re-acquire mode toggle carried by the follow skill's slot (long-press opens it). */
+data class ReacquireUi(val skillId: String, val mode: String?, val pending: String?, val onSelect: (String) -> Unit)
+
 /** The Skill Bar: filled slots in loadout order, then the overflow drawer button. */
 @Composable
 fun SkillBar(
@@ -110,13 +119,14 @@ fun SkillBar(
     onActivate: (String) -> Unit,
     onOpenDrawer: () -> Unit,
     modifier: Modifier = Modifier,
+    reacquire: ReacquireUi? = null,
 ) {
     val size = slotSize(width)
     val filled = slots.filter { it.skill != null }
     BoxWithConstraints(modifier) {
         val count = fittingSlotCount(maxWidth.value, size.value, AdosSpacing.S2.value, visibleSlotCount(width))
         Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalAlignment = Alignment.Bottom) {
-            for (slot in filled.take(count)) SkillSlot(slot, size, onActivate)
+            for (slot in filled.take(count)) SkillSlot(slot, size, onActivate, reacquire = reacquire?.takeIf { it.skillId == slot.skill?.id })
             DrawerButton(size, onOpenDrawer)
         }
     }
@@ -153,8 +163,9 @@ internal fun consoleButtonFor(button: Int): ConsoleButton? = when (button) {
     else -> null
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Modifier = Modifier) {
+fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Modifier = Modifier, reacquire: ReacquireUi? = null) {
     val skill = slot.skill ?: return
     val state = slot.state
     val enabled = state?.enabled ?: false
@@ -183,6 +194,19 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
         sweep.snapTo(1f)
         sweep.animateTo(0f, tween(remaining.toInt(), easing = LinearEasing))
     }
+    val menu = rememberAdosMenuState()
+    val reacquireLabel = stringResource(R.string.hud_rail_reacquire_description)
+    if (reacquire != null) {
+        val strict = stringResource(R.string.hud_rail_strict)
+        val smart = stringResource(R.string.hud_rail_smart)
+        AdosMenu(
+            menu,
+            listOf(
+                AdosMenuItem(label = (if (reacquire.mode == "strict") "✓ " else "") + strict, onClick = { reacquire.onSelect("strict") }),
+                AdosMenuItem(label = (if (reacquire.mode == "smart") "✓ " else "") + smart, onClick = { reacquire.onSelect("smart") }),
+            ),
+        )
+    }
     Column(modifier.width(size), horizontalAlignment = Alignment.CenterHorizontally) {
       Box {
         Surface(
@@ -198,7 +222,12 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
                     contentDescription = label
                     if (reason != null) stateDescription = reason
                 }
-                .clickable(role = Role.Button) { onActivate(skill.id) }
+                .combinedClickable(
+                    role = Role.Button,
+                    onLongClickLabel = reacquire?.let { reacquireLabel },
+                    onLongClick = reacquire?.let { { menu.expanded = true } },
+                ) { onActivate(skill.id) }
+                .adosMenuAnchor(menu)
                 .drawWithContent {
                     drawContent()
                     val f = sweep.value
@@ -220,6 +249,15 @@ fun SkillSlot(slot: SlotUi, size: Dp, onActivate: (String) -> Unit, modifier: Mo
                     Text(hint, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = colors.hudMuted, maxLines = 1)
                 }
                 state?.charges?.let { Text("×$it", style = MaterialTheme.typography.labelSmall, color = colors.hudInk2) }
+                reacquire?.let { r ->
+                    val shown = r.pending ?: r.mode
+                    val word = when (shown) {
+                        "strict" -> stringResource(R.string.hud_rail_strict)
+                        "smart" -> stringResource(R.string.hud_rail_smart)
+                        else -> null
+                    }
+                    word?.let { Text(it, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = if (r.pending != null) colors.hudMuted else colors.hudPrimary) }
+                }
             }
         }
         glyph?.let { ControllerGlyph(it, Modifier.align(Alignment.TopEnd).padding(AdosSpacing.S1), glyphs = controller.glyphs, size = 16.dp) }

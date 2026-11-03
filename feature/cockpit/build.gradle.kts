@@ -26,6 +26,7 @@ dependencies {
     implementation(libs.androidx.material3.adaptive)
     implementation(libs.androidx.navigationevent.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
 
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.compose.ui.test.junit4)

@@ -18,4 +18,5 @@
     <string name="skill_label_mode_auto">Start mission</string>
     <string name="skill_label_set_mode">Set mode</string>
     <string name="skill_label_fly_here">Fly here</string>
+    <string name="skill_label_ekf_source_set">Switch nav source</string>
 </resources>

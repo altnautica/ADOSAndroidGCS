@@ -46,6 +46,10 @@ data class AdosColorRoles(
     val hudGlassStrong: Color,
     val hudHair: Color,
     val hudHair2: Color,
+    val hudTrack: Color,
+    val hudLead: Color,
+    val hudCoast: Color,
+    val hudGt: Color,
     val termFg: Color,
 )
 
@@ -87,6 +91,10 @@ object AdosColors {
         hudGlassStrong = Color(0xC7000000),
         hudHair = Color(0x29FFFFFF),
         hudHair2 = Color(0x14FFFFFF),
+        hudTrack = Color(0xFFFF5A1F),
+        hudLead = Color(0xFFF5B544),
+        hudCoast = Color(0xFFF59E0B),
+        hudGt = Color(0xFFA78BFA),
         termFg = Color(0xFF00FF41),
     )
 
@@ -127,6 +135,10 @@ object AdosColors {
         hudGlassStrong = Color(0xC7000000),
         hudHair = Color(0x29FFFFFF),
         hudHair2 = Color(0x14FFFFFF),
+        hudTrack = Color(0xFFFF5A1F),
+        hudLead = Color(0xFFF5B544),
+        hudCoast = Color(0xFFF59E0B),
+        hudGt = Color(0xFFA78BFA),
         termFg = Color(0xFF15803D),
     )
 
@@ -167,6 +179,10 @@ object AdosColors {
         hudGlassStrong = Color(0xCC001100),
         hudHair = Color(0xFF003300),
         hudHair2 = Color(0xFF002200),
+        hudTrack = Color(0xFFFF3333),
+        hudLead = Color(0xFFAA8800),
+        hudCoast = Color(0xFFAA8800),
+        hudGt = Color(0xFF009900),
         termFg = Color(0xFF00AA00),
     )
 
@@ -207,6 +223,22 @@ object AdosSize {
     val IconXl = 32.dp
     const val IconStrokeDp = 1.5f
     val HudBlur = 9.dp
+}
+
+/** HUD v2 target symbology geometry, identical on every video surface. */
+object AdosHudTarget {
+    const val BracketRatio = 0.22f
+    val BracketMin = 10f.dp
+    val BracketMax = 28f.dp
+    val Stroke = 2.5f.dp
+    val Outline = 1f.dp
+    val ReticleArm = 18f.dp
+    val ReticleGap = 6f.dp
+    val TagPad = 6f.dp
+    val OutlineColor = Color(0xA6000000)
+    const val TagFontWeight = 600
+    const val TagUppercase = true
+    const val TagLetterSpacingEm = 0.06f
 }
 
 object AdosMotion {

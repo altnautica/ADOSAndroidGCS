@@ -55,4 +55,5 @@ object SkillReason {
     const val COMMAND_FAILED = "commandFailed"
     const val STATE_ERROR = "stateError"
     const val FLY_HERE_TARGET = "flyHereTarget"
+    const val EKF_SOURCE_SET = "ekfSourceSet"
 }

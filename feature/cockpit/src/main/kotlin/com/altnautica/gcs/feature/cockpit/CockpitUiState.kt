@@ -1,6 +1,5 @@
 package com.altnautica.gcs.feature.cockpit
 
-import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Skill
@@ -65,8 +64,6 @@ data class BandState(
     val batteryPct: Int?,
     val timeToReserveS: Int?,
     val batteryLevel: BatteryBand,
-    val gpsFix: GpsFix?,
-    val satellites: Int?,
     val link: LinkHealth,
     /** Heartbeat age in tenths of a second, for the link chip. */
     val linkAgeDeciS: Int?,
@@ -84,7 +81,7 @@ data class BandState(
     companion object {
         val Empty = BandState(
             nodeName = null, profile = NodeProfile.Unknown, reach = null, armed = null, modeName = null,
-            batteryPct = null, timeToReserveS = null, batteryLevel = BatteryBand.Unknown, gpsFix = null, satellites = null,
+            batteryPct = null, timeToReserveS = null, batteryLevel = BatteryBand.Unknown,
             link = LinkHealth.None, linkAgeDeciS = null, rssiDbm = null, lqPct = null, video = VideoState.NoSource,
             stick = StickChip.NoGamepad, preflightPassed = 0, preflightTotal = 0, recordingStartedAtMs = null, armedSinceMs = null,
         )

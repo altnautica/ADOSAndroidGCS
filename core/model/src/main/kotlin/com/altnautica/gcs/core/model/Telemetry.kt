@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.model
 
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -143,6 +144,19 @@ data class ObstacleSectors(
     val tMs: Long,
 )
 
+/** `LOCAL_POSITION_NED`: position and velocity in the EKF local frame (north, east, down), metres. */
+data class LocalPosition(
+    val northM: Float,
+    val eastM: Float,
+    val downM: Float,
+    val vnMs: Float,
+    val veMs: Float,
+    val vdMs: Float,
+    val tMs: Long,
+)
+
+private val NO_LOCAL_POSITION: StateFlow<LocalPosition?> = MutableStateFlow(null)
+
 /** One flow per telemetry topic so consumers only observe what they draw. */
 interface VehicleTelemetry {
     val attitude: StateFlow<Attitude?>
@@ -161,4 +175,7 @@ interface VehicleTelemetry {
     val fence: StateFlow<FenceStatus?>
     val obstacles: StateFlow<ObstacleSectors?>
     val statusText: SharedFlow<StatusText>
+
+    /** `LOCAL_POSITION_NED`; sources without a local frame keep it null. */
+    val localPosition: StateFlow<LocalPosition?> get() = NO_LOCAL_POSITION
 }

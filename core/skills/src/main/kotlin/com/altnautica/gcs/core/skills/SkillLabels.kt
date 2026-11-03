@@ -21,6 +21,7 @@ private val LABELS = mapOf(
     "skills.modeAuto" to R.string.skill_label_mode_auto,
     "skills.setMode" to R.string.skill_label_set_mode,
     "skills.flyHere" to R.string.skill_label_fly_here,
+    "skills.ekfSourceSet" to R.string.skill_label_ekf_source_set,
 )
 
 /**

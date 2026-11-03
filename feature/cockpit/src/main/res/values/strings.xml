@@ -29,14 +29,6 @@
     <string name="cockpit_reach_blocked">NO LINK</string>
     <string name="cockpit_armed">ARMED</string>
     <string name="cockpit_disarmed">DISARMED</string>
-    <string name="cockpit_gps_unknown">GPS —</string>
-    <string name="cockpit_gps_none">NO GPS</string>
-    <string name="cockpit_gps_no_fix">NO FIX</string>
-    <string name="cockpit_gps_2d">2D</string>
-    <string name="cockpit_gps_3d">3D</string>
-    <string name="cockpit_gps_dgps">DGPS</string>
-    <string name="cockpit_gps_rtk_float">RTK FLOAT</string>
-    <string name="cockpit_gps_rtk_fixed">RTK FIXED</string>
     <string name="cockpit_link_none">NO LINK</string>
     <string name="cockpit_video_live">LIVE</string>
     <string name="cockpit_video_frozen">FROZEN</string>

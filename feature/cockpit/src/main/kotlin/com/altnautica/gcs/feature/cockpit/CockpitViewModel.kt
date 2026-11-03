@@ -11,7 +11,11 @@ import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
+import com.altnautica.gcs.core.agent.node.LocalNodeApis
+import com.altnautica.gcs.core.extensions.data.ExtensionRepository
+import com.altnautica.gcs.core.extensions.data.PerceptionFeed
 import com.altnautica.gcs.core.extensions.skills.ExtensionSkillContributor
+import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 import com.altnautica.gcs.core.extensions.skills.ExtensionTargetActionSkill
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.model.CockpitAlert
@@ -112,6 +116,9 @@ class CockpitViewModel @AssistedInject constructor(
     private val clock: MonotonicClock,
     activator: SkillActivator,
     extensionSkills: ExtensionSkillContributor,
+    extensions: ExtensionRepository,
+    perception: PerceptionFeed,
+    localApis: Set<@JvmSuppressWildcards LocalNodeApis>,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -208,6 +215,7 @@ class CockpitViewModel @AssistedInject constructor(
     fun cycleStream(delta: Int) = videoCtl.cycleStream(delta)
     fun selectStreamIndex(index: Int) = videoCtl.selectStreamIndex(index)
     fun togglePip() = videoCtl.togglePip()
+    fun swapPip() = videoCtl.swapPip()
 
     /** True when the current feed can record. */
     val canRecord: StateFlow<Boolean> = videoCtl.canRecord
@@ -324,8 +332,14 @@ class CockpitViewModel @AssistedInject constructor(
     /** Extension target actions for the flown drone, with their states. */
     val targetActions: StateFlow<List<SlotUi>> = targets.actions
 
-    /** Runs a target action on a box drawn over the video (normalized x, y, width, height); the camera is the selected stream. */
+    /** Runs a target action on a box drawn over the video (frame px x, y, width, height); the camera is the selected stream. */
     fun activateTarget(skill: ExtensionTargetActionSkill, bbox: Map<String, Float>) = targets.activate(skill, bbox)
+
+    /** Detections, follow and navigation state, designation, nav-source chip and minimap frame. */
+    internal val autonomy = CockpitAutonomy(
+        viewModelScope, clock, vehicleNodeId, telemetry, nodeFlows.vehicleServices, video, session.allSkills, tick500,
+        extensions, perception, localApis, settingsRepo, _events, ::activate,
+    )
 
     // ---- Band, alerts, strip ----------------------------------------------------------
 

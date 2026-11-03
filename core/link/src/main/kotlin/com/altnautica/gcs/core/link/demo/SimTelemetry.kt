@@ -106,7 +106,8 @@ internal class SimTelemetry(
         )
     }
 
-    fun ekfStatus() = EkfStatusReport(flags = 0x3FF, velocityVariance = 0.05f, posHorizVariance = 0.04f, posVertVariance = 0.03f, compassVariance = 0.02f)
+    // A healthy EKF: every solution flag except CONST_POS_MODE (128), which means dead reckoning.
+    fun ekfStatus() = EkfStatusReport(flags = 0x37F, velocityVariance = 0.05f, posHorizVariance = 0.04f, posVertVariance = 0.03f, compassVariance = 0.02f)
 
     fun vibration() = Vibration(timeUsec = sim.bootMs * 1000, vibrationX = 3.1f, vibrationY = 2.8f, vibrationZ = 4.2f)
 

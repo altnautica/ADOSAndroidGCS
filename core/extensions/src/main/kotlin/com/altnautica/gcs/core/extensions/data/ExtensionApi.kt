@@ -6,6 +6,8 @@ import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.serialization.json.JsonElement
+import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
+import com.altnautica.gcs.core.agent.nav.NavApi
 import com.altnautica.gcs.core.agent.plugins.PluginApi
 import com.altnautica.gcs.core.agent.ws.AgentSockets
 import com.altnautica.gcs.core.agent.ws.WsFrame
@@ -49,11 +51,25 @@ fun <T> AgentResult<T>.toApi(): ApiResult<T> = when (this) {
 
 data class PerceptionInfo(val tier: String?, val npuTops: Double?)
 
-/** One camera of the node's video roster, as a camera parameter offers it. */
-data class RosterCamera(val id: String, val name: String?, val purposes: List<String>, val enabled: Boolean)
+/**
+ * One camera of the node's video roster, as a camera parameter offers it. [fovDeg] is the
+ * leg's horizontal field of view and [mountPitchDeg] its mount pitch, when reported.
+ */
+data class RosterCamera(
+    val id: String,
+    val name: String?,
+    val purposes: List<String>,
+    val enabled: Boolean,
+    val fovDeg: Float? = null,
+    val mountPitchDeg: Float? = null,
+)
 
-/** The extension routes of one node's agent (direct or through a ground-station relay). */
-interface ExtensionApi {
+/**
+ * The extension routes of one node's agent (direct or through a ground-station relay),
+ * plus the autonomy feeds (detections, navigation stream, live map) extensions and the
+ * cockpit read.
+ */
+interface ExtensionApi : AutonomyFeedApi {
     suspend fun list(): ApiResult<JsonElement>
     suspend fun detail(pluginId: String): ApiResult<JsonObject>
     suspend fun gcsAsset(pluginId: String, path: String): ApiResult<ByteArray>
@@ -72,9 +88,6 @@ interface ExtensionApi {
 
     /** Perception tier and NPU throughput from `/api/status/full`; null fields when unreported. */
     suspend fun perceptionInfo(): ApiResult<PerceptionInfo>
-
-    /** Text frames of the vision detection stream until it closes. */
-    fun detections(): Flow<String>
 
     /** Stage records of an install job until a terminal stage. */
     fun installJob(jobId: String): Flow<String>
@@ -129,6 +142,11 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
     override fun detections(): Flow<String> =
         sockets.open(client, PluginApi.DETECTIONS_WS_PATH, PluginApi.DETECTIONS_TICKET_SCOPE).textFrames()
 
+    override fun navStream(): Flow<String> =
+        sockets.open(client, NavApi.STREAM_WS_PATH, NavApi.STREAM_TICKET_SCOPE).textFrames()
+
+    override suspend fun mapLive(since: Long): AgentResult<JsonObject> = client.nav.mapLive(since)
+
     override suspend fun cameras(): ApiResult<List<RosterCamera>> = when (val r = client.cameraRoster()) {
         is AgentResult.Ok -> ApiResult.Ok(
             r.value.mapNotNull { c ->
@@ -139,6 +157,8 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
                     purposes = (c["purpose"] as? kotlinx.serialization.json.JsonArray)
                         ?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }.orEmpty(),
                     enabled = (c["enabled"] as? kotlinx.serialization.json.JsonPrimitive)?.content != "false",
+                    fovDeg = (c["fov_deg"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { !it.isString }?.content?.toFloatOrNull(),
+                    mountPitchDeg = (c["mount_pitch_deg"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { !it.isString }?.content?.toFloatOrNull(),
                 )
             },
         )

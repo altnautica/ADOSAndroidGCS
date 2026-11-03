@@ -60,6 +60,9 @@ internal class CockpitVideoController(
     private val failedSources = MutableStateFlow<Set<VideoSource>>(emptySet())
     private val pipVisible = MutableStateFlow(false)
 
+    /** The leg the PiP shows when it can: the one swapped out of the main view. */
+    private val pipPreferred = MutableStateFlow<String?>(null)
+
     private val candidates: StateFlow<List<VideoSource>> = combine(vehicleNode, baseUrls, selectedStream) { n, urls, stream ->
         if (n == null) emptyList() else videoSelector.candidates(n, stream) { urls[it] }.filter(videoSessions::canPlay)
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -77,11 +80,11 @@ internal class CockpitVideoController(
         if (src is VideoSource.AgentWhep) streamCatalog.streams(src.node) else flowOf(emptyList())
     }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    val video: StateFlow<VideoUi> = combine(mainSource, streams, selectedStream, switchingStream, pipVisible) { main, list, sel, switching, pip ->
+    private val selection = combine(selectedStream, pipPreferred) { s, p -> s to p }
+
+    val video: StateFlow<VideoUi> = combine(mainSource, streams, selection, switchingStream, pipVisible) { main, list, (sel, pref), switching, pip ->
         val selected = sel ?: list.firstOrNull { it.live }?.id
-        val pipStream = if (pip && main is VideoSource.AgentWhep) {
-            list.firstOrNull { it.id != selected && it.live && it.switchKind == StreamSwitchKind.Concurrent }
-        } else null
+        val pipStream = if (pip && main is VideoSource.AgentWhep) pickPip(list, selected, pref) else null
         VideoUi(
             main = main,
             pip = pipStream?.let { (main as VideoSource.AgentWhep).copy(streamId = it.id) },
@@ -141,6 +144,14 @@ internal class CockpitVideoController(
         selectStream(list[(current + delta).mod(list.size)].id)
     }
 
+    /** Swaps the main video and the PiP: the PiP leg becomes main and the old main goes into the PiP. */
+    fun swapPip() {
+        val v = video.value
+        val pipId = (v.pip as? VideoSource.AgentWhep)?.streamId ?: return
+        pipPreferred.value = v.selectedStreamId
+        selectStream(pipId)
+    }
+
     fun selectStreamIndex(index: Int) {
         streams.value.getOrNull(index)?.let { selectStream(it.id) }
     }
@@ -179,4 +190,13 @@ internal class CockpitVideoController(
     private companion object {
         const val SWITCH_TIMEOUT_MS = 3_000L
     }
+}
+
+/**
+ * The PiP leg: [preferred] (the leg last swapped out of the main view) when it is a live
+ * concurrent leg other than [selected], else the first such leg.
+ */
+internal fun pickPip(list: List<StreamDescriptor>, selected: String?, preferred: String?): StreamDescriptor? {
+    val eligible = list.filter { it.id != selected && it.live && it.switchKind == StreamSwitchKind.Concurrent }
+    return eligible.firstOrNull { it.id == preferred } ?: eligible.firstOrNull()
 }

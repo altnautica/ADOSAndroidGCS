@@ -88,6 +88,7 @@ class CommandService(
                 z = command.altRelM,
             )
             VehicleCommand.RebootAutopilot -> long(MavCmd.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN, 1f)
+            is VehicleCommand.SetEkfSourceSet -> long(MavCmd.MAV_CMD_SET_EKF_SOURCE_SET, command.set.toFloat())
             is VehicleCommand.MotorTest -> long(
                 MavCmd.MAV_CMD_DO_MOTOR_TEST,
                 command.motor.toFloat(),

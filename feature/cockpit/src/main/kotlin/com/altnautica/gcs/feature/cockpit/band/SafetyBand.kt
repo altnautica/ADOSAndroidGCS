@@ -26,8 +26,6 @@ import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Gamepad
 import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
-import androidx.compose.material.icons.outlined.GpsFixed
-import androidx.compose.material.icons.outlined.GpsOff
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.SettingsInputAntenna
@@ -61,7 +59,6 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.feature.cockpit.BandState
 import com.altnautica.gcs.feature.cockpit.BatteryBand
@@ -130,20 +127,6 @@ fun reachLabel(badge: ReachBadge): String = stringResource(
     },
 )
 
-@Composable
-fun gpsLabel(fix: GpsFix?): String = stringResource(
-    when (fix) {
-        null -> R.string.cockpit_gps_unknown
-        GpsFix.NoGps -> R.string.cockpit_gps_none
-        GpsFix.NoFix -> R.string.cockpit_gps_no_fix
-        GpsFix.Fix2D -> R.string.cockpit_gps_2d
-        GpsFix.Fix3D -> R.string.cockpit_gps_3d
-        GpsFix.DGps -> R.string.cockpit_gps_dgps
-        GpsFix.RtkFloat -> R.string.cockpit_gps_rtk_float
-        GpsFix.RtkFixed -> R.string.cockpit_gps_rtk_fixed
-    },
-)
-
 /** m:ss for a duration in seconds. */
 fun formatDuration(totalS: Long): String {
     val s = totalS.coerceAtLeast(0)
@@ -165,7 +148,7 @@ private fun ElapsedChip(icon: ImageVector, startMs: Long, clock: () -> Long, ton
 
 /**
  * The always-visible safety band: exit, node and reach, arm, mode, battery,
- * GPS, link, video, stick control, preflight, recording, flight time, Kill.
+ * nav source, link, video, stick control, preflight, recording, flight time, Kill.
  */
 @Composable
 fun SafetyBand(
@@ -176,6 +159,7 @@ fun SafetyBand(
     onOpenQuickSettings: () -> Unit,
     onOpenModes: () -> Unit,
     onKill: () -> Unit,
+    navChip: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = AdosTheme.colors
@@ -239,16 +223,8 @@ fun SafetyBand(
                     Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
 
-                val gpsGood = state.gpsFix != null && state.gpsFix.ordinal >= GpsFix.Fix3D.ordinal
-                BandChip(
-                    if (gpsGood) Icons.Outlined.GpsFixed else Icons.Outlined.GpsOff,
-                    gpsLabel(state.gpsFix) + (state.satellites?.let { " · $it" } ?: ""),
-                    when {
-                        state.gpsFix == null -> ChipTone.Neutral
-                        gpsGood -> ChipTone.Good
-                        else -> ChipTone.Warn
-                    },
-                )
+                // Item 6: the nav-source chip (what the EKF navigates on).
+                navChip()
 
                 val linkText = when {
                     state.link == LinkHealth.None -> stringResource(R.string.cockpit_link_none)
