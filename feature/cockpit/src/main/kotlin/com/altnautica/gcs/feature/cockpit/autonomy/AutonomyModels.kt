@@ -95,7 +95,7 @@ data class ScanFrame(val angleStartRad: Float, val angleIncrementRad: Float, val
 /** SLAM pose health. */
 enum class PoseHealth { Good, Degraded, Lost }
 
-/** A SLAM pose in map_frd (north, east, metres) with the body yaw. */
+/** A SLAM pose in map_ned (north, east, metres) with the body yaw. */
 data class PoseFrame(val northM: Float, val eastM: Float, val yawRad: Float, val health: PoseHealth, val receivedAtMs: Long)
 
 /** One live occupancy tile: PNG bytes for cell block (ix, iy). */

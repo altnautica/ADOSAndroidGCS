@@ -37,7 +37,7 @@ class AutonomyParseTest {
 
     @Test
     fun `pose yaw comes from the rotation`() {
-        val text = """{"kind":"pose","ts_ms":1,"data":{"pose":{"R":[0,-1,0,1,0,0,0,0,1],"t":[1,2,0]},"health":"degraded","frame":"map_frd"}}"""
+        val text = """{"kind":"pose","ts_ms":1,"data":{"pose":{"R":[0,-1,0,1,0,0,0,0,1],"t":[1,2,0]},"health":"degraded","frame":"map_ned"}}"""
         val p = (AutonomyParse.navFrame(text, 0) as NavFrame.Pose).pose
         assertEquals(Math.PI.toFloat() / 2, p.yawRad, 1e-5f)
         assertEquals(PoseHealth.Degraded, p.health)

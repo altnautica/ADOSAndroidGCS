@@ -131,7 +131,7 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
             putJsonArray("t") { add(JsonPrimitive(n)); add(JsonPrimitive(e)); add(JsonPrimitive(-3f)) }
         }
         put("health", health)
-        put("frame", "map_frd")
+        put("frame", "map_ned")
         put("source", "lidar_planar")
     }
 
@@ -213,7 +213,7 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
     override suspend fun mapLive(since: Long): AgentResult<JsonObject> = AgentResult.Ok(
         buildJsonObject {
             put("seq", MAP_SEQ)
-            put("frame", "map_frd")
+            put("frame", "map_ned")
             put("res_m", RES_M)
             put("tile_cells", CELLS)
             putJsonArray("tiles") { if (since < MAP_SEQ) tiles.forEach { add(it) } }
