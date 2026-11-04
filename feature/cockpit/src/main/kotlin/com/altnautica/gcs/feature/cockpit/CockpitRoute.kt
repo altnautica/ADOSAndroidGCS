@@ -17,7 +17,6 @@ import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +27,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
@@ -42,7 +42,6 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
-import androidx.window.core.layout.WindowSizeClass
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
@@ -55,7 +54,7 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
+import com.altnautica.gcs.feature.cockpit.skillbar.widthClassFor
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonRes
 
 /**
@@ -138,12 +137,8 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
         }
     }
 
-    val adaptive = currentWindowAdaptiveInfo().windowSizeClass
-    val width = when {
-        adaptive.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND) -> WidthClass.Expanded
-        adaptive.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND) -> WidthClass.Medium
-        else -> WidthClass.Compact
-    }
+    val windowWidthPx = LocalWindowInfo.current.containerSize.width
+    val width = widthClassFor(with(LocalDensity.current) { windowWidthPx.toDp().value })
 
     // The band and Skill Bar stay clear of the cutout and of system bars swiped in over the cockpit.
     Box(modifier.fillMaxSize().background(AdosTheme.colors.mediaLetterbox).windowInsetsPadding(WindowInsets.safeDrawing)) {

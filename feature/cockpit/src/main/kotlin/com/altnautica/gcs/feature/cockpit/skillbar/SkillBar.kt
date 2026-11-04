@@ -65,7 +65,21 @@ import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.SlotUi
 
 /** Window width class of the cockpit. */
-enum class WidthClass { Compact, Medium, Expanded }
+enum class WidthClass { Compact, Medium, Expanded, Tv }
+
+/** True for the classes wide enough for the telemetry pane, full rail and range geometry. */
+fun WidthClass.isWide(): Boolean = when (this) {
+    WidthClass.Compact, WidthClass.Medium -> false
+    WidthClass.Expanded, WidthClass.Tv -> true
+}
+
+/** Width class for a window [widthDp] wide; TV-sized windows are checked first. */
+fun widthClassFor(widthDp: Float): WidthClass = when {
+    widthDp >= 1600f -> WidthClass.Tv
+    widthDp >= 840f -> WidthClass.Expanded
+    widthDp >= 600f -> WidthClass.Medium
+    else -> WidthClass.Compact
+}
 
 /** Slot size per width class, scaled up in glove mode. */
 @Composable
@@ -74,6 +88,7 @@ fun slotSize(width: WidthClass): Dp {
         WidthClass.Compact -> 64.dp
         WidthClass.Medium -> 72.dp
         WidthClass.Expanded -> 88.dp
+        WidthClass.Tv -> 110.dp
     }
     return if (AdosTheme.gloveMode) base * GLOVE_TOUCH_SCALE else base
 }
@@ -83,6 +98,7 @@ fun visibleSlotCount(width: WidthClass): Int = when (width) {
     WidthClass.Compact -> 6
     WidthClass.Medium -> 10
     WidthClass.Expanded -> 12
+    WidthClass.Tv -> 12
 }
 
 /**

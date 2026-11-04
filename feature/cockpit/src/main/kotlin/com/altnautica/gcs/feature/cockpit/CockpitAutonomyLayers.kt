@@ -40,6 +40,7 @@ import com.altnautica.gcs.feature.cockpit.hud.TargetOverlay
 import com.altnautica.gcs.feature.cockpit.hud.rememberMotionPrefs
 import com.altnautica.gcs.feature.cockpit.skillbar.ReacquireUi
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
+import com.altnautica.gcs.feature.cockpit.skillbar.isWide
 import kotlinx.coroutines.delay
 
 /** Below this surface width candidate tags are hidden and tracked tags shorten to `#id`. */
@@ -141,12 +142,12 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
         }
         if (!followingMode) return@BoxWithConstraints
         state?.let {
-            val panelWidth = if (width == WidthClass.Expanded) 320.dp else Dp.Unspecified
+            val panelWidth = if (width.isWide()) 320.dp else Dp.Unspecified
             FollowRangePanel(
                 it, stale = !fresh, width = width,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = CockpitLayout.SkillBarClearance + 12.dp)
+                    .padding(bottom = CockpitLayout.skillBarClearance(width) + 12.dp)
                     .let { m -> if (panelWidth != Dp.Unspecified) m.widthIn(min = panelWidth) else m },
             )
         }
@@ -173,7 +174,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 skillEnabled = drawer.associate { (it.skill?.id ?: "") to (it.state?.enabled == true) },
             ),
             width = width,
-            safeHeight = maxHeight - topInset - CockpitLayout.SkillBarClearance,
+            safeHeight = maxHeight - topInset - CockpitLayout.skillBarClearance(width),
             onFollow = { vm.activate(CockpitAutonomy.FOLLOW_SKILL_ID) },
             onReacquireMode = a::setReacquireMode,
             onSwap = {
@@ -211,11 +212,12 @@ internal fun AutonomyRadar(vm: CockpitViewModel, modifier: Modifier, diameter: D
     ProximityRadar(telemetry, vm.autonomy.feed.scan, vm.autonomy.feed.nav, vm.autonomy::nowMs, modifier, diameter, motion.lowPower)
 }
 
-/** Radar diameter per width class (compact / medium / expanded). */
+/** Radar diameter per width class (compact / medium / expanded / tv). */
 internal fun radarDiameter(width: WidthClass): Dp = when (width) {
     WidthClass.Compact -> 88.dp
     WidthClass.Medium -> 100.dp
     WidthClass.Expanded -> 140.dp
+    WidthClass.Tv -> 176.dp
 }
 
 /** The minimap in its local frame, sampled at 2 Hz plus every pose. */

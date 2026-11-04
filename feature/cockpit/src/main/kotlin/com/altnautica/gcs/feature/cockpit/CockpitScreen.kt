@@ -61,6 +61,7 @@ import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillBar
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillDrawer
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
+import com.altnautica.gcs.feature.cockpit.skillbar.isWide
 
 /** Stacking order inside the cockpit. */
 private object Z {
@@ -96,12 +97,12 @@ internal fun CockpitScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val portrait = !isLandscape()
-        val insetWidth = CockpitLayout.insetWidth(maxWidth)
+        val insetWidth = CockpitLayout.insetWidth(maxWidth, width)
         val bandBar: @Composable (Modifier) -> Unit = { m -> Band(vm, width, onExit, m) }
         when {
             portrait -> PortraitLayout(vm, width, bandBar)
             width == WidthClass.Compact -> CompactLayout(vm, width, settings.density, insetWidth, bandBar)
-            else -> SplitLayout(vm, width, settings.splitRatio, settings.telemetryPane && width == WidthClass.Expanded, bandBar)
+            else -> SplitLayout(vm, width, settings.splitRatio, settings.telemetryPane && width.isWide(), bandBar)
         }
 
         if (connecting) {
@@ -111,7 +112,7 @@ internal fun CockpitScreen(
         }
         Overlays(vm, width)
         // Above the sheets, so the result of an action taken in a sheet stays readable.
-        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = CockpitLayout.SkillBarClearance).zIndex(Z.SHEETS + 1)) { snackbar() }
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = CockpitLayout.skillBarClearance(width)).zIndex(Z.SHEETS + 1)) { snackbar() }
     }
 }
 
@@ -150,11 +151,11 @@ private fun CompactLayout(vm: CockpitViewModel, width: WidthClass, density: Cock
         Alerts(vm, Modifier.align(Alignment.TopCenter).padding(top = SafetyBandHeight + AdosSpacing.S2).zIndex(Z.ALERTS))
         WidgetZones(
             vm,
-            Modifier.fillMaxSize().padding(top = SafetyBandHeight + CockpitLayout.ZoneTopClearance, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES),
+            Modifier.fillMaxSize().padding(top = SafetyBandHeight + CockpitLayout.ZoneTopClearance, bottom = CockpitLayout.skillBarClearance(width)).zIndex(Z.ZONES),
         )
-        Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+        Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.skillBarClearance(width)).zIndex(Z.ZONES))
         FollowChrome(vm, width, topInset = SafetyBandHeight, modifier = Modifier.zIndex(Z.ZONES))
-        Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.PIP))
+        Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.skillBarClearance(width)).zIndex(Z.PIP))
         Bar(vm, width, Modifier.align(Alignment.BottomCenter).padding(AdosSpacing.S2).zIndex(Z.SKILL_BAR))
     }
 }
@@ -201,10 +202,10 @@ private fun SplitLayout(
                     if (swapped) Minimap(vm, Modifier.fillMaxSize()) else VideoStage(vm, Modifier.fillMaxSize(), hudTopInset = false)
                     Column(Modifier.padding(AdosSpacing.S2).zIndex(Z.BAND), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) { Tabs(vm) }
                     Alerts(vm, Modifier.align(Alignment.TopCenter).padding(top = AdosSpacing.S12).zIndex(Z.ALERTS))
-                    WidgetZones(vm, Modifier.fillMaxSize().padding(top = AdosSpacing.S12, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
-                    Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.ZONES))
+                    WidgetZones(vm, Modifier.fillMaxSize().padding(top = AdosSpacing.S12, bottom = CockpitLayout.skillBarClearance(width)).zIndex(Z.ZONES))
+                    Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2, bottom = CockpitLayout.skillBarClearance(width)).zIndex(Z.ZONES))
                     FollowChrome(vm, width, topInset = AdosSpacing.S12, modifier = Modifier.zIndex(Z.ZONES))
-                    Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.SkillBarClearance).zIndex(Z.PIP))
+                    Pip(vm, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2, bottom = CockpitLayout.skillBarClearance(width)).zIndex(Z.PIP))
                     Bar(vm, width, Modifier.align(Alignment.BottomCenter).padding(AdosSpacing.S2).zIndex(Z.SKILL_BAR))
                 }
                 // Draggable divider; the ratio is persisted when the drag ends.
@@ -399,7 +400,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
             open = quickOpen,
             settings = settings,
             maxBrightness = maxBrightness,
-            showTelemetryPaneToggle = width == WidthClass.Expanded,
+            showTelemetryPaneToggle = width.isWide(),
             canRecord = canRecord,
             recording = recording,
             pipAvailable = video.streams.count { it.live && it.switchKind == com.altnautica.gcs.core.model.StreamSwitchKind.Concurrent } > 1,

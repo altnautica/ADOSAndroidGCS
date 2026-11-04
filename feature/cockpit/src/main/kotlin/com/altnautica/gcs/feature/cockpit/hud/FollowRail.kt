@@ -54,6 +54,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
+import com.altnautica.gcs.feature.cockpit.skillbar.isWide
 
 /** What the rail shows; every action dispatches through the same gates the Skill Bar uses. */
 internal data class RailUi(
@@ -90,7 +91,11 @@ internal fun FollowRail(
     modifier: Modifier = Modifier,
 ) {
     val c = AdosTheme.colors
-    val base = if (width == WidthClass.Expanded) 56.dp else 48.dp
+    val base = when (width) {
+        WidthClass.Compact, WidthClass.Medium -> 48.dp
+        WidthClass.Expanded -> 56.dp
+        WidthClass.Tv -> 64.dp
+    }
     val size = if (AdosTheme.gloveMode) base * GLOVE_TOUCH_SCALE else base
     val fold = width == WidthClass.Compact && safeHeight < 360.dp
     var unfolded by remember { mutableStateOf(false) }
@@ -112,7 +117,7 @@ internal fun FollowRail(
                     RailButton(Icons.Outlined.FiberManualRecord, stringResource(R.string.hud_rail_rec), size, if (ui.recording) c.hudCrit else c.hudInk, true, onRecord)
                 }
             }
-            if (width == WidthClass.Expanded) {
+            if (width.isWide()) {
                 Box(Modifier.fillMaxWidth().height(1.dp).drawBehind { drawRect(c.hudHair) })
                 RailButton(Icons.Outlined.Pause, stringResource(R.string.hud_rail_hold), size, c.hudInk, ui.skillEnabled["pause"] == true) { onSkill("pause") }
                 RailButton(Icons.Outlined.Home, stringResource(R.string.hud_rail_rtl), size, c.hudInk, ui.skillEnabled["rth"] == true) { onSkill("rth") }

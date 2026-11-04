@@ -20,4 +20,24 @@ class SkillBarLayoutTest {
     fun `a pane narrower than one slot still shows only the drawer`() {
         assertEquals(0, fittingSlotCount(availableDp = 40f, slotDp = 64f, gapDp = 8f, cap = 6))
     }
+
+    @Test
+    fun `a 1600 dp window is a tv`() {
+        assertEquals(WidthClass.Tv, widthClassFor(1600f))
+    }
+
+    @Test
+    fun `just under 1600 dp stays expanded`() {
+        assertEquals(WidthClass.Expanded, widthClassFor(1599f))
+    }
+
+    @Test
+    fun `a phone width is compact`() {
+        assertEquals(WidthClass.Compact, widthClassFor(599f))
+    }
+
+    @Test
+    fun `a tv shows twelve slots`() {
+        assertEquals(12, visibleSlotCount(WidthClass.Tv))
+    }
 }

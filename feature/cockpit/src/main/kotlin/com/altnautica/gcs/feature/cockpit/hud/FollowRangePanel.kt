@@ -34,6 +34,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.RangeCue
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
+import com.altnautica.gcs.feature.cockpit.skillbar.isWide
 
 private const val DASH = "—"
 private const val LATENCY_WARN_MS = 250f
@@ -96,7 +97,7 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
                 Text(stringResource(R.string.hud_range_agl, agl, ""), style = small)
                 Text(aglSource.first, style = small, color = aglSource.second)
             }
-            if (width == WidthClass.Expanded) {
+            if (width.isWide()) {
                 Text(
                     stringResource(
                         R.string.hud_range_geometry,
