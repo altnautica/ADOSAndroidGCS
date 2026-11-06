@@ -241,6 +241,36 @@ object AdosHudTarget {
     const val TagLetterSpacingEm = 0.06f
 }
 
+/** Cockpit overlay and flight-state colours, theme-independent (drawn over video). */
+object AdosCockpitColors {
+    val ArRoute = Color(0xFFFF3EC8)
+    val ArFuture = Color(0xCCFFFFFF)
+    val ArHome = Color(0xFFFFD400)
+    val ArFollow = Color(0xFF22D3EE)
+    val ArDetour = Color(0xFFF59E0B)
+    val ArBlocked = Color(0xFFEF4444)
+    val ArHalo = Color(0x99000000)
+    val ArPaused = Color(0xFF909090)
+    val LayerObstacleNear = Color(0x73EF4444)
+    val LayerObstacleMid = Color(0x4DF59E0B)
+    val LayerDepthNear = Color(0x73EF4444)
+    val LayerDepthMid = Color(0x4DF59E0B)
+    val LayerSurfaceZone = Color(0xFF00C853)
+    val StateReady = Color(0xFF00C853)
+    val StateNotReady = Color(0xFFEF4444)
+    val StatePilot = Color(0xFF2979FF)
+    val StateSkill = Color(0xFF22D3EE)
+    val StateGoto = Color(0xFF2979FF)
+    val StateSwarm = Color(0xFF2979FF)
+    val StateMission = Color(0xFFFF3EC8)
+    val StateRth = Color(0xFFF59E0B)
+    val StateFc = Color(0xFF909090)
+    val StateTuning = Color(0xFFF59E0B)
+    val StateStale = Color(0xFF909090)
+    val StateAvoiding = Color(0xFFF59E0B)
+    val StateBlocked = Color(0xFFEF4444)
+}
+
 object AdosMotion {
     const val QuickMs = 200
     const val BaseMs = 320
