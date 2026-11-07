@@ -1,6 +1,8 @@
 package com.altnautica.gcs.feature.cockpit.autonomy
 
 import android.util.Base64
+import com.altnautica.gcs.core.agent.pilot.PilotWire
+import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerFrame
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerParse
 import kotlinx.serialization.json.Json
@@ -18,6 +20,7 @@ sealed interface NavFrame {
     data class Nav(val nav: NavState) : NavFrame
     data class Follow(val follow: FollowState) : NavFrame
     data class Event(val event: FollowEvent) : NavFrame
+    data class Pilot(val state: PilotState) : NavFrame
     data class Layer(val frame: LayerFrame) : NavFrame
 }
 
@@ -71,6 +74,7 @@ internal object AutonomyParse {
             "nav" -> NavFrame.Nav(nav(data))
             "follow" -> follow(data)?.let(NavFrame::Follow)
             "follow_event" -> followEvent(root["topic"].str(), data, receivedAtMs)?.let(NavFrame::Event)
+            "pilot" -> PilotWire.parseState(data, receivedAtMs)?.let(NavFrame::Pilot)
             "ar", "obstacles", "depth", "surfaces" -> LayerParse.frame(root["kind"].str(), data)?.let(NavFrame::Layer)
             else -> null
         }

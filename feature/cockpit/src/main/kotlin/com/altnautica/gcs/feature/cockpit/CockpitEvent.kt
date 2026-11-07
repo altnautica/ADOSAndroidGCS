@@ -18,4 +18,10 @@ sealed interface CockpitEvent {
 
     /** The minimap switched to the local frame on its own. */
     data object MinimapLocal : CockpitEvent
+
+    /** A pilot action could not be sent: the vehicle's pilot channel is down. */
+    data object PilotUnavailable : CockpitEvent
+
+    /** The chip's "Set up aircraft" was pressed. */
+    data object SetUpAircraft : CockpitEvent
 }

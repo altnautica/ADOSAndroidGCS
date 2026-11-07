@@ -35,7 +35,8 @@ import com.altnautica.gcs.core.skills.binding.BindingStore
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.GamepadAxes
-import com.altnautica.gcs.core.skills.input.GamepadButton
+import com.altnautica.gcs.core.skills.controls.ControlsRepository
+import com.altnautica.gcs.core.skills.input.PadSnapshot
 import com.altnautica.gcs.core.skills.input.InputEvent
 import com.altnautica.gcs.core.skills.input.controller.ControllerInfo
 import com.altnautica.gcs.core.skills.input.controller.ControllerManager
@@ -85,6 +86,14 @@ class CockpitViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val events = MutableSharedFlow<InputEvent>(extraBufferCapacity = 16)
     private val buttons = MutableStateFlow(0)
+    private val pad = MutableStateFlow(PadSnapshot.Neutral)
+
+    /** A DualShock 4 holding [controls] (spec control ids), as the router's snapshot reports it. */
+    private fun TestScope.hold(vararg controls: String) {
+        val bits = testSpec.ds4.stream.buttonsBitfield
+        val mask = controls.fold(0) { m, c -> m or (1 shl bits.getValue(c)) }
+        pad.value = PadSnapshot(1, 0x054c, 0x09cc, GamepadAxes.Neutral, GamepadAxes.Neutral, mask, testScheduler.currentTime, emptyList())
+    }
 
     @Before
     fun setUp() = Dispatchers.setMain(dispatcher)
@@ -117,6 +126,7 @@ class CockpitViewModelTest {
         every { router.buttons } returns buttons
         every { router.gamepadConnected } returns gamepad
         every { router.events } returns events
+        every { router.snapshot } returns pad
         val activator = SkillActivator(clock)
         val endpoint = agentBaseUrl?.let { AgentEndpoint(null, it.toHttpUrl(), null) }
         val vm = CockpitViewModel(
@@ -130,8 +140,8 @@ class CockpitViewModelTest {
             services = object : VehicleServicesProvider {
                 override fun services(id: DeviceId) = flowOf(services)
             },
-            sessionFactory = SkillSessionFactory(SkillRegistry(emptySet()), activator, clock),
-            bindings = BindingStore(dataStore),
+            sessionFactory = SkillSessionFactory(SkillRegistry(emptySet(), testSpec), activator, clock),
+            bindings = BindingStore(dataStore, testSpec),
             router = router,
             settingsRepo = CockpitSettingsRepository(dataStore),
             controllerSettings = ControllerSettingsRepository(dataStore),
@@ -151,11 +161,13 @@ class CockpitViewModelTest {
                 every { batches(any()) } returns null
             },
             localApis = emptySet(),
+            spec = testSpec,
+            controls = ControlsRepository(dataStore, testSpec, flowOf(emptyList())),
         )
         // The screen-only flows run while collected; keep them hot like a visible cockpit.
         listOf(
-            vm.status, vm.maxBrightness, vm.canRecord, vm.recordingActive, vm.slots, vm.drawerSkills,
-            vm.modePicker, vm.targetActions, vm.band, vm.strip, vm.minimap,
+            vm.status, vm.maxBrightness, vm.canRecord, vm.recordingActive, vm.skillStates, vm.pickerChip,
+            vm.modeSheet, vm.chip, vm.flow, vm.targetActions, vm.band, vm.strip, vm.minimap,
         ).forEach { flow -> backgroundScope.launch { flow.collect {} } }
         return vm
     }
@@ -280,10 +292,10 @@ class CockpitViewModelTest {
         vehicle.beat(armed = true, now = testScheduler.currentTime)
         val vm = vm(listOf(node("drone-1")), vehicle)
         runCurrent()
-        assertTrue(vm.slots.value.first { it.skill?.id == "land" }.state!!.enabled)
+        assertTrue(vm.skillStates.value.getValue("land").enabled)
         advanceTimeBy(3_600)
         runCurrent()
-        val land = vm.slots.value.first { it.skill?.id == "land" }.state!!
+        val land = vm.skillStates.value.getValue("land")
         assertFalse(land.enabled)
         assertEquals(SkillReason.NO_FC_LINK, land.reasonKey)
         assertEquals(AlertLevel.Warning, vm.alerts.value.first { it.id == AlertId.LINK_STALE }.level)
@@ -291,25 +303,27 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `holding the gamepad land button through the sheet lands the vehicle`() = runTest(dispatcher) {
+    fun `holding triangle in the air for 1_5 s lands without a second sheet`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         advanceTimeBy(5_000)
         vehicle.beat(armed = true, now = testScheduler.currentTime)
         val vm = vm(listOf(node("drone-1")), vehicle)
         vm.attachInput()
         runCurrent()
-        buttons.value = 1 shl GamepadButton.L1
-        events.emit(InputEvent.Button(GamepadButton.L1, pressed = true, heldMs = 0))
+        hold("triangle")
+        advanceTimeBy(1_400)
         runCurrent()
-        assertEquals(ConfirmGesture.Hold, vm.confirm.state.value!!.gesture)
-        advanceTimeBy(820)
+        assertTrue(vehicle.control.sent.isEmpty())
+        advanceTimeBy(200)
         runCurrent()
+        assertNull(vm.confirm.state.value)
         assertEquals(listOf(VehicleCommand.Land), vehicle.control.sent)
+        hold()
         vm.viewModelScope.cancel()
     }
 
     @Test
-    fun `skill buttons do nothing while a navigable overlay is open`() = runTest(dispatcher) {
+    fun `controller skill bindings do nothing while a navigable overlay is open`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         advanceTimeBy(5_000)
         vehicle.beat(armed = true, now = testScheduler.currentTime)
@@ -317,41 +331,62 @@ class CockpitViewModelTest {
         vm.attachInput()
         runCurrent()
         vm.setQuickSettings(true)
-        buttons.value = 1 shl GamepadButton.L1
-        events.emit(InputEvent.Button(GamepadButton.L1, pressed = true, heldMs = 0))
+        hold("triangle")
+        advanceTimeBy(1_600)
         runCurrent()
-        assertNull(vm.confirm.state.value)
+        assertTrue(vehicle.control.sent.isEmpty())
         assertTrue(vm.quickSettingsOpen.value)
+        hold()
         vm.viewModelScope.cancel()
     }
 
     @Test
-    fun `back leaves, triangle swaps the view and a short options press opens quick settings`() = runTest(dispatcher) {
+    fun `triangle tap cycles the view, options opens quick settings and back closes then leaves`() = runTest(dispatcher) {
         val vm = vm(listOf(node("drone-1")), FakeVehicle())
         vm.attachInput()
         runCurrent()
         val emitted = mutableListOf<CockpitEvent>()
         backgroundScope.launch { vm.events.collect { emitted += it } }
         runCurrent()
+        assertEquals(CockpitView.Pilot, vm.view.value)
 
-        events.emit(InputEvent.Button(GamepadButton.Y, pressed = true, heldMs = 0))
+        hold("triangle")
+        advanceTimeBy(100)
+        hold()
+        advanceTimeBy(100)
         runCurrent()
-        assertTrue(vm.minimapSwapped.value)
+        assertEquals(CockpitView.Map, vm.view.value)
 
-        events.emit(InputEvent.Button(GamepadButton.START, pressed = true, heldMs = 0))
-        events.emit(InputEvent.Button(GamepadButton.START, pressed = false, heldMs = 200))
+        hold("options")
+        advanceTimeBy(100)
+        hold()
+        advanceTimeBy(100)
         runCurrent()
         assertTrue(vm.quickSettingsOpen.value)
-        vm.setQuickSettings(false)
 
-        events.emit(InputEvent.Button(GamepadButton.START, pressed = true, heldMs = 0))
-        events.emit(InputEvent.Button(GamepadButton.START, pressed = false, heldMs = 800))
-        runCurrent()
-        assertFalse("a long press is the app menu, not quick settings", vm.quickSettingsOpen.value)
-
-        events.emit(InputEvent.Button(GamepadButton.B, pressed = true, heldMs = 0))
+        vm.back()
+        assertFalse(vm.quickSettingsOpen.value)
+        assertFalse(CockpitEvent.ExitRequested in emitted)
+        vm.back()
         runCurrent()
         assertTrue(CockpitEvent.ExitRequested in emitted)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the PS button brakes on press even with a sheet open`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        advanceTimeBy(5_000)
+        vehicle.beat(armed = true, now = testScheduler.currentTime, mode = "GUIDED")
+        val vm = vm(listOf(node("drone-1")), vehicle)
+        vm.attachInput()
+        runCurrent()
+        vm.setQuickSettings(true)
+        hold("ps")
+        advanceTimeBy(60)
+        runCurrent()
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.SetMode(FlightMode(5, "LOITER"))), vehicle.control.sent)
+        hold()
         vm.viewModelScope.cancel()
     }
 
@@ -446,7 +481,7 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `the mode picker lists the plane's modes and a tap-tier pick switches at once`() = runTest(dispatcher) {
+    fun `the Mode sheet lists the plane's modes and a tap-tier pick switches at once`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         vehicle.control.availableModes.value =
             listOf(FlightMode(0, "MANUAL"), FlightMode(5, "FBWA"), FlightMode(12, "LOITER"), FlightMode(19, "QLOITER"))
@@ -454,25 +489,25 @@ class CockpitViewModelTest {
         vehicle.planeBeat("MANUAL", testScheduler.currentTime)
         val vm = vm(listOf(node("drone-1")), vehicle)
         runCurrent()
-        assertNull(vm.modePicker.value)
+        assertNull(vm.modeSheet.value)
 
-        vm.openModePicker()
+        vm.openModeSheet()
         runCurrent()
-        val picker = vm.modePicker.value!!
+        val picker = vm.modeSheet.value!!.fcModes
         assertTrue(picker.enabled)
         assertEquals(listOf("MANUAL", "FBWA", "LOITER", "QLOITER"), picker.choices.map { it.name })
         assertTrue(picker.choices.first { it.name == "MANUAL" }.current)
         assertEquals(ConfirmGesture.Tap, picker.choices.first { it.name == "QLOITER" }.gesture)
         assertEquals(ConfirmGesture.Hold, picker.choices.first { it.name == "FBWA" }.gesture)
 
-        vm.selectMode("QLOITER")
+        vm.modeSheetActions.onFcMode("QLOITER")
         runCurrent()
-        assertNull(vm.modePicker.value)
+        assertNull(vm.modeSheet.value)
         assertEquals(listOf(VehicleCommand.SetMode(FlightMode(19, "QLOITER"))), vehicle.control.sent)
 
         // A non-recovery mode asks for the hold tier and names the target.
-        vm.openModePicker()
-        vm.selectMode("FBWA")
+        vm.openModeSheet()
+        vm.modeSheetActions.onFcMode("FBWA")
         runCurrent()
         assertEquals(ConfirmGesture.Hold, vm.confirm.state.value!!.gesture)
         vm.confirm.cancel()
@@ -480,20 +515,16 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `the drawer's set-mode entry opens the picker and plane presets drop Brake`() = runTest(dispatcher) {
+    fun `set-mode without a target opens the Mode sheet and sends nothing`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         vehicle.control.availableModes.value = listOf(FlightMode(0, "MANUAL"), FlightMode(12, "LOITER"))
         advanceTimeBy(5_000)
         vehicle.planeBeat("MANUAL", testScheduler.currentTime)
         val vm = vm(listOf(node("drone-1")), vehicle)
         runCurrent()
-        val drawer = vm.drawerSkills.value.map { it.skill?.id }
-        assertEquals("set-mode", drawer.first())
-        assertTrue("mode.loiter" in drawer)
-        assertFalse("mode.brake" in drawer)
         vm.activate("set-mode")
         runCurrent()
-        assertTrue(vm.modePicker.value != null)
+        assertTrue(vm.modeSheet.value != null)
         assertTrue(vehicle.control.sent.isEmpty())
         vm.viewModelScope.cancel()
     }

@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.extensions.data.ExtensionRepository
 import com.altnautica.gcs.core.extensions.data.PerceptionFeed
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerStore
 import kotlinx.coroutines.CancellationException
@@ -77,6 +78,10 @@ internal class AutonomyFeed(
     private val _occupancy = MutableStateFlow<OccupancyLayer?>(null)
     val occupancy: StateFlow<OccupancyLayer?> = _occupancy.asStateFlow()
 
+    private val _pilot = MutableStateFlow<PilotState?>(null)
+
+    /** The onboard pilot's state as the navigation stream relays it to every client. */
+    val pilot: StateFlow<PilotState?> = _pilot.asStateFlow()
 
     /** The in-process source for [id], if any. */
     fun local(id: DeviceId): AutonomyFeedApi? = localApis.firstNotNullOfOrNull { it.autonomy(id) }
@@ -104,6 +109,7 @@ internal class AutonomyFeed(
         _trail.value = emptyList()
         _events.value = emptyList()
         _occupancy.value = null
+        _pilot.value = null
         layers.clear()
         tileCache.clear()
         mapSeq = 0L
@@ -142,6 +148,7 @@ internal class AutonomyFeed(
             is NavFrame.Follow -> _follow.value = Stamped(f.follow, now)
             is NavFrame.Layer -> layers.push(f.frame, now)
             is NavFrame.Event -> _events.update { list -> (list + f.event).filter { now - it.atMs <= EVENT_KEEP_MS } }
+            is NavFrame.Pilot -> _pilot.value = f.state
         }
     }
 

@@ -40,7 +40,6 @@ import com.altnautica.gcs.feature.cockpit.hud.TargetSemantics
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerStack
 import com.altnautica.gcs.feature.cockpit.hud.rememberTargetDrawer
 import com.altnautica.gcs.feature.cockpit.hud.rememberMotionPrefs
-import com.altnautica.gcs.feature.cockpit.skillbar.ReacquireUi
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.skillbar.isWide
 import kotlinx.coroutines.delay
@@ -126,7 +125,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
     val video by vm.video.collectAsStateWithLifecycle()
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
-    val drawer by vm.drawerSkills.collectAsStateWithLifecycle()
+    val skillStates by vm.skillStates.collectAsStateWithLifecycle()
     val state = follow?.value
     val fresh = follow?.let { now - it.atMs <= TargetState.FOLLOW_STALE_MS } == true
     val active = state != null && fresh && state.phase != FollowPhase.Idle && state.phase != FollowPhase.Lost
@@ -172,13 +171,13 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
             ui = RailUi(
                 followInstalled = installed,
                 followActive = active,
-                followEnabled = drawer.firstOrNull { it.skill?.id == CockpitAutonomy.FOLLOW_SKILL_ID }?.state?.enabled ?: true,
+                followEnabled = skillStates[CockpitAutonomy.FOLLOW_SKILL_ID]?.enabled ?: true,
                 reacquireMode = state?.reacquireMode,
                 pendingMode = pending,
                 swapLabels = swap,
                 canRecord = canRecord,
                 recording = recording,
-                skillEnabled = drawer.associate { (it.skill?.id ?: "") to (it.state?.enabled == true) },
+                skillEnabled = skillStates.mapValues { it.value.enabled },
             ),
             width = width,
             safeHeight = maxHeight - topInset - CockpitLayout.skillBarClearance(width),
@@ -198,17 +197,6 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = AdosSpacing.S2).zIndex(1f),
         )
     }
-}
-
-/** The follow skill's re-acquire toggle, for the Skill Bar slot. */
-@Composable
-internal fun rememberReacquireUi(vm: CockpitViewModel): ReacquireUi? {
-    val a = vm.autonomy
-    val installed by a.followInstalled.collectAsStateWithLifecycle()
-    val follow by a.feed.follow.collectAsStateWithLifecycle()
-    val pending by a.reacquirePending.collectAsStateWithLifecycle()
-    if (!installed) return null
-    return ReacquireUi(CockpitAutonomy.FOLLOW_SKILL_ID, follow?.value?.reacquireMode, pending, a::setReacquireMode)
 }
 
 /** The proximity radar with the companion's scan and the vision-nav obstacle rate. */

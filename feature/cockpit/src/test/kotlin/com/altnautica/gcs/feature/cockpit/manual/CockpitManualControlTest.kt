@@ -8,7 +8,9 @@ import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.HeartbeatState
 import com.altnautica.gcs.core.model.Vehicle
-import com.altnautica.gcs.core.skills.binding.Loadout
+import com.altnautica.gcs.core.skills.binding.Ds4Bindings
+import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
+import com.altnautica.gcs.feature.cockpit.testSpec
 import com.altnautica.gcs.core.skills.builtin.VehicleClass
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.GamepadAxes
@@ -57,6 +59,7 @@ class CockpitManualControlTest {
         val settings: MutableStateFlow<ControllerSettings>,
         val streamer: RecordingStreamer,
         val off: MutableList<StickOff>,
+        val route: MutableStateFlow<StickRoute>,
     )
 
     private fun FakeVehicle.beat(mode: String, armed: Boolean = true, type: Int = 2) {
@@ -76,17 +79,31 @@ class CockpitManualControlTest {
         val streamer = RecordingStreamer()
         val services = mockk<VehicleServices>(relaxed = true) { every { manualControl } returns streamer }
         val settingsFlow = MutableStateFlow(settings)
+        val route = MutableStateFlow(StickRoute.FcManual)
         val control = CockpitManualControl(
             scope = this,
             vehicle = MutableStateFlow<Vehicle?>(vehicle),
             vehicleServices = MutableStateFlow<VehicleServices?>(services),
             router = router,
             controllerSettings = settingsFlow,
-            loadout = MutableStateFlow(Loadout.DEFAULT),
+            boundButtons = MutableStateFlow(Ds4Bindings.boundButtonMask(testSpec.ds4, testSpec.ds4.bindings)),
+            route = route,
+            pilotStreaming = MutableStateFlow(false),
         )
         val off = mutableListOf<StickOff>()
         launch { control.off.collect { off += it } }
-        return Rig(control, vehicle, gamepad, axes, buttons, settingsFlow, streamer, off)
+        return Rig(control, vehicle, gamepad, axes, buttons, settingsFlow, streamer, off, route)
+    }
+
+    @Test
+    fun `in ADOS Pilot control the chip names the pilot and manual control never starts`() = runTest(UnconfinedTestDispatcher()) {
+        val r = backgroundScope.rig()
+        r.route.value = StickRoute.Pilot
+        runCurrent()
+        assertEquals(StickChip.Pilot(false), r.control.stick.value)
+        r.control.toggle()
+        runCurrent()
+        assertTrue(r.streamer.calls.none { it == "start" })
     }
 
     @Test

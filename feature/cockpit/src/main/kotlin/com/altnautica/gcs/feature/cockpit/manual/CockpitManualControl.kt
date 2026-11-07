@@ -5,10 +5,10 @@ import com.altnautica.gcs.core.link.manual.ManualControlInput
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Vehicle
-import com.altnautica.gcs.core.skills.binding.Loadout
+import com.altnautica.gcs.core.skills.binding.Ds4Bindings
 import com.altnautica.gcs.core.skills.builtin.vehicleClass
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
-import com.altnautica.gcs.core.skills.input.ReservedInputs
+import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
 import com.altnautica.gcs.feature.cockpit.StickChip
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,7 +36,12 @@ sealed interface StickOff {
     data class ControllerLost(val armed: Boolean) : StickOff
 }
 
-/** Gamepad stick control: the stick chip and the MANUAL_CONTROL stream it switches. */
+/**
+ * Gamepad stick control on the flight controller's MANUAL_CONTROL path: the stick chip and
+ * the stream it switches. It streams only on [StickRoute.FcManual] (`fc_manual`, or a flight
+ * controller without an onboard pilot); with the onboard pilot the sticks go to the pilot
+ * channel instead and the chip reads [StickChip.Pilot].
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class CockpitManualControl(
     scope: CoroutineScope,
@@ -44,7 +49,10 @@ internal class CockpitManualControl(
     vehicleServices: StateFlow<VehicleServices?>,
     router: AdosInputRouter,
     controllerSettings: Flow<ControllerSettings>,
-    loadout: StateFlow<Loadout>,
+    /** Buttons bound to cockpit actions; they never reach the flight controller. */
+    boundButtons: StateFlow<Int>,
+    route: StateFlow<StickRoute>,
+    pilotStreaming: StateFlow<Boolean>,
 ) {
     private val stickOn = MutableStateFlow(false)
 
@@ -55,8 +63,8 @@ internal class CockpitManualControl(
 
     private val settings: StateFlow<ControllerSettings> = controllerSettings.stateIn(scope, SharingStarted.Eagerly, ControllerSettings())
 
-    private val stickAllowed: StateFlow<Boolean> = combine(vehicle.flatMapLatest { it?.reach ?: flowOf(null) }, vehicleServices) { reach, svc ->
-        svc != null && (reach == Reach.DirectFc || reach == Reach.Lan || reach is Reach.ViaGround)
+    private val stickAllowed: StateFlow<Boolean> = combine(vehicle.flatMapLatest { it?.reach ?: flowOf(null) }, vehicleServices, route) { reach, svc, r ->
+        r == StickRoute.FcManual && svc != null && (reach == Reach.DirectFc || reach == Reach.Lan || reach is Reach.ViaGround)
     }.stateIn(scope, SharingStarted.Eagerly, false)
 
     private data class ModeGate(val mode: String?, val allowed: Boolean)
@@ -72,16 +80,20 @@ internal class CockpitManualControl(
         ModeGate(mode, StickPolicy.allowed(mode, vehicleClass(hb?.vehicleType, mode), allModes))
     }.stateIn(scope, SharingStarted.Eagerly, ModeGate(null, false))
 
-    val stick: StateFlow<StickChip> = combine(router.gamepadConnected, stickAllowed, modeGate, stickOn) { pad, link, gate, on ->
+    private val manualStick: Flow<StickChip> = combine(router.gamepadConnected, stickAllowed, modeGate, stickOn) { pad, link, gate, on ->
         when {
             !pad -> StickChip.NoGamepad
             !link -> StickChip.LinkBlocked
             !gate.allowed -> StickChip.ModeBlocked(gate.mode ?: UNKNOWN_MODE)
             else -> StickChip.Available(on)
         }
+    }
+
+    val stick: StateFlow<StickChip> = combine(manualStick, route, router.gamepadConnected, pilotStreaming) { manual, r, pad, streaming ->
+        if (r == StickRoute.Pilot && pad) StickChip.Pilot(streaming) else manual
     }.stateIn(scope, SharingStarted.Eagerly, StickChip.NoGamepad)
 
-    private val manualInput: StateFlow<ManualControlInput> = combine(router.axes, router.buttons, settings, loadout) { axes, pressed, s, l ->
+    private val manualInput: StateFlow<ManualControlInput> = combine(router.axes, router.buttons, settings, boundButtons) { axes, pressed, s, bound ->
         val e = s.expoPct / 100f
         // Mode 2: left stick throttle/yaw, right stick pitch/roll. Throttle takes no expo.
         ManualControlInput(
@@ -89,7 +101,7 @@ internal class CockpitManualControl(
             roll = applyExpo(axes.rightX, e),
             throttle = ((axes.leftY + 1f) / 2f).coerceIn(0f, 1f),
             yaw = applyExpo(axes.leftX, e),
-            buttons = ReservedInputs.manualControlButtonMask(pressed, l),
+            buttons = Ds4Bindings.manualControlButtonMask(pressed, bound),
         )
     }.stateIn(scope, SharingStarted.Eagerly, ManualControlInput.NEUTRAL)
 

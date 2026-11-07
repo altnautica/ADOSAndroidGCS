@@ -83,8 +83,15 @@ internal class CockpitAutonomy(
             override suspend fun setDetector(node: DeviceId, modelId: String) = engineApi(node)?.setDetector(modelId) is AgentResult.Ok
         },
         now = clock::nowMs,
-        previewAllowed = { telemetry.value?.heartbeat?.value?.armed != true },
-        armed = { telemetry.value?.heartbeat?.value?.armed == true },
+        previewAllowed = {
+            val pilot = feed.pilot.value
+            if (pilot != null) {
+                !pilot.armed || pilot.owner == com.altnautica.gcs.core.model.PilotOwner.Pilot || pilot.owner == com.altnautica.gcs.core.model.PilotOwner.FcMode
+            } else {
+                telemetry.value?.heartbeat?.value?.armed != true
+            }
+        },
+        armed = { feed.pilot.value?.armed ?: (telemetry.value?.heartbeat?.value?.armed == true) },
     )
 
     val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound)

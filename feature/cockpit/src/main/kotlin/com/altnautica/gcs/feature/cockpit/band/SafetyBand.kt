@@ -271,6 +271,15 @@ fun SafetyBand(
                         }
                         BandChip(Icons.Outlined.Gamepad, text, if (stick.on) ChipTone.Accent else ChipTone.Neutral, onClick = onToggleStick)
                     }
+                    is StickChip.Pilot -> {
+                        val pct = LocalControllerUi.current.batteryPct
+                        val text = if (pct == null) {
+                            stringResource(R.string.cockpit_stick_pilot)
+                        } else {
+                            stringResource(R.string.cockpit_stick_pilot_battery, pct)
+                        }
+                        BandChip(Icons.Outlined.Gamepad, text, if (stick.streaming) ChipTone.Accent else ChipTone.Neutral)
+                    }
                 }
 
                 if (state.preflightTotal > 0) {

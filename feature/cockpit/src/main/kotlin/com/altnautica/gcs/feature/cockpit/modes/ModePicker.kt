@@ -24,7 +24,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.width
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
@@ -59,21 +58,18 @@ fun modeChoices(available: List<FlightMode>, currentMode: String?, endsStick: (S
         )
     }
 
-/** Flight-mode picker opened from the band's mode chip and the drawer's Set mode entry; place it in a full-size box. */
+/** Every firmware mode as a tile grid, the current one marked; the Mode sheet's advanced section. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ModePickerSheet(state: ModePickerUi, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+fun FcModeGrid(state: ModePickerUi, onPick: (String) -> Unit, modifier: Modifier = Modifier) {
     val colors = AdosTheme.colors
-    AdosSheet(onDismiss) {
-        Column(Modifier.padding(horizontal = AdosSpacing.S6), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
-            Text(stringResource(R.string.cockpit_mode_picker_title), style = MaterialTheme.typography.titleMedium)
-            when {
-                state.reasonKey != null -> Text(reasonText(state.reasonKey), style = MaterialTheme.typography.bodyMedium, color = colors.statusWarning)
-                state.choices.isEmpty() -> Text(stringResource(R.string.cockpit_mode_picker_empty), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
-            }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+        when {
+            state.reasonKey != null -> Text(reasonText(state.reasonKey), style = MaterialTheme.typography.bodyMedium, color = colors.statusWarning)
+            state.choices.isEmpty() -> Text(stringResource(R.string.cockpit_mode_picker_empty), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
         }
         FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(AdosSpacing.S4),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
         ) {

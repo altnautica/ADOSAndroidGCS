@@ -48,6 +48,9 @@ sealed interface StickChip {
     data class ModeBlocked(val mode: String) : StickChip
 
     data class Available(val on: Boolean) : StickChip
+
+    /** The sticks fly the onboard pilot; [streaming] while input frames go out. */
+    data class Pilot(val streaming: Boolean) : StickChip
 }
 
 /**
@@ -90,13 +93,11 @@ data class BandState(
 
 enum class BatteryBand { Unknown, Good, Low, Critical }
 
-/** One Skill Bar slot. */
+/** A skill with its current state, as a picker row or a target action. */
 data class SlotUi(
     val index: Int,
     val skill: Skill?,
     val state: SkillState?,
-    val keyChord: String?,
-    val gamepadButton: Int?,
 )
 
 /** Video sources for the main feed and picture-in-picture, plus the stream tabs. */

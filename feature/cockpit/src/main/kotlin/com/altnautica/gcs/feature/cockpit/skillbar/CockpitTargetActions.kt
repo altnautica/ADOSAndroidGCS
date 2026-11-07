@@ -29,7 +29,7 @@ internal class CockpitTargetActions(
 ) {
     /** Extension target actions for the flown drone, with their states. */
     val actions: StateFlow<List<SlotUi>> = combine(extensionSkills.targetActions, session.context) { actions, ctx ->
-        actions.mapIndexed { i, a -> SlotUi(i, a, activator.mergedState(ctx.vehicle?.id, a, ctx), null, null) }
+        actions.mapIndexed { i, a -> SlotUi(i, a, activator.mergedState(ctx.vehicle?.id, a, ctx)) }
     }.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /**

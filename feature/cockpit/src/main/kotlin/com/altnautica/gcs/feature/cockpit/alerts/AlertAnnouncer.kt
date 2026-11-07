@@ -47,6 +47,12 @@ class AlertAnnouncer @Inject constructor(
         tts.speak(context.getString(R.string.cockpit_tts_mode, mode.replace('_', ' ').lowercase()), AlertLevel.Advisory)
     }
 
+    /** Speaks a flight-flow prompt (handover, return home, low battery, mission state). */
+    fun speak(text: String) {
+        ensureTts()
+        tts.speak(text, AlertLevel.Warning)
+    }
+
     /** The alert's localized title, or the FC's own text for a STATUSTEXT alert. */
     fun alertText(alert: CockpitAlert): String {
         val title = context.getString(alertTitleRes(alert.id))

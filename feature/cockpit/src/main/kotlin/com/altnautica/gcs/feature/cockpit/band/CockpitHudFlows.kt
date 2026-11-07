@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.model.Vehicle
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.core.skills.SkillTiming
 import com.altnautica.gcs.core.skills.heartbeatAgeMs
 import com.altnautica.gcs.core.video.RecordingState
 import com.altnautica.gcs.feature.cockpit.BandState
@@ -75,9 +76,11 @@ internal class CockpitHudFlows(
         ) { hb, batt, lq, _ ->
             val now = clock.nowMs()
             val age = hb?.let { heartbeatAgeMs(it.tMs, now) }
+            // A stale heartbeat no longer tells the arm state or mode: show them as unknown.
+            val fresh = age != null && age <= SkillTiming.LINK_STALE_MS
             BandTelemetry(
-                armed = hb?.armed,
-                mode = hb?.mode?.name,
+                armed = hb?.armed?.takeIf { fresh },
+                mode = hb?.mode?.name?.takeIf { fresh },
                 battery = batt?.remainingPct?.takeIf { it >= 0 },
                 ttr = batt?.timeToReserveS,
                 link = AlertEngine.linkHealth(hb?.tMs, now),

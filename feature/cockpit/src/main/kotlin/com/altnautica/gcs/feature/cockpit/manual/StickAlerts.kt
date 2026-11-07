@@ -17,5 +17,7 @@ internal fun StickOff.toAlert(nowMs: Long): RaisedAlert = when (this) {
 }
 
 /** True while stick control is on and the controller reports a low battery. */
-internal fun controllerBatteryLow(stick: StickChip, batteryPct: Int?): Boolean =
-    (stick as? StickChip.Available)?.on == true && batteryPct != null && batteryPct < AlertEngine.CONTROLLER_BATTERY_LOW_PCT
+internal fun controllerBatteryLow(stick: StickChip, batteryPct: Int?): Boolean {
+    val flying = (stick as? StickChip.Available)?.on == true || (stick as? StickChip.Pilot)?.streaming == true
+    return flying && batteryPct != null && batteryPct < AlertEngine.CONTROLLER_BATTERY_LOW_PCT
+}

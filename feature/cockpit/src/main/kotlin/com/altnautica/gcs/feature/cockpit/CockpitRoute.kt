@@ -54,6 +54,7 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.feature.cockpit.skillbar.widthClassFor
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonRes
 
@@ -61,9 +62,10 @@ import com.altnautica.gcs.feature.cockpit.skillbar.reasonRes
  * Full-screen cockpit for [nodeId]; a ground station's cockpit flies its carried
  * drone. Keeps the screen on, honours the max-brightness toggle, takes hardware
  * input while visible, and asks before leaving while the vehicle is armed.
+ * [onSetUpAircraft] opens aircraft setup for the flown vehicle (the chip's "Set up aircraft").
  */
 @Composable
-fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modifier) {
+fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceId) -> Unit, modifier: Modifier = Modifier) {
     val vm = hiltViewModel<CockpitViewModel, CockpitViewModel.Factory>(
         key = "cockpit:${nodeId.value}",
         creationCallback = { factory -> factory.create(nodeId.value) },
@@ -123,12 +125,19 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
                 )
                 CockpitEvent.ReacquireModeNotApplied -> snackbar.showSnackbar(resources.getString(R.string.hud_rail_mode_not_applied))
                 CockpitEvent.MinimapLocal -> snackbar.showSnackbar(resources.getString(R.string.hud_map_toast_local))
+                CockpitEvent.PilotUnavailable -> snackbar.showSnackbar(resources.getString(R.string.cockpit_pilot_unavailable))
+                CockpitEvent.SetUpAircraft -> (vm.extensionNodeId.value ?: nodeId).let(onSetUpAircraft)
             }
         }
     }
     LaunchedEffect(vm) {
         vm.notices.collect { notice ->
-            val reason = notice.reasonKey?.let { key -> reasonRes(key)?.let(resources::getString) ?: key }
+            val spec = vm.specStrings
+            val specKey = SPEC_NOTICE_KEYS[notice.reasonKey]
+            val reason = when {
+                specKey != null -> spec.format(specKey, notice.args)
+                else -> notice.reasonKey?.let { key -> reasonRes(key)?.let(resources::getString) ?: key }
+            }
             val detail = notice.message?.let { m -> reasonRes(m)?.let(resources::getString) ?: m }
             val text = listOfNotNull(reason, detail).distinct().joinToString(" · ")
             if (text.isNotEmpty()) {
@@ -192,6 +201,12 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, modifier: Modifier = Modi
         }
     }
 }
+
+/** Skill notices whose text comes from the cockpit spec strings, filled from the notice args. */
+private val SPEC_NOTICE_KEYS = mapOf(
+    SkillReason.NO_RESPONSE to "skill.did_not_respond",
+    SkillReason.PLUGIN_STOPPED to "skill.plugin_stopped",
+)
 
 /** Calls [onLost] whenever the cockpit window loses input focus. */
 @Composable
