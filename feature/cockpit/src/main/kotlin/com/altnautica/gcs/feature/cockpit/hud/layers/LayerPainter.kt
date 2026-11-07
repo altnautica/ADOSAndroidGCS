@@ -37,8 +37,12 @@ object LayerColors {
     val ChipFill = Color.Black.copy(alpha = 0.55f)
 }
 
-/** How grid cells draw: filled when measured, outlined otherwise, or every cell outlined. */
-enum class CellStyle { Solid, Outline }
+/**
+ * How grid cells draw: [Measured] fills cells from LiDAR or occupancy and outlines
+ * inferred ones (the obstacles layer); [Solid] fills every cell and [Outline] outlines
+ * every cell (the depth layer's operator choice).
+ */
+enum class CellStyle { Solid, Outline, Measured }
 
 /**
  * Draws every data layer into one canvas. One instance lives per [LayerStack] and keeps
@@ -307,9 +311,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
     // ---- Grids (obstacles, depth) ------------------------------------------------------------
 
     /**
-     * One camera grid: cells nearer than [maxM] filled red (≤ 2 m) or amber (2–5 m), solid
-     * when measured and outlined otherwise ([CellStyle.Outline] outlines every cell);
-     * unknown cells never draw.
+     * One camera grid: cells nearer than [maxM] drawn red (≤ 2 m) or amber (2–5 m), filled
+     * or outlined per [style]; unknown cells never draw.
      */
     fun DrawScope.drawGrid(grid: CameraGrid, view: Rect, maxM: Float, style: CellStyle, alpha: Float) {
         val cells = grid.cols * grid.rows
@@ -329,7 +332,11 @@ class LayerPainter(private val measurer: TextMeasurer) {
             val row = i / grid.cols
             val tl = Offset(view.left + col * cw, view.top + row * ch)
             val size = Size(cw, ch)
-            val solid = style == CellStyle.Solid && hasMask && GridCodec.bit(measured, i)
+            val solid = when (style) {
+                CellStyle.Solid -> true
+                CellStyle.Outline -> false
+                CellStyle.Measured -> hasMask && GridCodec.bit(measured, i)
+            }
             if (solid) {
                 drawRect(color, tl, size, alpha = alpha)
             } else {

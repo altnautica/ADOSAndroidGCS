@@ -20,6 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -99,6 +100,7 @@ fun LayerStack(
     val painter = remember(measurer) { LayerPainter(measurer) }
     val tick = remember { mutableIntStateOf(0) }
     val drawTargets by rememberUpdatedState(targets)
+    val labels = rememberLayerLabels()
     val store = controller.store
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(controller, cameraId, lifecycle) {
@@ -142,7 +144,7 @@ fun LayerStack(
             onDrawBehind {
                 tick.intValue // a draw-only read: interpolation and staleness redraw without recomposing
                 val t0 = System.nanoTime()
-                drawLayers(controller, cameraId, frameW, frameH, flags.value, depth.value, painter, drawTargets)
+                drawLayers(controller, cameraId, frameW, frameH, flags.value, depth.value, painter, labels, drawTargets)
                 LayerStackDebug.recordDraw(System.nanoTime() - t0)
             }
         },
@@ -158,6 +160,7 @@ private fun DrawScope.drawLayers(
     f: LayerFlags,
     depthOptions: DepthOptions,
     painter: LayerPainter,
+    labels: LayerLabels,
     drawTargets: (DrawScope.(alpha: Float) -> Unit)?,
 ) {
     val store = controller.store
@@ -181,7 +184,7 @@ private fun DrawScope.drawLayers(
                 val fr = freshness(store.depth, now)
                 val frame = store.depth.cur
                 if (fr == Freshness.Hidden) {
-                    chip(UNAVAILABLE_DEPTH)
+                    chip(labels.depthUnavailable)
                     continue
                 }
                 val grid = frame?.cameras?.get(cameraId) ?: continue
@@ -189,12 +192,12 @@ private fun DrawScope.drawLayers(
                 val range = d.rangeM ?: continue
                 val unscaled = (grid.scaleSource ?: frame.scaleSource) == "none"
                 with(painter) { drawGrid(grid, view, range, if (unscaled) CellStyle.Outline else d.style, alpha(fr)) }
-                if (unscaled) chip(DEPTH_UNSCALED)
+                if (unscaled) chip(labels.depthUnscaled)
             }
             LayerSpec.SURFACES -> {
                 val fr = freshness(store.surfaces, now, SURFACES_HIDE_MS)
                 if (fr == Freshness.Hidden) {
-                    chip(UNAVAILABLE_SURFACES)
+                    chip(labels.surfacesUnavailable)
                     continue
                 }
                 val frame = store.surfaces.cur?.takeIf { it.cameraId == cameraId } ?: continue
@@ -204,10 +207,10 @@ private fun DrawScope.drawLayers(
                 val fr = freshness(store.obstacles, now)
                 val frame = store.obstacles.cur ?: continue
                 if (fr == Freshness.Hidden) {
-                    chip(UNAVAILABLE_OBSTACLES)
+                    chip(labels.obstaclesUnavailable)
                     continue
                 }
-                frame.cameras[cameraId]?.let { g -> with(painter) { drawGrid(g, view, MID_MAX_M, CellStyle.Solid, alpha(fr)) } }
+                frame.cameras[cameraId]?.let { g -> with(painter) { drawGrid(g, view, MID_MAX_M, CellStyle.Measured, alpha(fr)) } }
                 with(painter) { drawSectorArc(frame.sectorsM, view, alpha(fr)) }
             }
             LayerSpec.TARGETS -> drawTargets?.invoke(this, 1f)
@@ -216,12 +219,12 @@ private fun DrawScope.drawLayers(
                 val frame = store.ar.cur ?: continue
                 val fr = freshness(store.ar, now)
                 if (fr == Freshness.Hidden || frame.reason != null || arCam?.reason != null) {
-                    chip(UNAVAILABLE_AR)
+                    chip(labels.arUnavailable)
                     continue
                 }
                 val route = ArRules.routeStyle(frame.mission, controller.previewAllowed())
                 with(painter) { drawAr(store.ar, cameraId, view, f, route, now, alpha(fr)) }
-                if (frame.approx) chip(AR_APPROX)
+                if (frame.approx) chip(labels.arApprox)
             }
             LayerSpec.AR_MOTION -> if (!f.isOn(LayerSpec.AR_ROUTE)) {
                 val frame = store.ar.cur ?: continue
@@ -261,9 +264,27 @@ private const val DEFAULT_H = 720f
 /** Surfaces arrive at 1 Hz, so they hide after three missed frames rather than 2 s. */
 private const val SURFACES_HIDE_MS = 3_000L
 
-private const val UNAVAILABLE_AR = "AR unavailable"
-private const val UNAVAILABLE_OBSTACLES = "Obstacles unavailable"
-private const val UNAVAILABLE_DEPTH = "Depth unavailable"
-private const val UNAVAILABLE_SURFACES = "Surfaces unavailable"
-private const val DEPTH_UNSCALED = "Depth unscaled"
-private const val AR_APPROX = "AR ≈"
+/** The canvas chip texts, resolved once per composition. */
+internal class LayerLabels(
+    val arUnavailable: String,
+    val obstaclesUnavailable: String,
+    val depthUnavailable: String,
+    val surfacesUnavailable: String,
+    val depthUnscaled: String,
+    val arApprox: String,
+)
+
+@Composable
+private fun rememberLayerLabels(): LayerLabels {
+    val r = LocalContext.current.resources
+    return remember(r) {
+        LayerLabels(
+            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_ar)),
+            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_obstacles)),
+            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_depth)),
+            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_surfaces)),
+            r.getString(R.string.layer_depth_unscaled),
+            r.getString(R.string.layer_ar_approx),
+        )
+    }
+}
