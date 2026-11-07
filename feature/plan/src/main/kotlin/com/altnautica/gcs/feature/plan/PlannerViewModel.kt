@@ -52,6 +52,7 @@ class PlannerViewModel @Inject constructor(
     private val offlineMaps: OfflineMapRepository,
     private val plannerSettings: PlannerSettingsRepository,
     private val inputRouter: AdosInputRouter,
+    mirrorSource: MissionMirrorSource,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PlannerUiState())
@@ -69,7 +70,7 @@ class PlannerViewModel @Inject constructor(
     private val nextId: () -> Long = { ids.getAndIncrement() }
 
     private val session = PlanSession(_state)
-    private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId) { plan, name, savedId, dirty ->
+    private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId, mirrorSource) { plan, name, savedId, dirty ->
         session.replacePlan(plan, name = name, savedId = savedId, dirty = dirty)
     }
     private val library = PlannerLibrary(viewModelScope, _state, savedPlans, documents, session, nextId) { vehicle.planWithHome() }
@@ -350,6 +351,9 @@ class PlannerViewModel @Inject constructor(
 
     /** Downloads from the vehicle; asks first when the open plan has unsaved edits. */
     fun download() = vehicle.download()
+
+    /** Replaces the open plan with the plan stored on the vehicle (its agent's mirror). */
+    fun loadFromDrone() = vehicle.loadFromDrone()
 
     fun cancelDownload() = vehicle.cancelDownload()
 

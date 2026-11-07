@@ -297,4 +297,6 @@
     <string name="plan_hint_zoom">Zoom</string>
     <string name="plan_hint_menu">Menu</string>
     <string name="plan_tools_description">Editing tools</string>
+    <string name="plan_drone_differs">Plan on drone differs from this device\'s plan</string>
+    <string name="plan_load_from_drone">Load from drone</string>
 </resources>

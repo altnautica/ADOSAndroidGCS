@@ -18,6 +18,7 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.link)
     implementation(projects.core.data)
+    implementation(projects.core.agent)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

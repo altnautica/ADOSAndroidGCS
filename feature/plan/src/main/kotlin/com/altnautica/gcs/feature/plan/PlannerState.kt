@@ -175,6 +175,8 @@ data class PlannerUiState(
     val transfer: TransferState = TransferState.Idle,
     /** The plan as last uploaded (and read back) or downloaded from the vehicle. */
     val vehiclePlan: MissionPlan? = null,
+    /** The vehicle's own plan from its agent's mirror; null without an agent path. */
+    val drone: DroneMissionUi? = null,
     val confirmReplaceWithDownload: Boolean = false,
     val library: List<SavedPlanEntity> = emptyList(),
     /** A discarding action waiting for the operator's confirm. */

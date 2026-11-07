@@ -91,7 +91,7 @@ internal fun PlannerMapPane(
 ) {
     val link = state.link as? VehicleLink.Connected
     val vehicle = link?.position?.let { MapVehicle(it, link.headingDeg, stale = !link.linkFresh) }
-    val overlays = remember(state.displayPlan, state.selection, state.survey, state.surveyPreview, state.fenceDraft, state.link) { state.toOverlays() }
+    val overlays = remember(state.displayPlan, state.selection, state.survey, state.surveyPreview, state.fenceDraft, state.link, state.drone) { state.toOverlays() }
 
     // Frame the plan once it has content, else the vehicle.
     val framePoints = remember(state.savedId, state.name, state.plan.items.isEmpty()) {

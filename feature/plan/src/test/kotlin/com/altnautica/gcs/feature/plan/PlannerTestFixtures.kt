@@ -9,6 +9,7 @@ import com.altnautica.gcs.core.link.mission.MissionError
 import com.altnautica.gcs.core.link.mission.MissionItem
 import com.altnautica.gcs.core.link.mission.MissionPlan as WirePlan
 import com.altnautica.gcs.core.link.mission.MissionResult
+import com.altnautica.gcs.core.link.mission.UploadReceipt
 import com.altnautica.gcs.core.link.mission.MissionService
 import com.altnautica.gcs.core.link.mission.MissionTransfer
 import com.altnautica.gcs.core.link.mission.MissionType
@@ -62,7 +63,10 @@ internal class FakeMissionService : MissionService {
     /** When set, the mission upload suspends here so tests can observe progress mid-transfer. */
     var gate: CompletableDeferred<Unit>? = null
 
-    override suspend fun upload(type: MissionType, items: List<MissionItem>): MissionResult<Unit> {
+    /** The plan id the scripted vehicle returns for a mission upload (0: no plan ids). */
+    var opaqueId: Long = 0
+
+    override suspend fun upload(type: MissionType, items: List<MissionItem>): MissionResult<UploadReceipt> {
         items.forEachIndexed { i, _ -> transfer.value = MissionTransfer.InProgress(type, TransferDirection.Upload, i + 1, items.size) }
         if (type == MissionType.Mission) gate?.await()
         if (type == failUpload) {
@@ -72,7 +76,7 @@ internal class FakeMissionService : MissionService {
         uploads += type to items
         stored[type] = WirePlan(if (type == MissionType.Mission) home else null, items)
         transfer.value = MissionTransfer.Completed(type, TransferDirection.Upload)
-        return MissionResult.Success(Unit)
+        return MissionResult.Success(UploadReceipt(if (type == MissionType.Mission) opaqueId else 0))
     }
 
     override suspend fun download(type: MissionType): MissionResult<WirePlan> {
@@ -176,6 +180,9 @@ internal class PlannerHarness {
         override fun services(id: DeviceId): Flow<VehicleServices?> = servicesFlow.map { if (id == node) it else null }
     }
 
+    /** The vehicle's mirrored plan as its agent would serve it; null: no agent path. */
+    val mirror = MutableStateFlow<com.altnautica.gcs.core.agent.mission.MissionMirror?>(null)
+
     fun viewModel() = PlannerViewModel(
         servicesProvider = provider,
         nodeSources = emptySet(),
@@ -185,6 +192,7 @@ internal class PlannerHarness {
         offlineMaps = FakeOfflineMaps(),
         plannerSettings = PlannerSettingsRepository(prefs),
         inputRouter = mockk(relaxed = true),
+        mirrorSource = { mirror },
     )
 
     suspend fun withViewModel(block: suspend (PlannerViewModel) -> Unit) {

@@ -77,6 +77,16 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
                 label = stringResource(if (state.inSyncWithVehicle) R.string.plan_in_sync else R.string.plan_not_in_sync),
             )
         }
+        state.drone?.takeIf { it.differs }?.let {
+            Text(stringResource(R.string.plan_drone_differs), style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
+            AdosButton(
+                stringResource(R.string.plan_load_from_drone),
+                onClick = actions.onLoadFromDrone,
+                enabled = !state.transferring,
+                variant = AdosButtonVariant.Secondary,
+                icon = Icons.Outlined.CloudDownload,
+            )
+        }
         PlanIssueList(issues)
         if (uploadBlocked && connected != null) {
             Text(stringResource(R.string.plan_issues_blocking), style = MaterialTheme.typography.bodySmall, color = colors.statusError)

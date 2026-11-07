@@ -81,6 +81,14 @@ fun PlannerUiState.toOverlays(): MapOverlays {
 
     val lines = buildList {
         if (path.size >= 2) add(MapLine("mission", path, LineKind.MissionPath))
+        // The vehicle holds another plan: draw its route dashed beside the open one.
+        drone?.takeIf { it.differs }?.plan?.let { p ->
+            val dronePath = buildList {
+                (p.home?.position ?: homePoint)?.let { add(it) }
+                p.items.filter { MavCmd.isNav(it.command) }.forEach { item -> item.position?.let { add(it) } }
+            }
+            if (dronePath.size >= 2) add(MapLine("drone-mission", dronePath, LineKind.DroneMission))
+        }
         surveyPreview?.path?.takeIf { it.size >= 2 }?.let { add(MapLine("survey-preview", it, LineKind.SurveyPreview)) }
         if (fenceDraft.size == 2) add(MapLine("fence-draft", fenceDraft, LineKind.SurveyPreview))
     }

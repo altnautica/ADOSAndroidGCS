@@ -7,6 +7,10 @@ import com.altnautica.gcs.core.link.mission.MissionResult
 import com.altnautica.gcs.core.link.mission.MissionTransfer
 import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.mission.TransferDirection
+import com.altnautica.gcs.core.link.mission.UploadReceipt
+import com.altnautica.gcs.core.agent.mission.MissionMirror
+import com.altnautica.gcs.core.model.MissionState
+import kotlinx.coroutines.flow.first
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.map.GeoPoint
@@ -49,12 +53,18 @@ internal class PlannerVehicleController(
     private val servicesProvider: VehicleServicesProvider,
     private val clock: ElapsedClock,
     private val nextId: () -> Long,
+    private val mirrorSource: MissionMirrorSource,
     private val replacePlan: (plan: MissionPlan, name: String, savedId: String?, dirty: Boolean) -> Unit,
 ) {
     private var services: VehicleServices? = null
     private var vehicleJob: Job? = null
     private var transferJob: Job? = null
     private var startJob: Job? = null
+    private var mirrorJob: Job? = null
+
+    /** The vehicle's mirrored plan as last read, and this device's receipt for the plan it put there. */
+    private var mirror: MissionMirror? = null
+    private var receipt: PlanReceipt? = null
 
     // ── Vehicle ──────────────────────────────────────────────
 
@@ -77,6 +87,10 @@ internal class PlannerVehicleController(
     fun selectVehicle(nodeId: DeviceId?) {
         if (nodeId == state.value.nodeId && vehicleJob != null) return
         vehicleJob?.cancel()
+        mirrorJob?.cancel()
+        mirrorJob = null
+        mirror = null
+        receipt = null
         transferJob?.cancel()
         transferJob = null
         startJob?.cancel()
@@ -88,6 +102,7 @@ internal class PlannerVehicleController(
                 nodeName = s.nodes.firstOrNull { it.id == nodeId }?.name,
                 link = if (nodeId == null) VehicleLink.None else VehicleLink.Connecting,
                 vehiclePlan = null,
+                drone = null,
                 transfer = TransferState.Idle,
                 startSheet = null,
             )
@@ -106,6 +121,41 @@ internal class PlannerVehicleController(
                 observeVehicle(svc)
             }
         }
+        mirrorJob = scope.launch {
+            mirrorSource.observe(nodeId).collect { m ->
+                mirror = m
+                refreshDrone()
+            }
+        }
+    }
+
+    /**
+     * Recomputes [PlannerUiState.drone]: the mirrored plan, and whether it differs from
+     * this device's. A vehicle plan with the open plan's items counts as the same plan.
+     */
+    private fun refreshDrone() {
+        val m = mirror
+        if (m == null) {
+            state.update { it.copy(drone = null) }
+            return
+        }
+        val dronePlan = PlanIdentity.planOf(m, nextId)
+        state.update { s ->
+            val sameItems = dronePlan != null && dronePlan.items.map { it.command to it.position } == s.plan.items.map { it.command to it.position }
+            val differs = dronePlan != null && !sameItems && !PlanIdentity.matches(m, receipt)
+            s.copy(drone = DroneMissionUi(dronePlan, m.status?.state ?: MissionState.None, differs))
+        }
+    }
+
+    /** Replaces the open plan with the vehicle's mirrored plan ("Load from drone"). */
+    fun loadFromDrone() {
+        val m = mirror ?: return
+        val plan = state.value.drone?.plan ?: return
+        if (state.value.transferring) return
+        replacePlan(plan, state.value.nodeName.orEmpty(), null, true)
+        receipt = PlanIdentity.receiptOf(m)
+        state.update { it.copy(vehiclePlan = plan) }
+        refreshDrone()
     }
 
     private suspend fun observeVehicle(svc: VehicleServices) {
@@ -160,15 +210,19 @@ internal class PlannerVehicleController(
         val s = state.value
         if (s.transferring || s.issues.any { it.kind.blocking }) return
         val plan = s.plan
-        val wire = MissionWire.toWire(plan, homeSlot())
+        val homeSlot = homeSlot()
+        val wire = MissionWire.toWire(plan, homeSlot)
+        val nodeId = s.nodeId
         runTransfer(svc, TransferDirection.Upload) {
             val steps = listOf(MissionType.Mission to wire.mission, MissionType.Fence to wire.fence, MissionType.Rally to wire.rally)
+            var opaqueId = 0L
             for ((type, items) in steps) {
                 val result = if (items.isEmpty() && type != MissionType.Mission) svc.mission.clear(type) else svc.mission.upload(type, items)
                 if (result is MissionResult.Failure) {
                     state.update { it.copy(transfer = TransferState.Failed(TransferDirection.Upload, type, result.error)) }
                     return@runTransfer
                 }
+                if (type == MissionType.Mission) opaqueId = ((result as MissionResult.Success).value as UploadReceipt).opaqueId
             }
             for ((type, sent) in steps) {
                 state.update { it.copy(transfer = TransferState.Verifying(type)) }
@@ -181,7 +235,11 @@ internal class PlannerVehicleController(
                     return@runTransfer
                 }
             }
+            // The agent's upload counter right after this upload: a later change means another client uploaded.
+            val seen = nodeId?.let { id -> mirrorSource.observe(id).first()?.uploadsSeen }
+            receipt = PlanReceipt(opaqueId, wire.mission.size + if (homeSlot) 1 else 0, seen)
             state.update { it.copy(transfer = TransferState.Done(TransferDirection.Upload, wire.mission.size), vehiclePlan = plan) }
+            refreshDrone()
         }
     }
 
@@ -231,6 +289,7 @@ internal class PlannerVehicleController(
                 return@runTransfer
             }
             replacePlan(rebuilt.plan, state.value.nodeName.orEmpty(), null, true)
+            mirror?.let { receipt = PlanIdentity.receiptOf(it) }
             state.update {
                 it.copy(
                     transfer = TransferState.Done(TransferDirection.Download, mission.items.size),
@@ -238,6 +297,7 @@ internal class PlannerVehicleController(
                     message = message ?: it.message,
                 )
             }
+            refreshDrone()
         }
     }
 
@@ -331,6 +391,7 @@ internal class PlannerVehicleController(
     /** Cancels the vehicle observation, any transfer, and any start in flight. */
     fun cancel() {
         vehicleJob?.cancel()
+        mirrorJob?.cancel()
         transferJob?.cancel()
         startJob?.cancel()
     }
