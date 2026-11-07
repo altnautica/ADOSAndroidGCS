@@ -4,6 +4,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.altnautica.gcs.feature.configure.wizard.GroundSetupCheck
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.data.home.SelectedVehicleStore
@@ -27,6 +30,7 @@ class AppViewModel @Inject constructor(
     private val dataStore: DataStore<Preferences>,
     private val replays: ReplayLauncher,
     private val selectedVehicle: SelectedVehicleStore,
+    private val groundSetup: GroundSetupCheck,
 ) : ViewModel() {
 
     /**
@@ -56,15 +60,28 @@ class AppViewModel @Inject constructor(
     /** Flying a node again lifts any Disconnect the notification applied. */
     fun reconnect(id: DeviceId) = vehicles.connect(id)
 
-    /** A new connection becomes Home's selected vehicle; [onSelected] then returns to Home. */
-    fun connected(id: DeviceId, onSelected: () -> Unit) {
+    /**
+     * A new connection becomes Home's selected vehicle; [onSelected] then returns to Home.
+     * When the vehicle's flight controller has never finished the ground setup wizard and
+     * this is its first connection here, [onSetupNeeded] opens aircraft setup once.
+     */
+    fun connected(id: DeviceId, onSelected: () -> Unit, onSetupNeeded: (DeviceId) -> Unit) {
         viewModelScope.launch {
             selectedVehicle.select(id)
             onSelected()
+            val uid = groundSetup.uidNeedingSetup(id) ?: return@launch
+            val key = stringSetPreferencesKey(SETUP_OFFERED)
+            val offered = dataStore.data.first()[key].orEmpty()
+            if (uid in offered) return@launch
+            dataStore.edit { it[key] = offered + uid }
+            onSetupNeeded(id)
         }
     }
 
     private companion object {
         val NOTIFICATIONS_ASKED = booleanPreferencesKey("app.notificationsAsked")
+
+        /** Flight-controller uids already offered aircraft setup on first connection. */
+        const val SETUP_OFFERED = "app.aircraftSetupOffered"
     }
 }

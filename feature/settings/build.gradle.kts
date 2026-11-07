@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.ados.android.hilt)
 }
 
+android {
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
 dependencies {
     implementation(projects.core.model)
     implementation(projects.core.designsystem)
@@ -11,9 +17,18 @@ dependencies {
     implementation(projects.core.link)
     implementation(projects.core.skills)
     implementation(projects.core.demo)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigationevent.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

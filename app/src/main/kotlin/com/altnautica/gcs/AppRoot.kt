@@ -39,6 +39,7 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.cockpit.CockpitRoute
 import com.altnautica.gcs.feature.configure.params.ParametersSurfaceRoute
 import com.altnautica.gcs.feature.configure.setup.SetupSurfaceRoute
+import com.altnautica.gcs.feature.configure.wizard.AircraftSetupRoute
 import com.altnautica.gcs.feature.connect.ConnectRoute
 import com.altnautica.gcs.feature.home.HomeRoute
 import com.altnautica.gcs.feature.home.HomeSurface
@@ -52,6 +53,7 @@ import com.altnautica.gcs.feature.plan.PlanRoute
 import com.altnautica.gcs.feature.settings.SettingsRoute
 import com.altnautica.gcs.feature.settings.controller.ControllerRoute
 import com.altnautica.gcs.feature.settings.licences.LicencesRoute
+import com.altnautica.gcs.navigation.AircraftSetupKey
 import com.altnautica.gcs.navigation.BackStackOps
 import com.altnautica.gcs.navigation.CloudKey
 import com.altnautica.gcs.navigation.CockpitKey
@@ -148,7 +150,16 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onStartMission = { fly(backStack, viewModel, it) },
                     )
                 }
-                entry<SetupKey> { key -> SetupSurfaceRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }) }
+                entry<SetupKey> { key ->
+                    SetupSurfaceRoute(
+                        nodeId = DeviceId(key.id),
+                        onBack = { BackStackOps.pop(backStack) },
+                        onOpenAircraftSetup = { BackStackOps.push(backStack, AircraftSetupKey(key.id)) },
+                    )
+                }
+                entry<AircraftSetupKey> { key ->
+                    AircraftSetupRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }, wizard = key.wizard)
+                }
                 entry<ParamsKey> { key -> ParametersSurfaceRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }) }
                 entry<LogsKey> {
                     LogsRoute(
@@ -188,6 +199,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                             viewModel.cockpitClosed(key.id)
                             BackStackOps.pop(backStack)
                         },
+                        onSetUpAircraft = { id -> BackStackOps.push(backStack, AircraftSetupKey(id.value, GROUND_WIZARD)) },
                     )
                 }
                 entry<ConnectKey> { key ->
@@ -197,7 +209,9 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onBack = { BackStackOps.pop(backStack) },
                         onOpenCloud = { BackStackOps.push(backStack, CloudKey) },
                         onOpenPhoneRadio = { BackStackOps.push(backStack, PhoneRadioKey) },
-                        onConnected = { id -> viewModel.connected(id, ::goHome) },
+                        onConnected = { id ->
+                            viewModel.connected(id, ::goHome) { needing -> BackStackOps.push(backStack, AircraftSetupKey(needing.value, GROUND_WIZARD)) }
+                        },
                     )
                 }
                 entry<FlightKey> { key ->
@@ -241,6 +255,9 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
         }
     }
 }
+
+/** The setup wizard a vehicle that was never set up starts with. */
+private const val GROUND_WIZARD = "ground"
 
 /** The route a Home or Quick menu surface opens; null when it needs a vehicle and has none. */
 private fun surfaceKey(surface: HomeSurface, nodeId: DeviceId?): NavKey? = when (surface) {

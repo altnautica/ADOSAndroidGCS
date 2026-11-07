@@ -47,15 +47,20 @@ fun CalibrationRoute(nodeId: DeviceId, modifier: Modifier = Modifier) {
         creationCallback = { it.create(nodeId.value) },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
-    CalibrationScreen(
-        state = state,
-        onStart = viewModel::start,
-        onConfirmPose = viewModel::confirmAccelPosition,
-        onAcceptCompass = viewModel::acceptCompass,
-        onSaveRadio = viewModel::saveRadio,
-        onCancel = viewModel::cancel,
-        modifier = modifier,
-    )
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.altnautica.gcs.feature.configure.wizard.LocalSetupText provides viewModel.text,
+    ) {
+        CalibrationScreen(
+            state = state,
+            onStart = viewModel::start,
+            onConfirmPose = viewModel::confirmAccelPosition,
+            onAcceptCompass = viewModel::acceptCompass,
+            onSaveRadio = viewModel::saveRadio,
+            onCancel = viewModel::cancel,
+            onAgentAction = viewModel::agentAction,
+            modifier = modifier,
+        )
+    }
 }
 
 @Composable
@@ -104,6 +109,7 @@ fun CalibrationScreen(
     onSaveRadio: () -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    onAgentAction: (action: String, args: kotlinx.serialization.json.JsonObject?) -> Unit = { _, _ -> },
 ) {
     val colors = AdosTheme.colors
     Column(modifier.fillMaxWidth().padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
@@ -113,7 +119,7 @@ fun CalibrationScreen(
         }
         val blockedReason = state.block?.let { stringResource(blockText(it)) }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-            CalibrationKind.entries.forEach { kind ->
+            CalibrationKind.entries.filter(state::offers).forEach { kind ->
                 ConsoleCard(
                     title = kindLabel(kind),
                     icon = kindIcon(kind),
@@ -122,6 +128,19 @@ fun CalibrationScreen(
                     disabledReason = blockedReason,
                 )
             }
+        }
+        if (state.agent) {
+            Text(stringResource(R.string.cfg_setup_gyro_agent), color = colors.fgTertiary, style = MaterialTheme.typography.bodySmall)
+            val step = state.agentStep
+            if (step == null) {
+                Text(stringResource(R.string.cfg_cal_idle), color = colors.fgSecondary)
+            } else {
+                com.altnautica.gcs.feature.configure.wizard.WizardStepView(step, busy = state.busy, onAction = onAgentAction)
+                if (state.running) {
+                    AdosButton(stringResource(R.string.cfg_cancel), onClick = onCancel, variant = AdosButtonVariant.Secondary)
+                }
+            }
+            return@Column
         }
         when (val cal = state.calibration) {
             CalibrationState.Idle -> Text(stringResource(R.string.cfg_cal_idle), color = colors.fgSecondary)

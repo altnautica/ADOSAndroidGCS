@@ -19,6 +19,10 @@ data class PlanKey(val nodeId: String? = null) : NavKey
 @Serializable
 data class SetupKey(val id: String) : NavKey
 
+/** The onboard pilot's aircraft setup wizards for a vehicle; [wizard] opens one directly. */
+@Serializable
+data class AircraftSetupKey(val id: String, val wizard: String? = null) : NavKey
+
 /** Flight-controller parameters for a vehicle. */
 @Serializable
 data class ParamsKey(val id: String) : NavKey

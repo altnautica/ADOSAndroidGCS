@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="controls_cancel">Cancel</string>
+    <string name="controls_tour_next">Next</string>
+    <string name="controls_tour_done">Done</string>
+    <string name="controls_tab_controls">Controls</string>
+    <string name="controls_tab_status">Status and pairing</string>
+    <string name="controls_message_locked">Safety binding: it can be moved, not removed.</string>
+    <string name="controls_message_same_control">That control already has this binding.</string>
+    <string name="controls_message_saved">Controller bindings saved.</string>
+    <string name="controls_message_save_refused">Not saved: resolve the conflicts and keep every safety binding.</string>
+    <string name="controls_message_imported">Controller bindings imported.</string>
+    <string name="controls_message_import_unreadable">That file is not a controls export.</string>
+    <string name="controls_message_import_refused">That file has conflicting or unknown bindings.</string>
+    <string name="controls_message_file_failed">The file could not be read or written.</string>
+    <string name="settings_sound">Sound</string>
+    <string name="settings_voice_prompts">Voice prompts</string>
+    <string name="settings_voice_prompts_summary">Speak handovers, return home, low battery and mission changes.</string>
+</resources>

@@ -52,6 +52,8 @@ class SettingsViewModel @Inject constructor(
 
     fun setModeCallouts(on: Boolean) = launch { cockpit.setModeCallouts(on) }
 
+    fun setVoicePrompts(on: Boolean) = launch { cockpit.setVoicePrompts(on) }
+
     fun setAltitudeReference(ref: AltitudeReference) = launch { cockpit.setAltitudeReference(ref) }
 
     fun setDensity(density: CockpitDensity) = launch { cockpit.setDensity(density) }

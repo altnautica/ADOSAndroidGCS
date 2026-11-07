@@ -125,6 +125,15 @@ private fun LazyListScope.cockpit(state: SettingsUiState, vm: SettingsViewModel)
             enabled = c.audioCallouts,
         )
     }
+    item { SectionHeader(stringResource(R.string.settings_sound)) }
+    item {
+        SwitchSettingRow(
+            title = stringResource(R.string.settings_voice_prompts),
+            checked = c.voicePrompts,
+            onCheckedChange = vm::setVoicePrompts,
+            summary = stringResource(R.string.settings_voice_prompts_summary),
+        )
+    }
     item {
         val labels = mapOf(
             AltitudeReference.Rel to stringResource(R.string.settings_alt_ref_rel),

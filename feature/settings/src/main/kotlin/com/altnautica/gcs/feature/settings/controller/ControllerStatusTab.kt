@@ -55,7 +55,6 @@ private const val SEPARATOR = " · "
 internal class StatusActions(
     val onRumble: (Boolean) -> Unit,
     val onLightbar: (Boolean) -> Unit,
-    val onDeadZone: (Int) -> Unit,
     val onExpo: (Int) -> Unit,
     val onRemoveAllModes: (DeviceId) -> Unit,
 )
@@ -94,9 +93,6 @@ private fun LazyListScope.preferenceItems(state: ControllerUiState, actions: Sta
         SwitchSettingRow(stringResource(R.string.settings_controller_lightbar), s.lightbar, actions.onLightbar, summary = stringResource(R.string.settings_controller_lightbar_summary))
     }
     item(key = "sticks") { SectionHeader(stringResource(R.string.settings_controller_sticks)) }
-    item(key = "deadzone") {
-        PercentRow(R.string.settings_controller_dead_zone, R.string.settings_controller_dead_zone_summary, s.deadZonePct, ControllerSettingsRepository.MAX_DEAD_ZONE_PCT, actions.onDeadZone)
-    }
     item(key = "expo") {
         PercentRow(R.string.settings_controller_expo, R.string.settings_controller_expo_summary, s.expoPct, ControllerSettingsRepository.MAX_EXPO_PCT, actions.onExpo)
     }

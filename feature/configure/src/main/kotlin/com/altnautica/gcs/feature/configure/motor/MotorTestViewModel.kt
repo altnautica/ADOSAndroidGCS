@@ -23,7 +23,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import com.altnautica.gcs.core.agent.fcsetup.FcSetupApi
+import com.altnautica.gcs.core.agent.fcsetup.SetupStep
+import com.altnautica.gcs.feature.configure.wizard.SetupProblem
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,6 +43,12 @@ data class MotorTestUiState(
     val block: MotorTestBlock? = MotorTestBlock.NoVehicle,
 )
 
+/** The vehicle's `outputs` step as the agent reports it; [step] is null until it has run. */
+data class AgentMotorTest(val step: SetupStep?, val busy: Boolean, val problem: SetupProblem?)
+
+/** The setup step that tests the motors and control surfaces. */
+const val OUTPUTS_STEP = "outputs"
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel(assistedFactory = MotorTestViewModel.Factory::class)
 class MotorTestViewModel internal constructor(
@@ -46,9 +56,18 @@ class MotorTestViewModel internal constructor(
     vehicles: VehicleProvider,
     private val now: () -> Long,
     ticks: Flow<Unit>,
+    backends: com.altnautica.gcs.feature.configure.wizard.SetupBackendSource =
+        com.altnautica.gcs.feature.configure.wizard.SetupBackendSource { flowOf(null) },
+    /** Setup strings for the agent motor test step. */
+    val text: com.altnautica.gcs.feature.configure.wizard.SetupText =
+        com.altnautica.gcs.feature.configure.wizard.SetupText { key, _ -> key },
 ) : ViewModel() {
-    @AssistedInject constructor(@Assisted nodeId: String, vehicles: VehicleProvider) :
-        this(DeviceId(nodeId), vehicles, SystemClock::elapsedRealtime, secondTicks())
+    @AssistedInject constructor(
+        @Assisted nodeId: String,
+        vehicles: VehicleProvider,
+        backends: com.altnautica.gcs.feature.configure.wizard.SetupBackendSource,
+        text: com.altnautica.gcs.feature.configure.wizard.SetupText,
+    ) : this(DeviceId(nodeId), vehicles, SystemClock::elapsedRealtime, secondTicks(), backends, text)
 
     @AssistedFactory
     interface Factory {
@@ -60,6 +79,34 @@ class MotorTestViewModel internal constructor(
     private val vehicle = vehicles.vehicle(nodeId).stateIn(viewModelScope, SharingStarted.Eagerly, null)
     private val ticker = ticks
 
+    private var session: com.altnautica.gcs.feature.configure.wizard.SetupSession? = null
+
+    /**
+     * When the vehicle is agent-connected the motor test is the vehicle's `outputs` setup
+     * step: the vehicle spins each motor behind its own propellers-off hold-confirm.
+     */
+    val agent: StateFlow<AgentMotorTest?> = backends.observe(nodeId).map { backend ->
+        session?.close()
+        session = backend?.let { com.altnautica.gcs.feature.configure.wizard.SetupSession(it, viewModelScope).also { s -> s.open() } }
+        session
+    }.flatMapLatest { s ->
+        s?.state?.map { snap ->
+            AgentMotorTest(snap.step(FcSetupApi.WIZARD_GROUND, OUTPUTS_STEP), snap.busy, snap.problem)
+        } ?: flowOf(null)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Runs the vehicle's motor test step on its own. */
+    fun runAgentTest() {
+        session?.runStep(FcSetupApi.WIZARD_GROUND, OUTPUTS_STEP)
+    }
+
+    fun agentAction(action: String, args: kotlinx.serialization.json.JsonObject?) {
+        session?.action(FcSetupApi.WIZARD_GROUND, OUTPUTS_STEP, action, args)
+    }
+
+    fun abortAgentTest() {
+        session?.abort(FcSetupApi.WIZARD_GROUND)
+    }
     val state: StateFlow<MotorTestUiState> = combine(
         form,
         vehicle,
@@ -132,6 +179,7 @@ class MotorTestViewModel internal constructor(
 
     override fun onCleared() {
         resetAcknowledgement()
+        session?.close()
         super.onCleared()
     }
 

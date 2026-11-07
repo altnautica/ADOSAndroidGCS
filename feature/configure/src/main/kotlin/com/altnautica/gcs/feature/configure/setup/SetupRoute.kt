@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
@@ -58,6 +59,7 @@ import com.altnautica.gcs.feature.configure.params.paramMessageText
 
 /** The setup sections, in list order. */
 enum class SetupSection(val label: Int, val icon: ImageVector) {
+    AircraftSetup(R.string.cfg_setup_aircraft, Icons.Outlined.FlightTakeoff),
     Calibration(R.string.cfg_setup_calibration, Icons.Outlined.Explore),
     FlightModes(R.string.cfg_setup_modes, Icons.Outlined.FlightTakeoff),
     Failsafe(R.string.cfg_setup_failsafe, Icons.Outlined.Shield),
@@ -76,6 +78,7 @@ internal fun SetupPanes(
     section: SetupSection,
     showDetailInPortrait: Boolean,
     onSelect: (SetupSection) -> Unit,
+    onOpenAircraftSetup: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val params = hiltViewModel<ParametersViewModel, ParametersViewModel.Factory>(
@@ -112,6 +115,10 @@ internal fun SetupPanes(
             detail = {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                     when (section) {
+                        SetupSection.AircraftSetup -> Column(Modifier.padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
+                            Text(stringResource(R.string.cfg_setup_aircraft_body), color = AdosTheme.colors.fgSecondary)
+                            AdosButton(stringResource(R.string.cfg_setup_aircraft_open), onClick = onOpenAircraftSetup)
+                        }
                         SetupSection.Calibration -> CalibrationRoute(nodeId)
                         SetupSection.FlightModes -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
                             SetupCatalog.flightModes(variant, mav)?.let { it.slots + it.channelParam }.orEmpty()

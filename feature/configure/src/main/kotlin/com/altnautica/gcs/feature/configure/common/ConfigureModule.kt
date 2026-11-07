@@ -15,4 +15,9 @@ object ConfigureModule {
         ConfigureTargetSource { id ->
             services.services(id).map { s -> s?.let { ConfigureTarget(it.vehicle, it.params, it.calibration) } }
         }
+
+    @Provides
+    fun provideSetupBackendSource(
+        source: com.altnautica.gcs.feature.configure.wizard.AgentSetupBackendSource,
+    ): com.altnautica.gcs.feature.configure.wizard.SetupBackendSource = source
 }

@@ -37,7 +37,7 @@ import com.altnautica.gcs.feature.configure.R
  * sections. MSP flight controllers get an explanation instead.
  */
 @Composable
-fun SetupSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
+fun SetupSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit, onOpenAircraftSetup: () -> Unit) {
     val vm = hiltViewModel<SetupSurfaceViewModel, SetupSurfaceViewModel.Factory>(
         key = "setup-surface-${nodeId.value}",
         creationCallback = { it.create(nodeId.value) },
@@ -97,6 +97,7 @@ fun SetupSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
                         section = it.ordinal
                         showDetail = true
                     },
+                    onOpenAircraftSetup = onOpenAircraftSetup,
                 )
             }
         }

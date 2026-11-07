@@ -57,9 +57,25 @@ fun MotorTestRoute(nodeId: DeviceId, motorCountHint: Int?, modifier: Modifier = 
         creationCallback = { it.create(nodeId.value) },
     )
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val agent by viewModel.agent.collectAsStateWithLifecycle()
     LaunchedEffect(motorCountHint) { motorCountHint?.let(viewModel::setMotorCount) }
     // Leaving the page withdraws the propellers-off acknowledgement and stops any held motor.
     DisposableEffect(viewModel) { onDispose { viewModel.resetAcknowledgement() } }
+    val agentTest = agent
+    if (agentTest != null) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.altnautica.gcs.feature.configure.wizard.LocalSetupText provides viewModel.text,
+        ) {
+            AgentMotorTestScreen(
+                test = agentTest,
+                onRun = viewModel::runAgentTest,
+                onAction = viewModel::agentAction,
+                onAbort = viewModel::abortAgentTest,
+                modifier = modifier,
+            )
+        }
+        return
+    }
     MotorTestScreen(
         state = state,
         frameKnown = motorCountHint != null,
@@ -70,6 +86,42 @@ fun MotorTestRoute(nodeId: DeviceId, motorCountHint: Int?, modifier: Modifier = 
         onHoldEnd = viewModel::endHold,
         modifier = modifier,
     )
+}
+
+/** The motor test run by the vehicle's computer: its `outputs` step, rendered from the step schema. */
+@Composable
+fun AgentMotorTestScreen(
+    test: AgentMotorTest,
+    onRun: () -> Unit,
+    onAction: (String, kotlinx.serialization.json.JsonObject?) -> Unit,
+    onAbort: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val running = test.step?.state == com.altnautica.gcs.core.agent.fcsetup.SetupStepState.Running ||
+        test.step?.state == com.altnautica.gcs.core.agent.fcsetup.SetupStepState.WaitingUser
+    Column(modifier.fillMaxWidth().padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
+        SectionHeader(stringResource(R.string.cfg_motor_title))
+        Text(stringResource(R.string.cfg_setup_agent_running), color = AdosTheme.colors.fgSecondary)
+        test.problem?.key?.let {
+            Text(com.altnautica.gcs.feature.configure.wizard.LocalSetupText.current.format(it, emptyMap()), color = AdosTheme.colors.statusError)
+        }
+        val step = test.step
+        if (step != null && running) {
+            com.altnautica.gcs.feature.configure.wizard.WizardStepView(step, busy = test.busy, onAction = onAction)
+            com.altnautica.gcs.core.designsystem.component.AdosButton(
+                stringResource(R.string.cfg_cancel),
+                onClick = onAbort,
+                variant = com.altnautica.gcs.core.designsystem.component.AdosButtonVariant.Secondary,
+            )
+        } else {
+            step?.result?.takeIf { it.isNotEmpty() }?.let { com.altnautica.gcs.feature.configure.wizard.ResultCard(it) }
+            com.altnautica.gcs.core.designsystem.component.AdosButton(
+                stringResource(R.string.cfg_motor_run_agent),
+                onClick = onRun,
+                enabled = !test.busy,
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

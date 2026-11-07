@@ -16,6 +16,8 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.link)
     implementation(projects.core.mavlink)
+    implementation(projects.core.agent)
+    implementation(projects.core.skills)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
@@ -27,4 +29,7 @@ dependencies {
 
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.ext.junit)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

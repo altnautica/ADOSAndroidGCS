@@ -107,6 +107,9 @@
     <string name="cfg_radio_save">Save radio calibration</string>
 
     <!-- Setup -->
+    <string name="cfg_setup_aircraft">Aircraft setup</string>
+    <string name="cfg_setup_aircraft_body">Guided calibration, initial parameters and tuning, run by the drone\'s onboard pilot. Each step can also be re-run on its own.</string>
+    <string name="cfg_setup_aircraft_open">Open aircraft setup</string>
     <string name="cfg_setup_calibration">Calibration</string>
     <string name="cfg_setup_modes">Flight modes</string>
     <string name="cfg_setup_failsafe">Failsafe</string>
@@ -132,4 +135,29 @@
     <string name="cfg_reboot_pending">Some changes apply after a reboot</string>
     <string name="cfg_reboot_action">Reboot flight controller</string>
     <string name="cfg_reboot_result">Reboot: %1$s</string>
+    <string name="cfg_setup_wizard_not_started">Not started</string>
+    <string name="cfg_setup_wizard_aborted">Aborted</string>
+    <string name="cfg_setup_wizard_done">Setup complete</string>
+    <string name="cfg_setup_state_pending">Pending</string>
+    <string name="cfg_setup_state_running">Running</string>
+    <string name="cfg_setup_state_waiting">Waiting for you</string>
+    <string name="cfg_setup_state_done">Done</string>
+    <string name="cfg_setup_state_failed">Failed</string>
+    <string name="cfg_setup_state_skipped">Skipped</string>
+    <string name="cfg_setup_start">Start</string>
+    <string name="cfg_setup_continue">Continue</string>
+    <string name="cfg_setup_view_results">Results</string>
+    <string name="cfg_setup_run_step">Run again</string>
+    <string name="cfg_setup_results">Results</string>
+    <string name="cfg_setup_snapshots">Parameter snapshots</string>
+    <string name="cfg_setup_hold_to">Hold: %1$s</string>
+    <string name="cfg_motor_run_agent">Test motors</string>
+    <string name="cfg_setup_direct_title">Setup runs on the vehicle\'s computer</string>
+    <string name="cfg_setup_direct_message">This flight controller is connected straight to the phone. Use Setup › Calibration and Motor test here, or connect through the vehicle\'s computer for the guided setup.</string>
+    <string name="cfg_setup_err_unreachable">The vehicle did not answer. Check the link and try again.</string>
+    <string name="cfg_setup_err_unauthorized">This device is not paired with the vehicle.</string>
+    <string name="cfg_setup_err_unsupported">The vehicle\'s software does not offer guided setup.</string>
+    <string name="cfg_setup_err_armed">Disarm before running setup.</string>
+    <string name="cfg_setup_agent_running">Running on the vehicle</string>
+    <string name="cfg_setup_gyro_agent">Gyro calibration runs with accelerometer calibration on the vehicle</string>
 </resources>
