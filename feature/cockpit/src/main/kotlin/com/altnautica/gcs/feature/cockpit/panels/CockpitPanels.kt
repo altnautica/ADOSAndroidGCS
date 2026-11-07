@@ -1,5 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.panels
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -108,12 +110,13 @@ fun TelemetryStrip(values: StripValues, modifier: Modifier = Modifier, vertical:
     val colors = AdosTheme.colors
     val cell: @Composable (Pair<String, String>) -> Unit = { (label, value) ->
         Column(Modifier.padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = colors.hudMuted)
-            Text(value, style = AdosTypography.numeric.medium, color = colors.hudInk)
+            // Cells never wrap: a squeezed strip scrolls sideways instead of growing tall.
+            Text(label, style = MaterialTheme.typography.labelSmall, color = colors.hudMuted, maxLines = 1, softWrap = false)
+            Text(value, style = AdosTypography.numeric.medium, color = colors.hudInk, maxLines = 1, softWrap = false)
         }
     }
     Surface(modifier, shape = RoundedCornerShape(AdosRadius.Xl), color = colors.hudGlass, border = BorderStroke(1.dp, colors.hudHair)) {
-        if (vertical) Column { items.forEach { cell(it) } } else Row { items.forEach { cell(it) } }
+        if (vertical) Column { items.forEach { cell(it) } } else Row(Modifier.horizontalScroll(rememberScrollState())) { items.forEach { cell(it) } }
     }
 }
 
