@@ -2,7 +2,7 @@ package com.altnautica.gcs.core.map
 
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -113,7 +114,8 @@ fun AdosMap(
 
 /**
  * Non-interactive inset that follows the vehicle and shows home and the live trail.
- * [onClick] (for example swapping the inset with the main view) receives taps.
+ * [onClick] (for example swapping the inset with the main view) receives taps, and
+ * [onLongPress] the map point under a long press.
  */
 @Composable
 fun AdosMinimap(
@@ -125,6 +127,7 @@ fun AdosMinimap(
     overlays: MapOverlays = MapOverlays.Empty,
     zoom: Double = 16.0,
     onClick: (() -> Unit)? = null,
+    onLongPress: ((GeoPoint) -> Unit)? = null,
 ) {
     val state = rememberAdosMapState(initialCenter = vehicle?.position ?: home, initialZoom = zoom)
     val description = stringResource(R.string.map_minimap_description)
@@ -152,8 +155,15 @@ fun AdosMinimap(
                     .padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1),
             )
         }
-        if (onClick != null) {
-            Box(Modifier.fillMaxSize().clickable(onClick = onClick))
+        if (onClick != null || onLongPress != null) {
+            Box(
+                Modifier.fillMaxSize().pointerInput(onClick, onLongPress) {
+                    detectTapGestures(
+                        onTap = onClick?.let { tap -> { tap() } },
+                        onLongPress = onLongPress?.let { press -> { offset -> state.geoAt(offset)?.let(press) } },
+                    )
+                },
+            )
         }
     }
 }

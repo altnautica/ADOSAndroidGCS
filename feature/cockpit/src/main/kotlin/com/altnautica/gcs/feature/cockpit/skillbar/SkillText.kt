@@ -28,6 +28,7 @@ import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.core.skills.builtinLabelRes
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 
 /** Material Symbols Outlined for the skill icon names; extensions fall back to a generic glyph. */
 fun skillIcon(name: String): ImageVector = when (name) {
@@ -98,6 +99,7 @@ private val REASONS = mapOf(
     SkillReason.COMMAND_FAILED to R.string.cockpit_reason_command_failed,
     SkillReason.STATE_ERROR to R.string.cockpit_reason_state_error,
     SkillReason.FLY_HERE_TARGET to R.string.cockpit_reason_fly_here_target,
+    CockpitAutonomy.REASON_NO_TARGET to R.string.cockpit_reason_no_target,
     SkillReason.EKF_SOURCE_SET to R.string.cockpit_reason_ekf_set,
 )
 

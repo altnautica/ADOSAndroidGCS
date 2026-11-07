@@ -5,9 +5,11 @@ import android.os.SystemClock
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.set
 import android.util.Base64
+import android.util.Log
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.nav.AutonomyControlApi
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
+import com.altnautica.gcs.core.demo.DemoFc
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -35,12 +37,13 @@ import kotlin.math.sin
  * and lost (4 s each), the vehicle circles a 16 × 10 m room with a planar scan, and the
  * room's occupancy map is served as live tiles.
  */
-internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
+internal class DemoAutonomy(fc: DemoFc) : AutonomyFeedApi, AutonomyControlApi {
     @Volatile private var reacquireMode = "smart"
 
     private fun t() = SystemClock.elapsedRealtime()
 
-    private val pilot = DemoPilot { t() }
+    /** Owner and input-source changes go to logcat under [PILOT_LOG_TAG], the demo pilot's flight log. */
+    private val pilot = DemoPilot(fc, { Log.i(PILOT_LOG_TAG, it) }) { t() }
 
     /** 0 candidate, 1 tracked, 2 acquiring, 3 following, 4 coasting, 5 searching, 6 re-acquired, 7 lost. */
     private fun step(now: Long) = ((now / STEP_MS) % STEPS).toInt()
@@ -277,6 +280,7 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
     }
 
     private companion object {
+        const val PILOT_LOG_TAG = "DemoPilot"
         const val CAMERA = "main"
         const val FRAME_W = 1280
         const val FRAME_H = 720

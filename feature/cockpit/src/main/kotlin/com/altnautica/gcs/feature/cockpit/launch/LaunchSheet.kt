@@ -14,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
@@ -27,6 +29,7 @@ import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.modes.Segments
+import kotlin.math.cos
 
 /** Hold that starts the launch sequence. */
 const val LAUNCH_HOLD_MS = 1_500
@@ -45,6 +48,21 @@ enum class LaunchWhenDone(val wire: String?) { None(null), Land("land"), Rth("rt
 
 /** A local NED point (metres) chosen on the map for the go-to option. */
 data class NedPoint(val n: Float, val e: Float, val d: Float)
+
+/** Metres per degree of latitude (and of longitude at the equator). */
+private const val METRES_PER_DEG = 111_319.49
+
+/**
+ * The go-to point at [toLat]/[toLon] in the pilot's local NED frame, [altM] above its
+ * origin: the local position ([fromN], [fromE]) of the reference at [fromLat]/[fromLon]
+ * (the vehicle, or home at the origin) plus the map offset from it, flat-earth, which is
+ * exact to centimetres over a launch's few hundred metres.
+ */
+fun launchGotoNed(fromLat: Double, fromLon: Double, fromN: Float, fromE: Float, toLat: Double, toLon: Double, altM: Float): NedPoint {
+    val n = (toLat - fromLat) * METRES_PER_DEG
+    val e = (toLon - fromLon) * METRES_PER_DEG * cos(Math.toRadians(fromLat))
+    return NedPoint(fromN + n.toFloat(), fromE + e.toFloat(), -altM)
+}
 
 /** The launch sheet's choices. */
 data class LaunchDraft(
@@ -123,6 +141,9 @@ fun LaunchSheet(ui: LaunchUi, onDraft: (LaunchDraft) -> Unit, onLaunch: () -> Un
             ) { w -> onDraft(d.copy(after = LaunchAfter.entries.first { it.wire == w })) }
             if (ui.mission != MissionState.Loaded) {
                 Text(specText("flow.launch.mission_needs_loaded"), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+            if (ui.gotoPoint == null) {
+                Text(stringResource(R.string.launch_pick_point_hint), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
             }
             if (d.after == LaunchAfter.Skill) {
                 Segments(

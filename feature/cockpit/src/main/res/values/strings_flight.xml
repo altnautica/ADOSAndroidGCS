@@ -45,6 +45,7 @@
     <string name="grid_card_radar">Show obstacle radar</string>
     <string name="on_screen_stick_left">Left stick: climb, descend and turn</string>
     <string name="on_screen_stick_right">Right stick: forward, back and sideways</string>
+    <string name="launch_pick_point_hint">To go to a map point, close this sheet and long-press the map.</string>
 
     <!-- Pilot channel -->
     <string name="cockpit_pilot_unavailable">The onboard pilot is not reachable.</string>

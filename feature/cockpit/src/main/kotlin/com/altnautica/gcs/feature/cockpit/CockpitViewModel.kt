@@ -21,6 +21,7 @@ import com.altnautica.gcs.core.extensions.data.PerceptionFeed
 import com.altnautica.gcs.core.extensions.skills.ExtensionSkillContributor
 import com.altnautica.gcs.core.extensions.skills.ExtensionTargetActionSkill
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
+import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.model.AvoidMode
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.model.ControlMode
@@ -52,6 +53,7 @@ import com.altnautica.gcs.core.skills.binding.BindingStore
 import com.altnautica.gcs.core.skills.binding.Ds4Bindings
 import com.altnautica.gcs.core.skills.binding.Loadout
 import com.altnautica.gcs.core.skills.builtin.BuiltinIds
+import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
 import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
@@ -82,7 +84,10 @@ import com.altnautica.gcs.feature.cockpit.input.CockpitAction
 import com.altnautica.gcs.feature.cockpit.input.CockpitInputMapper
 import com.altnautica.gcs.feature.cockpit.launch.LaunchDraft
 import com.altnautica.gcs.feature.cockpit.launch.LaunchUi
+import com.altnautica.gcs.feature.cockpit.launch.LaunchAfter
+import com.altnautica.gcs.feature.cockpit.launch.NedPoint
 import com.altnautica.gcs.feature.cockpit.launch.launchArgs
+import com.altnautica.gcs.feature.cockpit.launch.launchGotoNed
 import com.altnautica.gcs.feature.cockpit.manual.CockpitStickController
 import com.altnautica.gcs.feature.cockpit.modes.ModePickerUi
 import com.altnautica.gcs.feature.cockpit.modes.ModeSheetActions
@@ -540,13 +545,16 @@ class CockpitViewModel @AssistedInject constructor(
 
     private val launchDraft = MutableStateFlow(LaunchDraft())
 
-    val launch: StateFlow<LaunchUi?> = combine(overlays.launch, launchDraft, session.pickerSkills, pilot.state) { open, draft, skills, p ->
+    /** The map point a long-press picked for the launch's go-to option. */
+    private val launchPoint = MutableStateFlow<GeoPoint?>(null)
+
+    val launch: StateFlow<LaunchUi?> = combine(overlays.launch, launchDraft, session.pickerSkills, pilot.state, launchPoint) { open, draft, skills, p, point ->
         if (!open) return@combine null
         LaunchUi(
             draft = draft,
             skills = skills.filter { it.category == SkillCategory.Behavior && it.motion },
             mission = p?.mission?.state,
-            gotoPoint = null,
+            gotoPoint = gotoNed(point, draft.altM),
             vehicleClass = p?.vehicleClass,
             sequence = p?.sequence,
         )
@@ -560,9 +568,40 @@ class CockpitViewModel @AssistedInject constructor(
         launchDraft.value = draft
     }
 
+    /**
+     * A long-press on the map. On the ground it picks the Launch sheet's go-to point and
+     * opens the sheet on that option; in the air it flies there at the current height
+     * (fly-here, behind its hold confirm).
+     */
+    fun pickMapPoint(point: GeoPoint) {
+        val airborne = pilot.state.value?.let { it.armed && !it.landed } ?: (vehicle.value?.telemetry?.heartbeat?.value?.armed == true)
+        if (airborne) {
+            val alt = telemetry.value?.position?.value?.altRelM ?: return
+            activate(FlyHereSkill.id, mapOf(SkillArgs.LAT to point.latDeg, SkillArgs.LON to point.lonDeg, SkillArgs.ALTITUDE_M to alt))
+            return
+        }
+        launchPoint.value = point
+        launchDraft.update { it.copy(after = LaunchAfter.Goto) }
+        overlays.launch.value = true
+    }
+
+    /** [point] in the pilot's local frame at [altM] above it: from the vehicle's local position, else from home. */
+    private fun gotoNed(point: GeoPoint?, altM: Float): NedPoint? {
+        if (point == null) return null
+        val t = telemetry.value ?: return null
+        val local = t.localPosition.value
+        val fix = t.position.value
+        if (local != null && fix != null) {
+            return launchGotoNed(fix.latDeg, fix.lonDeg, local.northM, local.eastM, point.latDeg, point.lonDeg, altM)
+        }
+        val home = t.home.value ?: return null
+        return launchGotoNed(home.latDeg, home.lonDeg, 0f, 0f, point.latDeg, point.lonDeg, altM)
+    }
+
     /** Sends the launch sequence from the sheet's choices, behind the first-arm checklist. */
     fun launchNow() {
-        val args = launchArgs(launchDraft.value, session.pickerSkills.value, null) ?: return
+        val draft = launchDraft.value
+        val args = launchArgs(draft, session.pickerSkills.value, gotoNed(launchPoint.value, draft.altM)) ?: return
         if (!armGate.request(ArmRequest.Launch(args))) {
             overlays.preflight.value = true
             _armGateOpen.value = true
@@ -681,6 +720,11 @@ class CockpitViewModel @AssistedInject constructor(
         // A banner past its vehicle time is dropped by the pilot; the local cap keeps a stale frame from pinning it.
         if (p != null && clock.nowMs() - p.receivedAtMs > PilotState.STALE_MS) f.copy(banner = null, gateProgress = null) else f
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlowUi())
+
+    private val _paramNudges = MutableSharedFlow<Int>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** D-pad ↑/↓ with the skill picker open: steps for the focused parameter of the open Tweak panel. */
+    val paramNudges: SharedFlow<Int> = _paramNudges.asSharedFlow()
 
     /** The controller hold in progress (arm, kill, RTH, take-off), for the hold ring. */
     private val _hold = MutableStateFlow<ControllerHold?>(null)
@@ -863,14 +907,14 @@ class CockpitViewModel @AssistedInject constructor(
             }
             CockpitControllerAction.SkillStop -> stopOrBack()
             is CockpitControllerAction.PickerFocus -> if (overlays.picker.value) movePickerFocus(a.delta)
-            is CockpitControllerAction.ParamAdjust -> if (overlays.picker.value) movePickerFocus(a.delta)
+            is CockpitControllerAction.ParamAdjust -> if (overlays.picker.value) _paramNudges.tryEmit(a.delta)
             is CockpitControllerAction.LayerLevel -> autonomy.layers.cycleLevel(a.delta)
             is CockpitControllerAction.ProfileCycle -> {
                 val profiles = PilotProfile.entries
                 val at = profiles.indexOf(pilot.state.value?.profile ?: PilotProfile.Normal)
                 pilotAction(PilotAction.profile(profiles[(at + a.delta).mod(profiles.size)]))
             }
-            CockpitControllerAction.Designate -> Unit // The touchpad pointer drives the on-video designator.
+            CockpitControllerAction.Designate -> autonomy.designateCentre(autonomy.mainCamera())
             CockpitControllerAction.Photo -> runCommand(VehicleCommand.CapturePhoto)
             CockpitControllerAction.RecordToggle -> toggleRecording()
             is CockpitControllerAction.Zoom -> runCommand(VehicleCommand.CameraZoom(a.step))

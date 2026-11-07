@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.cockpit
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -9,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -53,6 +56,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
@@ -115,16 +119,6 @@ private object Z {
 
 private val WIDGET_ZONES = listOf("top-left", "top-right", "bottom-left", "bottom-right")
 
-/** Per-class sizes of the cockpit grid (layout.json `classes`). */
-private data class GridSizes(val column: Dp, val shutter: Dp, val card: Pair<Dp, Dp>?, val chipCard: Dp?, val scale: Float)
-
-private fun gridSizes(width: WidthClass): GridSizes = when (width) {
-    WidthClass.Compact -> GridSizes(48.dp, 56.dp, null, 96.dp, 1f)
-    WidthClass.Medium -> GridSizes(56.dp, 56.dp, 200.dp to 140.dp, null, 1f)
-    WidthClass.Expanded -> GridSizes(56.dp, 56.dp, 280.dp to 180.dp, null, 1f)
-    WidthClass.Tv -> GridSizes(56.dp * 1.33f, 56.dp * 1.33f, 280.dp * 1.33f to 180.dp * 1.33f, null, 1.33f)
-}
-
 /**
  * The cockpit grid. Landscape: the top bar (flight-state chip, status, battery, link, nav
  * source, controller, layers, settings), the left column (take off or land, return home,
@@ -185,13 +179,17 @@ private fun LandscapeGrid(vm: CockpitViewModel, width: WidthClass, onExit: () ->
     val view by vm.view.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val onScreen by vm.onScreenSticksEnabled.collectAsStateWithLifecycle()
+    val canRecord by vm.canRecord.collectAsStateWithLifecycle()
     val sizes = gridSizes(width)
     val sticksShown = onScreen && (width == WidthClass.Compact || width == WidthClass.Expanded)
     val inward = if (sticksShown) ON_SCREEN_PAD + AdosSpacing.S4 else 0.dp
     Column(Modifier.fillMaxSize()) {
         TopBar(vm, width, onExit, Modifier.zIndex(Z.BAND))
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            MainView(vm, view, settings.splitRatio, Modifier.fillMaxSize())
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val fit = gridFit(maxHeight, sizes, canRecord)
+            // The HUD is the centre zone: between the columns, so their buttons never cover its tapes.
+            val hudInset = PaddingValues(start = GridEdge * 2 + sizes.leftButton, end = GridEdge * 2 + sizes.rightWidth)
+            MainView(vm, view, settings.splitRatio, hudInset, Modifier.fillMaxSize())
             Column(Modifier.align(Alignment.TopCenter).padding(top = AdosSpacing.S2).zIndex(Z.ALERTS), horizontalAlignment = Alignment.CenterHorizontally) {
                 Tabs(vm)
                 Alerts(vm, Modifier.padding(top = AdosSpacing.S2))
@@ -200,11 +198,22 @@ private fun LandscapeGrid(vm: CockpitViewModel, width: WidthClass, onExit: () ->
             CentreRings(vm, Modifier.align(Alignment.Center).zIndex(Z.ALERTS))
             WidgetZones(vm, Modifier.fillMaxSize().padding(horizontal = sizes.column + AdosSpacing.S4, vertical = 72.dp).zIndex(Z.ZONES))
             FollowChrome(vm, width, topInset = 0.dp, modifier = Modifier.zIndex(Z.ZONES))
-            LeftColumn(vm, sizes, Modifier.align(Alignment.CenterStart).padding(start = AdosSpacing.S2).zIndex(Z.CONTROLS))
-            RightColumn(vm, sizes, Modifier.align(Alignment.CenterEnd).padding(end = AdosSpacing.S2).zIndex(Z.CONTROLS))
-            BottomLeftCard(vm, width, sizes, Modifier.align(Alignment.BottomStart).padding(start = AdosSpacing.S2 + inward, bottom = AdosSpacing.S2).zIndex(Z.ZONES))
-            Strip(vm, Modifier.align(Alignment.BottomCenter).padding(bottom = AdosSpacing.S2).zIndex(Z.CONTROLS))
-            PickerChip(vm, Modifier.align(Alignment.BottomEnd).padding(end = AdosSpacing.S2 + inward, bottom = AdosSpacing.S2).zIndex(Z.CONTROLS))
+            Box(Modifier.fillMaxHeight().padding(start = GridEdge, top = GridEdge, bottom = fit.leftBottom).zIndex(Z.CONTROLS)) {
+                LeftColumn(vm, sizes, Modifier.align(Alignment.CenterStart))
+            }
+            Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(end = GridEdge, top = GridEdge, bottom = fit.rightBottom).zIndex(Z.CONTROLS)) {
+                RightColumn(vm, sizes.shutter, fit.rightButton, fit.cameraSettingsInColumn, Modifier.align(Alignment.CenterEnd))
+            }
+            // Bottom row: the card, the telemetry row between it and the picker chip, the chip.
+            Row(
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = GridEdge + inward, end = GridEdge + inward, bottom = GridEdge).zIndex(Z.CONTROLS),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
+            ) {
+                BottomLeftCard(vm, width, fit)
+                Box(Modifier.weight(1f), contentAlignment = Alignment.BottomCenter) { Strip(vm) }
+                PickerChip(vm)
+            }
             if (sticksShown) OnScreenSticksRow(vm, Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(AdosSpacing.S2).zIndex(Z.CONTROLS))
         }
     }
@@ -212,9 +221,10 @@ private fun LandscapeGrid(vm: CockpitViewModel, width: WidthClass, onExit: () ->
 
 /** The main view: video, map with video picture-in-picture, the two side by side, or video with the vision panel. */
 @Composable
-private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float, modifier: Modifier) {
+private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float, hudInset: PaddingValues, modifier: Modifier) {
+    val startOnly = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr))
     when (view) {
-        CockpitView.Pilot -> VideoStage(vm, modifier)
+        CockpitView.Pilot -> VideoStage(vm, modifier, hudInset = hudInset)
         CockpitView.Map -> Box(modifier) {
             Minimap(vm, Modifier.fillMaxSize())
             Box(
@@ -228,9 +238,9 @@ private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float,
                 VideoStage(vm, Modifier.fillMaxSize(), showHud = false, showLayers = false)
             }
         }
-        CockpitView.Split -> SplitView(vm, savedRatio, modifier)
+        CockpitView.Split -> SplitView(vm, savedRatio, startOnly, modifier)
         CockpitView.Vision -> Row(modifier) {
-            VideoStage(vm, Modifier.weight(1f).fillMaxHeight())
+            VideoStage(vm, Modifier.weight(1f).fillMaxHeight(), hudInset = startOnly)
             val video by vm.video.collectAsStateWithLifecycle()
             VisionSidePanel(vm, vm.autonomy.mainCamera(video), Modifier.width(320.dp).fillMaxHeight())
         }
@@ -238,13 +248,13 @@ private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float,
 }
 
 @Composable
-private fun SplitView(vm: CockpitViewModel, savedRatio: Float, modifier: Modifier) {
+private fun SplitView(vm: CockpitViewModel, savedRatio: Float, hudInset: PaddingValues, modifier: Modifier) {
     var ratio by remember(savedRatio) { mutableFloatStateOf(savedRatio) }
     val splitLabel = stringResource(R.string.cockpit_split_divider)
     BoxWithConstraints(modifier) {
         val total = constraints.maxWidth.toFloat()
         Row(Modifier.fillMaxSize()) {
-            VideoStage(vm, Modifier.weight(ratio).fillMaxHeight())
+            VideoStage(vm, Modifier.weight(ratio).fillMaxHeight(), hudInset = hudInset)
             Box(
                 Modifier
                     .width(12.dp)
@@ -297,14 +307,23 @@ private fun PortraitLayout(vm: CockpitViewModel, width: WidthClass, onExit: () -
 
 /** A round grid button: icon, label for accessibility, 48 dp minimum. */
 @Composable
-private fun GridButton(icon: ImageVector, label: String, size: Dp, tag: String, onClick: () -> Unit, active: Boolean = false) {
+private fun GridButton(
+    icon: ImageVector,
+    label: String,
+    size: Dp,
+    tag: String,
+    onClick: () -> Unit,
+    active: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
+) {
     val colors = AdosTheme.colors
     Box(
         Modifier
             .size(size)
             .clip(CircleShape)
             .background(if (active) colors.accentPrimary else colors.hudGlass)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onClick)
+            .combinedClickable(onClickLabel = label, role = Role.Button, onLongClickLabel = longClickLabel, onLongClick = onLongClick, onClick = onClick)
             .semantics { contentDescription = label }
             .testTag(tag),
         contentAlignment = Alignment.Center,
@@ -332,41 +351,57 @@ private fun FlightActions(vm: CockpitViewModel, size: Dp) {
 @Composable
 private fun LeftColumn(vm: CockpitViewModel, sizes: GridSizes, modifier: Modifier) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3), horizontalAlignment = Alignment.CenterHorizontally) {
-        FlightActions(vm, maxOf(sizes.column, 56.dp))
+        FlightActions(vm, sizes.leftButton)
     }
 }
 
+/** The right column; without room for every button, camera settings move to zoom-in's long-press. */
 @Composable
-private fun RightColumn(vm: CockpitViewModel, sizes: GridSizes, modifier: Modifier) {
+private fun RightColumn(vm: CockpitViewModel, shutter: Dp, button: Dp, cameraSettings: Boolean, modifier: Modifier) {
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
+    val openSettings = { vm.setQuickSettings(true) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2), horizontalAlignment = Alignment.CenterHorizontally) {
-        GridButton(Icons.Outlined.ZoomIn, stringResource(R.string.grid_zoom_in), sizes.column, "grid-zoom-in", vm::zoomIn)
-        GridButton(Icons.Outlined.PhotoCamera, stringResource(R.string.grid_shutter), sizes.shutter, "grid-shutter", vm::capturePhoto)
+        GridButton(
+            Icons.Outlined.ZoomIn,
+            stringResource(R.string.grid_zoom_in),
+            button,
+            "grid-zoom-in",
+            vm::zoomIn,
+            onLongClick = if (cameraSettings) null else openSettings,
+            longClickLabel = if (cameraSettings) null else stringResource(R.string.grid_camera_settings),
+        )
+        GridButton(Icons.Outlined.PhotoCamera, stringResource(R.string.grid_shutter), shutter, "grid-shutter", vm::capturePhoto)
         if (canRecord) {
-            GridButton(Icons.Outlined.FiberManualRecord, stringResource(R.string.grid_record), sizes.column, "grid-record", vm::toggleRecording, active = recording)
+            GridButton(Icons.Outlined.FiberManualRecord, stringResource(R.string.grid_record), button, "grid-record", vm::toggleRecording, active = recording)
         }
-        GridButton(Icons.Outlined.ZoomOut, stringResource(R.string.grid_zoom_out), sizes.column, "grid-zoom-out", vm::zoomOut)
-        GridButton(Icons.Outlined.CenterFocusStrong, stringResource(R.string.grid_gimbal_recenter), sizes.column, "grid-gimbal", vm::recenterGimbal)
-        GridButton(Icons.Outlined.Tune, stringResource(R.string.grid_camera_settings), sizes.column, "grid-camera-settings", { vm.setQuickSettings(true) })
+        GridButton(Icons.Outlined.ZoomOut, stringResource(R.string.grid_zoom_out), button, "grid-zoom-out", vm::zoomOut)
+        GridButton(Icons.Outlined.CenterFocusStrong, stringResource(R.string.grid_gimbal_recenter), button, "grid-gimbal", vm::recenterGimbal)
+        if (cameraSettings) {
+            GridButton(Icons.Outlined.Tune, stringResource(R.string.grid_camera_settings), button, "grid-camera-settings", openSettings)
+        }
     }
 }
 
-/** The bottom-left card: the map or the radar, switched by tapping its toggle (or L3 swaps video and map). */
+/**
+ * The bottom-left card: the map or the radar, switched by tapping its toggle (or L3 swaps video
+ * and map). Where it is too short for a card ([GridFit.card] null) it is the square map chip.
+ * A long-press on the map picks the Launch sheet's map point.
+ */
 @Composable
-private fun BottomLeftCard(vm: CockpitViewModel, width: WidthClass, sizes: GridSizes, modifier: Modifier) {
+private fun BottomLeftCard(vm: CockpitViewModel, width: WidthClass, fit: GridFit) {
     var radar by rememberSaveable { mutableStateOf(false) }
-    val chip = sizes.chipCard
     val shape = RoundedCornerShape(AdosRadius.Xl)
-    if (chip != null) {
-        // Compact: a 96 dp chip; tapping it swaps video and map.
-        Box(modifier.size(chip).clip(shape)) {
+    val card = fit.card
+    if (card == null) {
+        // A chip; tapping it swaps video and map.
+        Box(Modifier.size(fit.chip).clip(shape).testTag("grid-card")) {
             Minimap(vm, Modifier.fillMaxSize(), onClick = vm::toggleMinimapSwap)
         }
         return
     }
-    val (w, h) = sizes.card ?: return
-    Box(modifier.size(width = w, height = h).clip(shape).background(AdosTheme.colors.hudGlass)) {
+    val (w, h) = card
+    Box(Modifier.size(width = w, height = h).clip(shape).background(AdosTheme.colors.hudGlass).testTag("grid-card")) {
         if (radar) {
             Radar(vm, width, Modifier.align(Alignment.Center))
         } else {
@@ -444,7 +479,13 @@ private fun GateRingProgress(progress: Float) {
 
 /** Video, extension overlay, marks, data layers and HUD. */
 @Composable
-private fun VideoStage(vm: CockpitViewModel, modifier: Modifier, showHud: Boolean = true, showLayers: Boolean = true) {
+private fun VideoStage(
+    vm: CockpitViewModel,
+    modifier: Modifier,
+    showHud: Boolean = true,
+    showLayers: Boolean = true,
+    hudInset: PaddingValues = PaddingValues(),
+) {
     val video by vm.video.collectAsStateWithLifecycle()
     val videoState by vm.videoState.collectAsStateWithLifecycle()
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
@@ -476,7 +517,7 @@ private fun VideoStage(vm: CockpitViewModel, modifier: Modifier, showHud: Boolea
                 telemetry = telemetry,
                 altitudeReference = settings.altitudeReference,
                 density = settings.density,
-                modifier = Modifier.fillMaxSize().zIndex(Z.HUD),
+                modifier = Modifier.fillMaxSize().padding(hudInset).zIndex(Z.HUD),
             )
         }
         Pip(vm, Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp).zIndex(Z.PIP))
@@ -494,7 +535,8 @@ private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Un
         return
     }
     Box(modifier) {
-        AdosMinimap(state.vehicle, state.home, state.trail, Modifier.fillMaxSize(), zoom = MINIMAP_ZOOM, onClick = onClick)
+        // A long-press anywhere on a cockpit map picks a point: the launch go-to on the ground, fly-here in the air.
+        AdosMinimap(state.vehicle, state.home, state.trail, Modifier.fillMaxSize(), zoom = MINIMAP_ZOOM, onClick = onClick, onLongPress = vm::pickMapPoint)
         extNode?.let { node ->
             val center = state.vehicle?.position
             ExtensionSlotHost(
@@ -567,7 +609,7 @@ private fun SkillTweak(vm: CockpitViewModel, skill: Skill) {
     val src = skill.source as? SkillSource.Extension ?: return
     val params by vm.autonomy.pluginParameters(src.pluginId, skill.params).collectAsStateWithLifecycle(emptyList())
     if (params.isEmpty()) return
-    ExtensionParametersPanel(node, src.pluginId, params, Modifier.fillMaxWidth(), sectionKey = "tweak:${skill.id}")
+    ExtensionParametersPanel(node, src.pluginId, params, Modifier.fillMaxWidth(), sectionKey = "tweak:${skill.id}", nudges = vm.paramNudges)
 }
 
 /** Quick settings and the sheets, all drawn in the cockpit window above the flight surface (z 50). */

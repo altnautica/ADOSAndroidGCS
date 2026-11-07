@@ -72,6 +72,12 @@ class AdosMapState(initialCenter: GeoPoint?, initialZoom: Double) {
         return Offset(p.x, p.y)
     }
 
+    /** The map point under [offset] (pixels from the map's top-left corner); null until ready. */
+    fun geoAt(offset: Offset): GeoPoint? {
+        val p = map?.projection?.fromScreenLocation(PointF(offset.x, offset.y)) ?: return null
+        return GeoPoint(p.latitude, p.longitude)
+    }
+
     fun centerOn(point: GeoPoint, zoom: Double? = null, animate: Boolean = true) = run { map ->
         val update = if (zoom != null) {
             CameraUpdateFactory.newLatLngZoom(point.toLatLng(), zoom)

@@ -4,6 +4,7 @@ import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.capture.CaptureApi
 import com.altnautica.gcs.core.agent.capture.CaptureExposure
 import com.altnautica.gcs.core.demo.DemoIds
+import com.altnautica.gcs.core.demo.DemoVehicleHub
 import com.altnautica.gcs.core.demo.node.DemoNodeApis
 import com.altnautica.gcs.core.agent.capture.CaptureMarkResponse
 import com.altnautica.gcs.core.agent.capture.CaptureSessions
@@ -260,7 +261,7 @@ class VisorViewModelTest {
     @Test
     fun inProcessNodeCameraChipsSwitchThePreview() = runTest(dispatcher) {
         val demo = DemoIds.VISOR
-        val localApis = NodeApis(mockk(), mockk(), setOf(DemoNodeApis()))
+        val localApis = NodeApis(mockk(), mockk(), setOf(DemoNodeApis(DemoVehicleHub())))
         val endpoints = mockk<AgentEndpoints>(relaxed = true)
         val vm = VisorViewModel(demo.value, localApis, endpoints)
         vm.resolvePreview()

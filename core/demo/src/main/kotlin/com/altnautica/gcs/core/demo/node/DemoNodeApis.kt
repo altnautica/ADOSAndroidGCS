@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.demo.DemoIds
+import com.altnautica.gcs.core.demo.DemoVehicleHub
 import com.altnautica.gcs.core.demo.video.DemoVideoFactory
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.VideoSource
@@ -13,11 +14,11 @@ import javax.inject.Singleton
 
 /** Serves the demo Visor's capture and sensor pages and the demo ground station's sensors. */
 @Singleton
-class DemoNodeApis @Inject constructor() : LocalNodeApis {
+class DemoNodeApis @Inject constructor(private val hub: DemoVehicleHub) : LocalNodeApis {
     private val capture by lazy { DemoCaptureApi() }
     private val visorSensors by lazy { DemoVisorSensors() }
     private val groundSensors by lazy { DemoGroundSensors() }
-    private val autonomy by lazy { DemoAutonomy() }
+    private val autonomy by lazy { DemoAutonomy(hub) }
 
     override fun handles(id: DeviceId): Boolean = id == DemoIds.VISOR || id == DemoIds.GROUND
 

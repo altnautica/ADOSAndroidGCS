@@ -240,7 +240,25 @@ internal class CockpitAutonomy(
 
     /** Locks [item]'s detection on [cameraId]: `POST /api/vision/designate` with its frame-px box. */
     fun lock(item: DrawItem, cameraId: String) {
-        val d = item.detection ?: return
+        item.detection?.let { lockDetection(it, cameraId) }
+    }
+
+    /**
+     * The controller's designate (touchpad click): locks the detection under the centre
+     * reticle of [cameraId]'s latest batch, else the one nearest it. With nothing detected
+     * it says so rather than doing nothing.
+     */
+    fun designateCentre(cameraId: String) {
+        val batch = feed.batches.value[cameraId]
+        val d = batch?.let { centreDetection(it) }
+        if (d == null) {
+            events.tryEmit(CockpitEvent.TargetRefused(REASON_NO_TARGET))
+            return
+        }
+        lockDetection(d, cameraId)
+    }
+
+    private fun lockDetection(d: Detection, cameraId: String) {
         scope.launch {
             val body = buildJsonObject {
                 put("camera_id", cameraId)
@@ -405,6 +423,18 @@ internal class CockpitAutonomy(
         const val GHOST_MAX = 30
         const val LEGS_RETRY_MS = 10_000L
         const val REASON_REFUSED = "commandRejected"
+
+        /** Designate found no detection in view. */
+        const val REASON_NO_TARGET = "noTargetInView"
+
+        /** The detection whose box holds the frame centre (the smallest, if several), else the nearest box centre. */
+        fun centreDetection(batch: DetectionBatch): Detection? {
+            val cx = batch.frameWidth / 2
+            val cy = batch.frameHeight / 2
+            val under = batch.items.filter { cx in it.box.x..it.box.right && cy in it.box.y..it.box.bottom }
+            if (under.isNotEmpty()) return under.minBy { it.box.w * it.box.h }
+            return batch.items.minByOrNull { (it.box.cx - cx) * (it.box.cx - cx) + (it.box.cy - cy) * (it.box.cy - cy) }
+        }
         private val MIRRORED_PHASES = setOf(FollowPhase.Acquiring, FollowPhase.Following, FollowPhase.Coasting, FollowPhase.Searching, FollowPhase.Holding)
 
         fun fixType(f: GpsFix): Int = when (f) {

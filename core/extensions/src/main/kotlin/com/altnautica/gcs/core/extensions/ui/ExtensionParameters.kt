@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.extensions.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -43,10 +45,13 @@ import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Native renderer for an extension's declared parameters, with read-back from the node.
- * Values are validated here and again by the agent on write.
+ * Values are validated here and again by the agent on write. Each value of [nudges] steps
+ * the focused numeric parameter (the first one when none holds focus) by that many steps:
+ * a controller's D-pad adjusts it while the panel is open.
  */
 @Composable
 fun ExtensionParametersPanel(
@@ -56,12 +61,15 @@ fun ExtensionParametersPanel(
     modifier: Modifier = Modifier,
     sectionKey: String = "parameters",
     onWriteError: (String) -> Unit = {},
+    nudges: Flow<Int>? = null,
 ) {
     val vm: ExtensionParametersViewModel = hiltViewModel(key = "extension-params:${node.value}:$pluginId:$sectionKey")
     LaunchedEffect(vm, node, pluginId, parameters) { vm.start(node, pluginId, parameters) }
     LaunchedEffect(vm) { vm.writeErrors.collect { onWriteError(it.message) } }
+    val focused = remember { mutableStateOf<String?>(null) }
+    if (nudges != null) LaunchedEffect(vm, nudges) { nudges.collect { vm.nudge(focused.value, it) } }
     val state by vm.state.collectAsStateWithLifecycle()
-    ParametersContent(state, onCommit = vm::commit, modifier = modifier)
+    ParametersContent(state, onCommit = vm::commit, modifier = modifier, onFocused = { focused.value = it })
 }
 
 @Composable
@@ -69,6 +77,7 @@ internal fun ParametersContent(
     state: ParametersUiState,
     onCommit: (PluginParameter, JsonPrimitive) -> Unit,
     modifier: Modifier = Modifier,
+    onFocused: (String) -> Unit = {},
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (state.groups.isEmpty()) {
@@ -79,7 +88,9 @@ internal fun ParametersContent(
             if (visible.isEmpty()) continue
             g.title?.let { SectionHeader(displayLabel(it, it)) }
             for (p in visible) {
-                ParameterControl(p, state, onCommit)
+                Box(Modifier.onFocusChanged { if (it.hasFocus) onFocused(p.key) }) {
+                    ParameterControl(p, state, onCommit)
+                }
             }
         }
     }

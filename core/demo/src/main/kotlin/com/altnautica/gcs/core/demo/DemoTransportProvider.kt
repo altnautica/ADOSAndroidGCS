@@ -11,13 +11,13 @@ import kotlinx.coroutines.Dispatchers
 
 /** Opens the in-process simulated vehicle for the demo drone. */
 @Singleton
-class DemoTransportProvider @Inject constructor() : TransportProvider {
+class DemoTransportProvider @Inject constructor(private val hub: DemoVehicleHub) : TransportProvider {
 
     override fun supports(node: NodeSummary, reach: Reach): Boolean =
         reach == Reach.DirectFc && node.id == DemoIds.DRONE
 
     override suspend fun open(node: NodeSummary, reach: Reach): MavlinkByteTransport {
         require(supports(node, reach)) { "Not the demo vehicle: ${node.id.value}" }
-        return DemoTransport(Dispatchers.Default)
+        return DemoTransport(Dispatchers.Default).also(hub::attach)
     }
 }

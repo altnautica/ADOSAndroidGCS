@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import kotlin.math.roundToLong
 import javax.inject.Inject
 
 /** One rendered group of parameters (declaration order within `ui.order`). */
@@ -120,7 +122,30 @@ class ExtensionParametersViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Steps a numeric parameter by [steps] of its schema step (else a twentieth of its range,
+     * else 1): [key] when it is a visible numeric parameter, else the first one. This is the
+     * controller's D-pad adjustment; the write goes through [commit], which clamps.
+     */
+    fun nudge(key: String?, steps: Int) {
+        val s = _state.value
+        val numeric = s.groups.flatMap { it.items }.filter { p ->
+            s.isVisible(p) && p.binding == ParameterBinding.PluginConfig &&
+                (p.schema.type == ParameterType.Number || p.schema.type == ParameterType.Integer) && p.schema.enum == null
+        }
+        val p = numeric.firstOrNull { it.key == key } ?: numeric.firstOrNull() ?: return
+        val schema = p.schema
+        val current = s.values[p.key]?.doubleOrNull ?: schema.default?.doubleOrNull ?: schema.minimum ?: 0.0
+        val range = if (schema.minimum != null && schema.maximum != null) schema.maximum - schema.minimum else null
+        val step = schema.step ?: range?.div(NUDGE_FRACTION)?.takeIf { it > 0 } ?: 1.0
+        val next = current + steps * step
+        commit(p, if (schema.type == ParameterType.Integer) JsonPrimitive(next.roundToLong()) else JsonPrimitive(next))
+    }
+
     companion object {
+        /** Range divisions per D-pad step for a parameter without a schema step. */
+        private const val NUDGE_FRACTION = 20.0
+
         /** Group by `ui.group` in first-appearance order; sort by `ui.order`, then declaration. */
         fun group(parameters: List<PluginParameter>): List<ParameterGroup> {
             val order = LinkedHashMap<String?, MutableList<IndexedValue<PluginParameter>>>()
