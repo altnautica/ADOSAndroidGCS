@@ -22,6 +22,13 @@ class DemoSettings @Inject constructor(
         dataStore.edit { it[ENABLED] = enabled }
     }
 
+    /** The demo pod stops reporting one skill's state, so its slot goes stale ("last seen"). */
+    val staleSkill: Flow<Boolean> = dataStore.data.map { it[STALE_SKILL] ?: false }.distinctUntilChanged()
+
+    suspend fun setStaleSkill(stale: Boolean) {
+        dataStore.edit { it[STALE_SKILL] = stale }
+    }
+
     /** Turns demo mode on and returns the demo vehicle to open. */
     suspend fun enable(): DeviceId {
         setEnabled(true)
@@ -31,5 +38,6 @@ class DemoSettings @Inject constructor(
     private companion object {
         // Key kept from the earlier direct-link setting so a stored choice survives.
         val ENABLED = booleanPreferencesKey("direct_link_demo_enabled")
+        val STALE_SKILL = booleanPreferencesKey("demo_stale_skill")
     }
 }

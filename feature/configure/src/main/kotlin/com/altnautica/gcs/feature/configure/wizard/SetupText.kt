@@ -28,6 +28,21 @@ object SetupTextModule {
         SetupText { key, args -> spec.setupStrings.format(key, args) }
 }
 
+/** The label of [key]: the key itself when the strings have it, else [prefix] + [key], else the bare key. */
+fun SetupText.label(key: String, prefix: String, args: Map<String, String> = emptyMap()): String {
+    val direct = format(key, args)
+    if (direct != key) return direct
+    val prefixed = prefix + key
+    return format(prefixed, args).takeIf { it != prefixed } ?: key
+}
+
+/** A live or result value as text; a string value that is itself a setup key (`setup.question.…`) resolves to its string. */
+fun SetupText.value(v: JsonElement, args: Map<String, String> = emptyMap()): String {
+    val p = v as? JsonPrimitive
+    if (p != null && p.isString && p.content.startsWith("setup.")) return format(p.content, args)
+    return v.displayText()
+}
+
 /** A JSON value as display text: strings bare, numbers trimmed to at most two decimals. */
 fun JsonElement.displayText(): String = when (this) {
     JsonNull -> "–"

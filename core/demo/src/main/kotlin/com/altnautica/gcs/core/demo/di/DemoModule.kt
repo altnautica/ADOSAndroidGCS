@@ -4,8 +4,10 @@ import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.demo.DemoNodeSource
 import com.altnautica.gcs.core.demo.DemoTransportProvider
 import com.altnautica.gcs.core.demo.node.DemoNodeApis
+import com.altnautica.gcs.core.demo.skills.DemoPodSkills
 import com.altnautica.gcs.core.demo.video.DemoVideoFactory
 import com.altnautica.gcs.core.model.NodeSource
+import com.altnautica.gcs.core.model.SkillContributor
 import com.altnautica.gcs.core.model.TransportProvider
 import com.altnautica.gcs.core.video.VideoSourceFactory
 import dagger.Binds
@@ -34,4 +36,8 @@ abstract class DemoModule {
     @Binds
     @IntoSet
     abstract fun nodeApis(apis: DemoNodeApis): LocalNodeApis
+
+    @Binds
+    @IntoSet
+    abstract fun podSkills(skills: DemoPodSkills): SkillContributor
 }

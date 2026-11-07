@@ -55,6 +55,8 @@
     <string name="settings_phone_radio_summary">Radio adapter, receive keys and link statistics</string>
     <string name="settings_demo">Demo drone</string>
     <string name="settings_demo_summary">Show a simulated drone in the fleet</string>
+    <string name="settings_demo_stale_skill">Demo pod: stale skill state</string>
+    <string name="settings_demo_stale_skill_summary">The demo pod stops reporting its Record skill, so the slot dims and shows when it was last seen</string>
     <string name="settings_endpoints">Saved endpoints</string>
     <string name="settings_endpoints_none">No saved UDP or TCP endpoints.</string>
     <string name="settings_endpoint_remove">Remove %1$s</string>

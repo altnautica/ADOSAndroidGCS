@@ -133,7 +133,7 @@ fun ControlsScreen(
             pressedLabel = "pressed",
             conflictLabel = "conflict",
             onHotspot = { id -> if (state.press != null) actions.pressedOnScreen(id) else actions.openControl(id) },
-            modifier = Modifier.widthIn(max = 720.dp).align(Alignment.CenterHorizontally),
+            modifier = Modifier.widthIn(max = 800.dp).align(Alignment.CenterHorizontally),
         )
         if (state.conflicts.isNotEmpty()) {
             Text(t("controls.conflict"), color = AdosTheme.colors.statusError, modifier = Modifier.testTag("controls-conflict"))

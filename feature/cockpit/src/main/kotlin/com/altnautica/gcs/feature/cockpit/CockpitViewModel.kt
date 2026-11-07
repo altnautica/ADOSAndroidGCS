@@ -610,7 +610,14 @@ class CockpitViewModel @AssistedInject constructor(
         sendLaunch(args)
     }
 
-    private fun sendLaunch(args: Map<String, Any?>) = pilotAction(PilotAction(PilotAction.LAUNCH, args))
+    /**
+     * Sends the launch and closes the Launch sheet: left open, its armed "Hold to launch"
+     * stayed live through the flight and the stale sheet state carried past the landing.
+     */
+    private fun sendLaunch(args: Map<String, Any?>) {
+        overlays.launch.value = false
+        pilotAction(PilotAction(PilotAction.LAUNCH, args))
+    }
 
     /** Cancels the low-battery return countdown. */
     fun cancelRthCountdown() = pilotAction(PilotAction(PilotAction.RTH_CANCEL))

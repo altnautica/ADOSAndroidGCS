@@ -208,6 +208,16 @@ private fun LazyListScope.connections(state: SettingsUiState, vm: SettingsViewMo
             summary = stringResource(R.string.settings_demo_summary),
         )
     }
+    if (state.demoEnabled) {
+        item {
+            SwitchSettingRow(
+                title = stringResource(R.string.settings_demo_stale_skill),
+                checked = state.demoStaleSkill,
+                onCheckedChange = vm::setDemoStaleSkill,
+                summary = stringResource(R.string.settings_demo_stale_skill_summary),
+            )
+        }
+    }
     item { SectionHeader(stringResource(R.string.settings_endpoints)) }
     if (state.endpoints.isEmpty()) {
         item {

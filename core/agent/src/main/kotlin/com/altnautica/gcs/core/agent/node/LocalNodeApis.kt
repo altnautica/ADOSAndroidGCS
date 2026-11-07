@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.agent.node
 
 import com.altnautica.gcs.core.agent.capture.CaptureApi
+import com.altnautica.gcs.core.agent.fcsetup.SetupBackend
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.model.DeviceId
@@ -23,4 +24,10 @@ interface LocalNodeApis {
      * other pages come from its own source. Null when this entry has none for [id].
      */
     fun autonomy(id: DeviceId): AutonomyFeedApi? = null
+
+    /**
+     * The flight-controller setup engine served in-process for [id] (the agent's
+     * `/api/v1/fc-setup` routes and step stream). Independent of [handles], like [autonomy].
+     */
+    fun fcSetup(id: DeviceId): SetupBackend? = null
 }

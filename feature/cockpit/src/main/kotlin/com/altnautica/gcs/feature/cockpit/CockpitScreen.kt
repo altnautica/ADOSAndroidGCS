@@ -79,7 +79,6 @@ import com.altnautica.gcs.core.video.ui.VideoSurfaceRole
 import com.altnautica.gcs.feature.cockpit.alerts.AlertStack
 import com.altnautica.gcs.feature.cockpit.autonomy.MinimapFrame
 import com.altnautica.gcs.feature.cockpit.band.SafetyBand
-import com.altnautica.gcs.feature.cockpit.band.SafetyBandHeight
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChip
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmHost
 import com.altnautica.gcs.feature.cockpit.flow.GateRing
@@ -126,7 +125,7 @@ private val WIDGET_ZONES = listOf("top-left", "top-right", "bottom-left", "botto
  * bottom-left card (map or radar), the bottom row (distance, height and speeds), the skill
  * picker chip at the bottom right, and the HUD and data layers in the centre. The main view
  * is the video, the map, both side by side, or the video with the vision panel. Portrait:
- * 16:9 video with the top bar inside it, then the left-column actions as a row, the skill
+ * the status band, then the chip and layers row, the 16:9 video, the left-column actions as a row, the skill
  * picker, telemetry and the map. Each region collects only the flows it draws.
  */
 @Composable
@@ -156,22 +155,49 @@ internal fun CockpitScreen(
 @Composable
 private fun TopBar(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit, modifier: Modifier = Modifier) {
     val chip by vm.chip.collectAsStateWithLifecycle()
-    val band by vm.band.collectAsStateWithLifecycle()
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton, modifier = Modifier.padding(start = AdosSpacing.S2))
-        SafetyBand(
-            state = band,
-            onExit = onExit,
-            onToggleStick = vm::toggleStickControl,
-            onOpenPreflight = { vm.setPreflight(true) },
-            onOpenQuickSettings = { vm.setQuickSettings(true) },
-            onOpenModes = vm::openModeSheet,
-            onKill = { vm.activate(BuiltinIds.KILL) },
-            navChip = { NavChipSlot(vm, width) },
-            modifier = Modifier.weight(1f),
-        )
+        Band(vm, width, onExit, Modifier.weight(1f))
         LayerLevelButton(vm.autonomy.layers, Modifier.padding(end = AdosSpacing.S2))
     }
+}
+
+/**
+ * The portrait top bar, above the video: the status band across the full width (so the exit
+ * arrow and vehicle name keep their room), then the flight-state chip and the layer level
+ * button on their own row.
+ */
+@Composable
+private fun PortraitTopBar(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit, modifier: Modifier = Modifier) {
+    val chip by vm.chip.collectAsStateWithLifecycle()
+    Column(modifier.fillMaxWidth()) {
+        Band(vm, width, onExit, Modifier.fillMaxWidth())
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
+        ) {
+            FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton)
+            Box(Modifier.weight(1f))
+            LayerLevelButton(vm.autonomy.layers)
+        }
+    }
+}
+
+@Composable
+private fun Band(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit, modifier: Modifier) {
+    val band by vm.band.collectAsStateWithLifecycle()
+    SafetyBand(
+        state = band,
+        onExit = onExit,
+        onToggleStick = vm::toggleStickControl,
+        onOpenPreflight = { vm.setPreflight(true) },
+        onOpenQuickSettings = { vm.setQuickSettings(true) },
+        onOpenModes = vm::openModeSheet,
+        onKill = { vm.activate(BuiltinIds.KILL) },
+        navChip = { NavChipSlot(vm, width) },
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -281,11 +307,11 @@ private fun SplitView(vm: CockpitViewModel, savedRatio: Float, hudInset: Padding
 private fun PortraitLayout(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit) {
     val sizes = gridSizes(width)
     Column(Modifier.fillMaxSize().background(AdosTheme.colors.bgCanvas)) {
+        PortraitTopBar(vm, width, onExit, Modifier.zIndex(Z.BAND))
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
             VideoStage(vm, Modifier.fillMaxSize())
-            TopBar(vm, width, onExit, Modifier.align(Alignment.TopStart).zIndex(Z.BAND))
             CentreRings(vm, Modifier.align(Alignment.Center).zIndex(Z.ALERTS))
-            FollowChrome(vm, width, topInset = SafetyBandHeight, modifier = Modifier.zIndex(Z.ZONES))
+            FollowChrome(vm, width, topInset = 0.dp, modifier = Modifier.zIndex(Z.ZONES))
         }
         Column(Modifier.padding(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {

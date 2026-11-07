@@ -76,6 +76,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -170,6 +171,34 @@ class CockpitViewModelTest {
             vm.modeSheet, vm.chip, vm.flow, vm.targetActions, vm.band, vm.strip, vm.minimap,
         ).forEach { flow -> backgroundScope.launch { flow.collect {} } }
         return vm
+    }
+
+    @Test
+    fun `sending the launch closes the Launch sheet and the take-off after landing opens it again`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        advanceTimeBy(5_000)
+        // Armed once this session: the first-arm checklist no longer gates the launch.
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val vm = vm(listOf(node("drone-1")), vehicle)
+        backgroundScope.launch { vm.launch.collect {} }
+        advanceTimeBy(600)
+        runCurrent()
+
+        vm.openLaunch(true)
+        runCurrent()
+        assertNotNull(vm.launch.value)
+        vm.launchNow()
+        runCurrent()
+        assertNull("the sheet closes once the launch is sent", vm.launch.value)
+
+        // Flight, landing, disarm: the next take-off tap opens a fresh sheet.
+        vehicle.beat(armed = false, now = testScheduler.currentTime)
+        advanceTimeBy(600)
+        runCurrent()
+        vm.openLaunch(true)
+        runCurrent()
+        assertNotNull(vm.launch.value)
+        vm.viewModelScope.cancel()
     }
 
     private fun FakeVehicle.beat(armed: Boolean, now: Long, mode: String = "STABILIZE") {

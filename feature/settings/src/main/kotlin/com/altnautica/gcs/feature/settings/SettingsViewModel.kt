@@ -23,6 +23,7 @@ data class SettingsUiState(
     val appearance: AppearanceSettings = AppearanceSettings(),
     val cockpit: CockpitSettings = CockpitSettings(),
     val demoEnabled: Boolean = false,
+    val demoStaleSkill: Boolean = false,
     val endpoints: List<DirectEndpoint> = emptyList(),
 )
 
@@ -37,9 +38,9 @@ class SettingsViewModel @Inject constructor(
     val state: StateFlow<SettingsUiState> = combine(
         app.appearance,
         cockpit.settings,
-        demo.enabled,
+        combine(demo.enabled, demo.staleSkill) { on, stale -> on to stale },
         direct.endpoints,
-    ) { a, c, demoOn, endpoints -> SettingsUiState(true, a, c, demoOn, endpoints) }
+    ) { a, c, (demoOn, stale), endpoints -> SettingsUiState(true, a, c, demoOn, stale, endpoints) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
     fun setTheme(theme: AdosThemeId) = launch { app.setTheme(theme) }
@@ -72,6 +73,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setDemoEnabled(on: Boolean) = launch { demo.setEnabled(on) }
+
+    fun setDemoStaleSkill(on: Boolean) = launch { demo.setStaleSkill(on) }
 
     fun removeEndpoint(endpoint: DirectEndpoint) = launch { direct.removeEndpoint(endpoint) }
 

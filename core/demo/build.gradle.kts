@@ -9,6 +9,7 @@ dependencies {
     implementation(projects.core.video)
     implementation(projects.core.agent)
     implementation(projects.core.data)
+    implementation(projects.core.extensions)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)

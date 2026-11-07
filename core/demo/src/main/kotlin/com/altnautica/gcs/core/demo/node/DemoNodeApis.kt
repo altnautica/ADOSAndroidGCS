@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.agent.capture.CaptureApi
+import com.altnautica.gcs.core.agent.fcsetup.SetupBackend
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
@@ -11,14 +12,21 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.VideoSource
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
-/** Serves the demo Visor's capture and sensor pages and the demo ground station's sensors. */
+/**
+ * Serves the demo Visor's capture and sensor pages, the demo ground station's sensors, and
+ * the demo drone's autonomy feeds and flight-controller setup engine.
+ */
 @Singleton
 class DemoNodeApis @Inject constructor(private val hub: DemoVehicleHub) : LocalNodeApis {
     private val capture by lazy { DemoCaptureApi() }
     private val visorSensors by lazy { DemoVisorSensors() }
     private val groundSensors by lazy { DemoGroundSensors() }
     private val autonomy by lazy { DemoAutonomy(hub) }
+    private val fcSetup by lazy { DemoFcSetup(CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
 
     override fun handles(id: DeviceId): Boolean = id == DemoIds.VISOR || id == DemoIds.GROUND
 
@@ -36,4 +44,7 @@ class DemoNodeApis @Inject constructor(private val hub: DemoVehicleHub) : LocalN
 
     /** Scripted detections, navigation stream and live map for the demo drone. */
     override fun autonomy(id: DeviceId): AutonomyFeedApi? = if (id == DemoIds.DRONE) autonomy else null
+
+    /** The setup wizards of the demo drone's flight controller. */
+    override fun fcSetup(id: DeviceId): SetupBackend? = if (id == DemoIds.DRONE) fcSetup else null
 }

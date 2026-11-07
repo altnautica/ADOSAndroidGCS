@@ -1,22 +1,24 @@
 package com.altnautica.gcs.feature.settings.controller
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -29,6 +31,8 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -36,9 +40,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.PathParser
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.skills.input.PadSnapshot
 import com.altnautica.gcs.core.skills.spec.ArtRole
@@ -106,12 +112,57 @@ fun ControllerDrawing(
         art.paths.map { ParsedPath(PathParser.createPathFromPathData(it.d).asComposePath(), it.role, it.control) }
     }
     val bounds = remember(hotspots) { hotspots.hotspots.mapValues { it.value.bounds() } }
-    BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(vbW / vbH)) {
-        val density = LocalDensity.current
-        val scale = with(density) { maxWidth.toPx() } / vbW
-        Canvas(Modifier.fillMaxSize()) {
+    // Written by the measure pass, read by the draw pass: where the art sits and every leader line.
+    var frame by remember { mutableStateOf<ControllerLabelFrame?>(null) }
+    val density = LocalDensity.current
+    Layout(
+        content = {
+            for ((id, _) in hotspots.hotspots) {
+                if (bounds[id] == null) continue
+                val label = labels[id].orEmpty()
+                val state = buildList {
+                    if (isPressed(id, pad.value, bitfield, triggerPressed)) add(pressedLabel)
+                    if (id in conflicts) add(conflictLabel)
+                }.joinToString(", ")
+                Box(
+                    Modifier
+                        .layoutId(HotspotId(id))
+                        .semantics {
+                            contentDescription = "$id: $label"
+                            stateDescription = state
+                        }
+                        .testTag("hotspot-$id")
+                        .clickable(role = Role.Button) { onHotspot(id) },
+                )
+            }
+            for ((id, spot) in hotspots.hotspots) {
+                val label = labels[id] ?: continue
+                if (label.isEmpty()) continue
+                Row(
+                    Modifier.layoutId(LabelId(id)).testTag("label-$id"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (id in locked) {
+                        Icon(Icons.Outlined.Lock, contentDescription = null, tint = colors.fgSecondary, modifier = Modifier.size(12.dp))
+                    }
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (id in conflicts) colors.statusError else colors.fgPrimary,
+                        textAlign = when (spot.labelSide) {
+                            LabelSide.Left -> TextAlign.End
+                            LabelSide.Right -> TextAlign.Start
+                            else -> TextAlign.Center
+                        },
+                    )
+                }
+            }
+        },
+        modifier = modifier.fillMaxWidth().drawBehind {
+            val f = frame ?: return@drawBehind
             val p = pad.value
-            translate(-vbX * scale, -vbY * scale) {
+            val scale = f.scale
+            translate(f.art.left - vbX * scale, f.art.top - vbY * scale) {
                 scale(scale, pivot = Offset.Zero) {
                     val stroke = Stroke(width = art.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round)
                     for (path in parsed) {
@@ -135,82 +186,76 @@ fun ControllerDrawing(
                     bounds["touchpad"]?.let { b ->
                         for (t in p.touches) drawCircle(colors.accentPrimary, 10f, Offset(b.left + t.x * b.width, b.top + t.y * b.height))
                     }
-                    // Conflicts outlined red; leader lines to every label anchor.
-                    for ((id, spot) in hotspots.hotspots) {
+                    // Conflicts outlined red.
+                    for (id in conflicts) {
                         val b = bounds[id] ?: continue
-                        if (id in conflicts) {
-                            drawRoundRect(colors.statusError, Offset(b.left - 6f, b.top - 6f), Size(b.width + 12f, b.height + 12f), CornerRadius(10f), style = Stroke(5f))
-                        }
-                        if (labels[id] != null) {
-                            val anchor = Offset(spot.labelAnchor[0], spot.labelAnchor[1])
-                            drawLine(colors.borderStrong, b.center, anchor, strokeWidth = 2f)
-                        }
+                        drawRoundRect(colors.statusError, Offset(b.left - 6f, b.top - 6f), Size(b.width + 12f, b.height + 12f), CornerRadius(10f), style = Stroke(5f))
                     }
                 }
             }
-        }
-        // Tappable hotspots with their labels, positioned in the same scaled frame.
-        for ((id, spot) in hotspots.hotspots) {
-            val b = bounds[id] ?: continue
-            val x = with(density) { ((b.left - vbX) * scale).toDp() }
-            val y = with(density) { ((b.top - vbY) * scale).toDp() }
-            val w = with(density) { (b.width * scale).toDp() }.coerceAtLeast(24.dp)
-            val h = with(density) { (b.height * scale).toDp() }.coerceAtLeast(24.dp)
-            val label = labels[id].orEmpty()
-            val state = buildList {
-                if (isPressed(id, pad.value, bitfield, triggerPressed)) add(pressedLabel)
-                if (id in conflicts) add(conflictLabel)
-            }.joinToString(", ")
-            Box(
-                Modifier
-                    .offset(x, y)
-                    .size(w, h)
-                    .semantics {
-                        contentDescription = "$id: $label"
-                        stateDescription = state
-                    }
-                    .testTag("hotspot-$id")
-                    .clickable(role = Role.Button) { onHotspot(id) },
+            // Leader lines from each control's anchor out to its label, with a dot on the control.
+            val leaderWidth = 1.dp.toPx()
+            for ((_, placed) in f.labels) {
+                drawLine(colors.borderStrong, placed.leaderFrom, placed.leaderTo, strokeWidth = leaderWidth)
+                drawCircle(colors.borderStrong, 2.dp.toPx(), placed.leaderFrom)
+            }
+        },
+    ) { measurables, constraints ->
+        val totalWidth = constraints.maxWidth.toFloat()
+        val gutter = minOf(with(density) { LABEL_GUTTER_MAX.toPx() }, totalWidth * GUTTER_FRACTION)
+        val gap = with(density) { LABEL_GAP.toPx() }
+        val spacing = with(density) { LABEL_SPACING.toPx() }
+        val sideMax = (gutter - gap).toInt().coerceAtLeast(1)
+        val bandMax = with(density) { LABEL_BAND_MAX.roundToPx() }
+        val labelPlaceables = measurables.mapNotNull { m ->
+            val id = (m.layoutId as? LabelId)?.id ?: return@mapNotNull null
+            val spot = hotspots.hotspots.getValue(id)
+            val max = if (spot.labelSide == LabelSide.Left || spot.labelSide == LabelSide.Right) sideMax else bandMax
+            id to m.measure(Constraints(maxWidth = max))
+        }.toMap()
+        val requests = labelPlaceables.map { (id, placeable) ->
+            val spot = hotspots.hotspots.getValue(id)
+            LabelRequest(
+                id = id,
+                side = spot.labelSide,
+                anchor = Offset(spot.labelAnchor[0] - vbX, spot.labelAnchor[1] - vbY),
+                width = placeable.width.toFloat(),
+                height = placeable.height.toFloat(),
             )
-            if (label.isNotEmpty()) {
-                val ax = with(density) { ((spot.labelAnchor[0] - vbX) * scale).toDp() }
-                val ay = with(density) { ((spot.labelAnchor[1] - vbY) * scale).toDp() }
-                val boxW = 96.dp
-                val (lx, ly) = when (spot.labelSide) {
-                    LabelSide.Left -> (ax - boxW) to (ay - 8.dp)
-                    LabelSide.Right -> ax to (ay - 8.dp)
-                    LabelSide.Top -> (ax - boxW / 2) to (ay - 20.dp)
-                    LabelSide.Bottom -> (ax - boxW / 2) to ay
-                }
-                androidx.compose.foundation.layout.Row(
-                    Modifier.offset(lx, ly).widthIn(max = boxW).testTag("label-$id"),
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    if (id in locked) {
-                        androidx.compose.material3.Icon(
-                            androidx.compose.material.icons.Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = colors.fgSecondary,
-                            modifier = Modifier.size(12.dp),
-                        )
-                    }
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (id in conflicts) colors.statusError else colors.fgPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = when (spot.labelSide) {
-                            LabelSide.Left -> TextAlign.End
-                            LabelSide.Right -> TextAlign.Start
-                            else -> TextAlign.Center
-                        },
-                    )
-                }
+        }
+        val f = layoutControllerLabels(requests, totalWidth, gutter, vbW, vbH, gap, spacing)
+        frame = f
+        val minTouch = with(density) { 24.dp.roundToPx() }
+        val hotspotPlaceables = measurables.mapNotNull { m ->
+            val id = (m.layoutId as? HotspotId)?.id ?: return@mapNotNull null
+            val b = bounds.getValue(id)
+            val w = (b.width * f.scale).roundToInt().coerceAtLeast(minTouch)
+            val h = (b.height * f.scale).roundToInt().coerceAtLeast(minTouch)
+            Triple(b, m.measure(Constraints.fixed(w, h)), id)
+        }
+        layout(constraints.maxWidth, ceil(f.height).toInt()) {
+            for ((b, placeable, _) in hotspotPlaceables) {
+                val cx = f.art.left + (b.center.x - vbX) * f.scale
+                val cy = f.art.top + (b.center.y - vbY) * f.scale
+                placeable.place((cx - placeable.width / 2f).roundToInt(), (cy - placeable.height / 2f).roundToInt())
+            }
+            for ((id, placeable) in labelPlaceables) {
+                val rect = f.labels.getValue(id).rect
+                placeable.place(rect.left.roundToInt(), rect.top.roundToInt())
             }
         }
     }
 }
+
+private data class HotspotId(val id: String)
+
+private data class LabelId(val id: String)
+
+private val LABEL_GUTTER_MAX = 128.dp
+private val LABEL_BAND_MAX = 112.dp
+private val LABEL_GAP = 12.dp
+private val LABEL_SPACING = 4.dp
+private const val GUTTER_FRACTION = 0.2f
 
 /** A plain colour from `#RRGGBB[AA]`. */
 internal fun specColor(hex: String): Color {

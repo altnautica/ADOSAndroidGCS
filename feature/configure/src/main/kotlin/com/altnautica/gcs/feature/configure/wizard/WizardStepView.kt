@@ -47,6 +47,10 @@ const val SETUP_HOLD_MS = 1_500
 /** The step that ends the ground wizard by offering the onboard pilot. */
 const val ADOS_INTRO_STEP = "ados_intro"
 
+/** The engine sends bare live and result keys (`pose`, `gains_after`); their labels live under these prefixes. */
+private const val LIVE_PREFIX = "setup.live."
+private const val RESULT_PREFIX = "setup.result."
+
 /**
  * One setup step rendered from its schema: title, body, illustration, progress ring,
  * live values, blockers, result and its actions. Action inputs come from
@@ -86,7 +90,9 @@ fun WizardStepView(
         step.image?.let { key ->
             SetupImage(key, text.format(step.titleKey, args), colors.fgPrimary, Modifier.widthIn(max = 360.dp))
         }
-        if (step.live.isNotEmpty()) LiveTable(step.live.mapKeys { (k, _) -> text.format(k, args) }.mapValues { it.value.displayText() })
+        if (step.live.isNotEmpty()) {
+            LiveTable(step.live.entries.associate { (k, v) -> text.label(k, LIVE_PREFIX, args) to text.value(v, args) })
+        }
         step.blockers.forEach { key ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                 Icon(Icons.Outlined.Block, contentDescription = null, tint = colors.statusError, modifier = Modifier.size(18.dp))
@@ -185,7 +191,7 @@ fun ResultCard(result: JsonObject, modifier: Modifier = Modifier) {
         Text(stringResource(R.string.cfg_setup_results), style = MaterialTheme.typography.titleSmall, color = colors.fgPrimary)
         result.forEach { (key, value) ->
             Row(Modifier.fillMaxWidth()) {
-                Text(text.format(key, emptyMap()), Modifier.weight(1f), color = colors.fgSecondary, style = MaterialTheme.typography.bodyMedium)
+                Text(text.label(key, RESULT_PREFIX), Modifier.weight(1f), color = colors.fgSecondary, style = MaterialTheme.typography.bodyMedium)
                 Text(value.displayText(), color = colors.fgPrimary, style = MaterialTheme.typography.bodyMedium)
             }
         }

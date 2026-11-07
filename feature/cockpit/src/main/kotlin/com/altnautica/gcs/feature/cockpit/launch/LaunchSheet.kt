@@ -114,7 +114,10 @@ data class LaunchUi(
 @Composable
 fun LaunchSheet(ui: LaunchUi, onDraft: (LaunchDraft) -> Unit, onLaunch: () -> Unit, onDismiss: () -> Unit) {
     AdosSheet(onDismiss = onDismiss, title = specText("flow.launch.title")) {
-        Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3), modifier = Modifier.testTag("launch-sheet")) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S6).testTag("launch-sheet"),
+        ) {
             ui.sequence?.let { StepStrip(it) }
             val d = ui.draft
             Text(specText("flow.launch.alt_m") + " · " + "%.0f m".format(d.altM), style = MaterialTheme.typography.labelLarge)
