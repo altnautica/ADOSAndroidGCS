@@ -202,6 +202,7 @@ internal object MapGeoJson {
                 LineKind.Trail -> Triple(palette.trail, 2, false)
                 LineKind.Track -> Triple(palette.track, 3, false)
                 LineKind.SurveyPreview -> Triple(palette.surveyPreview, 2, true)
+                LineKind.DroneMission -> Triple(palette.missionPath, 3, true)
             }
             addFeature(
                 lineGeometry(line.points),

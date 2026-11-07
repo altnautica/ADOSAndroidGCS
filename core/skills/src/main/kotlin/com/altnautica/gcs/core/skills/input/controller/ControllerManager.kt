@@ -64,7 +64,6 @@ class ControllerManager internal constructor(
         scope.launch {
             settings.collect { s ->
                 current = s
-                router.extraDeadZone = s.deadZonePct / 100f
                 if (!s.lightbar) platform?.clearLights()
             }
         }

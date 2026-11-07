@@ -94,6 +94,8 @@ class ExtensionSkillContributor @Inject constructor(
                 reach = reach,
                 reported = ReportedState.from(state[ext.pluginId]?.get(c.stateTopic)),
                 writer = writerFor(node, ext.pluginId),
+                pluginName = ext.name,
+                lastSeenMs = { feed.lastSeenMs(node, ext.pluginId) },
             )
         }
     }

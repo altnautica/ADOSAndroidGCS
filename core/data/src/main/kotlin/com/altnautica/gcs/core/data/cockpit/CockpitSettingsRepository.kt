@@ -40,6 +40,8 @@ data class CockpitSettings(
     val splitRatio: Float = 0.6f,
     /** Telemetry side pane on expanded widths. */
     val telemetryPane: Boolean = true,
+    /** Spoken flight-flow prompts: handover, return home, low battery and mission state changes. */
+    val voicePrompts: Boolean = true,
 )
 
 /** Cockpit preferences in the app settings store; the settings screen edits the same values. */
@@ -61,6 +63,7 @@ class CockpitSettingsRepository @Inject constructor(
             density = p[DENSITY]?.let { runCatching { CockpitDensity.valueOf(it) }.getOrNull() } ?: d.density,
             splitRatio = (p[SPLIT] ?: d.splitRatio).coerceIn(MIN_SPLIT, MAX_SPLIT),
             telemetryPane = p[TELEMETRY_PANE] ?: d.telemetryPane,
+            voicePrompts = p[VOICE_PROMPTS] ?: d.voicePrompts,
         )
     }.distinctUntilChanged()
 
@@ -85,6 +88,8 @@ class CockpitSettingsRepository @Inject constructor(
     suspend fun setSplitRatio(ratio: Float) = dataStore.edit { it[SPLIT] = ratio.coerceIn(MIN_SPLIT, MAX_SPLIT) }
 
     suspend fun setTelemetryPane(on: Boolean) = dataStore.edit { it[TELEMETRY_PANE] = on }
+
+    suspend fun setVoicePrompts(on: Boolean) = dataStore.edit { it[VOICE_PROMPTS] = on }
 
     /** The minimap frame pin for one vehicle: `auto`, `local` or `map`; `auto` when unset. */
     fun minimapMode(vehicleId: String): Flow<String> = dataStore.data.map { it[minimapKey(vehicleId)] ?: MINIMAP_AUTO }
@@ -115,6 +120,7 @@ class CockpitSettingsRepository @Inject constructor(
         private val DENSITY = stringPreferencesKey("cockpit.density")
         private val SPLIT = floatPreferencesKey("cockpit.splitRatio")
         private val TELEMETRY_PANE = booleanPreferencesKey("cockpit.telemetryPane")
+        private val VOICE_PROMPTS = booleanPreferencesKey("cockpit.audio.voicePrompts")
         private fun layersKey(vehicleId: String) = stringPreferencesKey("cockpit.layers.$vehicleId")
         private fun minimapKey(vehicleId: String) = stringPreferencesKey("cockpit.minimap.mode.$vehicleId")
         const val MINIMAP_AUTO = "auto"

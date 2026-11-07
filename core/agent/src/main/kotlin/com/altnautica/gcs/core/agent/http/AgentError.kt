@@ -72,6 +72,7 @@ object AgentErrorParser {
             ?: (detail as? JsonPrimitive)?.contentOrNull
             ?: detailObj?.str("message")
             ?: json?.str("reason")
+            ?: json?.str("err")
 
         when (code) {
             "E_ARMED" -> return AgentError.Armed(

@@ -16,8 +16,22 @@ import android.view.MotionEvent
 import androidx.annotation.RequiresApi
 import kotlin.math.roundToInt
 
-/** Controller rumble patterns. */
-enum class Rumble { Confirm, Warning, Critical }
+/**
+ * A controller rumble: [pulsesMs] on-times separated by [gapMs] of rest, at [amplitude]
+ * (0..1). The presets are the cockpit's controller patterns.
+ */
+data class Rumble(val pulsesMs: List<Int>, val gapMs: Int, val amplitude: Float) {
+    companion object {
+        /** One short pulse: a mode or skill change. */
+        val ModeChange = Rumble(listOf(80), 0, 0.5f)
+
+        /** Two short pulses: a warning. */
+        val Warning = Rumble(listOf(80, 80), 120, 0.6f)
+
+        /** Three long pulses: a critical event. */
+        val Critical = Rumble(listOf(300, 300, 300), 200, 1f)
+    }
+}
 
 /**
  * Platform access to attached controllers: enumeration, battery, rumble and the light
@@ -103,15 +117,17 @@ internal class PlatformControllers(context: Context) {
         fun rumble(device: InputDevice, pattern: Rumble) {
             val vibrator = device.vibratorManager.defaultVibrator
             if (!vibrator.hasVibrator()) return
-            val effect = when (pattern) {
-                Rumble.Confirm -> VibrationEffect.createOneShot(40, 180)
-                Rumble.Warning -> VibrationEffect.createWaveform(longArrayOf(0, 80, 120, 80), intArrayOf(0, 200, 0, 200), -1)
-                Rumble.Critical -> VibrationEffect.createWaveform(
-                    longArrayOf(0, 150, 100, 150, 100, 150),
-                    intArrayOf(0, 255, 0, 255, 0, 255),
-                    -1,
-                )
+            if (pattern.pulsesMs.isEmpty()) return
+            val level = (pattern.amplitude * 255f).roundToInt().coerceIn(1, 255)
+            val timings = ArrayList<Long>(pattern.pulsesMs.size * 2)
+            val amplitudes = ArrayList<Int>(pattern.pulsesMs.size * 2)
+            pattern.pulsesMs.forEachIndexed { i, on ->
+                timings += if (i == 0) 0L else pattern.gapMs.toLong()
+                amplitudes += 0
+                timings += on.toLong()
+                amplitudes += level
             }
+            val effect = VibrationEffect.createWaveform(timings.toLongArray(), amplitudes.toIntArray(), -1)
             vibrator.vibrate(effect)
         }
 

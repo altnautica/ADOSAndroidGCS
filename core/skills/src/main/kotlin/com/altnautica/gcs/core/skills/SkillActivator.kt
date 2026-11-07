@@ -128,8 +128,10 @@ class SkillActivator @Inject constructor(
         if (skill == null) return ActivationOutcome.Missing
         val k = key(vehicleId, skill.id)
 
-        // 2. Busy: an in-flight activation or open confirm drops further presses.
-        if (k in busy) return ActivationOutcome.Busy
+        // 2. Busy: an in-flight activation or open confirm drops further presses. The brake
+        // is safe to repeat and must never wait on another command, so it skips this gate.
+        val brake = skill.id in NEVER_BLOCKED
+        if (!brake && k in busy) return ActivationOutcome.Busy
 
         // 3. Disabled gate: report the reason, never open a confirm.
         val state = mergedState(vehicleId, skill, ctx)
@@ -175,24 +177,29 @@ class SkillActivator @Inject constructor(
         }
 
         // 8. One-shot debounce.
-        if (!skill.toggle) {
+        if (!skill.toggle && !brake) {
             val now = clock.nowMs()
             val until = debounceUntil[k] ?: 0L
             if (now < until) return ActivationOutcome.Debounced
             debounceUntil[k] = now + SkillTiming.DEBOUNCE_MS
         }
 
-        // 9. A running behaviour (follow-me and the like) ends before a skill that moves the vehicle.
-        if (preemptsBehaviors(skill.id)) {
+        // 9. Built-in pause, land, rth, kill and a Mode-sheet change stop motion skills only;
+        // navigation estimators and camera skills keep running. A second motion skill first
+        // stops the active one and waits for its state echo (at most MOTION_HANDOVER_MS).
+        if (preemptsMotion(skill.id) || (skill.motion && skill.toggle)) {
             for (peer in peers) {
-                if (peer.id == skill.id || !peer.toggle || peer.category != SkillCategory.Behavior) continue
+                if (peer.id == skill.id || !peer.toggle || !peer.motion) continue
                 val peerState = runCatching { peer.state(ctx) }.getOrNull() ?: continue
-                if (peerState.active) deactivate(vehicleId, peer, ctx)
+                if (!peerState.active) continue
+                deactivate(vehicleId, peer, ctx)
+                if (skill.motion) awaitInactive(peer, ctx)
             }
         }
 
         // 10. Activate.
-        if (!busy.add(k)) return ActivationOutcome.Busy
+        val locked = busy.add(k)
+        if (!locked && !brake) return ActivationOutcome.Busy
         return try {
             val result = skill.activate(ctx, activateArgs)
             if (!skill.toggle && result.succeeded() && skill.cooldownMs > 0) {
@@ -204,7 +211,15 @@ class SkillActivator @Inject constructor(
         } catch (e: Exception) {
             ActivationOutcome.Failed(e.message ?: e.javaClass.simpleName)
         } finally {
-            busy.remove(k)
+            if (locked) busy.remove(k)
+        }
+    }
+
+    private suspend fun awaitInactive(peer: Skill, ctx: SkillContext) {
+        repeat((MOTION_HANDOVER_MS / ECHO_POLL_MS).toInt()) {
+            val active = runCatching { peer.state(ctx).active }.getOrDefault(false)
+            if (!active) return
+            kotlinx.coroutines.delay(ECHO_POLL_MS)
         }
     }
 
@@ -223,9 +238,16 @@ class SkillActivator @Inject constructor(
     }
 
     companion object {
-        private val PREEMPTING = setOf("rth", "land", "abort", "kill", "set-mode", "pause")
+        private val PREEMPTING = setOf("rth", "land", "kill", "set-mode", "pause")
 
-        fun preemptsBehaviors(skillId: String) = skillId in PREEMPTING || skillId.startsWith("mode.")
+        /** The brake: never dropped as busy or debounced. */
+        private val NEVER_BLOCKED = setOf("pause")
+
+        /** How long a new motion skill waits for the previous one's stop echo. */
+        const val MOTION_HANDOVER_MS = 1_000L
+        private const val ECHO_POLL_MS = 50L
+
+        fun preemptsMotion(skillId: String) = skillId in PREEMPTING
 
         fun armRefusal(requirement: ArmRequirement, armed: Boolean?): String? = when {
             requirement == ArmRequirement.Any -> null

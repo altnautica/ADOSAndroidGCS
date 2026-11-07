@@ -40,6 +40,8 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
 
     private fun t() = SystemClock.elapsedRealtime()
 
+    private val pilot = DemoPilot { t() }
+
     /** 0 candidate, 1 tracked, 2 acquiring, 3 following, 4 coasting, 5 searching, 6 re-acquired, 7 lost. */
     private fun step(now: Long) = ((now / STEP_MS) % STEPS).toInt()
 
@@ -109,9 +111,12 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
             emit(frame("follow", follow(s, now, yaw), now))
             if (n++ % 5 == 0) emit(frame("nav", nav(s), now))
             layers.frames(now) { kind, data -> frame(kind, data, now) }.forEach { emit(it) }
+            emit(pilot.frame())
             delay(TICK_MS)
         }
     }.flowOn(Dispatchers.Default)
+
+    override fun pilotStream(outgoing: Flow<String>): Flow<String> = pilot.stream(outgoing).flowOn(Dispatchers.Default)
 
     private fun frame(kind: String, data: JsonObject, now: Long) = buildJsonObject {
         put("kind", kind)

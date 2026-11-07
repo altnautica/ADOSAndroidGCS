@@ -48,7 +48,7 @@ class MavlinkMissionService(
 
     private val busy = Mutex()
 
-    override suspend fun upload(type: MissionType, items: List<MissionItem>): MissionResult<Unit> =
+    override suspend fun upload(type: MissionType, items: List<MissionItem>): MissionResult<UploadReceipt> =
         guarded(type, TransferDirection.Upload) { target ->
             val homeSlot = hasHomeSlot(target, type)
             val wire = if (homeSlot) listOf(homePlaceholder()) + items else items
@@ -98,7 +98,7 @@ class MavlinkMissionService(
         type: MissionType,
         wire: List<MissionItem>,
         inbox: Inbox,
-    ): MissionResult<Unit> {
+    ): MissionResult<UploadReceipt> {
         val count = MissionCount(target.sysId, target.compId, wire.size, type.wire)
         send(count)?.let { return it }
         var lastSent: MavMessage = count
@@ -115,7 +115,14 @@ class MavlinkMissionService(
                 is MissionRequestInt -> reply.seq.takeIf { reply.missionType == type.wire }
                 is MissionRequest -> reply.seq.takeIf { reply.missionType == type.wire }
                 is MissionAck -> {
-                    if (reply.missionType != type.wire) null else return ackResult(reply)
+                    if (reply.missionType != type.wire) {
+                        null
+                    } else {
+                        return when (val r = ackResult(reply)) {
+                            is MissionResult.Success -> MissionResult.Success(UploadReceipt(reply.opaqueId))
+                            is MissionResult.Failure -> r
+                        }
+                    }
                 }
                 else -> null
             } ?: continue

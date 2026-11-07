@@ -12,6 +12,7 @@ import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.model.ConfirmPolicy
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillCategory
 import com.altnautica.gcs.core.model.SkillContext
@@ -92,8 +93,15 @@ internal fun materialIcon(hint: String): String = when (hint.lowercase()) {
     else -> hint.lowercase().replace('-', '_')
 }
 
-private fun ExtensionSkillCategory.toModel(): SkillCategory =
-    if (this == ExtensionSkillCategory.Camera) SkillCategory.Camera else SkillCategory.Behavior
+private fun ExtensionSkillCategory.toModel(): SkillCategory = when (this) {
+    ExtensionSkillCategory.Behavior -> SkillCategory.Behavior
+    ExtensionSkillCategory.Camera -> SkillCategory.Camera
+    ExtensionSkillCategory.Navigation -> SkillCategory.Navigation
+    ExtensionSkillCategory.Utility -> SkillCategory.Utility
+}
+
+/** Extension state older than this dims the skill and shows its age. */
+const val EXTENSION_STATE_FRESH_MS = 3_000L
 
 private fun armRequirementOf(wire: String?): ArmRequirement = when (wire) {
     "armed" -> ArmRequirement.Armed
@@ -136,12 +144,16 @@ class ExtensionSkill(
     val reach: ExtensionReach,
     val reported: ReportedState,
     private val writer: ExtensionConfigWriter,
+    pluginName: String = pluginId,
+    /** Monotonic time of the last successful state read of the extension; null before the first. */
+    private val lastSeenMs: () -> Long? = { null },
+    private val nowMs: () -> Long = { android.os.SystemClock.elapsedRealtime() },
 ) : Skill {
     override val id: String = skillId(pluginId, contribution.id)
     override val labelKey: String = contribution.label
     override val icon: String = materialIcon(contribution.icon)
     override val category: SkillCategory = contribution.category.toModel()
-    override val source: SkillSource = SkillSource.Extension(pluginId)
+    override val source: SkillSource = SkillSource.Extension(pluginId, pluginName)
     override val toggle: Boolean = contribution.toggle
     override val confirm: ConfirmPolicy? = if (contribution.confirm) extensionConfirm(contribution.label) else null
     override val armRequirement: ArmRequirement = armRequirementOf(contribution.armRequirement)
@@ -152,14 +164,31 @@ class ExtensionSkill(
         } else {
             null
         }
+    override val motion: Boolean = contribution.motion
+    override val params: List<String> = contribution.params
+    override val nudge: Boolean = contribution.nudge
+    override val oneShot: Boolean = contribution.oneShot
+    override val vehicleClasses: Set<PilotVehicleClass> =
+        contribution.vehicleClasses.mapNotNull { PilotVehicleClass.of(it) }.toSet()
 
     override fun state(ctx: SkillContext): SkillState {
-        ExtensionReach.reasonKey(reach)?.let { return SkillState(false, false, it, null, null) }
+        val active = reported.state == ReportedState.Kind.Active
+        val noPath = ExtensionReach.reasonKey(reach)
+        if (noPath != null) {
+            // The behaviour keeps running on the vehicle: show it ACTIVE (stale) with Stop enabled.
+            return if (active) {
+                SkillState(true, true, noPath, null, null, badge = reported.badge, stale = true)
+            } else {
+                SkillState(false, false, noPath, null, null)
+            }
+        }
+        val ageMs = lastSeenMs()?.let { nowMs() - it }
+        val lastSeenS = ageMs?.takeIf { it > EXTENSION_STATE_FRESH_MS }?.let { (it / 1_000L).toInt() }
         return when (reported.state) {
-            ReportedState.Kind.Active -> SkillState(true, true, null, null, null)
-            ReportedState.Kind.Idle -> SkillState(true, false, null, null, null)
+            ReportedState.Kind.Active -> SkillState(true, true, null, null, null, badge = reported.badge, lastSeenS = lastSeenS)
+            ReportedState.Kind.Idle -> SkillState(true, false, null, null, null, badge = reported.badge, lastSeenS = lastSeenS)
             ReportedState.Kind.Disabled ->
-                SkillState(false, false, reported.reason ?: REASON_EXTENSION_UNAVAILABLE, null, null)
+                SkillState(false, false, reported.reason ?: REASON_EXTENSION_UNAVAILABLE, null, null, lastSeenS = lastSeenS)
         }
     }
 
@@ -170,9 +199,10 @@ class ExtensionSkill(
         if (toggle) writer.write(contribution.configKey, JsonPrimitive(false)).toCommandResult() else CommandResult.Unsupported
 
     override fun equals(other: Any?): Boolean = other is ExtensionSkill && other.id == id &&
-        other.node == node && other.contribution == contribution && other.reach == reach && other.reported == reported
+        other.node == node && other.contribution == contribution && other.reach == reach &&
+        other.reported == reported && other.source == source
 
-    override fun hashCode(): Int = listOf(id, node, contribution, reach, reported).hashCode()
+    override fun hashCode(): Int = listOf(id, node, contribution, reach, reported, source).hashCode()
 
     companion object {
         fun skillId(pluginId: String, localId: String) = "$pluginId:$localId"

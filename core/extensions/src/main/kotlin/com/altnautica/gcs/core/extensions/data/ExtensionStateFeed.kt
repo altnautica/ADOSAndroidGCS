@@ -43,6 +43,11 @@ class ExtensionStateFeed @Inject constructor(
 
     fun state(node: DeviceId): Flow<NodeExtensionState> = states.map { it[node].orEmpty() }
 
+    private val lastOk = java.util.concurrent.ConcurrentHashMap<Pair<DeviceId, String>, Long>()
+
+    /** Monotonic time of the last successful state read of [pluginId] on [node], or null before the first. */
+    fun lastSeenMs(node: DeviceId, pluginId: String): Long? = lastOk[node to pluginId]
+
     /** Start (or join) polling [node]; the returned action releases this holder. */
     fun acquire(node: DeviceId): () -> Unit {
         synchronized(polls) {
@@ -84,6 +89,7 @@ class ExtensionStateFeed @Inject constructor(
         val api = repository.api(node) ?: return
         for (ext in enabled) {
             val body = (api.state(ext.pluginId) as? ApiResult.Ok)?.value ?: continue
+            lastOk[node to ext.pluginId] = android.os.SystemClock.elapsedRealtime()
             val topics = HashMap<String, JsonElement>()
             for ((topic, entry) in body) {
                 val payload = (entry as? JsonObject)?.get("payload") ?: continue

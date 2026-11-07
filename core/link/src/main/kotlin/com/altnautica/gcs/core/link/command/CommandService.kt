@@ -98,6 +98,12 @@ class CommandService(
                 0f,
                 0f,
             )
+            is VehicleCommand.GimbalRate ->
+                long(CMD_GIMBAL_MANAGER_PITCHYAW, Float.NaN, Float.NaN, command.pitchDps, command.yawDps, 0f, 0f, 0f)
+            VehicleCommand.GimbalRecenter ->
+                long(CMD_GIMBAL_MANAGER_PITCHYAW, 0f, 0f, Float.NaN, Float.NaN, 0f, 0f, 0f)
+            is VehicleCommand.CameraZoom -> long(CMD_SET_CAMERA_ZOOM, ZOOM_TYPE_STEP, command.step.toFloat())
+            VehicleCommand.CapturePhoto -> long(CMD_IMAGE_START_CAPTURE, 0f, 0f, 1f)
         }
     }
 
@@ -271,6 +277,14 @@ class CommandService(
         const val ACK_TIMEOUT_MS = 1_500L
         const val RETRIES = 3
         const val IN_PROGRESS_TIMEOUT_MS = 10_000L
+
+        /** MAV_CMD ids of the camera and gimbal commands (MAVLink common). */
+        const val CMD_GIMBAL_MANAGER_PITCHYAW = 1000
+        const val CMD_SET_CAMERA_ZOOM = 531
+        const val CMD_IMAGE_START_CAPTURE = 2000
+
+        /** `ZOOM_TYPE_STEP`: param2 is a step direction. */
+        const val ZOOM_TYPE_STEP = 0f
 
         /** `param2` magic of MAV_CMD_COMPONENT_ARM_DISARM that bypasses arming checks. */
         const val FORCE_ARM = 2989f

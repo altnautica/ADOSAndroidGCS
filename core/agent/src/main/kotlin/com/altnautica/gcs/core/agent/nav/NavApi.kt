@@ -23,6 +23,13 @@ interface AutonomyFeedApi {
     fun navStream(outbound: Flow<String>): Flow<String>
 
     /**
+     * The pilot channel (`/api/v1/pilot/stream`): every text in [outgoing] (input,
+     * release, action, session.take, hb frames) goes to the pilot; server frames
+     * (`pilot`, `keepalive`, `action_result`) come back until the socket closes.
+     */
+    fun pilotStream(outgoing: Flow<String>): Flow<String>
+
+    /**
      * `POST /api/vision/demand` equivalent: `{camera_id, hold_s, owner, kind?}` holds
      * (or with `hold_s` 0 releases) detection, depth or surfaces on a camera.
      */

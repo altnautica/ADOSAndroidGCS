@@ -70,6 +70,14 @@ class AgentClient internal constructor(
     /** Host navigation and live map routes (`/api/v1/nav/...`, `/api/v1/map/...`). */
     val nav: NavApi = NavApi(this)
 
+    /** Flight-controller setup wizards (`/api/v1/fc-setup/...`). */
+    val fcSetup: com.altnautica.gcs.core.agent.fcsetup.FcSetupApi =
+        com.altnautica.gcs.core.agent.fcsetup.FcSetupApi(this)
+
+    /** The flight controller's mission as the agent mirrors it (`/api/v1/mission`). */
+    val mission: com.altnautica.gcs.core.agent.mission.MissionMirrorApi =
+        com.altnautica.gcs.core.agent.mission.MissionMirrorApi(this)
+
     // ---- identity and status -------------------------------------------------
 
     /** `GET /api/version`, cached for five minutes per endpoint. */

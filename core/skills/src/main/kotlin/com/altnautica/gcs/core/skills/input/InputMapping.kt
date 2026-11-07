@@ -1,7 +1,6 @@
 package com.altnautica.gcs.core.skills.input
 
 import android.view.KeyEvent
-import com.altnautica.gcs.core.skills.binding.Loadout
 import kotlin.math.abs
 import kotlin.math.sign
 
@@ -28,8 +27,11 @@ object GamepadButton {
     const val DPAD_RIGHT = 15
     const val HOME = 16
 
-    /** Highest button index a binding may use. */
-    const val MAX_BINDABLE = 15
+    /** Touchpad click (a DualShock's touchpad device reports it as a primary button). */
+    const val TOUCHPAD = 17
+
+    /** Highest standard button index. */
+    const val LAST = TOUCHPAD
 
     /** Standard index of an Android gamepad key code, or null when the key is not a gamepad button. */
     fun fromKeyCode(keyCode: Int): Int? = when (keyCode) {
@@ -54,50 +56,23 @@ object GamepadButton {
     }
 }
 
-/** Inputs the cockpit owns; skills can never be bound to them. */
+/** Keyboard chords the cockpit owns; skills can never be bound to them. */
 object ReservedInputs {
-    /**
-     * B back, Y view swap, Select recording, Start quick settings, L3+R3 stick control,
-     * D-pad stream cycle, mode picker and skill drawer, Home quick menu. A, X, L1, R1,
-     * L2 and R2 are free for skills.
-     */
-    val GAMEPAD_BUTTONS: Set<Int> = setOf(
-        GamepadButton.B, GamepadButton.Y, GamepadButton.SELECT, GamepadButton.START,
-        GamepadButton.L3, GamepadButton.R3,
-        GamepadButton.DPAD_UP, GamepadButton.DPAD_DOWN, GamepadButton.DPAD_LEFT, GamepadButton.DPAD_RIGHT,
-        GamepadButton.HOME,
-    )
-
-    /** Palette, parameter shortcuts, stream digits and cycle, picture-in-picture, quick settings. */
+    /** Picker, parameter shortcuts, stream digits and cycle, picture-in-picture, quick settings, view and layer level. */
     val CHORDS: Set<String> = setOf(
         "escape", "meta+k", "ctrl+k", "ctrl+s", "meta+s", "ctrl+shift+s", "meta+shift+s", "ctrl+r", "meta+r",
-        "1", "2", "3", "4", "5", "6", "7", "8", "9", "`", "p", "shift+<", "shift+;",
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "`", "p", "v", "o", "shift+<", "shift+;",
     )
 
-    fun isReservedButton(button: Int) = button in GAMEPAD_BUTTONS
-
     fun isReservedChord(chord: String) = chord in CHORDS
-
-    private val RESERVED_MASK: Int = GAMEPAD_BUTTONS.fold(0) { acc, b -> acc or (1 shl b) }
-
-    /**
-     * `MANUAL_CONTROL` button bitmask: the first 16 buttons minus every cockpit-reserved
-     * button and every button bound to a skill in [loadout], so a skill press never also
-     * reaches the flight controller.
-     */
-    fun manualControlButtonMask(pressed: Int, loadout: Loadout): Int {
-        val skillMask = loadout.slots.fold(0) { acc, slot -> slot.gamepadButton?.let { acc or (1 shl it) } ?: acc }
-        return pressed and 0xFFFF and RESERVED_MASK.inv() and skillMask.inv()
-    }
 }
 
 /**
- * Removes the stick's resting noise: values within [flat] plus the operator's [extra]
- * dead zone of centre read 0 and the remaining travel is rescaled so full deflection
- * still reads ±1.
+ * Removes the stick's resting noise: values within the hardware [flat] range of centre
+ * read 0 and the remaining travel is rescaled so full deflection still reads ±1.
  */
-fun applyDeadZone(value: Float, flat: Float, extra: Float): Float {
-    val f = (flat.coerceAtLeast(0f) + extra.coerceAtLeast(0f)).coerceAtMost(0.99f)
+fun applyDeadZone(value: Float, flat: Float): Float {
+    val f = flat.coerceIn(0f, 0.99f)
     val v = value.coerceIn(-1f, 1f)
     if (abs(v) <= f) return 0f
     return sign(v) * (abs(v) - f) / (1f - f)
@@ -132,6 +107,7 @@ fun canonicalChord(keyCode: Int, metaState: Int, unicodeChar: Int): String? {
         in KeyEvent.KEYCODE_NUMPAD_0..KeyEvent.KEYCODE_NUMPAD_9 -> (keyCode - KeyEvent.KEYCODE_NUMPAD_0).toString()
         in KeyEvent.KEYCODE_F1..KeyEvent.KEYCODE_F12 -> "f" + (keyCode - KeyEvent.KEYCODE_F1 + 1)
         in KeyEvent.KEYCODE_A..KeyEvent.KEYCODE_Z -> ('a' + (keyCode - KeyEvent.KEYCODE_A)).toString()
+        KeyEvent.KEYCODE_SPACE -> "space"
         else -> {
             if (unicodeChar <= 0x20 || Character.isISOControl(unicodeChar)) return null
             String(Character.toChars(unicodeChar)).lowercase()

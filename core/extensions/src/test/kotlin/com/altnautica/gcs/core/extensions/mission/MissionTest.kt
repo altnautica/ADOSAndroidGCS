@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.link.mission.MissionItem
 import com.altnautica.gcs.core.link.mission.MissionPlan
 import com.altnautica.gcs.core.link.mission.MissionResult
 import com.altnautica.gcs.core.link.mission.MissionService
+import com.altnautica.gcs.core.link.mission.UploadReceipt
 import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
@@ -88,7 +89,7 @@ class MissionTest {
     fun writeUploadsOnlyAfterApprovalWhileDisarmed() = runTest {
         val mission = mockk<MissionService>()
         val uploaded = slot<List<MissionItem>>()
-        coEvery { mission.upload(MissionType.Mission, capture(uploaded)) } returns MissionResult.Success(Unit)
+        coEvery { mission.upload(MissionType.Mission, capture(uploaded)) } returns MissionResult.Success(UploadReceipt(0))
 
         val declined = port(false, mission).write("ext", NODE, writeArgs) { _, _, _ -> false }
         assertEquals("false", declined.jsonObject["ok"]!!.jsonPrimitive.content)

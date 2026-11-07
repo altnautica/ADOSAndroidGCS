@@ -24,6 +24,12 @@ object SkillTiming {
 
     /** How long a `guarded` control stays armed after its first activation. */
     const val GUARD_WINDOW_MS = 3_000L
+
+    /** A write without its state echo after this long reverts with a "did not respond" notice. */
+    const val ECHO_TIMEOUT_MS = 3_000L
+
+    /** Skill states are re-evaluated this often so freshness and pending rings age on screen. */
+    const val STATE_TICK_MS = 1_000L
 }
 
 /**
@@ -56,4 +62,10 @@ object SkillReason {
     const val STATE_ERROR = "stateError"
     const val FLY_HERE_TARGET = "flyHereTarget"
     const val EKF_SOURCE_SET = "ekfSourceSet"
+    const val PILOT_UNAVAILABLE = "pilotUnavailable"
+    const val NO_PAUSED_MISSION = "noPausedMission"
+    const val NOT_LANDED = "notLanded"
+    const val NO_RESPONSE = "noResponse"
+    const val PLUGIN_STOPPED = "pluginStopped"
+    const val STOP_QUEUED = "stopQueued"
 }

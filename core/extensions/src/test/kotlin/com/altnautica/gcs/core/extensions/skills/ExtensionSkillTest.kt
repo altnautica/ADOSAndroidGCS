@@ -84,9 +84,11 @@ class ExtensionSkillTest {
 
     @Test
     fun cloudOnlyActivationIsDenied() = runTest {
-        val s = ExtensionSkill(NODE, followMe.pluginId, contribution, ExtensionReach.CloudOnly, ReportedState.Idle) { _, _ ->
-            WriteOutcome.NoPath(ExtensionReach.REASON_LAN_OR_GROUND_REQUIRED)
-        }
+        val s = ExtensionSkill(
+            NODE, followMe.pluginId, contribution, ExtensionReach.CloudOnly, ReportedState.Idle,
+            writer = { _, _ -> WriteOutcome.NoPath(ExtensionReach.REASON_LAN_OR_GROUND_REQUIRED) },
+            nowMs = { 0L },
+        )
         assertEquals(CommandResult.Denied(ExtensionReach.REASON_LAN_OR_GROUND_REQUIRED), s.activate(ctx, emptyMap()))
     }
 

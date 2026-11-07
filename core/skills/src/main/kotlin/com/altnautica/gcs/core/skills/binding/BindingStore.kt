@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillSource
+import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -14,25 +15,34 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
-/** Persists the Skill Bar loadout (slots, chords, gamepad buttons) in the app settings store. */
+/** Persists the keyboard hotkey loadout (slots and chords) in the app settings store. */
 @Singleton
 class BindingStore @Inject constructor(
     private val dataStore: DataStore<Preferences>,
+    private val spec: CockpitSpecRepository,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** The factory loadout, built from the built-in table's keyboard chords. */
+    val defaults: Loadout by lazy { Loadout.defaults(spec.builtins) }
+
+    private val builtinChords: Set<String> by lazy { Loadout.builtinChords(spec.builtins) }
 
     val loadout: Flow<Loadout> = dataStore.data
         .map { prefs -> decode(prefs[KEY]) }
         .distinctUntilChanged()
 
+    /** Extension chords left unbound because another skill, a built-in or the cockpit held them. */
+    val keyConflicts: Flow<List<KeyConflict>> = loadout.map { it.conflicts }.distinctUntilChanged()
+
     private fun decode(raw: String?): Loadout {
-        if (raw == null) return Loadout.DEFAULT
+        if (raw == null) return defaults
         return try {
             json.decodeFromString(Loadout.serializer(), raw).normalized()
         } catch (_: SerializationException) {
-            Loadout.DEFAULT
+            defaults
         } catch (_: IllegalArgumentException) {
-            Loadout.DEFAULT
+            defaults
         }
     }
 
@@ -51,21 +61,19 @@ class BindingStore @Inject constructor(
 
     suspend fun bindChord(slotIndex: Int, chord: String?): BindResult = update { it.bindChord(slotIndex, chord) }
 
-    suspend fun bindButton(slotIndex: Int, button: Int?): BindResult = update { it.bindButton(slotIndex, button) }
-
-    /** Restores the factory slots; extension skills are offered their suggested bindings again. */
-    suspend fun resetToDefaults() = update { Loadout.DEFAULT to Unit }
+    /** Restores the factory slots; extension skills are offered their suggested chords again. */
+    suspend fun resetToDefaults() = update { defaults to Unit }
 
     /**
-     * Offers every extension skill's suggested binding once, into empty slots.
-     * Returns the outcome per skill that was newly slotted.
+     * Offers every extension skill's suggested chord once, into empty slots. Returns the
+     * outcome per skill that was newly slotted.
      */
     suspend fun seedExtensionDefaults(skills: List<Skill>): Map<String, SeedOutcome> = update { start ->
         var loadout = start
         val outcomes = LinkedHashMap<String, SeedOutcome>()
         for (skill in skills) {
             if (skill.source !is SkillSource.Extension) continue
-            val (next, outcome) = loadout.seed(skill.id, skill.defaultBinding)
+            val (next, outcome) = loadout.seed(skill.id, skill.defaultBinding, builtinChords)
             loadout = next
             if (outcome != SeedOutcome.Skipped) outcomes[skill.id] = outcome
         }
@@ -73,6 +81,6 @@ class BindingStore @Inject constructor(
     }
 
     private companion object {
-        val KEY = stringPreferencesKey("skills.loadout.v2")
+        val KEY = stringPreferencesKey("skills.loadout.v3")
     }
 }

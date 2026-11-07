@@ -17,14 +17,17 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SkillSessionTest {
-    private val commandSkills = listOf("arm", "rth", "land", "takeoff", "kill", "abort", "mode.loiter")
+    /** Built-ins that need a fresh link (pause and kill are sent blind). */
+    private val commandSkills = listOf("arm", "disarm", "rth", "land", "takeoff", "resume", "take_control")
 
     private fun TestScope.session(vehicle: Vehicle?): SkillSession {
         val clock = MonotonicClock { testScheduler.currentTime }
         return SkillSession(
             vehicle = MutableStateFlow(vehicle),
             checklistReady = MutableStateFlow(true),
-            registry = SkillRegistry(emptySet()),
+            pilot = MutableStateFlow(null),
+            pilotLink = MutableStateFlow(null),
+            registry = SkillRegistry(emptySet(), testSpec),
             activator = SkillActivator(clock),
             clock = clock,
             scope = backgroundScope,
@@ -94,16 +97,16 @@ class SkillSessionTest {
     }
 
     @Test
-    fun `no vehicle disables commands and the bar hides argument-only skills`() = runTest {
+    fun `no vehicle disables commands and the picker carries no built-ins`() = runTest {
         val s = session(null)
         runCurrent()
         assertEquals(SkillReason.NO_FC_LINK, s.states.value.getValue("arm").reasonKey)
-        val bar = s.barSkills.value.map { it.id }
-        assertFalse("set-mode" in bar)
-        assertFalse("fly-here" in bar)
-        assertTrue("kill" in bar)
-        // Flight skills come before safety skills.
-        assertTrue(bar.indexOf("takeoff") < bar.indexOf("kill"))
+        // The table's built-ins all have a state; none of them is offered in the skill picker.
+        for (id in listOf("arm", "disarm", "takeoff", "land", "rth", "pause", "resume", "take_control", "kill")) {
+            assertTrue(id, id in s.states.value)
+        }
+        assertFalse("abort" in s.states.value)
+        assertTrue(s.pickerSkills.value.isEmpty())
     }
 
     @Test

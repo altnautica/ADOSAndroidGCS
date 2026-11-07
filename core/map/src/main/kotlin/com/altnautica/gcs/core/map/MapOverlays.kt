@@ -25,7 +25,8 @@ data class MapPolygon(val id: String, val points: List<GeoPoint>, val kind: Area
 @Immutable
 data class MapCircle(val id: String, val center: GeoPoint, val radiusM: Double, val kind: AreaKind)
 
-enum class LineKind { MissionPath, Trail, Track, SurveyPreview }
+/** [DroneMission]: the plan stored on the vehicle, drawn dashed when it is not this device's plan. */
+enum class LineKind { MissionPath, Trail, Track, SurveyPreview, DroneMission }
 
 @Immutable
 data class MapLine(val id: String, val points: List<GeoPoint>, val kind: LineKind)

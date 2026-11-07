@@ -19,6 +19,18 @@ sealed interface VehicleCommand {
 
     /** `MAV_CMD_SET_EKF_SOURCE_SET`: make EKF3 source set [set] (1-3) active. */
     data class SetEkfSourceSet(val set: Int) : VehicleCommand
+
+    /** Gimbal pitch and yaw rates in deg/s (`MAV_CMD_DO_GIMBAL_MANAGER_PITCHYAW`). */
+    data class GimbalRate(val pitchDps: Float, val yawDps: Float) : VehicleCommand
+
+    /** Gimbal back to level and forward. */
+    data object GimbalRecenter : VehicleCommand
+
+    /** One zoom step in ([step] > 0) or out (`MAV_CMD_SET_CAMERA_ZOOM`, step type). */
+    data class CameraZoom(val step: Int) : VehicleCommand
+
+    /** One still image (`MAV_CMD_IMAGE_START_CAPTURE`). */
+    data object CapturePhoto : VehicleCommand
 }
 
 sealed interface CommandResult {

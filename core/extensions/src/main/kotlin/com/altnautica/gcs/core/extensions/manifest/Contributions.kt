@@ -50,6 +50,15 @@ data class SkillContribution(
     val stateTopic: String,
     val defaultKey: String?,
     val defaultGamepadButton: Int?,
+    /** The skill commands the vehicle (holds the motion lease). */
+    val motion: Boolean = false,
+    /** Parameter keys shown in the skill's Tweak panel. */
+    val params: List<String> = emptyList(),
+    /** The skill consumes stick nudges. */
+    val nudge: Boolean = false,
+    val oneShot: Boolean = false,
+    /** `multirotor` | `fixedwing` | `vtol`; all three when undeclared. */
+    val vehicleClasses: List<String> = listOf("multirotor", "fixedwing", "vtol"),
 )
 
 data class TargetActionContribution(
@@ -118,6 +127,7 @@ object ContributionParser {
 
     private val NODE_PROFILES = listOf("drone", "ground-station", "workstation", "compute")
     private val SURFACE_GROUPS = setOf("status", "vehicle", "link", "device", "compute")
+    private val VEHICLE_CLASSES = listOf("multirotor", "fixedwing", "vtol")
     private val PAGE_ID = Regex("^[a-z0-9-]{1,48}$")
 
     fun parse(contributes: JsonElement?): ExtensionContributions {
@@ -183,6 +193,13 @@ object ContributionParser {
             stateTopic = topic,
             defaultKey = binding?.get("key").str(),
             defaultGamepadButton = binding?.either("gamepad_button", "gamepadButton").num()?.toInt(),
+            motion = e["motion"].bool() == true,
+            params = e["params"].asArray().orEmpty().mapNotNull { it.str() },
+            nudge = e["nudge"].bool() == true,
+            oneShot = e.either("one_shot", "oneShot").bool() == true,
+            vehicleClasses = e.either("vehicle_classes", "vehicleClasses").asArray()
+                ?.mapNotNull { it.str() }?.filter { it in VEHICLE_CLASSES }?.takeIf { it.isNotEmpty() }
+                ?: VEHICLE_CLASSES,
         )
     }
 

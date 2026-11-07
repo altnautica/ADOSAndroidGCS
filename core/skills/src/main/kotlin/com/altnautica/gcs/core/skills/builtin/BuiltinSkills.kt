@@ -6,7 +6,11 @@ import com.altnautica.gcs.core.model.Binding
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.model.ConfirmPolicy
+import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.FlightMode
+import com.altnautica.gcs.core.model.MissionState
+import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillCategory
@@ -15,23 +19,25 @@ import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.skills.SkillReason
-import com.altnautica.gcs.core.skills.SkillTiming
+import com.altnautica.gcs.core.skills.spec.BuiltinSpec
+import com.altnautica.gcs.core.skills.spec.BuiltinsSpec
+import com.altnautica.gcs.core.skills.spec.Ds4Spec
+import com.altnautica.gcs.core.skills.spec.SpecArmRequirement
+import com.altnautica.gcs.core.skills.spec.SpecConfirmKind
+import com.altnautica.gcs.core.skills.spec.SpecStaleLink
 
 /** A skill whose confirm policy depends on the activation arguments (mode changes). */
 interface ArgumentConfirm {
     fun confirmFor(args: Map<String, Any?>): ConfirmPolicy?
 }
 
-/** Skill Bar traits that the shared [Skill] contract does not carry. */
-interface BarTraits {
+/** Traits of a built-in that the shared [Skill] contract does not carry. */
+interface BuiltinTraits {
     /** False for skills that need an argument and are dispatched from their own control. */
     val bindable: Boolean
 
-    /** Hidden from the bar when the firmware is known to lack autonomous navigation. */
-    val requiresAutonomousNav: Boolean
-
-    /** False when the vehicle is known to lack what the skill needs; the bar then hides it (unsupported). */
-    fun presentFor(ctx: SkillContext): Boolean = true
+    /** Sent even while the link is stale (pause, kill): never disabled for freshness. */
+    val sendsBlind: Boolean
 }
 
 /** Activation argument keys understood by the built-ins. */
@@ -46,6 +52,22 @@ object SkillArgs {
 
     /** Standard-mapping gamepad button that triggered the activation; its hold satisfies the confirm. */
     const val GAMEPAD_BUTTON = "gamepadButton"
+}
+
+/** Ids of the built-in flight actions; the table itself is the cockpit spec's `builtins.json`. */
+object BuiltinIds {
+    const val ARM = "arm"
+    const val DISARM = "disarm"
+    const val TAKEOFF = "takeoff"
+    const val LAND = "land"
+    const val RTH = "rth"
+    const val PAUSE = "pause"
+    const val RESUME = "resume"
+    const val TAKE_CONTROL = "take_control"
+    const val KILL = "kill"
+
+    /** Built-ins that stop a running motion skill before they act. */
+    val PREEMPTING: Set<String> = setOf(PAUSE, LAND, RTH, KILL)
 }
 
 object TakeoffAltitude {
@@ -65,18 +87,13 @@ val IDLE_STATE = SkillState(enabled = true, active = false, reasonKey = null, co
 fun disabledState(reason: String) =
     SkillState(enabled = false, active = false, reasonKey = reason, cooldownEndsAtMs = null, charges = null)
 
-/** Builds a built-in confirm policy; title and message keys follow `skills.<key>.confirm.*`. */
-fun builtinConfirm(key: String, gesture: ConfirmGesture, danger: Boolean, checklistAware: Boolean = false) =
+/** A confirm policy whose title and message keys follow `skills.<key>.confirm.*`. */
+fun builtinConfirm(key: String, gesture: ConfirmGesture, holdMs: Int, danger: Boolean, checklistAware: Boolean = false) =
     ConfirmPolicy(
         titleKey = "skills.$key.confirm.title",
         messageKey = "skills.$key.confirm.message",
         gesture = gesture,
-        holdMs = when (gesture) {
-            ConfirmGesture.Tap -> 0
-            ConfirmGesture.Hold -> SkillTiming.HOLD_MS
-            ConfirmGesture.Slide -> SkillTiming.SLIDE_HOLD_MS
-            ConfirmGesture.Guarded -> SkillTiming.GUARDED_HOLD_MS
-        },
+        holdMs = holdMs,
         checklistAware = checklistAware,
         danger = danger,
     )
@@ -84,21 +101,21 @@ fun builtinConfirm(key: String, gesture: ConfirmGesture, danger: Boolean, checkl
 /** Recovery modes that stop the vehicle where it is: confirmed by the press itself. */
 private val RECOVERY_MODES = setOf("LOITER", "BRAKE", "ALT_HOLD", "POSHOLD", "QLOITER", "QHOVER", "FLOWHOLD")
 
-/** Mode names that start or continue a mission. */
-private val MISSION_MODES = setOf("AUTO")
+/** Hold of a non-recovery mode change from the Mode sheet. */
+private const val MODE_CHANGE_HOLD_MS = 1_500
 
-/** Confirm tier of a mode change: tap for recovery modes, slide to start a mission, hold otherwise. */
+/** Confirm tier of a mode change from the Mode sheet: tap for recovery modes, a hold otherwise. */
 fun modeChangeConfirm(modeName: String): ConfirmPolicy? {
-    val name = modeName.uppercase()
-    if (name in RECOVERY_MODES) return null
-    val gesture = if (name in MISSION_MODES) ConfirmGesture.Slide else ConfirmGesture.Hold
-    return builtinConfirm("modeChange", gesture, danger = false)
+    if (modeName.uppercase() in RECOVERY_MODES) return null
+    return builtinConfirm("modeChange", ConfirmGesture.Hold, MODE_CHANGE_HOLD_MS, danger = false)
 }
 
-/** Command skills need a fresh, commandable link to the flight controller. */
-internal fun disabledIfNoLink(ctx: SkillContext): SkillState? {
+/** True when actions go to the onboard pilot rather than straight to the flight controller. */
+fun SkillContext.routesToPilot(): Boolean = pilotLink != null && pilot?.controlMode == ControlMode.Ados
+
+/** The vehicle can be commanded at all: present and not receive-only. */
+private fun disabledIfNoCommandPath(ctx: SkillContext): SkillState? {
     val vehicle = ctx.vehicle ?: return disabledState(SkillReason.NO_FC_LINK)
-    if (!ctx.linkFresh) return disabledState(SkillReason.NO_FC_LINK)
     val reach = vehicle.reach.value
     if (reach is Reach.PhoneRadio) return disabledState(SkillReason.RECEIVE_ONLY)
     if (reach is Reach.Blocked) {
@@ -107,18 +124,12 @@ internal fun disabledIfNoLink(ctx: SkillContext): SkillState? {
     return null
 }
 
-internal fun disabledUnlessDisarmed(ctx: SkillContext): SkillState? = when (ctx.armed) {
-    true -> disabledState(SkillReason.ALREADY_ARMED)
-    null -> disabledState(SkillReason.NO_FC_LINK)
-    false -> null
+/** Command skills need a fresh, commandable link: the pilot channel in ADOS Pilot mode, the FC link otherwise. */
+internal fun disabledIfNoLink(ctx: SkillContext): SkillState? {
+    disabledIfNoCommandPath(ctx)?.let { return it }
+    val fresh = if (ctx.routesToPilot()) ctx.pilotLink?.connected?.value == true else ctx.linkFresh
+    return if (fresh) null else disabledState(SkillReason.NO_FC_LINK)
 }
-
-internal fun disabledUnlessArmed(ctx: SkillContext, reason: String = SkillReason.NOT_ARMED): SkillState? =
-    when (ctx.armed) {
-        false -> disabledState(reason)
-        null -> disabledState(SkillReason.NO_FC_LINK)
-        true -> null
-    }
 
 internal fun ctxModes(ctx: SkillContext): List<FlightMode> =
     ctx.vehicle?.control?.availableModes?.value.orEmpty()
@@ -126,7 +137,12 @@ internal fun ctxModes(ctx: SkillContext): List<FlightMode> =
 private suspend fun SkillContext.run(command: VehicleCommand): CommandResult =
     vehicle?.control?.run(command) ?: CommandResult.Denied(SkillReason.NO_FC_LINK)
 
-/** Base for the built-in flight skills: one-shot, sourced from the app itself. */
+private fun SkillContext.sendPilot(action: PilotAction): CommandResult = when (pilotLink?.action(action)) {
+    true -> CommandResult.Accepted
+    else -> CommandResult.Denied(SkillReason.PILOT_UNAVAILABLE)
+}
+
+/** Base for the built-ins: one-shot, sourced from the app itself. */
 abstract class BuiltinSkill(
     final override val id: String,
     final override val labelKey: String,
@@ -137,31 +153,12 @@ abstract class BuiltinSkill(
     final override val cooldownMs: Long = 0,
     final override val defaultBinding: Binding? = null,
     final override val bindable: Boolean = true,
-    final override val requiresAutonomousNav: Boolean = false,
-) : Skill, BarTraits {
+    final override val sendsBlind: Boolean = false,
+) : Skill, BuiltinTraits {
     final override val source: SkillSource = SkillSource.Builtin
     final override val toggle: Boolean = false
 
     protected suspend fun send(ctx: SkillContext, command: VehicleCommand): CommandResult = ctx.run(command)
-}
-
-object ArmSkill : BuiltinSkill(
-    id = "arm", labelKey = "skills.arm", icon = "power", category = SkillCategory.Safety,
-    armRequirement = ArmRequirement.Disarmed,
-    confirm = builtinConfirm("arm", ConfirmGesture.Slide, danger = true, checklistAware = true),
-) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: disabledUnlessDisarmed(ctx) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.Arm())
-}
-
-object DisarmSkill : BuiltinSkill(
-    id = "disarm", labelKey = "skills.disarm", icon = "power_off", category = SkillCategory.Safety,
-    armRequirement = ArmRequirement.Armed,
-    confirm = builtinConfirm("disarm", ConfirmGesture.Hold, danger = true),
-) {
-    override fun state(ctx: SkillContext) =
-        disabledIfNoLink(ctx) ?: disabledUnlessArmed(ctx, SkillReason.ALREADY_DISARMED) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.Disarm())
 }
 
 /** Takeoff altitude from the arguments, clamped to the allowed range; default when absent. */
@@ -174,169 +171,180 @@ fun takeoffAltitude(args: Map<String, Any?>): Float {
     }
 }
 
+/** Firmware modes that hold position, best first, for the vehicle class. */
+private fun holdCandidates(cls: VehicleClass): List<String> = when (cls) {
+    VehicleClass.Multirotor, VehicleClass.Unknown -> listOf("BRAKE", "LOITER", "POSHOLD")
+    VehicleClass.FixedWing -> listOf("LOITER")
+    VehicleClass.Vtol -> listOf("QLOITER", "QHOVER", "LOITER")
+    VehicleClass.Rover -> listOf("HOLD", "LOITER")
+    VehicleClass.Sub -> listOf("POSHOLD")
+}
+
+/** The advertised mode that holds this vehicle where it is, or null when it has none. */
+internal fun holdMode(ctx: SkillContext): FlightMode? {
+    val modes = ctxModes(ctx)
+    return holdCandidates(ctx.vehicleClass()).firstNotNullOfOrNull { wanted ->
+        modes.firstOrNull { it.name.equals(wanted, ignoreCase = true) }
+    }
+}
+
+private fun armRequirementOf(spec: SpecArmRequirement): ArmRequirement = when (spec) {
+    SpecArmRequirement.Any, SpecArmRequirement.DisarmedOrLanded -> ArmRequirement.Any
+    SpecArmRequirement.Armed, SpecArmRequirement.ArmedLanded -> ArmRequirement.Armed
+    SpecArmRequirement.Disarmed -> ArmRequirement.Disarmed
+}
+
+private val DANGER = setOf(BuiltinIds.ARM, BuiltinIds.DISARM, BuiltinIds.TAKEOFF, BuiltinIds.LAND, BuiltinIds.KILL)
+private val CHECKLIST_AWARE = setOf(BuiltinIds.ARM, BuiltinIds.TAKEOFF)
+
+private fun confirmOf(spec: BuiltinSpec): ConfirmPolicy? {
+    val gesture = when (spec.confirm.kind) {
+        SpecConfirmKind.Tap -> return null
+        SpecConfirmKind.Hold -> ConfirmGesture.Hold
+        SpecConfirmKind.HoldConfirm -> ConfirmGesture.Guarded
+    }
+    return builtinConfirm(spec.id, gesture, spec.confirm.ms, danger = spec.id in DANGER, checklistAware = spec.id in CHECKLIST_AWARE)
+}
+
+private fun categoryOf(id: String): SkillCategory = when (id) {
+    BuiltinIds.ARM, BuiltinIds.DISARM, BuiltinIds.KILL -> SkillCategory.Safety
+    else -> SkillCategory.Flight
+}
+
 /**
- * Arms and climbs. On firmware with a guided mode (ArduPilot) the vehicle enters it
- * before arming: the mode it rests in after a landing or a recovery (LAND, RTL, BRAKE)
- * refuses to arm, and the takeoff command needs it anyway. Firmware without one
- * (PX4) arms where it is and switches itself on the takeoff command.
+ * One row of the built-in table. Its label, arm requirement, confirm tier, link
+ * freshness and keyboard chord come from the spec row; what it does is decided by its
+ * id. In ADOS Pilot control the action goes to the onboard pilot by name; otherwise
+ * the equivalent command goes to the flight controller.
  */
-object TakeoffSkill : BuiltinSkill(
-    id = "takeoff", labelKey = "skills.takeoff", icon = "flight_takeoff", category = SkillCategory.Flight,
-    armRequirement = ArmRequirement.Disarmed,
-    confirm = builtinConfirm("takeoff", ConfirmGesture.Hold, danger = true, checklistAware = true),
-    requiresAutonomousNav = true,
+class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
+    id = spec.id,
+    labelKey = spec.label,
+    icon = spec.icon,
+    category = categoryOf(spec.id),
+    armRequirement = armRequirementOf(spec.armRequirement),
+    confirm = confirmOf(spec),
+    defaultBinding = spec.keyboard?.let { Binding(it, null) },
+    sendsBlind = spec.staleLink == SpecStaleLink.SendBlind,
 ) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: disabledUnlessDisarmed(ctx) ?: IDLE_STATE
+    override fun state(ctx: SkillContext): SkillState {
+        val link = if (sendsBlind) disabledIfNoCommandPath(ctx) else disabledIfNoLink(ctx)
+        link?.let { return it }
+        if (spec.id == BuiltinIds.TAKE_CONTROL && ctx.pilotLink == null) return disabledState(SkillReason.PILOT_UNAVAILABLE)
+        armGate(ctx)?.let { return it }
+        if (spec.id == BuiltinIds.RESUME && !ctx.routesToPilot()) {
+            val mission = ctx.pilot?.mission?.state
+            if (mission != null && mission != MissionState.Paused) return disabledState(SkillReason.NO_PAUSED_MISSION)
+        }
+        return IDLE_STATE
+    }
+
+    /** The table's arm requirement; landed comes from the pilot and is unknown without it. */
+    private fun armGate(ctx: SkillContext): SkillState? {
+        val armed = ctx.armed
+        val landed = ctx.pilot?.landed
+        return when (spec.armRequirement) {
+            SpecArmRequirement.Any -> null
+            SpecArmRequirement.Armed -> when (armed) {
+                false -> disabledState(SkillReason.NOT_ARMED)
+                null -> if (sendsBlind) null else disabledState(SkillReason.NO_FC_LINK)
+                true -> null
+            }
+            SpecArmRequirement.Disarmed -> when (armed) {
+                true -> disabledState(SkillReason.ALREADY_ARMED)
+                null -> disabledState(SkillReason.NO_FC_LINK)
+                false -> null
+            }
+            SpecArmRequirement.ArmedLanded -> when {
+                armed == null -> disabledState(SkillReason.NO_FC_LINK)
+                !armed -> disabledState(SkillReason.ALREADY_DISARMED)
+                landed == false -> disabledState(SkillReason.NOT_LANDED)
+                else -> null
+            }
+            SpecArmRequirement.DisarmedOrLanded -> when {
+                armed == null -> disabledState(SkillReason.NO_FC_LINK)
+                armed && landed != true -> disabledState(SkillReason.ALREADY_ARMED)
+                else -> null
+            }
+        }
+    }
+
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
-        val guided = ModePreset.Guided.resolve(ctx)
+        if (spec.id == BuiltinIds.TAKE_CONTROL) return ctx.sendPilot(PilotAction(spec.pilotAction))
+        if (ctx.routesToPilot()) {
+            val pilotArgs = if (spec.id == BuiltinIds.TAKEOFF) mapOf(PILOT_ARG_ALT_M to takeoffAltitude(args)) else emptyMap()
+            return ctx.sendPilot(PilotAction(spec.pilotAction, pilotArgs))
+        }
+        return when (spec.id) {
+            BuiltinIds.ARM -> send(ctx, VehicleCommand.Arm())
+            BuiltinIds.DISARM -> send(ctx, VehicleCommand.Disarm())
+            BuiltinIds.TAKEOFF -> takeoff(ctx, args)
+            BuiltinIds.LAND -> send(ctx, VehicleCommand.Land)
+            BuiltinIds.RTH -> send(ctx, VehicleCommand.ReturnToLaunch)
+            BuiltinIds.PAUSE -> pause(ctx)
+            BuiltinIds.RESUME -> send(ctx, VehicleCommand.ResumeMission)
+            BuiltinIds.KILL -> send(ctx, VehicleCommand.Kill)
+            else -> CommandResult.Unsupported
+        }
+    }
+
+    /**
+     * Arms and climbs. On firmware with a guided mode (ArduPilot) the vehicle enters it
+     * before arming: the mode it rests in after a landing or a recovery (LAND, RTL, BRAKE)
+     * refuses to arm, and the takeoff command needs it anyway. Firmware without one (PX4)
+     * arms where it is and switches itself on the takeoff command.
+     */
+    private suspend fun takeoff(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
+        val guided = ctxModes(ctx).firstOrNull { it.name.equals(GUIDED, ignoreCase = true) }
         if (guided != null && !guided.name.equals(ctx.mode?.name, ignoreCase = true)) {
             val switched = send(ctx, VehicleCommand.SetMode(guided))
             if (switched != CommandResult.Accepted && switched !is CommandResult.Queued) return switched
         }
-        val armed = send(ctx, VehicleCommand.Arm())
-        if (armed != CommandResult.Accepted && armed !is CommandResult.Queued) return armed
+        if (ctx.armed != true) {
+            val armed = send(ctx, VehicleCommand.Arm())
+            if (armed != CommandResult.Accepted && armed !is CommandResult.Queued) return armed
+        }
         return send(ctx, VehicleCommand.Takeoff(takeoffAltitude(args)))
     }
-}
 
-object LandSkill : BuiltinSkill(
-    id = "land", labelKey = "skills.land", icon = "flight_land", category = SkillCategory.Flight,
-    armRequirement = ArmRequirement.Armed,
-    confirm = builtinConfirm("land", ConfirmGesture.Hold, danger = true),
-    requiresAutonomousNav = true,
-) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: disabledUnlessArmed(ctx) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.Land)
-}
-
-object RthSkill : BuiltinSkill(
-    id = "rth", labelKey = "skills.rth", icon = "home", category = SkillCategory.Flight,
-    armRequirement = ArmRequirement.Any,
-    confirm = builtinConfirm("rth", ConfirmGesture.Hold, danger = false),
-    cooldownMs = 5_000,
-    requiresAutonomousNav = true,
-) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.ReturnToLaunch)
-}
-
-object PauseSkill : BuiltinSkill(
-    id = "pause", labelKey = "skills.pause", icon = "pause", category = SkillCategory.Flight,
-    armRequirement = ArmRequirement.Armed,
-    confirm = null,
-    requiresAutonomousNav = true,
-) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: disabledUnlessArmed(ctx) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
-        val inMission = ctx.mode?.name?.uppercase() in MISSION_MODES
-        if (inMission) return send(ctx, VehicleCommand.PauseMission)
-        val hold = ModePreset.Loiter.resolve(ctx) ?: return send(ctx, VehicleCommand.PauseMission)
+    /** A running mission pauses in place; anything else brakes into the vehicle's hold mode. */
+    private suspend fun pause(ctx: SkillContext): CommandResult {
+        if (ctx.pilot?.mission?.state == MissionState.Active) return send(ctx, VehicleCommand.PauseMission)
+        val hold = holdMode(ctx) ?: return send(ctx, VehicleCommand.PauseMission)
         return send(ctx, VehicleCommand.SetMode(hold))
     }
-}
 
-object ResumeSkill : BuiltinSkill(
-    id = "resume", labelKey = "skills.resume", icon = "play_arrow", category = SkillCategory.Flight,
-    armRequirement = ArmRequirement.Armed,
-    confirm = builtinConfirm("resume", ConfirmGesture.Hold, danger = false),
-    requiresAutonomousNav = true,
-) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: disabledUnlessArmed(ctx) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.ResumeMission)
-}
-
-object AbortSkill : BuiltinSkill(
-    id = "abort", labelKey = "skills.abort", icon = "cancel", category = SkillCategory.Safety,
-    armRequirement = ArmRequirement.Any,
-    confirm = builtinConfirm("abort", ConfirmGesture.Hold, danger = true),
-) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.Land)
-}
-
-object KillSkill : BuiltinSkill(
-    id = "kill", labelKey = "skills.kill", icon = "dangerous", category = SkillCategory.Safety,
-    armRequirement = ArmRequirement.Any,
-    confirm = builtinConfirm("kill", ConfirmGesture.Guarded, danger = true),
-) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: IDLE_STATE
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>) = send(ctx, VehicleCommand.Kill)
-}
-
-/**
- * Mode presets. A preset names a behaviour, not a firmware mode: each resolves, per
- * [VehicleClass], to the first listed mode the vehicle advertises (a plane's Loiter is
- * LOITER, a hovering VTOL's is QLOITER). A preset with no mode for the vehicle is hidden.
- * [tierMode] fixes the confirm tier: Loiter, Brake and Alt hold are tap.
- */
-enum class ModePreset(val skillId: String, val labelKey: String, val icon: String, val tierMode: String) {
-    Loiter("mode.loiter", "skills.modeLoiter", "my_location", "LOITER"),
-    Brake("mode.brake", "skills.modeBrake", "front_hand", "BRAKE"),
-    AltHold("mode.althold", "skills.modeAltHold", "height", "ALT_HOLD"),
-    Stabilize("mode.stabilize", "skills.modeStabilize", "center_focus_strong", "STABILIZE"),
-    Guided("mode.guided", "skills.modeGuided", "navigation", "GUIDED"),
-    Auto("mode.auto", "skills.modeAuto", "route", "AUTO"),
-    ;
-
-    /** Mode names this preset means on [cls], best first; empty when the class has no such mode. */
-    fun candidates(cls: VehicleClass): List<String> = when (this) {
-        Loiter -> when (cls) {
-            VehicleClass.Multirotor -> listOf("LOITER", "POSHOLD")
-            VehicleClass.FixedWing -> listOf("LOITER")
-            VehicleClass.Vtol -> listOf("QLOITER", "LOITER")
-            VehicleClass.Rover -> listOf("LOITER", "HOLD")
-            VehicleClass.Sub -> listOf("POSHOLD")
-            VehicleClass.Unknown -> listOf("LOITER", "POSHOLD")
-        }
-        Brake -> when (cls) {
-            VehicleClass.Multirotor, VehicleClass.Unknown -> listOf("BRAKE")
-            else -> emptyList()
-        }
-        AltHold -> when (cls) {
-            VehicleClass.Multirotor, VehicleClass.Sub, VehicleClass.Unknown -> listOf("ALT_HOLD")
-            VehicleClass.FixedWing -> listOf("FBWB")
-            VehicleClass.Vtol -> listOf("QHOVER", "ALT_HOLD")
-            VehicleClass.Rover -> emptyList()
-        }
-        Stabilize -> when (cls) {
-            VehicleClass.Vtol -> listOf("QSTABILIZE", "STABILIZE")
-            VehicleClass.Rover -> listOf("MANUAL")
-            else -> listOf("STABILIZE")
-        }
-        Guided -> listOf("GUIDED")
-        Auto -> listOf("AUTO")
+    private companion object {
+        const val GUIDED = "GUIDED"
+        const val PILOT_ARG_ALT_M = "alt_m"
     }
-
-    /** The advertised mode this preset means on [cls], or null when the vehicle has none. */
-    fun resolve(available: List<FlightMode>, cls: VehicleClass): FlightMode? =
-        candidates(cls).firstNotNullOfOrNull { wanted -> available.firstOrNull { it.name.equals(wanted, ignoreCase = true) } }
-
-    fun resolve(ctx: SkillContext): FlightMode? = resolve(ctxModes(ctx), ctx.vehicleClass())
 }
 
-class ModeSkill(val preset: ModePreset) : BuiltinSkill(
-    id = preset.skillId, labelKey = preset.labelKey, icon = preset.icon, category = SkillCategory.Flight,
+/** Switches the onboard pilot's stick profile (F1–F3); needs the pilot channel. */
+class ProfileSkill(val profile: PilotProfile, label: String) : BuiltinSkill(
+    id = idFor(PilotAction.profile(profile).name),
+    labelKey = label,
+    icon = "speed",
+    category = SkillCategory.Flight,
     armRequirement = ArmRequirement.Any,
-    confirm = modeChangeConfirm(preset.tierMode),
-), ArgumentConfirm {
-    override fun confirmFor(args: Map<String, Any?>): ConfirmPolicy? = modeChangeConfirm(preset.tierMode)
-
-    /** Shown while the mode list is still unknown; hidden once it is known to lack the preset. */
-    override fun presentFor(ctx: SkillContext): Boolean = ctxModes(ctx).isEmpty() || preset.resolve(ctx) != null
-
+    confirm = null,
+) {
     override fun state(ctx: SkillContext): SkillState {
-        disabledIfNoLink(ctx)?.let { return it }
-        if (preset.resolve(ctx) == null) return disabledState(SkillReason.MODE_UNAVAILABLE)
-        return IDLE_STATE
+        val link = ctx.pilotLink ?: return disabledState(SkillReason.PILOT_UNAVAILABLE)
+        if (!link.connected.value) return disabledState(SkillReason.NO_FC_LINK)
+        return IDLE_STATE.copy(active = ctx.pilot?.profile == profile)
     }
 
-    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
-        val mode = preset.resolve(ctx) ?: return CommandResult.Rejected(-1, SkillReason.MODE_UNAVAILABLE)
-        return send(ctx, VehicleCommand.SetMode(mode))
+    override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult =
+        ctx.sendPilot(PilotAction.profile(profile))
+
+    companion object {
+        /** The skill id of a `profile:<name>` action is the action name itself. */
+        fun idFor(action: String): String = action
     }
 }
 
-/** Sets an arbitrary mode named by [SkillArgs.TARGET_MODE]; driven from the mode picker. */
+/** Sets an arbitrary mode named by [SkillArgs.TARGET_MODE]; driven from the Mode sheet's FC mode list. */
 object SetModeSkill : BuiltinSkill(
     id = "set-mode", labelKey = "skills.setMode", icon = "tune", category = SkillCategory.Flight,
     armRequirement = ArmRequirement.Any,
@@ -361,11 +369,17 @@ object SetModeSkill : BuiltinSkill(
 object FlyHereSkill : BuiltinSkill(
     id = "fly-here", labelKey = "skills.flyHere", icon = "near_me", category = SkillCategory.Flight,
     armRequirement = ArmRequirement.Armed,
-    confirm = builtinConfirm("flyHere", ConfirmGesture.Hold, danger = false),
+    confirm = builtinConfirm("flyHere", ConfirmGesture.Hold, holdMs = 800, danger = false),
     bindable = false,
-    requiresAutonomousNav = true,
 ) {
-    override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: disabledUnlessArmed(ctx) ?: IDLE_STATE
+    override fun state(ctx: SkillContext): SkillState {
+        disabledIfNoLink(ctx)?.let { return it }
+        return when (ctx.armed) {
+            false -> disabledState(SkillReason.NOT_ARMED)
+            null -> disabledState(SkillReason.NO_FC_LINK)
+            true -> IDLE_STATE
+        }
+    }
 
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
         val lat = (args[SkillArgs.LAT] as? Number)?.toDouble()
@@ -384,7 +398,7 @@ object FlyHereSkill : BuiltinSkill(
 object EkfSourceSetSkill : BuiltinSkill(
     id = "ekf-source-set", labelKey = "skills.ekfSourceSet", icon = "swap_horiz", category = SkillCategory.Flight,
     armRequirement = ArmRequirement.Any,
-    confirm = builtinConfirm("ekfSourceSet", ConfirmGesture.Hold, danger = false),
+    confirm = builtinConfirm("ekfSourceSet", ConfirmGesture.Hold, holdMs = 800, danger = false),
     bindable = false,
 ) {
     override fun state(ctx: SkillContext) = disabledIfNoLink(ctx) ?: IDLE_STATE
@@ -396,14 +410,19 @@ object EkfSourceSetSkill : BuiltinSkill(
     }
 }
 
-/**
- * Every built-in skill in registration order. Held in its own object so its
- * initialisation never runs inside a skill object's initialiser (a cycle that
- * would capture a not-yet-created skill as null).
- */
+/** Every built-in skill, in table order. */
 object BuiltinSkills {
-    val all: List<Skill> by lazy {
-        listOf(ArmSkill, DisarmSkill, TakeoffSkill, LandSkill, RthSkill, PauseSkill, ResumeSkill, AbortSkill, KillSkill) +
-            ModePreset.entries.map(::ModeSkill) + listOf(SetModeSkill, FlyHereSkill, EkfSourceSetSkill)
+    /**
+     * The built-in table rows, then a profile skill per F-key of the table's
+     * `profile_keys` (labelled from the controller action list), then the built-ins
+     * dispatched from their own controls.
+     */
+    fun from(builtins: BuiltinsSpec, ds4: Ds4Spec): List<Skill> {
+        val labels = ds4.actions.associate { it.id to it.label }
+        val profiles = builtins.profileKeys.entries.sortedBy { it.key }.mapNotNull { (_, action) ->
+            val profile = PilotProfile.entries.firstOrNull { PilotAction.profile(it).name == action } ?: return@mapNotNull null
+            ProfileSkill(profile, labels[action] ?: action)
+        }
+        return builtins.builtins.map(::TableBuiltinSkill) + profiles + listOf(SetModeSkill, FlyHereSkill, EkfSourceSetSkill)
     }
 }

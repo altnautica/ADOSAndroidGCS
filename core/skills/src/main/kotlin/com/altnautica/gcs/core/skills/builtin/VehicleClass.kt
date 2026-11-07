@@ -2,7 +2,7 @@ package com.altnautica.gcs.core.skills.builtin
 
 import com.altnautica.gcs.core.model.SkillContext
 
-/** Airframe class that decides which firmware mode a [ModePreset] means. */
+/** Airframe class from the HEARTBEAT; decides which firmware mode holds the vehicle in place. */
 enum class VehicleClass { Multirotor, FixedWing, Vtol, Rover, Sub, Unknown }
 
 // MAV_TYPE values from the MAVLink common definitions.

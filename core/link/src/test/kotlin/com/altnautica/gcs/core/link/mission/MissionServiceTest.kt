@@ -34,7 +34,7 @@ class MissionServiceTest {
     fun `upload then download round-trips through the simulated vehicle`() = runTest {
         val h = demoHarness()
         val mission = service(h.link, backgroundScope)
-        assertEquals(MissionResult.Success(Unit), mission.upload(MissionType.Mission, items))
+        assertEquals(MissionResult.Success(UploadReceipt(0)), mission.upload(MissionType.Mission, items))
         assertEquals(MissionTransfer.Completed(MissionType.Mission, TransferDirection.Upload), mission.transfer.value)
 
         val download = mission.download(MissionType.Mission)
@@ -70,7 +70,7 @@ class MissionServiceTest {
         }
         val home = MutableStateFlow(HomePosition(-35.0, 149.0, 600f, 0))
         val mission = MavlinkMissionService(link, CommandService(backgroundScope, link, MutableStateFlow(null), home), home)
-        assertEquals(MissionResult.Success(Unit), mission.upload(MissionType.Mission, items))
+        assertEquals(MissionResult.Success(UploadReceipt(0)), mission.upload(MissionType.Mission, items))
         assertEquals(4, count)
         assertEquals(listOf(0, 1, 2, 3), received.map { it.seq })
         assertEquals(MavFrame.MAV_FRAME_GLOBAL, received[0].frame)
@@ -85,7 +85,7 @@ class MissionServiceTest {
         val fence = listOf(
             MissionItem.global(MavCmd.MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION, -35.3632, 149.1652, 0f, param1 = 150f, frame = MavFrame.MAV_FRAME_GLOBAL_INT),
         )
-        assertEquals(MissionResult.Success(Unit), mission.upload(MissionType.Fence, fence))
+        assertEquals(MissionResult.Success(UploadReceipt(0)), mission.upload(MissionType.Fence, fence))
         val plan = (mission.download(MissionType.Fence) as MissionResult.Success).value
         assertEquals(null, plan.home)
         assertEquals(fence, plan.items)

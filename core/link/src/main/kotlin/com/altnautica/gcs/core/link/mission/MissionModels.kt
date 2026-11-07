@@ -95,11 +95,14 @@ sealed interface MissionResult<out T> {
     data class Failure(val error: MissionError) : MissionResult<Nothing>
 }
 
+/** An accepted upload: [opaqueId] is the plan id the vehicle returned in MISSION_ACK, 0 when it has none. */
+data class UploadReceipt(val opaqueId: Long)
+
 /** Mission, fence and rally transfer with the vehicle's mission protocol. */
 interface MissionService {
     val transfer: StateFlow<MissionTransfer>
 
-    suspend fun upload(type: MissionType, items: List<MissionItem>): MissionResult<Unit>
+    suspend fun upload(type: MissionType, items: List<MissionItem>): MissionResult<UploadReceipt>
 
     suspend fun download(type: MissionType): MissionResult<MissionPlan>
 

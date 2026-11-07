@@ -12,12 +12,8 @@ import com.altnautica.gcs.core.model.SkillContext
 import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.VehicleCommand
-import com.altnautica.gcs.core.skills.builtin.ArmSkill
-import com.altnautica.gcs.core.skills.builtin.KillSkill
-import com.altnautica.gcs.core.skills.builtin.PauseSkill
-import com.altnautica.gcs.core.skills.builtin.RthSkill
+import com.altnautica.gcs.core.skills.builtin.BuiltinSkills
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
-import com.altnautica.gcs.core.skills.builtin.TakeoffSkill
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
@@ -37,14 +33,21 @@ class SkillActivatorTest {
 
     private val calls = mutableListOf<String>()
 
-    /** Records each gate the pipeline consults, so the order is observable. */
+    private val builtins = BuiltinSkills.from(testSpec.builtins, testSpec.ds4)
+    private fun builtin(id: String) = builtins.first { it.id == id }
+    private val pause get() = builtin("pause")
+    private val takeoff get() = builtin("takeoff")
+    private val rth get() = builtin("rth")
+
+    /** Records each gate the pipeline consults, so the order is observable. A deactivate clears its active flag. */
     private inner class Probe(
         override val id: String = "probe",
         override val toggle: Boolean = false,
         override val confirm: ConfirmPolicy? = ConfirmPolicy("t", "m", ConfirmGesture.Hold, 800, false, false),
         override val armRequirement: ArmRequirement = ArmRequirement.Any,
-        private val stateValue: SkillState = SkillState(true, false, null, null, null),
+        private var stateValue: SkillState = SkillState(true, false, null, null, null),
         override val category: SkillCategory = SkillCategory.Flight,
+        override val motion: Boolean = false,
     ) : Skill {
         override val labelKey = id
         override val icon = "x"
@@ -61,6 +64,7 @@ class SkillActivatorTest {
         }
         override suspend fun deactivate(ctx: SkillContext): CommandResult {
             calls += "deactivate:$id"
+            stateValue = stateValue.copy(active = false)
             return CommandResult.Accepted
         }
     }
@@ -117,11 +121,12 @@ class SkillActivatorTest {
     }
 
     @Test
-    fun `tap tier activates without a confirm`() = runTest {
-        vehicle.heartbeat(armed = true, tMs = now, mode = "AUTO")
-        val outcome = activator.activate(PauseSkill, ctx(armed = true).copy(mode = vehicle.telemetry.heartbeat.value!!.mode), emptyMap(), cancelAll)
+    fun `tap tier pause activates without a confirm and brakes into the hold mode`() = runTest {
+        vehicle.heartbeat(armed = true, tMs = now, mode = "GUIDED")
+        val outcome = activator.activate(pause, ctx(armed = true).copy(mode = vehicle.telemetry.heartbeat.value!!.mode), emptyMap(), cancelAll)
         assertTrue(outcome is ActivationOutcome.Completed)
-        assertEquals(listOf(VehicleCommand.PauseMission), vehicle.control.sent)
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.SetMode(FlightMode(5, "LOITER"))), vehicle.control.sent)
+        assertFalse("confirm" in calls)
     }
 
     @Test
@@ -145,18 +150,53 @@ class SkillActivatorTest {
     }
 
     @Test
-    fun `an active behaviour is pre-empted before a mode-changing skill runs`() = runTest {
-        val follow = Probe(id = "follow", toggle = true, category = SkillCategory.Behavior, stateValue = SkillState(true, true, null, null, null))
-        val rth = Probe(id = "rth", confirm = null)
-        activator.activate(rth, ctx(), emptyMap(), confirmAll, peers = listOf(follow, rth))
-        assertEquals(listOf("state:rth", "state:follow", "deactivate:follow", "activate:rth"), calls)
+    fun `pause stops an active motion skill and leaves navigation and camera skills running`() = runTest {
+        vehicle.heartbeat(armed = true, tMs = now)
+        val active = SkillState(true, true, null, null, null)
+        val follow = Probe(id = "follow", toggle = true, category = SkillCategory.Behavior, stateValue = active, motion = true)
+        val visionNav = Probe(id = "vision-nav", toggle = true, category = SkillCategory.Navigation, stateValue = active)
+        val tracker = Probe(id = "tracker", toggle = true, category = SkillCategory.Camera, stateValue = active)
+        activator.activate(pause, ctx(armed = true), emptyMap(), confirmAll, peers = listOf(visionNav, follow, tracker, pause))
+        // Only motion peers are consulted: the estimator and the camera skill are never read or stopped.
+        assertEquals(listOf("state:follow", "deactivate:follow"), calls)
+    }
+
+    @Test
+    fun `rth and land also stop motion skills only`() = runTest {
+        vehicle.heartbeat(armed = true, tMs = now)
+        val follow = Probe(id = "follow", toggle = true, stateValue = SkillState(true, true, null, null, null), motion = true)
+        val visionNav = Probe(id = "vision-nav", toggle = true, stateValue = SkillState(true, true, null, null, null))
+        for (id in listOf("rth", "land")) {
+            calls.clear()
+            now += 1_000
+            activator.activate(builtin(id), ctx(armed = true), emptyMap(), confirmAll, peers = listOf(visionNav, follow))
+            assertFalse(id, "deactivate:vision-nav" in calls)
+        }
+        assertFalse(follow.state(ctx()).active)
+    }
+
+    @Test
+    fun `a second motion skill stops the first and waits for its echo before starting`() = runTest {
+        val first = Probe(id = "follow", toggle = true, confirm = null, stateValue = SkillState(true, true, null, null, null), motion = true)
+        val second = Probe(id = "orbit", toggle = true, confirm = null, motion = true)
+        val outcome = activator.activate(second, ctx(), emptyMap(), confirmAll, peers = listOf(first, second))
+        assertTrue(outcome is ActivationOutcome.Completed)
+        assertEquals(listOf("state:orbit", "state:follow", "deactivate:follow", "state:follow", "activate:orbit"), calls)
+    }
+
+    @Test
+    fun `a non-motion toggle never stops the active motion skill`() = runTest {
+        val follow = Probe(id = "follow", toggle = true, confirm = null, stateValue = SkillState(true, true, null, null, null), motion = true)
+        val recorder = Probe(id = "recorder", toggle = true, confirm = null, category = SkillCategory.Camera)
+        activator.activate(recorder, ctx(), emptyMap(), confirmAll, peers = listOf(follow, recorder))
+        assertFalse("deactivate:follow" in calls)
     }
 
     @Test
     fun `confirm arguments reach the skill and a takeoff enters GUIDED then arms first`() = runTest {
         vehicle.heartbeat(armed = false, tMs = now)
         val confirmer = SkillConfirmer { ConfirmResult.Confirmed(mapOf(SkillArgs.ALTITUDE_M to 25f)) }
-        activator.activate(TakeoffSkill, ctx(), emptyMap(), confirmer)
+        activator.activate(takeoff, ctx(), emptyMap(), confirmer)
         assertEquals(
             listOf(VehicleCommand.SetMode(FlightMode(4, "GUIDED")), VehicleCommand.Arm(), VehicleCommand.Takeoff(25f)),
             vehicle.control.sent,
@@ -166,35 +206,37 @@ class SkillActivatorTest {
     @Test
     fun `a takeoff already in GUIDED does not switch mode and stops when the switch is refused`() = runTest {
         val guided = SkillContext(vehicle, false, FlightMode(4, "GUIDED"), true, true, true)
-        activator.activate(TakeoffSkill, guided, emptyMap(), confirmAll)
+        activator.activate(takeoff, guided, emptyMap(), confirmAll)
         assertEquals(listOf(VehicleCommand.Arm(), VehicleCommand.Takeoff(10f)), vehicle.control.sent)
 
         vehicle.control.sent.clear()
         vehicle.control.result = CommandResult.Rejected(4, "failed")
         now += 1_000
-        val outcome = activator.activate(TakeoffSkill, ctx(), emptyMap(), confirmAll)
+        val outcome = activator.activate(takeoff, ctx(), emptyMap(), confirmAll)
         assertEquals(ActivationOutcome.Completed(CommandResult.Rejected(4, "failed"), false), outcome)
         assertEquals(listOf<VehicleCommand>(VehicleCommand.SetMode(FlightMode(4, "GUIDED"))), vehicle.control.sent)
     }
 
     @Test
-    fun `an accepted rth starts a cooldown window merged into its state`() = runTest {
+    fun `pause is never dropped as busy or debounced`() = runTest {
         vehicle.heartbeat(armed = true, tMs = now)
-        activator.activate(RthSkill, ctx(armed = true), emptyMap(), confirmAll)
-        assertEquals(now + 5_000, activator.mergedState(vehicle.id, RthSkill, ctx(armed = true)).cooldownEndsAtMs)
-        now += 5_001
-        assertEquals(null, activator.mergedState(vehicle.id, RthSkill, ctx(armed = true)).cooldownEndsAtMs)
+        assertTrue(activator.activate(pause, ctx(armed = true), emptyMap(), confirmAll) is ActivationOutcome.Completed)
+        now += 100
+        assertTrue(activator.activate(pause, ctx(armed = true), emptyMap(), confirmAll) is ActivationOutcome.Completed)
     }
 
     @Test
-    fun `confirm tiers follow the cockpit standard`() {
-        assertEquals(ConfirmGesture.Slide, ArmSkill.confirm!!.gesture)
-        assertEquals(1_500, ArmSkill.confirm!!.holdMs)
-        assertTrue(ArmSkill.confirm!!.checklistAware)
-        assertEquals(ConfirmGesture.Hold, TakeoffSkill.confirm!!.gesture)
-        assertEquals(800, TakeoffSkill.confirm!!.holdMs)
-        assertEquals(ConfirmGesture.Guarded, KillSkill.confirm!!.gesture)
-        assertEquals(1_500, KillSkill.confirm!!.holdMs)
-        assertEquals(null, PauseSkill.confirm)
+    fun `confirm tiers come from the builtins table`() {
+        assertEquals(ConfirmGesture.Hold, builtin("arm").confirm!!.gesture)
+        assertEquals(800, builtin("arm").confirm!!.holdMs)
+        assertTrue(builtin("arm").confirm!!.checklistAware)
+        assertEquals(ConfirmGesture.Hold, takeoff.confirm!!.gesture)
+        assertEquals(1_500, takeoff.confirm!!.holdMs)
+        assertEquals(1_500, rth.confirm!!.holdMs)
+        assertEquals(ConfirmGesture.Guarded, builtin("kill").confirm!!.gesture)
+        assertEquals(3_000, builtin("kill").confirm!!.holdMs)
+        assertEquals(null, pause.confirm)
+        assertEquals(null, builtin("resume").confirm)
+        assertFalse(builtins.any { it.id == "abort" })
     }
 }

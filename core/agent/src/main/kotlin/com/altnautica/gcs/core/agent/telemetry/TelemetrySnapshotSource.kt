@@ -160,6 +160,7 @@ object SnapshotMapping {
         VehicleCommand.ResumeMission -> "resumeMission" to emptyList()
         is VehicleCommand.SetMode -> "mode" to listOf(JsonPrimitive(command.mode.name))
         is VehicleCommand.SetEkfSourceSet -> "ekfSourceSet" to listOf(JsonPrimitive(command.set))
-        is VehicleCommand.FlyTo, is VehicleCommand.MotorTest, VehicleCommand.RebootAutopilot -> null
+        is VehicleCommand.FlyTo, is VehicleCommand.MotorTest, VehicleCommand.RebootAutopilot,
+        is VehicleCommand.GimbalRate, VehicleCommand.GimbalRecenter, is VehicleCommand.CameraZoom, VehicleCommand.CapturePhoto -> null
     }
 }

@@ -55,6 +55,7 @@ class AdosInputRouterTest {
         every { metaState } returns 0
         every { getUnicodeChar(any()) } returns 0
         every { deviceId } returns device
+        every { this@mockk.device } returns null
     }
 
     /** Presses and releases a gamepad key after [holdMs]; returns whether down and up were consumed. */
@@ -312,6 +313,16 @@ class AdosInputRouterTest {
         r.onMotion(motion(1, MotionEvent.AXIS_BRAKE to 0.5f, MotionEvent.AXIS_GAS to 1f))
         assertEquals(0.5f, r.axes.value.leftTrigger, 0.001f)
         assertEquals(1f, r.axes.value.rightTrigger, 0.001f)
+    }
+
+    @Test
+    fun `older DualShock drivers report the triggers on RX and RY`() = runTest {
+        val r = router(capture = null)
+        r.onMotion(motion(1, MotionEvent.AXIS_RX to 0.25f, MotionEvent.AXIS_RY to 0.75f))
+        assertEquals(0.25f, r.axes.value.leftTrigger, 0.001f)
+        assertEquals(0.75f, r.axes.value.rightTrigger, 0.001f)
+        // The right stick stays on Z / RZ.
+        assertEquals(0f, r.axes.value.rightX, 0f)
     }
 
     @Test

@@ -19,11 +19,54 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** One finger on a controller touchpad, normalised 0..1 with y down. */
+data class PadTouch(val x: Float, val y: Float)
+
 /**
- * Activity-level input router. Gamepad sticks are dead-zoned with each axis's
- * reported flat range plus the operator dead zone, every batched historical sample
- * of a motion event is applied in order, buttons carry hold timing, and hardware
- * keyboard keys become canonical chords.
+ * The live state of the active gamepad, read by the stick streamer and the controls
+ * visualisation alike. [raw] carries no dead zone at all (calibration works in raw
+ * units); [axes] has the hardware flat range removed. Both have Y positive with the
+ * stick pushed up and triggers 0..1. [buttons] is the standard-index bitmask
+ * (16 = PS / Home, 17 = touchpad click). [atMs] is the monotonic time of the last
+ * motion or key from the pad, for the stale-input rule.
+ */
+data class PadSnapshot(
+    val deviceId: Int?,
+    val vendorId: Int,
+    val productId: Int,
+    val raw: GamepadAxes,
+    val axes: GamepadAxes,
+    val buttons: Int,
+    val atMs: Long,
+    val touches: List<PadTouch>,
+) {
+    companion object {
+        val Neutral = PadSnapshot(null, 0, 0, GamepadAxes.Neutral, GamepadAxes.Neutral, 0, 0L, emptyList())
+    }
+}
+
+/**
+ * Trigger axes in preference order. Pads without the trigger axes report L2/R2 on
+ * BRAKE/GAS (most Bluetooth pads) or on RX/RY (older DualShock drivers).
+ */
+internal val LEFT_TRIGGER_AXES = intArrayOf(MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_RX)
+internal val RIGHT_TRIGGER_AXES = intArrayOf(MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS, MotionEvent.AXIS_RY)
+
+/**
+ * A trigger reading as 0 (released) to 1 (pressed). An axis whose range starts below 0
+ * (a generic axis used as a trigger rests at its minimum) is rescaled from its range.
+ */
+internal fun triggerValue(raw: Float, rangeMin: Float?, rangeMax: Float?): Float {
+    if (rangeMin != null && rangeMax != null && rangeMin < 0f && rangeMax > rangeMin) {
+        return ((raw - rangeMin) / (rangeMax - rangeMin)).coerceIn(0f, 1f)
+    }
+    return raw.coerceIn(0f, 1f)
+}
+
+/**
+ * Activity-level input router. Gamepad sticks are dead-zoned with each axis's reported
+ * flat range, every batched historical sample of a motion event is applied in order,
+ * buttons carry hold timing, and hardware keyboard keys become canonical chords.
  *
  * Gamepad buttons are always consumed, so the platform never turns one into a
  * fallback key (space, centre, back, home). While an [InputCapture] takes flight
@@ -37,21 +80,30 @@ class AdosInputRouter @Inject constructor(
 ) : InputRouter {
     private val _axes = MutableStateFlow(GamepadAxes.Neutral)
     private val _buttons = MutableStateFlow(0)
+    private val _snapshot = MutableStateFlow(PadSnapshot.Neutral)
     private val _gamepadConnected = MutableStateFlow(false)
     private val _activeDeviceId = MutableStateFlow<Int?>(null)
     private val _lastInputController = MutableStateFlow(false)
     private val _events = MutableSharedFlow<InputEvent>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val _uiInput = MutableSharedFlow<UiInput>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-    private val pressedAt = LongArray(GamepadButton.HOME + 1)
+    private val pressedAt = LongArray(GamepadButton.LAST + 1)
     private val stickNav = StickNavigator()
     private var navDirection: NavDirection? = null
     private var enterHeld = false
+    private var raw = GamepadAxes.Neutral
+    private var touches: List<PadTouch> = emptyList()
+    private var vendorId = 0
+    private var productId = 0
+    private var lastPadMs = 0L
 
-    /** Current stick positions after the dead-zone. */
+    /** Current stick positions after the hardware flat range. */
     val axes: StateFlow<GamepadAxes> = _axes.asStateFlow()
 
     /** Bitmask of pressed standard-layout buttons (bit n = button n). */
     val buttons: StateFlow<Int> = _buttons.asStateFlow()
+
+    /** The active pad's raw axes, buttons and timing; the one input source every reader shares. */
+    val snapshot: StateFlow<PadSnapshot> = _snapshot.asStateFlow()
 
     /** True while at least one gamepad or joystick is attached. */
     val gamepadConnected: StateFlow<Boolean> = _gamepadConnected.asStateFlow()
@@ -69,10 +121,6 @@ class AdosInputRouter @Inject constructor(
 
     /** Controller UI navigation, emitted outside flight capture (and for app commands inside it). */
     val uiInput: SharedFlow<UiInput> = _uiInput.asSharedFlow()
-
-    /** Operator dead zone (0..0.2) added to each axis's hardware flat range. */
-    @Volatile
-    var extraDeadZone: Float = 0f
 
     @Volatile
     var capture: InputCapture? = null
@@ -117,11 +165,11 @@ class AdosInputRouter @Inject constructor(
         if (active != null && active !in ids) {
             // The active pad is gone: centre everything even if another pad remains.
             neutralize()
-            _activeDeviceId.value = null
+            setActive(null, null)
         }
         _gamepadConnected.value = connected
         if (!connected) {
-            _axes.value = GamepadAxes.Neutral
+            setAxes(GamepadAxes.Neutral, GamepadAxes.Neutral)
             releaseAll()
             setDirection(null)
         }
@@ -133,21 +181,54 @@ class AdosInputRouter @Inject constructor(
     /** No capture, or a capture whose overlay navigates like the rest of the app. */
     private fun uiMode(): Boolean = capture.let { it == null || it.uiNavigation }
 
+    private fun setActive(id: Int?, device: InputDevice?) {
+        _activeDeviceId.value = id
+        vendorId = device?.vendorId ?: 0
+        productId = device?.productId ?: 0
+        if (id == null) {
+            touches = emptyList()
+            _snapshot.value = PadSnapshot.Neutral
+        } else {
+            publish()
+        }
+    }
+
+    private fun publish() {
+        _snapshot.value = PadSnapshot(
+            deviceId = _activeDeviceId.value,
+            vendorId = vendorId,
+            productId = productId,
+            raw = raw,
+            axes = _axes.value,
+            buttons = _buttons.value,
+            atMs = lastPadMs,
+            touches = touches,
+        )
+    }
+
+    private fun setAxes(filtered: GamepadAxes, unfiltered: GamepadAxes) {
+        _axes.value = filtered
+        raw = unfiltered
+        publish()
+    }
+
     override fun onTouch() {
         _lastInputController.value = false
     }
 
     override fun onMotion(event: MotionEvent): Boolean {
-        if (!event.isFromSource(InputDevice.SOURCE_JOYSTICK) || event.actionMasked != MotionEvent.ACTION_MOVE) return false
+        if (!event.isFromSource(InputDevice.SOURCE_JOYSTICK)) return onPadPointer(event)
+        if (event.actionMasked != MotionEvent.ACTION_MOVE) return false
         _lastInputController.value = true
         val device = event.device
         val active = _activeDeviceId.value
         if (active == null) {
-            _activeDeviceId.value = event.deviceId
+            setActive(event.deviceId, device)
         } else if (active != event.deviceId) {
             // Motion from a non-active pad never moves the sticks.
             return true
         }
+        lastPadMs = clock.nowMs()
         for (i in 0 until event.historySize) applySample(event, device, i)
         applySample(event, device, -1)
         updateDirection(event)
@@ -155,31 +236,73 @@ class AdosInputRouter @Inject constructor(
         return true
     }
 
+    /**
+     * The touchpad of the active pad arrives as a separate pointer device with the same
+     * vendor and product: its button is the touchpad click, its pointer positions the
+     * touch points. Any other pointer event is left to the view hierarchy.
+     */
+    private fun onPadPointer(event: MotionEvent): Boolean {
+        if (_activeDeviceId.value == null || !event.isFromSource(InputDevice.SOURCE_TOUCHPAD)) return false
+        val device = event.device ?: return false
+        if (device.vendorId != vendorId || device.productId != productId) return false
+        when (event.actionMasked) {
+            MotionEvent.ACTION_BUTTON_PRESS -> setButton(GamepadButton.TOUCHPAD, true)
+            MotionEvent.ACTION_BUTTON_RELEASE -> setButton(GamepadButton.TOUCHPAD, false)
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> touches = emptyList()
+            else -> {
+                val rx = device.getMotionRange(MotionEvent.AXIS_X, event.source)
+                val ry = device.getMotionRange(MotionEvent.AXIS_Y, event.source)
+                touches = if (rx == null || ry == null || rx.range <= 0f || ry.range <= 0f) {
+                    emptyList()
+                } else {
+                    (0 until event.pointerCount).map { p ->
+                        PadTouch(
+                            ((event.getX(p) - rx.min) / rx.range).coerceIn(0f, 1f),
+                            ((event.getY(p) - ry.min) / ry.range).coerceIn(0f, 1f),
+                        )
+                    }
+                }
+            }
+        }
+        lastPadMs = clock.nowMs()
+        publish()
+        return true
+    }
+
     /** [pos] < 0 reads the current sample, otherwise a batched historical one. */
     private fun applySample(event: MotionEvent, device: InputDevice?, pos: Int) {
-        val extra = extraDeadZone
-        fun read(axis: Int): Float {
-            val raw = if (pos < 0) event.getAxisValue(axis) else event.getHistoricalAxisValue(axis, pos)
-            val flat = device?.getMotionRange(axis, event.source)?.flat ?: 0f
-            return applyDeadZone(raw, flat, extra)
+        fun value(axis: Int): Float = if (pos < 0) event.getAxisValue(axis) else event.getHistoricalAxisValue(axis, pos)
+        fun flat(axis: Int): Float = device?.getMotionRange(axis, event.source)?.flat ?: 0f
+        fun trigger(candidates: IntArray): Float {
+            val axis = if (device == null) {
+                // Unknown device: the first candidate that reads anything.
+                candidates.firstOrNull { value(it) != 0f } ?: candidates[0]
+            } else {
+                candidates.firstOrNull { device.getMotionRange(it, event.source) != null } ?: candidates[0]
+            }
+            val range = device?.getMotionRange(axis, event.source)
+            return triggerValue(value(axis), range?.min, range?.max)
         }
-        fun trigger(primary: Int, fallback: Int): Float {
-            val axis = if (device?.getMotionRange(primary, event.source) != null) primary else fallback
-            val raw = if (pos < 0) event.getAxisValue(axis) else event.getHistoricalAxisValue(axis, pos)
-            val flat = device?.getMotionRange(axis, event.source)?.flat ?: 0f
-            return applyDeadZone(raw, flat, 0f).coerceIn(0f, 1f)
-        }
-        _axes.value = GamepadAxes(
-            leftX = read(MotionEvent.AXIS_X),
-            leftY = -read(MotionEvent.AXIS_Y),
-            rightX = read(MotionEvent.AXIS_Z),
-            rightY = -read(MotionEvent.AXIS_RZ),
-            leftTrigger = trigger(MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE),
-            rightTrigger = trigger(MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS),
+        val lx = value(MotionEvent.AXIS_X).coerceIn(-1f, 1f)
+        val ly = value(MotionEvent.AXIS_Y).coerceIn(-1f, 1f)
+        val rx = value(MotionEvent.AXIS_Z).coerceIn(-1f, 1f)
+        val ry = value(MotionEvent.AXIS_RZ).coerceIn(-1f, 1f)
+        val lt = trigger(LEFT_TRIGGER_AXES)
+        val rt = trigger(RIGHT_TRIGGER_AXES)
+        setAxes(
+            filtered = GamepadAxes(
+                leftX = applyDeadZone(lx, flat(MotionEvent.AXIS_X)),
+                leftY = -applyDeadZone(ly, flat(MotionEvent.AXIS_Y)),
+                rightX = applyDeadZone(rx, flat(MotionEvent.AXIS_Z)),
+                rightY = -applyDeadZone(ry, flat(MotionEvent.AXIS_RZ)),
+                leftTrigger = lt,
+                rightTrigger = rt,
+            ),
+            unfiltered = GamepadAxes(lx, -ly, rx, -ry, lt, rt),
         )
         // Controllers that report the D-pad as a hat axis instead of key events.
-        val hatX = if (pos < 0) event.getAxisValue(MotionEvent.AXIS_HAT_X) else event.getHistoricalAxisValue(MotionEvent.AXIS_HAT_X, pos)
-        val hatY = if (pos < 0) event.getAxisValue(MotionEvent.AXIS_HAT_Y) else event.getHistoricalAxisValue(MotionEvent.AXIS_HAT_Y, pos)
+        val hatX = value(MotionEvent.AXIS_HAT_X)
+        val hatY = value(MotionEvent.AXIS_HAT_Y)
         setButton(GamepadButton.DPAD_LEFT, hatX < -0.5f)
         setButton(GamepadButton.DPAD_RIGHT, hatX > 0.5f)
         setButton(GamepadButton.DPAD_UP, hatY < -0.5f)
@@ -243,18 +366,24 @@ class AdosInputRouter @Inject constructor(
         val passThrough = ui && isDpadKey(event.keyCode)
         val active = _activeDeviceId.value
         if (active == null) {
-            _activeDeviceId.value = event.deviceId
+            setActive(event.deviceId, event.device)
         } else if (active != event.deviceId) {
             // Only a deliberate press lets a second pad take over.
             if (!down) return !passThrough
             neutralize()
-            _activeDeviceId.value = event.deviceId
+            setActive(event.deviceId, event.device)
         }
+        lastPadMs = clock.nowMs()
         // L3, R3 and the numbered buttons outside the standard layout carry no index.
-        val button = GamepadButton.fromKeyCode(event.keyCode) ?: return true
+        val button = GamepadButton.fromKeyCode(event.keyCode)
+        if (button == null) {
+            publish()
+            return true
+        }
         // The window swallows the first down of a navigation key (Enter, D-pad) when it
         // leaves touch mode, so a repeated down that finds the key up starts the press.
         val held = setButton(button, down)
+        if (held == null) publish()
         if (held != null && !(down && event.repeatCount > 0)) {
             val inputs = if (ui) uiInputsForButton(button, down, held) else captureUiInputsForButton(button, down, held)
             inputs.forEach { _uiInput.tryEmit(it) }
@@ -268,6 +397,7 @@ class AdosInputRouter @Inject constructor(
         val was = _buttons.value and bit != 0
         if (was == pressed) return null
         _buttons.value = if (pressed) _buttons.value or bit else _buttons.value and bit.inv()
+        publish()
         val now = clock.nowMs()
         val held = if (pressed) {
             pressedAt[button] = now
@@ -285,7 +415,8 @@ class AdosInputRouter @Inject constructor(
      * joystick events, so the last deflection must not linger.
      */
     fun neutralize() {
-        _axes.value = GamepadAxes.Neutral
+        touches = emptyList()
+        setAxes(GamepadAxes.Neutral, GamepadAxes.Neutral)
         enterHeld = false
         releaseAll()
         stickNav.reset()
@@ -295,6 +426,6 @@ class AdosInputRouter @Inject constructor(
     private fun releaseAll() {
         // A held confirm press must not stay down in the UI once its pad is gone.
         if (_buttons.value and (1 shl GamepadButton.A) != 0 && uiMode()) _uiInput.tryEmit(UiInput.Activate(false))
-        for (b in 0..GamepadButton.HOME) setButton(b, false)
+        for (b in 0..GamepadButton.LAST) setButton(b, false)
     }
 }

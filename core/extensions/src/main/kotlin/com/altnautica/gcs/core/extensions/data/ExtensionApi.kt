@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.serialization.json.JsonElement
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.nav.NavApi
+import com.altnautica.gcs.core.agent.pilot.PilotWire
 import com.altnautica.gcs.core.agent.plugins.PluginApi
 import com.altnautica.gcs.core.agent.ws.AgentSockets
 import com.altnautica.gcs.core.agent.ws.WsFrame
@@ -144,6 +145,9 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
 
     override fun navStream(outbound: Flow<String>): Flow<String> =
         sockets.open(client, NavApi.STREAM_WS_PATH, NavApi.STREAM_TICKET_SCOPE, outbound).textFrames()
+
+    override fun pilotStream(outgoing: Flow<String>): Flow<String> =
+        sockets.open(client, PilotWire.STREAM_WS_PATH, PilotWire.TICKET_SCOPE, outgoing).textFrames()
 
     override suspend fun visionDemand(body: JsonObject): AgentResult<JsonElement> =
         client.requestJson("POST", "api/vision/demand", body)

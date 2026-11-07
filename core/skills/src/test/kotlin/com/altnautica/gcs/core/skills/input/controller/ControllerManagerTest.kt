@@ -65,11 +65,4 @@ class ControllerManagerTest {
         assertEquals(listOf(5), m.controllers.value.map { it.deviceId })
         assertEquals(5, m.active.value?.deviceId)
     }
-
-    @Test
-    fun `the operator dead zone reaches the router`() = runTest(UnconfinedTestDispatcher()) {
-        manager({ emptyList() }, ControllerSettings(deadZonePct = 15))
-        runCurrent()
-        verify { router.extraDeadZone = 0.15f }
-    }
 }

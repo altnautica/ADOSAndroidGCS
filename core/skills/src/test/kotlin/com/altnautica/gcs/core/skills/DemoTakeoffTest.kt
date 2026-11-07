@@ -55,7 +55,9 @@ class DemoTakeoffTest {
         val session = SkillSession(
             MutableStateFlow(vehicle),
             MutableStateFlow(true),
-            SkillRegistry(emptySet()),
+            MutableStateFlow(null),
+            MutableStateFlow(null),
+            SkillRegistry(emptySet(), testSpec),
             SkillActivator(clock),
             clock,
             backgroundScope,
