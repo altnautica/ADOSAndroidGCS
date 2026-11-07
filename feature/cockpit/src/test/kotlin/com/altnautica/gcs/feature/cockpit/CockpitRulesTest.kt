@@ -136,6 +136,20 @@ class CockpitRulesTest {
     }
 
     @Test
+    fun `on a medium window too short to stack, the map card keeps its spec size beside the left column`() {
+        // 2400 x 1080 px at density 560 is 685 dp wide (medium); about 265 dp of body below the top bar.
+        val sizes = gridSizes(WidthClass.Medium)
+        val fit = gridFit(265.dp, sizes, record = false)
+        assertEquals(200.dp to 140.dp, fit.card)
+        assertTrue(fit.cardBesideColumn)
+        assertEquals(GridEdge, fit.leftBottom)
+        // Tall enough to stack: the card sits below the column as before.
+        val tall = gridFit(420.dp, sizes, record = false)
+        assertEquals(200.dp to 140.dp, tall.card)
+        assertTrue(!tall.cardBesideColumn)
+    }
+
+    @Test
     fun `designate picks the detection under the centre reticle, else the nearest`() {
         fun det(x: Float, y: Float, w: Float, h: Float) = Detection(Box(x, y, w, h), "person", 0.9f, null, null)
         val big = det(500f, 200f, 400f, 400f)

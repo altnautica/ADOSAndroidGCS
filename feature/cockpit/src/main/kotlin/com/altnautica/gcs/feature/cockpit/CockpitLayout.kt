@@ -71,6 +71,11 @@ internal data class GridFit(
     val cameraSettingsInColumn: Boolean,
     /** The right column's small buttons (all but the shutter). */
     val rightButton: Dp,
+    /**
+     * The left column and the card cannot stack in this height: the card keeps its spec
+     * size and sits beside the column (to its right) instead of shrinking to a chip.
+     */
+    val cardBesideColumn: Boolean = false,
 ) {
     /** Height of the bottom-left zone (card or chip). */
     val bottomLeftHeight: Dp get() = card?.second ?: chip
@@ -104,16 +109,22 @@ internal fun gridFit(height: Dp, sizes: GridSizes, record: Boolean): GridFit {
     val specCard = sizes.card
     var card: Pair<Dp, Dp>? = null
     var chip = sizes.chipCard ?: MIN_CARD
+    var beside = false
     if (specCard != null && leftRoom >= MIN_CARD) {
         val h = minOf(specCard.second, leftRoom)
         card = specCard.first * (h / specCard.second) to h
+    } else if (specCard != null) {
+        // Too short to stack: the card keeps the class's spec size beside the column.
+        val h = minOf(specCard.second, height - GridEdge * 2)
+        card = specCard.first * (h / specCard.second) to h
+        beside = true
     } else {
         chip = minOf(chip, leftRoom).coerceAtLeast(MIN_CHIP)
     }
-    val leftBottom = GridEdge + (card?.second ?: chip) + GridGap
+    val leftBottom = if (beside) GridEdge else GridEdge + (card?.second ?: chip) + GridGap
     val rightBottom = GridEdge + PICKER_CHIP_HEIGHT * sizes.scale + GridGap
     val rightRoom = height - GridEdge - rightBottom
     val settings = rightColumnHeight(sizes, record, cameraSettings = true) <= rightRoom
     val button = if (settings || rightColumnHeight(sizes, record, cameraSettings = false) <= rightRoom) sizes.column else minOf(sizes.column, MIN_CHIP)
-    return GridFit(card, chip, leftBottom, rightBottom, settings, button)
+    return GridFit(card, chip, leftBottom, rightBottom, settings, button, beside)
 }

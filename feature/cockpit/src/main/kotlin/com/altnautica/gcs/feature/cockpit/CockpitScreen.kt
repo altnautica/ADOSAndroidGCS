@@ -213,6 +213,8 @@ private fun LandscapeGrid(vm: CockpitViewModel, width: WidthClass, onExit: () ->
         TopBar(vm, width, onExit, Modifier.zIndex(Z.BAND))
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val fit = gridFit(maxHeight, sizes, canRecord)
+            // A card beside the left column starts after it.
+            val cardShift = if (fit.cardBesideColumn) sizes.leftButton + AdosSpacing.S2 else 0.dp
             // The HUD is the centre zone: between the columns, so their buttons never cover its tapes.
             val hudInset = PaddingValues(start = GridEdge * 2 + sizes.leftButton, end = GridEdge * 2 + sizes.rightWidth)
             MainView(vm, view, settings.splitRatio, hudInset, Modifier.fillMaxSize())
@@ -232,7 +234,7 @@ private fun LandscapeGrid(vm: CockpitViewModel, width: WidthClass, onExit: () ->
             }
             // Bottom row: the card, the telemetry row between it and the picker chip, the chip.
             Row(
-                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = GridEdge + inward, end = GridEdge + inward, bottom = GridEdge).zIndex(Z.CONTROLS),
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = GridEdge + inward + cardShift, end = GridEdge + inward, bottom = GridEdge).zIndex(Z.CONTROLS),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
             ) {

@@ -103,6 +103,31 @@ class Ds4ActionDispatcherTest {
     }
 
     @Test
+    fun `a take-off hold, its release, then a land hold in the same session lands`() {
+        assertTrue(builtin("takeoff") in press("triangle", ms = 1_600, ctx = ground))
+        val land = press("triangle", ms = 1_600, ctx = air)
+        assertTrue(land.toString(), builtin("land") in land)
+        assertFalse(land.toString(), builtin("takeoff") in land)
+    }
+
+    @Test
+    fun `a Triangle never released after the take-off hold starts no land hold`() {
+        // Holds start on a press edge: a button still down from the take-off hold is not a new hold.
+        val out = ArrayList<CockpitControllerAction>()
+        repeat(80) {
+            out += dispatcher.update(now, pad(setOf("triangle")), rows, ground)
+            now += 20
+        }
+        assertTrue(out.toString(), builtin("takeoff") in out)
+        out.clear()
+        repeat(100) {
+            out += dispatcher.update(now, pad(setOf("triangle")), rows, air)
+            now += 20
+        }
+        assertFalse(out.toString(), builtin("land") in out)
+    }
+
+    @Test
     fun `D-pad up and down adjust the parameter with the picker open and the layer level otherwise`() {
         val open = air.copy(pickerOpen = true)
         assertEquals(listOf(CockpitControllerAction.ParamAdjust(1)), press("dpad_up", ctx = open))
