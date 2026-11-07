@@ -89,7 +89,7 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
         put("lock_state", lock?.let { JsonPrimitive(it) } ?: JsonNull)
     }
 
-    override fun navStream(): Flow<String> = flow {
+    override fun navStream(outbound: Flow<String>): Flow<String> = flow {
         var last = -1
         var n = 0
         while (true) {
@@ -108,6 +108,7 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
             emit(frame("scan", scan(north, east, yaw), now))
             emit(frame("follow", follow(s, now, yaw), now))
             if (n++ % 5 == 0) emit(frame("nav", nav(s), now))
+            layers.frames(now) { kind, data -> frame(kind, data, now) }.forEach { emit(it) }
             delay(TICK_MS)
         }
     }.flowOn(Dispatchers.Default)
@@ -246,6 +247,20 @@ internal class DemoAutonomy : AutonomyFeedApi, AutonomyControlApi {
             }
         }
         return out
+    }
+
+    private val layers = DemoLayerFrames()
+
+    override suspend fun visionDemand(body: JsonObject): AgentResult<JsonElement> {
+        layers.demand(body, t())
+        return AgentResult.Ok(buildJsonObject { put("detecting", true) })
+    }
+
+    override suspend fun visionStatus(): AgentResult<JsonObject> = AgentResult.Ok(layers.status())
+
+    override suspend fun setDetector(modelId: String): AgentResult<JsonElement> {
+        layers.activeModel = modelId
+        return AgentResult.Ok(buildJsonObject { put("ok", true) })
     }
 
     override suspend fun designate(body: JsonObject): AgentResult<JsonElement> =

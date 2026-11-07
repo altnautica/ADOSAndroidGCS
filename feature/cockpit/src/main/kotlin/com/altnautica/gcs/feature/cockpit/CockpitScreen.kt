@@ -282,7 +282,7 @@ private fun VideoStage(vm: CockpitViewModel, modifier: Modifier, hudTopInset: Bo
             ExtensionSlotHost(node, "video.overlay", Modifier.fillMaxSize().zIndex(Z.EXT_OVERLAY))
             ExtensionMarksLayer(node, Modifier.fillMaxSize().zIndex(Z.MARKS))
         }
-        TargetLayers(vm, vm.autonomy.mainCamera(video), pip = false, modifier = Modifier.fillMaxSize().zIndex(Z.MARKS))
+        VideoLayers(vm, vm.autonomy.mainCamera(video), Modifier.fillMaxSize().zIndex(Z.MARKS))
         if (showHud) {
             HudCanvas(
                 telemetry = telemetry,
@@ -352,7 +352,6 @@ private fun Pip(vm: CockpitViewModel, modifier: Modifier) {
     val pip = video.pip ?: return
     Box(modifier.size(width = 192.dp, height = 108.dp).clip(RoundedCornerShape(AdosRadius.Lg))) {
         VideoSurface(pip, Modifier.fillMaxSize(), role = VideoSurfaceRole.Pip)
-        vm.autonomy.pipCamera(video)?.let { camera -> TargetLayers(vm, camera, pip = true, modifier = Modifier.fillMaxSize()) }
     }
 }
 

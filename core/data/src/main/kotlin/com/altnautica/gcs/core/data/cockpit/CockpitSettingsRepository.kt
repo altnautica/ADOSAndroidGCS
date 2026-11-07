@@ -91,6 +91,11 @@ class CockpitSettingsRepository @Inject constructor(
 
     suspend fun setMinimapMode(vehicleId: String, mode: String) = dataStore.edit { it[minimapKey(vehicleId)] = mode }
 
+    /** The video data-layer state for one vehicle (level, flags, depth options) as the cockpit's JSON; null when unset. */
+    fun layers(vehicleId: String): Flow<String?> = dataStore.data.map { it[layersKey(vehicleId)] }
+
+    suspend fun setLayers(vehicleId: String, json: String) = dataStore.edit { it[layersKey(vehicleId)] = json }
+
     companion object {
         const val MIN_SPLIT = 0.2f
         const val MAX_SPLIT = 0.8f
@@ -110,6 +115,7 @@ class CockpitSettingsRepository @Inject constructor(
         private val DENSITY = stringPreferencesKey("cockpit.density")
         private val SPLIT = floatPreferencesKey("cockpit.splitRatio")
         private val TELEMETRY_PANE = booleanPreferencesKey("cockpit.telemetryPane")
+        private fun layersKey(vehicleId: String) = stringPreferencesKey("cockpit.layers.$vehicleId")
         private fun minimapKey(vehicleId: String) = stringPreferencesKey("cockpit.minimap.mode.$vehicleId")
         const val MINIMAP_AUTO = "auto"
         const val MINIMAP_LOCAL = "local"

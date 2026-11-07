@@ -1,15 +1,14 @@
 package com.altnautica.gcs.feature.cockpit.hud
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -59,23 +58,64 @@ import com.altnautica.gcs.feature.cockpit.autonomy.TargetText
 import kotlin.math.max
 
 /**
- * HUD v2 target symbology over one video (host target layer, z 12): hairline candidates,
- * corner brackets, the TRACK tag, reticle, feet tick, coast ghost, search ring, off-frame
- * arrow and the LOST fade. Draw-only; the designator takes the touches. Each item also
- * carries a TalkBack node with its spoken description and a select action.
+ * HUD v2 target symbology over one video: hairline candidates, corner brackets, the TRACK
+ * tag, reticle, feet tick, coast ghost, search ring, off-frame arrow and the LOST fade.
+ * The `targets` layer of the video canvas calls [draw] from its draw phase, so a new
+ * resolve redraws without recomposing.
+ */
+@Stable
+internal class TargetDrawer(
+    private val colors: AdosColorRoles,
+    private val measurer: TextMeasurer,
+    private val style: TextStyle,
+    private val text: TargetText,
+    private val motion: MotionPrefs,
+    private val autonomy: CockpitAutonomy,
+    private val compact: Boolean,
+) {
+    fun DrawScope.draw(state: TargetLayerState, alpha: Float) {
+        val items = state.items
+        if (items.isEmpty()) return
+        val (left, top, scale) = state.fit(size.width, size.height)
+        val view = Rect(left, top, left + state.frameW * scale, top + state.frameH * scale)
+        val painter = TargetPainter(this, colors, measurer, style, text, motion, view, scale, state.nowMs, autonomy)
+        val placed = ArrayList<Rect>()
+        if (alpha < 1f) {
+            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
+            for (item in items) painter.draw(item, false, compact, placed)
+            drawContext.canvas.restore()
+        } else {
+            for (item in items) painter.draw(item, false, compact, placed)
+        }
+    }
+}
+
+@Composable
+internal fun rememberTargetDrawer(autonomy: CockpitAutonomy, motion: MotionPrefs, compact: Boolean): TargetDrawer {
+    val colors = AdosTheme.colors
+    val measurer = rememberTextMeasurer()
+    val resources = LocalResources.current
+    return remember(colors, measurer, resources, motion, autonomy, compact) {
+        val style = AdosTypography.numeric.small.copy(
+            fontSize = 11.sp,
+            fontWeight = FontWeight(AdosHudTarget.TagFontWeight),
+            letterSpacing = AdosHudTarget.TagLetterSpacingEm.em,
+        )
+        TargetDrawer(colors, measurer, style, TargetText(resources), motion, autonomy, compact)
+    }
+}
+
+/**
+ * The targets' TalkBack nodes (one per drawn target, over its rendered rect, with its
+ * spoken description and a select action) and the re-acquire haptic. Draws nothing.
  */
 @Composable
-internal fun TargetOverlay(
+internal fun TargetSemantics(
     state: TargetLayerState,
     autonomy: CockpitAutonomy,
-    motion: MotionPrefs,
-    pip: Boolean,
-    compact: Boolean,
     onSelect: (DrawItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = AdosTheme.colors
-    val measurer = rememberTextMeasurer()
     val text = TargetText(LocalResources.current)
     val haptics = LocalHapticFeedback.current
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -86,24 +126,8 @@ internal fun TargetOverlay(
             seen = list.toSet()
         }
     }
-    val tagStyle = AdosTypography.numeric.small.copy(
-        fontSize = if (pip) 9.sp else 11.sp,
-        fontWeight = FontWeight(AdosHudTarget.TagFontWeight),
-        letterSpacing = AdosHudTarget.TagLetterSpacingEm.em,
-    )
     val follow = autonomy.feed.follow.collectAsStateWithLifecycle().value?.value
     Box(modifier.fillMaxSize().onSizeChanged { size = it }) {
-        Spacer(
-            Modifier.fillMaxSize().drawBehind {
-                val items = state.items
-                val (left, top, scale) = state.fit(this.size.width, this.size.height)
-                val view = Rect(left, top, left + state.frameW * scale, top + state.frameH * scale)
-                val painter = TargetPainter(this, colors, measurer, tagStyle, text, motion, view, scale, state.nowMs, autonomy)
-                val placed = ArrayList<Rect>()
-                for (item in items) painter.draw(item, pip, compact, placed)
-            },
-        )
-        // One TalkBack node per drawn target, over its rendered rect.
         val density = LocalDensity.current
         val (left, top, scale) = state.fit(size.width.toFloat(), size.height.toFloat())
         for (item in state.items) {

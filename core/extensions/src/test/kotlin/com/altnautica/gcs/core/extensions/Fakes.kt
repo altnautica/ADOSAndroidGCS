@@ -104,7 +104,10 @@ class FakeExtensionApi(
     override suspend fun stopRecording(): ApiResult<JsonElement> = ok()
     override suspend fun perceptionInfo(): ApiResult<PerceptionInfo> = ApiResult.Ok(PerceptionInfo(null, null))
     override fun detections(): Flow<String> = emptyFlow()
-    override fun navStream(): Flow<String> = emptyFlow()
+    override fun navStream(outbound: Flow<String>): Flow<String> = emptyFlow()
+    override suspend fun visionDemand(body: JsonObject): AgentResult<JsonElement> = AgentResult.Ok(JsonObject(emptyMap()))
+    override suspend fun visionStatus(): AgentResult<JsonObject> = AgentResult.Ok(JsonObject(emptyMap()))
+    override suspend fun setDetector(modelId: String): AgentResult<JsonElement> = AgentResult.Ok(JsonObject(emptyMap()))
     override suspend fun mapLive(since: Long): AgentResult<JsonObject> = AgentResult.Err(AgentError.FeatureAbsent)
     override fun installJob(jobId: String): Flow<String> = emptyFlow()
     override suspend fun cameras(): ApiResult<List<RosterCamera>> = ApiResult.Ok(

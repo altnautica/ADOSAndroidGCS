@@ -142,8 +142,16 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
     override fun detections(): Flow<String> =
         sockets.open(client, PluginApi.DETECTIONS_WS_PATH, PluginApi.DETECTIONS_TICKET_SCOPE).textFrames()
 
-    override fun navStream(): Flow<String> =
-        sockets.open(client, NavApi.STREAM_WS_PATH, NavApi.STREAM_TICKET_SCOPE).textFrames()
+    override fun navStream(outbound: Flow<String>): Flow<String> =
+        sockets.open(client, NavApi.STREAM_WS_PATH, NavApi.STREAM_TICKET_SCOPE, outbound).textFrames()
+
+    override suspend fun visionDemand(body: JsonObject): AgentResult<JsonElement> =
+        client.requestJson("POST", "api/vision/demand", body)
+
+    override suspend fun visionStatus(): AgentResult<JsonObject> = client.nav.visionStatus()
+
+    override suspend fun setDetector(modelId: String): AgentResult<JsonElement> =
+        client.requestJson("PUT", "api/vision/detector", kotlinx.serialization.json.buildJsonObject { put("model_id", kotlinx.serialization.json.JsonPrimitive(modelId)) })
 
     override suspend fun mapLive(since: Long): AgentResult<JsonObject> = client.nav.mapLive(since)
 

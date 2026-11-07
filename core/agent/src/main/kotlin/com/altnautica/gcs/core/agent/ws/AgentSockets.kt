@@ -8,6 +8,8 @@ import com.altnautica.gcs.core.agent.http.AgentResult
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -37,9 +39,10 @@ class AgentSockets @Inject constructor(private val http: AgentHttp) {
     /**
      * Frames from [path] on [client]'s node until the socket closes. The flow
      * completes on a normal close and fails with [AgentException] on close code
-     * 4401 / HTTP 401 ([AgentError.Unauthorized]) or a transport error.
+     * 4401 / HTTP 401 ([AgentError.Unauthorized]) or a transport error. Each text in
+     * [outbound] is sent on the socket while it is open.
      */
-    fun open(client: AgentClient, path: String, ticketScope: String? = null): Flow<WsFrame> = callbackFlow {
+    fun open(client: AgentClient, path: String, ticketScope: String? = null, outbound: Flow<String> = emptyFlow()): Flow<WsFrame> = callbackFlow {
         val endpoint = client.endpoint
         var protocol: String? = null
         if (ticketScope != null) {
@@ -88,7 +91,11 @@ class AgentSockets @Inject constructor(private val http: AgentHttp) {
                 }
             },
         )
-        awaitClose { socket.close(NORMAL_CLOSE, null) }
+        val sender = launch { outbound.collect { socket.send(it) } }
+        awaitClose {
+            sender.cancel()
+            socket.close(NORMAL_CLOSE, null)
+        }
     }
 
     companion object {

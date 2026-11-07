@@ -36,7 +36,9 @@ import com.altnautica.gcs.feature.cockpit.hud.RailUi
 import com.altnautica.gcs.feature.cockpit.hud.TargetDesignator
 import com.altnautica.gcs.feature.cockpit.hud.TargetLayerDriver
 import com.altnautica.gcs.feature.cockpit.hud.TargetLayerState
-import com.altnautica.gcs.feature.cockpit.hud.TargetOverlay
+import com.altnautica.gcs.feature.cockpit.hud.TargetSemantics
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerStack
+import com.altnautica.gcs.feature.cockpit.hud.rememberTargetDrawer
 import com.altnautica.gcs.feature.cockpit.hud.rememberMotionPrefs
 import com.altnautica.gcs.feature.cockpit.skillbar.ReacquireUi
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
@@ -47,11 +49,13 @@ import kotlinx.coroutines.delay
 private val COMPACT_SURFACE = 600.dp
 
 /**
- * The host target layer of one video surface (z 12): resolver driver, HUD v2 overlay and
- * designation (tap or long-press drag). [cameraId] is the camera this surface shows.
+ * The data layers of the main video: one canvas for every layer (targets included),
+ * the target resolver driver, the TalkBack nodes and designation (tap or long-press
+ * drag). [cameraId] is the camera this surface shows. The picture-in-picture video
+ * draws no layers.
  */
 @Composable
-internal fun TargetLayers(vm: CockpitViewModel, cameraId: String, pip: Boolean, modifier: Modifier = Modifier) {
+internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modifier = Modifier) {
     val a = vm.autonomy
     val videoState by vm.videoState.collectAsStateWithLifecycle()
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
@@ -66,7 +70,12 @@ internal fun TargetLayers(vm: CockpitViewModel, cameraId: String, pip: Boolean, 
         val compact = maxWidth < COMPACT_SURFACE
         val surfaceW = constraints.maxWidth.toFloat()
         val surfaceH = constraints.maxHeight.toFloat()
-        TargetOverlay(layer, a, motion, pip, compact, onSelect = { item ->
+        val drawer = rememberTargetDrawer(a, motion, compact)
+        LayerStack(
+            a.layers, cameraId, layer.frameW, layer.frameH, Modifier.fillMaxSize(),
+            targets = { alpha -> with(drawer) { draw(layer, alpha) } },
+        )
+        TargetSemantics(layer, a, onSelect = { item ->
             item.rect?.let { r ->
                 // The menu opens under the box's bottom-centre, as for a tap.
                 val (left, top, scale) = layer.fit(surfaceW, surfaceH)
@@ -74,9 +83,7 @@ internal fun TargetLayers(vm: CockpitViewModel, cameraId: String, pip: Boolean, 
                 designator.open(anchor, mapOf("x" to r.x, "y" to r.y, "width" to r.w, "height" to r.h), item)
             }
         })
-        if (!pip || actions.isNotEmpty() || layer.items.isNotEmpty()) {
-            TargetDesignator(layer, designator, actions, onLock = { a.lock(it, cameraId) }, onAction = vm::activateTarget)
-        }
+        TargetDesignator(layer, designator, actions, onLock = { a.lock(it, cameraId) }, onAction = vm::activateTarget)
     }
 }
 

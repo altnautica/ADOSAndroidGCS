@@ -11,11 +11,13 @@ import com.altnautica.gcs.core.extensions.data.ExtensionRepository
 import com.altnautica.gcs.core.extensions.data.PerceptionFeed
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +48,10 @@ internal class AutonomyFeed(
     private val repository: ExtensionRepository,
     private val perception: PerceptionFeed,
     private val localApis: Set<LocalNodeApis>,
+    /** Overlay frames (`ar`, `obstacles`, `depth`, `surfaces`) go straight to the layer store. */
+    private val layers: LayerStore,
+    /** Client frames for the nav-stream socket: the view lease. */
+    private val outbound: Flow<String>,
 ) {
     private val _batches = MutableStateFlow<Map<String, DetectionBatch>>(emptyMap())
     val batches: StateFlow<Map<String, DetectionBatch>> = _batches.asStateFlow()
@@ -71,6 +77,7 @@ internal class AutonomyFeed(
     private val _occupancy = MutableStateFlow<OccupancyLayer?>(null)
     val occupancy: StateFlow<OccupancyLayer?> = _occupancy.asStateFlow()
 
+
     /** The in-process source for [id], if any. */
     fun local(id: DeviceId): AutonomyFeedApi? = localApis.firstNotNullOfOrNull { it.autonomy(id) }
 
@@ -81,7 +88,7 @@ internal class AutonomyFeed(
                 if (id == null) return@collectLatest
                 coroutineScope {
                     launch { detections(id) }
-                    launch { retrying { api(id)?.navStream()?.collect(::onNavText) } }
+                    launch { retrying { api(id)?.navStream(outbound)?.collect(::onNavText) } }
                     launch { pollMap(id) }
                 }
             }
@@ -97,6 +104,7 @@ internal class AutonomyFeed(
         _trail.value = emptyList()
         _events.value = emptyList()
         _occupancy.value = null
+        layers.clear()
         tileCache.clear()
         mapSeq = 0L
     }
@@ -132,6 +140,7 @@ internal class AutonomyFeed(
             is NavFrame.Scan -> _scan.value = f.scan
             is NavFrame.Nav -> _nav.value = Stamped(f.nav, now)
             is NavFrame.Follow -> _follow.value = Stamped(f.follow, now)
+            is NavFrame.Layer -> layers.push(f.frame, now)
             is NavFrame.Event -> _events.update { list -> (list + f.event).filter { now - it.atMs <= EVENT_KEEP_MS } }
         }
     }

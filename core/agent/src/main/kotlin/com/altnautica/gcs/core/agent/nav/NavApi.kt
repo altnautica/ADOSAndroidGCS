@@ -15,8 +15,24 @@ interface AutonomyFeedApi {
     /** Detection batch text frames (agent wire shape, snake_case) until the stream closes. */
     fun detections(): Flow<String>
 
-    /** Navigation stream text frames `{kind, ts_ms, data}` until the stream closes. */
-    fun navStream(): Flow<String>
+    /**
+     * Navigation stream text frames `{kind, ts_ms, data}` until the stream closes. Each
+     * text in [outbound] goes to the agent on the same socket (the `{"type":"view"}`
+     * lease that names the camera and layers this client draws).
+     */
+    fun navStream(outbound: Flow<String>): Flow<String>
+
+    /**
+     * `POST /api/vision/demand` equivalent: `{camera_id, hold_s, owner, kind?}` holds
+     * (or with `hold_s` 0 releases) detection, depth or surfaces on a camera.
+     */
+    suspend fun visionDemand(body: JsonObject): AgentResult<JsonElement>
+
+    /** `GET /api/vision/status`: registered models, backend state and detection health. */
+    suspend fun visionStatus(): AgentResult<JsonObject>
+
+    /** `PUT /api/vision/detector {model_id}`: makes a registered model the detector (the engine restarts). */
+    suspend fun setDetector(modelId: String): AgentResult<JsonElement>
 
     /** Occupancy tiles changed after [since]: `{seq, frame, res_m, tile_cells, tiles[]}`. */
     suspend fun mapLive(since: Long): AgentResult<JsonObject>
@@ -40,6 +56,9 @@ class NavApi internal constructor(private val client: AgentClient) {
     /** `GET /api/v1/nav/status`: the latest frame of each kind with its age; absent kinds are null. */
     suspend fun status(): AgentResult<JsonObject> = client.get(STATUS_PATH, JsonObject.serializer())
 
+    /** `GET /api/vision/status`: registered models, backend state and detection health. */
+    suspend fun visionStatus(): AgentResult<JsonObject> = client.get(VISION_STATUS_PATH, JsonObject.serializer())
+
     /** `GET /api/v1/map/live?since=`: occupancy tiles changed after [since]. */
     suspend fun mapLive(since: Long): AgentResult<JsonObject> =
         client.get(MAP_LIVE_PATH, JsonObject.serializer(), mapOf("since" to since.toString()))
@@ -47,6 +66,7 @@ class NavApi internal constructor(private val client: AgentClient) {
     companion object {
         const val STATUS_PATH = "api/v1/nav/status"
         const val MAP_LIVE_PATH = "api/v1/map/live"
+        const val VISION_STATUS_PATH = "api/vision/status"
 
         /** WebSocket path of the navigation stream (needs a `nav.stream` ticket). */
         const val STREAM_WS_PATH = "api/v1/nav/stream"

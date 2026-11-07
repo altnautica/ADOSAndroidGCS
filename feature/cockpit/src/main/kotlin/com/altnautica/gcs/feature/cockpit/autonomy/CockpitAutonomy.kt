@@ -24,6 +24,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerController
+import com.altnautica.gcs.feature.cockpit.hud.layers.VisionEngine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,7 +70,27 @@ internal class CockpitAutonomy(
     private val events: MutableSharedFlow<CockpitEvent>,
     private val activate: (String, Map<String, Any?>) -> Unit,
 ) {
-    val feed = AutonomyFeed(scope, clock, node, repository, perception, localApis)
+    /** The video data layers: frames, flags, view and compute leases. */
+    val layers: LayerController = LayerController(
+        scope, node, settings,
+        engine = object : VisionEngine {
+            override suspend fun demand(node: DeviceId, body: kotlinx.serialization.json.JsonObject) {
+                engineApi(node)?.visionDemand(body)
+            }
+
+            override suspend fun status(node: DeviceId) = (engineApi(node)?.visionStatus() as? AgentResult.Ok)?.value
+
+            override suspend fun setDetector(node: DeviceId, modelId: String) = engineApi(node)?.setDetector(modelId) is AgentResult.Ok
+        },
+        now = clock::nowMs,
+        previewAllowed = { telemetry.value?.heartbeat?.value?.armed != true },
+        armed = { telemetry.value?.heartbeat?.value?.armed == true },
+    )
+
+    val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound)
+
+    /** The node's vision routes: in-process for a simulated node, else its agent. */
+    private suspend fun engineApi(id: DeviceId): com.altnautica.gcs.core.agent.nav.AutonomyFeedApi? = feed.local(id) ?: repository.api(id)
 
     /** The clock every feed timestamp is on. */
     fun nowMs(): Long = clock.nowMs()
@@ -88,6 +110,20 @@ internal class CockpitAutonomy(
     /** True when follow-me's skill is installed on the flown node. */
     val followInstalled: StateFlow<Boolean> = skills.map { list -> list.any { it.id == FOLLOW_SKILL_ID } }
         .distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
+
+    /** The flown node's manifest parameters of [pluginId] named in [keys], in [keys] order: a skill's Tweak panel. */
+    fun pluginParameters(pluginId: String, keys: List<String>): kotlinx.coroutines.flow.Flow<List<com.altnautica.gcs.core.extensions.parameters.PluginParameter>> =
+        node.flatMapLatest { id ->
+            if (id == null || keys.isEmpty()) {
+                kotlinx.coroutines.flow.flowOf(emptyList())
+            } else {
+                repository.extensions(id).map { s ->
+                    val ext = (s as? com.altnautica.gcs.core.extensions.data.ExtensionsState.Loaded)?.extensions?.firstOrNull { it.pluginId == pluginId }
+                    val byKey = ext?.contributions?.parameters.orEmpty().associateBy { it.key }
+                    keys.mapNotNull { byKey[it] }
+                }
+            }
+        }
 
     // ---- Target memory (LOST rect, coast ghost) ------------------------------------
 
