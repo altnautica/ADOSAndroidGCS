@@ -13,6 +13,10 @@
     <string name="controls_message_import_unreadable">That file is not a controls export.</string>
     <string name="controls_message_import_refused">That file has conflicting or unknown bindings.</string>
     <string name="controls_message_file_failed">The file could not be read or written.</string>
+    <string name="controls_key_conflicts_title">Extension keys not bound</string>
+    <string name="controls_key_conflict">%1$s wanted %2$s, already used by %3$s. Pick another key in the cockpit hotkeys.</string>
+    <string name="controls_key_holder_cockpit">the cockpit</string>
+    <string name="controls_key_holder_builtin">a built-in action</string>
     <string name="settings_sound">Sound</string>
     <string name="settings_voice_prompts">Voice prompts</string>
     <string name="settings_voice_prompts_summary">Speak handovers, return home, low battery and mission changes.</string>

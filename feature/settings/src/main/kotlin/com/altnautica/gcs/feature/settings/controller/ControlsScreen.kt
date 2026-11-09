@@ -138,6 +138,19 @@ fun ControlsScreen(
         if (state.conflicts.isNotEmpty()) {
             Text(t("controls.conflict"), color = AdosTheme.colors.statusError, modifier = Modifier.testTag("controls-conflict"))
         }
+        if (state.keyConflicts.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1), modifier = Modifier.testTag("controls-key-conflicts")) {
+                Text(stringResource(R.string.controls_key_conflicts_title), style = MaterialTheme.typography.titleSmall)
+                for (c in state.keyConflicts) {
+                    val holder = when (c.holder) {
+                        null -> stringResource(R.string.controls_key_holder_cockpit)
+                        "" -> stringResource(R.string.controls_key_holder_builtin)
+                        else -> c.holder
+                    }
+                    Text(stringResource(R.string.controls_key_conflict, c.skill, c.chord, holder), color = AdosTheme.colors.fgSecondary)
+                }
+            }
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             AdosButton(t("controls.save"), onClick = actions::save, enabled = state.canSave, modifier = Modifier.testTag("controls-save"))
             if (state.dirty) AdosButton(stringResource(R.string.controls_cancel), onClick = actions::discard, variant = AdosButtonVariant.Secondary)

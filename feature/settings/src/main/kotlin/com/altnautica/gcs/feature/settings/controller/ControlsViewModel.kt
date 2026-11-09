@@ -9,6 +9,10 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.skills.SkillRegistry
+import com.altnautica.gcs.core.skills.binding.BindingStore
+import com.altnautica.gcs.core.skills.binding.KeyConflict
+import com.altnautica.gcs.core.skills.binding.BUILTIN_HOLDER
+import com.altnautica.gcs.core.skills.binding.RESERVED_HOLDER
 import com.altnautica.gcs.core.skills.binding.BindingConflict
 import com.altnautica.gcs.core.skills.binding.Ds4Bindings
 import com.altnautica.gcs.core.skills.controls.BindingProblem
@@ -118,6 +122,8 @@ data class ControlsUiState(
     /** The first-connect tour card on screen (0..2), or null. */
     val tourStep: Int? = null,
     val settings: ControllerSettings = ControllerSettings(),
+    /** Extension skills whose suggested keyboard key another skill or the cockpit already held. */
+    val keyConflicts: List<KeyConflictUi> = emptyList(),
     val onScreenSticks: Boolean = false,
     val allModesVehicles: List<AllModesVehicle> = emptyList(),
 ) {
@@ -138,6 +144,7 @@ class ControlsViewModel @Inject constructor(
     private val connections: PadConnectionProbe,
     registry: SkillRegistry,
     nodeRepository: NodeRepository,
+    bindings: BindingStore,
 ) : ViewModel() {
 
     private val draft = MutableStateFlow<List<ControlBindingSpec>?>(null)
@@ -169,13 +176,19 @@ class ControlsViewModel @Inject constructor(
     }
 
     val state: StateFlow<ControlsUiState> = combine(
-        combine(manager.active, saved, draft, installed) { active, s, d, skills -> Inputs(active, s, d, skills) },
+        combine(manager.active, saved, draft, installed, bindings.keyConflicts) { active, s, d, skills, keys -> Inputs(active, s, d, skills, keys) },
         ui,
         preferences,
     ) { inputs, t, (prefs, vehicles) -> build(inputs, t, prefs, vehicles) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ControlsUiState())
 
-    private data class Inputs(val active: ControllerInfo?, val saved: ControlsState?, val draft: List<ControlBindingSpec>?, val skills: List<Skill>)
+    private data class Inputs(
+        val active: ControllerInfo?,
+        val saved: ControlsState?,
+        val draft: List<ControlBindingSpec>?,
+        val skills: List<Skill>,
+        val keyConflicts: List<KeyConflict>,
+    )
 
     private var pressJob: Job? = null
     private var calibrationJob: Job? = null
@@ -232,6 +245,7 @@ class ControlsViewModel @Inject constructor(
             tourStep = tourStep,
             settings = prefs,
             onScreenSticks = saved.onScreenSticks,
+            keyConflicts = keyConflictsUi(inputs.keyConflicts, inputs.skills),
             allModesVehicles = vehicles,
         )
     }
@@ -527,6 +541,22 @@ class ControlsViewModel @Inject constructor(
         private const val RUMBLE_PAUSE_MS = 600L
         private const val CALIBRATION_POLL_MS = 16L
         private const val NANOS_PER_MS = 1_000_000L
+    }
+}
+
+/** One extension skill left without its suggested key: [holder] null means the cockpit reserves it, "" a built-in. */
+data class KeyConflictUi(val chord: String, val skill: String, val holder: String?)
+
+/** Labels the loadout's seed conflicts with the installed skills' names. */
+internal fun keyConflictsUi(conflicts: List<KeyConflict>, skills: List<Skill>): List<KeyConflictUi> {
+    fun label(id: String) = skills.firstOrNull { it.id == id }?.labelKey ?: id
+    return conflicts.map { c ->
+        val holder = when (c.holder) {
+            RESERVED_HOLDER -> null
+            BUILTIN_HOLDER -> ""
+            else -> label(c.holder)
+        }
+        KeyConflictUi(c.chord, label(c.skillId), holder)
     }
 }
 
