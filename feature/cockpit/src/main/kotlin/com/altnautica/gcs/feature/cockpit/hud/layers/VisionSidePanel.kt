@@ -72,6 +72,7 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
     val batches by vm.autonomy.feed.batches.collectAsStateWithLifecycle()
     val flags by layers.flags.collectAsStateWithLifecycle()
     val depth by layers.depth.collectAsStateWithLifecycle()
+    val view by layers.view.collectAsStateWithLifecycle()
     var status by remember { mutableStateOf<EngineStatus?>(null) }
     var unreachable by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -127,10 +128,15 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
             }
         }
 
+        val forced = layers.spec.forced(view)
         for (id in listOf(LayerSpec.DEPTH, LayerSpec.SURFACES)) {
+            val sw = layerSwitch(id, flags, forced)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) {
-                Text(layerLabel(id), color = c.mediaOn, modifier = Modifier.weight(1f))
-                Switch(checked = flags.isOn(id), onCheckedChange = { layers.toggle(id) })
+                Column(Modifier.weight(1f)) {
+                    Text(layerLabel(id), color = c.mediaOn)
+                    if (sw.forced) Text(stringResource(R.string.vision_layer_forced), color = c.mediaOn.copy(alpha = 0.7f))
+                }
+                Switch(checked = sw.checked, enabled = sw.enabled, onCheckedChange = { layers.toggle(id) })
             }
         }
         Text(stringResource(R.string.vision_depth_style), color = c.mediaOn)
@@ -156,6 +162,12 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
         }
     }
 }
+
+/** How a layer switch shows: a layer the open view forces on reads on and cannot be switched here. */
+internal data class LayerSwitch(val checked: Boolean, val enabled: Boolean, val forced: Boolean)
+
+internal fun layerSwitch(id: String, flags: LayerFlags, forced: Set<String>): LayerSwitch =
+    if (id in forced) LayerSwitch(checked = true, enabled = false, forced = true) else LayerSwitch(flags.isOn(id), enabled = true, forced = false)
 
 private const val STATUS_POLL_MS = 5_000L
 private const val DETECTION_KIND = "detection"

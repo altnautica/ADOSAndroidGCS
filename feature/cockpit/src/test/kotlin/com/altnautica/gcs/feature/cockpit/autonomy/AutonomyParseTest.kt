@@ -60,4 +60,23 @@ class AutonomyParseTest {
         assertEquals(2, trail.size)
         assertTrue(trail.last().health == PoseHealth.Lost)
     }
+
+    @Test
+    fun `the view lease becomes the status route's view query`() {
+        assertEquals("main:targets,depth", AutonomyFeed.viewQuery("""{"type":"view","camera_id":"main","layers":["targets","depth"]}"""))
+        assertNull("a release names no layers", AutonomyFeed.viewQuery("""{"type":"view","camera_id":"main","layers":[]}"""))
+        assertNull(AutonomyFeed.viewQuery("not json"))
+    }
+
+    @Test
+    fun `the status body yields stream frames only for fresh kinds`() {
+        val body = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"pilot":{"ts_ms":7,"age_ms":300,"data":{"owner":"idle"}},"pose":{"ts_ms":1,"age_ms":5000,"data":{}},"obstacles":null}""",
+        ) as kotlinx.serialization.json.JsonObject
+        val frames = AutonomyFeed.statusFrames(body)
+        assertEquals(1, frames.size)
+        val f = kotlinx.serialization.json.Json.parseToJsonElement(frames.single()) as kotlinx.serialization.json.JsonObject
+        assertEquals("\"pilot\"", f["kind"].toString())
+        assertEquals("7", f["ts_ms"].toString())
+    }
 }

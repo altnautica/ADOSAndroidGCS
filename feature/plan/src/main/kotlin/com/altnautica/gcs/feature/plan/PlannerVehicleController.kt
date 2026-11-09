@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.plan
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
 import com.altnautica.gcs.core.link.mission.MissionError
 import com.altnautica.gcs.core.link.mission.MissionItem
+import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.link.mission.MissionResult
 import com.altnautica.gcs.core.link.mission.MissionTransfer
 import com.altnautica.gcs.core.link.mission.MissionType

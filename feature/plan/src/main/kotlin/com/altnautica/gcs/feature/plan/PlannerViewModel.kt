@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.data.plan.PlannerSettingsRepository
 import com.altnautica.gcs.core.database.SavedPlanDao
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
+import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.map.DragPhase
 import com.altnautica.gcs.core.map.GeoPoint

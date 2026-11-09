@@ -60,10 +60,13 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
     val actions by vm.targetActions.collectAsStateWithLifecycle()
     val motion = rememberMotionPrefs()
+    val layoutClass = LocalLayoutClass.current
+    val reducedRate by a.feed.reducedRate.collectAsStateWithLifecycle()
     val layer = remember(cameraId) { TargetLayerState(cameraId) }
     val designator = remember { DesignatorState() }
     // Overlays clear on video loss: no frame for over a second reads as Frozen or not Live.
     val videoLost = videoState !is VideoState.Live
+    LaunchedEffect(a.layers, layoutClass) { a.layers.useDefaultLevel(layoutClass.defaultLayerLevel()) }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val compact = maxWidth < COMPACT_SURFACE
         val surfaceW = constraints.maxWidth.toFloat()
@@ -79,6 +82,7 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
         LayerStack(
             a.layers, cameraId, layer.frameW, layer.frameH, Modifier.fillMaxSize(),
             targets = layer,
+            presentation = layoutClass.layerPresentation().copy(reducedRate = reducedRate),
         )
         TargetSemantics(layer, a, onSelect = { item ->
             item.rect?.let { r ->
@@ -115,7 +119,7 @@ private fun rememberTick(a: CockpitAutonomy): Long {
 
 /**
  * Following-mode chrome over the video: the what's-locked chip (top centre), the range
- * panel (bottom centre, above the Skill Bar) and the right rail. Shown while follow-me
+ * panel (bottom centre, above the bottom row) and the right rail. Shown while follow-me
  * reports a phase other than idle, or a target is designated and follow-me is installed.
  */
 @Composable
@@ -159,7 +163,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 it, stale = !fresh, width = width,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = CockpitLayout.skillBarClearance(width) + 12.dp)
+                    .padding(bottom = CockpitLayout.bottomClearance(width) + 12.dp)
                     .let { m -> if (panelWidth != Dp.Unspecified) m.widthIn(min = panelWidth) else m },
             )
         }
@@ -183,10 +187,9 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 swapLabels = swap,
                 canRecord = canRecord,
                 recording = recording,
-                skillEnabled = skillStates.mapValues { it.value.enabled },
             ),
             width = width,
-            safeHeight = maxHeight - topInset - CockpitLayout.skillBarClearance(width),
+            safeHeight = maxHeight - topInset - CockpitLayout.bottomClearance(width),
             onFollow = { vm.activate(CockpitAutonomy.FOLLOW_SKILL_ID) },
             onReacquireMode = a::setReacquireMode,
             onSwap = {
@@ -199,7 +202,6 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 }
             },
             onRecord = vm::toggleRecording,
-            onSkill = { vm.activate(it) },
             modifier = Modifier.align(Alignment.CenterEnd).padding(end = AdosSpacing.S2).zIndex(1f),
         )
     }

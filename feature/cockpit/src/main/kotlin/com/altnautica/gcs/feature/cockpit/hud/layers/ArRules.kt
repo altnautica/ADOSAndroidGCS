@@ -56,4 +56,21 @@ object ArRules {
             append(" · ").append(s / 60).append(':').append((s % 60).toString().padStart(2, '0'))
         }
     }
+
+    /**
+     * Seconds to the next waypoint for the flight-state chip: the `next` waypoint's ETA in
+     * a fresh [frame] ([ageMs] within the hide window) while its mission is active, else null.
+     */
+    fun nextWaypointEtaS(frame: ArFrame?, ageMs: Long?): Float? {
+        if (frame == null || ageMs == null || ageMs > LayerStore.HIDE_MS) return null
+        if (frame.mission != null && frame.mission.state != "active") return null
+        for (cam in frame.cameras.values) {
+            val items = cam.items
+            for (i in items.indices) {
+                val it = items[i]
+                if (it.t == "wp" && it.role == "next" && it.etaS != null) return it.etaS
+            }
+        }
+        return null
+    }
 }

@@ -92,21 +92,34 @@ fun StreamTabs(
     }
 }
 
+/** The strip cells in order; a distance-only layout class (compact, portrait) keeps the home distance and bearing. */
+enum class StripCell { Dist, Home, Vs, Thr, Wp, Sats }
+
+fun stripCells(distanceOnly: Boolean): List<StripCell> =
+    if (distanceOnly) listOf(StripCell.Dist, StripCell.Home) else StripCell.entries
+
 /** Telemetry strip: distance and bearing home, climb, throttle, waypoint, satellites/HDOP. */
 @Composable
-fun TelemetryStrip(values: StripValues, modifier: Modifier = Modifier, vertical: Boolean = false) {
-    val items = listOf(
-        stringResource(R.string.cockpit_strip_dist) to (values.homeDistanceM?.let { "${it.roundToInt()} m" } ?: DASH),
-        stringResource(R.string.cockpit_strip_home) to (values.homeBearingDeg?.let { "%03d°".format(it.roundToInt() % 360) } ?: DASH),
-        stringResource(R.string.cockpit_strip_vs) to (values.climbMs?.let { "%+.1f m/s".format(it) } ?: DASH),
-        stringResource(R.string.cockpit_strip_thr) to (values.throttlePct?.let { "$it%" } ?: DASH),
-        stringResource(R.string.cockpit_strip_wp) to (
-            if (values.missionSeq != null && values.missionTotal != null && values.missionTotal > 0) "${values.missionSeq}/${values.missionTotal}" else DASH
-            ),
-        stringResource(R.string.cockpit_strip_sats) to (
-            values.satellites?.let { sats -> "$sats" + (values.hdop?.let { " · %.1f".format(it) } ?: "") } ?: DASH
-            ),
+fun TelemetryStrip(values: StripValues, modifier: Modifier = Modifier, vertical: Boolean = false, distanceOnly: Boolean = false) {
+    val labels = mapOf(
+        StripCell.Dist to stringResource(R.string.cockpit_strip_dist),
+        StripCell.Home to stringResource(R.string.cockpit_strip_home),
+        StripCell.Vs to stringResource(R.string.cockpit_strip_vs),
+        StripCell.Thr to stringResource(R.string.cockpit_strip_thr),
+        StripCell.Wp to stringResource(R.string.cockpit_strip_wp),
+        StripCell.Sats to stringResource(R.string.cockpit_strip_sats),
     )
+    val items = stripCells(distanceOnly).map { c ->
+        labels.getValue(c) to when (c) {
+            StripCell.Dist -> values.homeDistanceM?.let { "${it.roundToInt()} m" } ?: DASH
+            StripCell.Home -> values.homeBearingDeg?.let { "%03d°".format(it.roundToInt() % 360) } ?: DASH
+            StripCell.Vs -> values.climbMs?.let { "%+.1f m/s".format(it) } ?: DASH
+            StripCell.Thr -> values.throttlePct?.let { "$it%" } ?: DASH
+            StripCell.Wp ->
+                if (values.missionSeq != null && values.missionTotal != null && values.missionTotal > 0) "${values.missionSeq}/${values.missionTotal}" else DASH
+            StripCell.Sats -> values.satellites?.let { sats -> "$sats" + (values.hdop?.let { " · %.1f".format(it) } ?: "") } ?: DASH
+        }
+    }
     val colors = AdosTheme.colors
     val cell: @Composable (Pair<String, String>) -> Unit = { (label, value) ->
         Column(Modifier.padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1)) {

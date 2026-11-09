@@ -95,8 +95,8 @@ class LayerRulesTest {
     @Test
     fun `lease messages carry the contract fields`() {
         assertEquals("""{"type":"view","camera_id":"main","layers":["ar_route","obstacles"]}""", LayerController.viewLease("main", listOf("ar_route", "obstacles")))
-        assertEquals("""{"kind":"depth","camera_id":"main","hold_s":6.0,"owner":"android"}""", LayerController.demandBody("depth", "main", 6.0).toString())
-        assertEquals("""{"camera_id":"main","hold_s":0.0,"owner":"android"}""", LayerController.demandBody(LayerController.DETECTION, "main", 0.0).toString())
+        assertEquals("""{"kind":"depth","camera_id":"main","hold_s":6.0,"owner":"android:1"}""", LayerController.demandBody("depth", "main", 6.0, "android:1").toString())
+        assertEquals("""{"camera_id":"main","hold_s":0.0,"owner":"android:1"}""", LayerController.demandBody(LayerController.DETECTION, "main", 0.0, "android:1").toString())
     }
 
     @Test
@@ -134,5 +134,15 @@ class LayerRulesTest {
         s.push("a", 1, 1_000)
         s.push("b", 2, 1_600)
         assertEquals(1f, s.fraction(1_600))
+    }
+
+    @Test
+    fun `the chip ETA is the next waypoint's ETA from a fresh active frame`() {
+        val items = listOf(ArItem("wp", seq = 3, role = "after", etaS = 90f), ArItem("wp", seq = 2, role = "next", etaS = 42f))
+        val frame = ArFrame(cameras = mapOf("main" to ArCamera(items = items)), mission = MissionState(state = "active"))
+        assertEquals(42f, ArRules.nextWaypointEtaS(frame, 100L))
+        assertEquals(null, ArRules.nextWaypointEtaS(frame, LayerStore.HIDE_MS + 1))
+        assertEquals(null, ArRules.nextWaypointEtaS(frame.copy(mission = MissionState(state = "paused")), 100L))
+        assertEquals(null, ArRules.nextWaypointEtaS(null, 100L))
     }
 }

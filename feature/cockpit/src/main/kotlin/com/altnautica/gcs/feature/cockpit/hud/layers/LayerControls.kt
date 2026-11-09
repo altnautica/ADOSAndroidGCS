@@ -7,15 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -54,7 +52,7 @@ internal fun layerLabel(id: String): String = when (id) {
 @Composable
 fun LayerLevelButton(controller: LayerController, modifier: Modifier = Modifier) {
     val flags by controller.flags.collectAsStateWithLifecycle()
-    var menu by remember { mutableStateOf(false) }
+    val menu = rememberAdosMenuState()
     val label = levelLabel(flags.level)
     val description = stringResource(R.string.layers_button_description, label)
     Box(modifier) {
@@ -62,21 +60,20 @@ fun LayerLevelButton(controller: LayerController, modifier: Modifier = Modifier)
             Modifier
                 .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                 .background(AdosTheme.colors.mediaScrim, RoundedCornerShape(8.dp))
-                .combinedClickable(onClick = { controller.cycleLevel(1) }, onLongClick = { menu = true })
+                .adosMenuAnchor(menu)
+                .combinedClickable(onClick = { controller.cycleLevel(1) }, onLongClick = { menu.expanded = true })
                 .semantics { contentDescription = description }
                 .padding(horizontal = 12.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(stringResource(R.string.layers_button, label), color = AdosTheme.colors.mediaOn)
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            for (id in controller.spec.canvasOrder) {
-                DropdownMenuItem(
-                    text = { Text(layerLabel(id)) },
-                    onClick = { controller.toggle(id) },
-                    trailingIcon = { Checkbox(checked = flags.isOn(id), onCheckedChange = { controller.toggle(id) }) },
-                )
-            }
+        // An in-window menu: the activity input router and the D-pad focus trap reach it, unlike a popup window.
+        val on = stringResource(R.string.layers_menu_on)
+        val off = stringResource(R.string.layers_menu_off)
+        val items = controller.spec.canvasOrder.map { id ->
+            AdosMenuItem(label = "${layerLabel(id)} · ${if (flags.isOn(id)) on else off}", onClick = { controller.toggle(id) })
         }
+        AdosMenu(menu, items)
     }
 }

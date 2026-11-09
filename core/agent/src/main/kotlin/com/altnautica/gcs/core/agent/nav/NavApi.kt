@@ -43,6 +43,13 @@ interface AutonomyFeedApi {
 
     /** Occupancy tiles changed after [since]: `{seq, frame, res_m, tile_cells, tiles[]}`. */
     suspend fun mapLive(since: Long): AgentResult<JsonObject>
+
+    /**
+     * `GET /api/v1/nav/status?view=<camera_id>:<layer,…>`: the latest frame of each kind
+     * `{ts_ms, age_ms, data}`, projected to [view], which the request also leases. The
+     * polling fallback when the navigation socket cannot open; null where no agent serves it.
+     */
+    suspend fun navStatus(view: String?): AgentResult<JsonObject>? = null
 }
 
 /**
@@ -60,8 +67,12 @@ interface AutonomyControlApi {
 /** Host navigation and map routes (`/api/v1/nav/...`, `/api/v1/map/...`). */
 class NavApi internal constructor(private val client: AgentClient) {
 
-    /** `GET /api/v1/nav/status`: the latest frame of each kind with its age; absent kinds are null. */
-    suspend fun status(): AgentResult<JsonObject> = client.get(STATUS_PATH, JsonObject.serializer())
+    /**
+     * `GET /api/v1/nav/status[?view=]`: the latest frame of each kind with its age; absent
+     * kinds are null. A [view] (`<camera_id>:<layer,…>`) leases that camera and layers.
+     */
+    suspend fun status(view: String? = null): AgentResult<JsonObject> =
+        client.get(STATUS_PATH, JsonObject.serializer(), view?.let { mapOf("view" to it) } ?: emptyMap())
 
     /** `GET /api/vision/status`: registered models, backend state and detection health. */
     suspend fun visionStatus(): AgentResult<JsonObject> = client.get(VISION_STATUS_PATH, JsonObject.serializer())

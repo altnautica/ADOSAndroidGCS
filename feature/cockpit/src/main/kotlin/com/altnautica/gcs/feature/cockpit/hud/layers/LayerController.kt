@@ -12,7 +12,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -25,6 +27,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.random.Random
 
 /** The flown node's vision engine routes the layers use; null when no node answers. */
 interface VisionEngine {
@@ -79,13 +82,22 @@ class LayerController(
     private val _depth = MutableStateFlow(DepthOptions())
     val depth: StateFlow<DepthOptions> = _depth.asStateFlow()
 
-    private val _outbound = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    // The latest view lease is replayed to a socket that (re)connects, so a lease sent
+    // while the nav stream was reconnecting is not lost until the next renewal.
+    private val _outbound = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 8)
 
     /** Text frames for the nav-stream socket (the view lease). */
     val outbound: SharedFlow<String> = _outbound.asSharedFlow()
 
+    /** This surface's demand-lease owner: unique per cockpit, so two phones never share a lease. */
+    val owner: String = "$OWNER_PREFIX:${Random.nextLong().toULong().toString(16).padStart(16, '0')}"
+
     private val attached = MutableStateFlow<String?>(null)
     private var attachCount = 0
+
+    /** True once the vehicle's own saved layer state was restored. */
+    private var persisted = false
+    private var defaultLevel = LayerLevel.Full
 
     init {
         scope.launch { node.collectLatest { id -> if (id != null) settings.layers(id.value).collect(::restore) } }
@@ -96,9 +108,24 @@ class LayerController(
     fun useSpec(s: LayerSpec) {
         if (s == spec) return
         spec = s
-        base.value = s.defaults()
+        if (!persisted) base.value = startFlags()
         recompute()
     }
+
+    /**
+     * The level a vehicle starts at before the operator picks one: the layout class's
+     * `default_layer_level` (route on compact and portrait). A saved state wins.
+     */
+    fun useDefaultLevel(level: LayerLevel) {
+        if (level == defaultLevel) return
+        defaultLevel = level
+        if (!persisted) {
+            base.value = startFlags()
+            recompute()
+        }
+    }
+
+    private fun startFlags(): LayerFlags = spec.defaults().let { if (defaultLevel == it.level) it else it.withLevel(defaultLevel, spec) }
 
     /** The flown node, for the vision panel's engine reads. */
     val nodeId: DeviceId? get() = node.value
@@ -136,7 +163,9 @@ class LayerController(
     }
 
     private fun restore(json: String?) {
-        val (f, d) = decode(json) ?: (spec.defaults() to DepthOptions())
+        val saved = decode(json)
+        persisted = saved != null
+        val (f, d) = saved ?: (startFlags() to DepthOptions())
         base.value = f
         _depth.value = d
         recompute()
@@ -158,6 +187,10 @@ class LayerController(
         }
     }
 
+    /**
+     * Sends the view lease and the demand leases for [camera] at once, again the moment
+     * the layer set changes, and every [RENEW_MS] otherwise.
+     */
     private suspend fun leases(camera: String) {
         val held = HashSet<String>()
         try {
@@ -171,12 +204,12 @@ class LayerController(
                     if (f.isOn(LayerSpec.SURFACES)) add(LayerSpec.SURFACES)
                 }
                 node.value?.let { id ->
-                    for (k in want) runCatching { engine.demand(id, demandBody(k, camera, HOLD_S)) }
-                    for (k in held - want) runCatching { engine.demand(id, demandBody(k, camera, 0.0)) }
+                    for (k in want) runCatching { engine.demand(id, demandBody(k, camera, HOLD_S, owner)) }
+                    for (k in held - want) runCatching { engine.demand(id, demandBody(k, camera, 0.0, owner)) }
                 }
                 held.clear()
                 held.addAll(want)
-                delay(RENEW_MS)
+                withTimeoutOrNull(RENEW_MS) { flags.first { it != f } }
             }
         } finally {
             // The agent keeps one view lease per socket (the latest wins): a camera switch
@@ -185,7 +218,7 @@ class LayerController(
             val id = node.value
             if (id != null && held.isNotEmpty()) {
                 val release = held.toList()
-                scope.launch { for (k in release) runCatching { engine.demand(id, demandBody(k, camera, 0.0)) } }
+                scope.launch { for (k in release) runCatching { engine.demand(id, demandBody(k, camera, 0.0, owner)) } }
             }
         }
     }
@@ -193,7 +226,7 @@ class LayerController(
     companion object {
         const val RENEW_MS = 2_000L
         const val HOLD_S = 6.0
-        const val OWNER = "android"
+        const val OWNER_PREFIX = "android"
         const val DETECTION = "detection"
 
         /** The layers the agent computes per view lease. */
@@ -206,11 +239,11 @@ class LayerController(
         }.toString()
 
         /** `POST /api/vision/demand` body; detection names no kind. */
-        fun demandBody(kind: String, camera: String, holdS: Double): JsonObject = buildJsonObject {
+        fun demandBody(kind: String, camera: String, holdS: Double, owner: String): JsonObject = buildJsonObject {
             if (kind != DETECTION) put("kind", kind)
             put("camera_id", camera)
             put("hold_s", holdS)
-            put("owner", OWNER)
+            put("owner", owner)
         }
 
         fun encode(f: LayerFlags, d: DepthOptions): String = buildJsonObject {

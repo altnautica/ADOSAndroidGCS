@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,10 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FiberManualRecord
-import androidx.compose.material.icons.outlined.FlightLand
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.MoreHoriz
-import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PersonPinCircle
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.Icon
@@ -54,9 +50,8 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
-import com.altnautica.gcs.feature.cockpit.skillbar.isWide
 
-/** What the rail shows; every action dispatches through the same gates the Skill Bar uses. */
+/** What the rail shows; every action dispatches through the cockpit's skill gates. */
 internal data class RailUi(
     val followInstalled: Boolean,
     val followActive: Boolean,
@@ -69,14 +64,11 @@ internal data class RailUi(
     val swapLabels: Pair<String, String>?,
     val canRecord: Boolean,
     val recording: Boolean,
-    /** Enabled state of the mirrored Skill Bar skills (`pause`, `rth`, `land`). */
-    val skillEnabled: Map<String, Boolean>,
 )
 
 /**
  * Following-mode right rail: FOLLOW / TRACKING ×, the STRICT | SMART re-acquire toggle,
- * the camera swap and REC, plus HOLD, RTL and LAND (mirrors of the Skill Bar skills, so
- * they share its gate and confirm) at the expanded width.
+ * the camera swap and REC. Hold, return and land stay on the left column only.
  */
 @Composable
 internal fun FollowRail(
@@ -87,7 +79,6 @@ internal fun FollowRail(
     onReacquireMode: (String) -> Unit,
     onSwap: () -> Unit,
     onRecord: () -> Unit,
-    onSkill: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = AdosTheme.colors
@@ -116,12 +107,6 @@ internal fun FollowRail(
                 if (ui.canRecord) {
                     RailButton(Icons.Outlined.FiberManualRecord, stringResource(R.string.hud_rail_rec), size, if (ui.recording) c.hudCrit else c.hudInk, true, onRecord)
                 }
-            }
-            if (width.isWide()) {
-                Box(Modifier.fillMaxWidth().height(1.dp).drawBehind { drawRect(c.hudHair) })
-                RailButton(Icons.Outlined.Pause, stringResource(R.string.hud_rail_hold), size, c.hudInk, ui.skillEnabled["pause"] == true) { onSkill("pause") }
-                RailButton(Icons.Outlined.Home, stringResource(R.string.hud_rail_rtl), size, c.hudInk, ui.skillEnabled["rth"] == true) { onSkill("rth") }
-                RailButton(Icons.Outlined.FlightLand, stringResource(R.string.hud_rail_land), size, c.hudInk, ui.skillEnabled["land"] == true) { onSkill("land") }
             }
         }
     }

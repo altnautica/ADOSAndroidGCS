@@ -6,13 +6,13 @@ import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 
 /** Named cockpit spacings, so each clearance is defined once. */
 internal object CockpitLayout {
-    private val SkillBarClearanceDefault = 112.dp
-    private val SkillBarClearanceTv = 140.dp
+    private val BottomClearanceDefault = 112.dp
+    private val BottomClearanceTv = 140.dp
 
-    /** Space kept free above the bottom edge for the Skill Bar. */
-    fun skillBarClearance(width: WidthClass): Dp = when (width) {
-        WidthClass.Compact, WidthClass.Medium, WidthClass.Expanded -> SkillBarClearanceDefault
-        WidthClass.Tv -> SkillBarClearanceTv
+    /** Space kept free above the bottom edge for the bottom row, card and skill picker chip. */
+    fun bottomClearance(width: WidthClass): Dp = when (width) {
+        WidthClass.Compact, WidthClass.Medium, WidthClass.Expanded -> BottomClearanceDefault
+        WidthClass.Tv -> BottomClearanceTv
     }
 
     /** Space kept free below the safety band for the inset row (minimap, tabs, strip). */

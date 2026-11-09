@@ -156,6 +156,7 @@ data class LocalPosition(
 )
 
 private val NO_LOCAL_POSITION: StateFlow<LocalPosition?> = MutableStateFlow(null)
+private val NO_VTOL_TRANSITION: StateFlow<Boolean> = MutableStateFlow(false)
 
 /** One flow per telemetry topic so consumers only observe what they draw. */
 interface VehicleTelemetry {
@@ -178,4 +179,7 @@ interface VehicleTelemetry {
 
     /** `LOCAL_POSITION_NED`; sources without a local frame keep it null. */
     val localPosition: StateFlow<LocalPosition?> get() = NO_LOCAL_POSITION
+
+    /** True while a VTOL airframe is transitioning (`EXTENDED_SYS_STATE.vtol_state` 1 or 2). */
+    val vtolTransitioning: StateFlow<Boolean> get() = NO_VTOL_TRANSITION
 }

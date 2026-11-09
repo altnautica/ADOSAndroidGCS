@@ -75,9 +75,6 @@
     <string name="hud_rail_smart">SMART</string>
     <string name="hud_rail_cam_swap">%1$s ⇄ %2$s</string>
     <string name="hud_rail_rec">REC</string>
-    <string name="hud_rail_hold">HOLD</string>
-    <string name="hud_rail_rtl">RTL</string>
-    <string name="hud_rail_land">LAND</string>
     <string name="hud_rail_more">More</string>
     <string name="hud_rail_mode_not_applied">Re-acquire mode not applied</string>
     <string name="hud_rail_reacquire_description">Re-acquire mode</string>

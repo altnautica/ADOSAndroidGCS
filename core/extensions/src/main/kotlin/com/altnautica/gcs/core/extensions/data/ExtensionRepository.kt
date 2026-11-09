@@ -89,6 +89,15 @@ class ExtensionRepository @Inject constructor(
         (s as? ExtensionsState.Loaded)?.extensions.orEmpty().filter { it.status.isEnabled }
     }
 
+    /**
+     * Why [pluginId] stopped on [node], from the latest inventory: its install status word,
+     * "uninstalled" once it is gone from the list, "stopped" while the inventory is unknown.
+     */
+    fun stopReason(node: DeviceId, pluginId: String): String {
+        val s = extensions(node).value as? ExtensionsState.Loaded ?: return "stopped"
+        return s.extensions.firstOrNull { it.pluginId == pluginId }?.status?.stopReason ?: "uninstalled"
+    }
+
     suspend fun api(node: DeviceId): ExtensionApi? {
         val r = liveReach(node)
         return if (r.hasAgentPath) apis.forNode(node, r) else null

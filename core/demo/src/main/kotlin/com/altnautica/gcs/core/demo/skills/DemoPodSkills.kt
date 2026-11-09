@@ -112,7 +112,7 @@ class DemoPodSkills internal constructor(
 
         /**
          * The pod extension's manifest as an agent reports an installed, running extension.
-         * Skills carry every required C5 field; labels are literal (the manifest's English
+         * Skills carry every required manifest skill field; labels are literal (the manifest's English
          * locale strings), which the manifest schema allows in place of i18n keys.
          */
         val DETAIL_JSON = """

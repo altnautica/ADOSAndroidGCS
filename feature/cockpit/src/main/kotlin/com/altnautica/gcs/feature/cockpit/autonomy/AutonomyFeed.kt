@@ -83,6 +83,20 @@ internal class AutonomyFeed(
     /** The onboard pilot's state as the navigation stream relays it to every client. */
     val pilot: StateFlow<PilotState?> = _pilot.asStateFlow()
 
+    private val _reducedRate = MutableStateFlow(false)
+
+    /**
+     * True while the navigation socket cannot open and the feed polls
+     * `GET /api/v1/nav/status?view=` at 2 Hz instead (a radio link that cannot carry it).
+     */
+    val reducedRate: StateFlow<Boolean> = _reducedRate.asStateFlow()
+
+    /** Local time of the last navigation-socket frame. */
+    @Volatile private var lastStreamMs = NEVER
+
+    /** The latest view lease sent to the agent, re-sent as `?view=` by the poll. */
+    @Volatile private var lease: String? = null
+
     /** The in-process source for [id], if any. */
     fun local(id: DeviceId): AutonomyFeedApi? = localApis.firstNotNullOfOrNull { it.autonomy(id) }
 
@@ -92,8 +106,18 @@ internal class AutonomyFeed(
                 clear()
                 if (id == null) return@collectLatest
                 coroutineScope {
+                    launch { outbound.collect { lease = viewQuery(it) } }
                     launch { detections(id) }
-                    launch { retrying { api(id)?.navStream(outbound)?.collect(::onNavText) } }
+                    launch {
+                        retrying {
+                            api(id)?.navStream(outbound)?.collect { text ->
+                                lastStreamMs = clock.nowMs()
+                                _reducedRate.value = false
+                                onNavText(text)
+                            }
+                        }
+                    }
+                    launch { pollStatus(id) }
                     launch { pollMap(id) }
                 }
             }
@@ -110,12 +134,34 @@ internal class AutonomyFeed(
         _events.value = emptyList()
         _occupancy.value = null
         _pilot.value = null
+        _reducedRate.value = false
+        lastStreamMs = NEVER
         layers.clear()
         tileCache.clear()
         mapSeq = 0L
     }
 
     private suspend fun api(id: DeviceId): AutonomyFeedApi? = local(id) ?: repository.api(id)
+
+    /**
+     * The radio fallback: while the navigation socket has delivered nothing for
+     * [STREAM_QUIET_MS], polls the status route at 2 Hz with this client's view lease and
+     * feeds each fresh kind through [onNavText]. [reducedRate] is on only while the poll
+     * brings fresh frames the socket did not, so an idle agent never reads as degraded.
+     */
+    private suspend fun pollStatus(id: DeviceId) {
+        while (true) {
+            delay(STATUS_POLL_MS)
+            val now = clock.nowMs()
+            if (lastStreamMs != NEVER && now - lastStreamMs < STREAM_QUIET_MS) continue
+            val body = api(id)?.let { runCatching { it.navStatus(lease) }.getOrNull() }?.getOrNull()
+            if (body == null) {
+                _reducedRate.value = false
+                continue
+            }
+            _reducedRate.value = statusFrames(body).onEach(::onNavText).isNotEmpty()
+        }
+    }
 
     private suspend fun detections(id: DeviceId) {
         val local = local(id)
@@ -189,6 +235,31 @@ internal class AutonomyFeed(
 
     companion object {
         const val MAP_POLL_MS = 1_000L
+        const val STATUS_POLL_MS = 500L
+        const val STREAM_QUIET_MS = 3_000L
+        const val STATUS_FRESH_MS = 2_000L
+        private const val NEVER = Long.MIN_VALUE
+
+        /** A `{"type":"view","camera_id","layers":[…]}` lease as the status route's `<camera_id>:<layer,…>` query. */
+        fun viewQuery(lease: String): String? {
+            val o = runCatching { kotlinx.serialization.json.Json.parseToJsonElement(lease) }.getOrNull() as? kotlinx.serialization.json.JsonObject ?: return null
+            val camera = (o["camera_id"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return null
+            val layers = (o["layers"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }.orEmpty()
+            return if (camera.isEmpty() || layers.isEmpty()) null else "$camera:${layers.joinToString(",")}"
+        }
+
+        /** Stream-shaped `{kind, ts_ms, data}` texts for every kind in a status body fresher than [STATUS_FRESH_MS]. */
+        fun statusFrames(body: kotlinx.serialization.json.JsonObject): List<String> = body.mapNotNull { (kind, entry) ->
+            val e = entry as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            val age = (e["age_ms"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() ?: return@mapNotNull null
+            val data = e["data"] ?: return@mapNotNull null
+            if (age > STATUS_FRESH_MS) return@mapNotNull null
+            kotlinx.serialization.json.buildJsonObject {
+                put("kind", kotlinx.serialization.json.JsonPrimitive(kind))
+                put("ts_ms", e["ts_ms"] ?: kotlinx.serialization.json.JsonPrimitive(0))
+                put("data", data)
+            }.toString()
+        }
         const val MAP_DIM_MS = 5_000L
         const val RETRY_MS = 1_000L
         const val MAX_RETRY_MS = 10_000L

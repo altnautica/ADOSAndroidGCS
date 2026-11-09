@@ -80,6 +80,7 @@ import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipResolver
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipUi
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmController
 import com.altnautica.gcs.feature.cockpit.flow.FlowUi
+import com.altnautica.gcs.feature.cockpit.hud.layers.ArRules
 import com.altnautica.gcs.feature.cockpit.input.CockpitAction
 import com.altnautica.gcs.feature.cockpit.input.CockpitInputMapper
 import com.altnautica.gcs.feature.cockpit.launch.LaunchDraft
@@ -146,6 +147,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import com.altnautica.gcs.core.link.mission.MissionMirrorSource
+import com.altnautica.gcs.core.map.MapOverlays
 
 /** Severity at or below which a STATUSTEXT raises a critical alert (MAV_SEVERITY_CRITICAL). */
 private const val SEVERITY_CRITICAL = 2
@@ -184,6 +187,7 @@ class CockpitViewModel @AssistedInject constructor(
     private val localApis: Set<@JvmSuppressWildcards LocalNodeApis>,
     private val spec: CockpitSpecRepository,
     private val controls: ControlsRepository,
+    missionMirror: MissionMirrorSource,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -241,6 +245,31 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** On-screen sticks enabled in Settings › Controls (default off). */
     val onScreenSticksEnabled: StateFlow<Boolean> = controls.onScreenSticks.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val _tourStep = MutableStateFlow<Int?>(null)
+
+    /** The first-connect controller tour card on screen (0..[TOUR_STEPS]-1), or null. */
+    val tourStep: StateFlow<Int?> = _tourStep.asStateFlow()
+
+    init {
+        // The first pad connected anywhere opens the three-card tour once, here as in Settings.
+        viewModelScope.launch {
+            combine(router.gamepadConnected, controls.tourSeen) { pad, seen -> pad && !seen }
+                .distinctUntilChanged()
+                .collect { show -> if (show && _tourStep.value == null) _tourStep.value = 0 }
+        }
+    }
+
+    /** Next card; past the last one the tour is marked seen. */
+    fun nextTourStep() {
+        val step = _tourStep.value ?: return
+        if (step + 1 < TOUR_STEPS) _tourStep.value = step + 1 else finishTour()
+    }
+
+    fun finishTour() {
+        _tourStep.value = null
+        viewModelScope.launch { controls.setTourSeen(true) }
+    }
 
     // ---- Clocks -----------------------------------------------------------------------
 
@@ -339,6 +368,7 @@ class CockpitViewModel @AssistedInject constructor(
         viewModelScope,
         pilot = pilot.state,
         pilotLink = pilot.link,
+        stopReason = { pluginId -> extensions.stopReason(vehicleNodeId.value ?: cockpitNodeId, pluginId) },
     )
 
     val loadout: StateFlow<Loadout> = bindings.loadout.stateIn(viewModelScope, SharingStarted.Eagerly, Loadout.defaults(spec.builtins))
@@ -691,6 +721,13 @@ class CockpitViewModel @AssistedInject constructor(
     /** Minimap vehicle, home and trail, sampled at 2 Hz; the trail keeps points at least 2 m apart. */
     val minimap: StateFlow<MinimapState> = hud.minimap
 
+    /** The route the vehicle holds (its agent's mission mirror), drawn on every cockpit map. */
+    val missionRoute: StateFlow<MapOverlays> = combine(
+        vehicleNodeId.flatMapLatest { id -> id?.let(missionMirror::observe) ?: flowOf(null) },
+        minimap.map { it.home }.distinctUntilChanged(),
+    ) { mirror, home -> missionRouteOverlays(mirror, home) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), MapOverlays.Empty)
+
     /** True when the map fills the screen and the video sits in the inset. */
     val minimapSwapped: StateFlow<Boolean> = hud.minimapSwapped
 
@@ -718,6 +755,8 @@ class CockpitViewModel @AssistedInject constructor(
                 missionCompleteSinceMs = done,
                 homeDistM = homeDistanceM(map),
                 goalDistM = p?.goalNed?.let { goalDistanceM(it, telemetry.value?.localPosition?.value) },
+                missionEtaS = autonomy.layers.store.ar.let { ArRules.nextWaypointEtaS(it.cur, it.ageMs(autonomy.nowMs())) },
+                vtolTransitioning = telemetry.value?.vtolTransitioning?.value == true,
                 fcModeName = b.modeName,
             ),
         )
@@ -1009,6 +1048,9 @@ class CockpitViewModel @AssistedInject constructor(
 
         /** Activation argument: the skill was confirmed by a completed controller hold. */
         const val ARG_HELD = "heldConfirm"
+
+        /** Cards in the first-connect controller tour: sticks, safety, skills. */
+        const val TOUR_STEPS = 3
 
         private val SAFETY_BUILTINS = setOf(BuiltinIds.PAUSE, BuiltinIds.RTH, BuiltinIds.KILL)
     }

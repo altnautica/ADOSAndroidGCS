@@ -64,7 +64,8 @@ private data class PendingEcho(val wantActive: Boolean, val sinceMs: Long)
  * A toggle write shows a pending ring until its echo arrives; after
  * [SkillTiming.ECHO_TIMEOUT_MS] the ring clears with a "did not respond" notice. A Stop
  * pressed while the link is lost is queued and sent once the link returns. An active
- * extension skill that disappears (its extension stopped) raises a notice.
+ * extension skill that disappears (its extension stopped) raises a notice whose reason
+ * comes from [stopReason] (the extension's reported status: crashed, disabled, uninstalled).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SkillSession internal constructor(
@@ -76,6 +77,7 @@ class SkillSession internal constructor(
     private val activator: SkillActivator,
     private val clock: MonotonicClock,
     private val scope: CoroutineScope,
+    private val stopReason: (pluginId: String) -> String = { REASON_STOPPED },
 ) {
     private val vehicleState: StateFlow<Vehicle?> = vehicle.stateIn(scope, SharingStarted.Eagerly, null)
     private val checklist: StateFlow<Boolean> = checklistReady.stateIn(scope, SharingStarted.Eagerly, false)
@@ -265,7 +267,7 @@ class SkillSession internal constructor(
                     pending.update { it - id }
                     queuedStops.update { it - id }
                     _notices.tryEmit(
-                        SkillNotice(id, NoticeLevel.Warning, SkillReason.PLUGIN_STOPPED, null, mapOf("plugin" to src.pluginName, "reason" to "disabled")),
+                        SkillNotice(id, NoticeLevel.Warning, SkillReason.PLUGIN_STOPPED, null, mapOf("plugin" to src.pluginName, "reason" to stopReason(src.pluginId))),
                     )
                 }
                 previous = now
@@ -321,5 +323,9 @@ class SkillSessionFactory @Inject constructor(
         scope: CoroutineScope,
         pilot: Flow<PilotState?> = flowOf(null),
         pilotLink: Flow<PilotLink?> = flowOf(null),
-    ): SkillSession = SkillSession(vehicle, checklistReady, pilot, pilotLink, registry, activator, clock, scope)
+        stopReason: (pluginId: String) -> String = { REASON_STOPPED },
+    ): SkillSession = SkillSession(vehicle, checklistReady, pilot, pilotLink, registry, activator, clock, scope, stopReason)
 }
+
+/** Stop reason when the extension's status is unknown. */
+const val REASON_STOPPED = "stopped"

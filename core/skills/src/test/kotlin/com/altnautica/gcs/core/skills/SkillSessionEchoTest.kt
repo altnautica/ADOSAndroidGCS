@@ -152,4 +152,39 @@ class SkillSessionEchoTest {
         runCurrent()
         assertFalse(s.states.value.getValue(skill.id).pending)
     }
+
+    @Test
+    fun `an active extension skill that disappears raises a stopped notice with the extension's reason`() = runTest {
+        advanceTimeBy(10_000)
+        val skill = Toggle().apply { reported = reported.copy(active = true) }
+        val vehicle = FakeVehicle()
+        vehicle.heartbeat(armed = true, tMs = testScheduler.currentTime)
+        val clock = MonotonicClock { testScheduler.currentTime }
+        val list = MutableStateFlow<List<Skill>>(listOf(skill))
+        val contributor = object : SkillContributor {
+            override val skills: Flow<List<Skill>> = list
+        }
+        val s = SkillSession(
+            vehicle = MutableStateFlow(vehicle),
+            checklistReady = MutableStateFlow(true),
+            pilot = MutableStateFlow(null),
+            pilotLink = MutableStateFlow(null),
+            registry = SkillRegistry(setOf(contributor), testSpec),
+            activator = SkillActivator(clock),
+            clock = clock,
+            scope = backgroundScope,
+            stopReason = { id -> if (id == "p") "crashed" else "stopped" },
+        )
+        val notices = collect(s)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(s.states.value.getValue(skill.id).active)
+
+        list.value = emptyList()
+        advanceTimeBy(1_000)
+        runCurrent()
+        val stopped = notices.single { it.reasonKey == SkillReason.PLUGIN_STOPPED }
+        assertEquals("p", stopped.args["plugin"])
+        assertEquals("crashed", stopped.args["reason"])
+    }
 }

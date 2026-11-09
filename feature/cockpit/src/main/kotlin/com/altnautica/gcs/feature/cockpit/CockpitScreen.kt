@@ -136,9 +136,11 @@ internal fun CockpitScreen(
     onExit: () -> Unit,
     snackbar: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalCockpitStrings provides vm.specStrings) {
-        Box(Modifier.fillMaxSize()) {
-            if (!isLandscape()) PortraitLayout(vm, width, onExit) else LandscapeGrid(vm, width, onExit)
+    val landscape = isLandscape()
+    val layoutClass = vm.cockpitSpec.layout.classes[layoutClassId(width, landscape)]
+    CompositionLocalProvider(LocalCockpitStrings provides vm.specStrings, LocalLayoutClass provides layoutClass) {
+        Box(Modifier.fillMaxSize().focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing)) {
+            if (!landscape) PortraitLayout(vm, width, onExit) else LandscapeGrid(vm, width, onExit)
             if (connecting) {
                 Box(Modifier.align(Alignment.Center).zIndex(Z.ALERTS)) {
                     LoadingState(stringResource(R.string.cockpit_connecting))
@@ -556,6 +558,7 @@ private fun VideoStage(
 private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {
     val state by vm.minimap.collectAsStateWithLifecycle()
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
+    val route by vm.missionRoute.collectAsStateWithLifecycle()
     val frame by vm.autonomy.minimapFrame.collectAsStateWithLifecycle()
     if (frame == MinimapFrame.Local) {
         // Pan and pinch are drag gestures, so a plain tap still swaps video and map.
@@ -564,7 +567,10 @@ private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Un
     }
     Box(modifier) {
         // A long-press anywhere on a cockpit map picks a point: the launch go-to on the ground, fly-here in the air.
-        AdosMinimap(state.vehicle, state.home, state.trail, Modifier.fillMaxSize(), zoom = MINIMAP_ZOOM, onClick = onClick, onLongPress = vm::pickMapPoint)
+        AdosMinimap(
+            state.vehicle, state.home, state.trail, Modifier.fillMaxSize(),
+            overlays = route, zoom = MINIMAP_ZOOM, onClick = onClick, onLongPress = vm::pickMapPoint,
+        )
         extNode?.let { node ->
             val center = state.vehicle?.position
             ExtensionSlotHost(
@@ -588,7 +594,7 @@ private fun Tabs(vm: CockpitViewModel) {
 @Composable
 private fun Strip(vm: CockpitViewModel, modifier: Modifier = Modifier) {
     val strip by vm.strip.collectAsStateWithLifecycle()
-    TelemetryStrip(strip, modifier)
+    TelemetryStrip(strip, modifier, distanceOnly = LocalLayoutClass.current.distanceOnly)
 }
 
 @Composable
@@ -693,6 +699,10 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
     val modeSheet by vm.modeSheet.collectAsStateWithLifecycle()
     modeSheet?.let { ui ->
         Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) { ModeSheet(ui, vm.cockpitSpec.flightState.modeSheet, vm.modeSheetActions) }
+    }
+    val tourStep by vm.tourStep.collectAsStateWithLifecycle()
+    tourStep?.let { step ->
+        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) { ControllerTourSheet(step, vm::nextTourStep, vm::finishTour) }
     }
     val launch by vm.launch.collectAsStateWithLifecycle()
     launch?.let { ui ->

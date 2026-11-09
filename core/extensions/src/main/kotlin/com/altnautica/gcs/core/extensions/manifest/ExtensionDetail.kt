@@ -8,6 +8,14 @@ enum class InstallStatus {
 
     val isEnabled: Boolean get() = this == Enabled || this == Running
 
+    /** The word a "<plugin> stopped: <reason>" notice reads for an install left in this status. */
+    val stopReason: String get() = when (this) {
+        Crashed -> "crashed"
+        Disabled -> "disabled"
+        Removed -> "uninstalled"
+        else -> "stopped"
+    }
+
     companion object {
         fun fromWire(v: String?): InstallStatus = when (v) {
             "installed" -> Installed

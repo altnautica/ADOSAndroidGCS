@@ -159,6 +159,8 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
 
     override suspend fun mapLive(since: Long): AgentResult<JsonObject> = client.nav.mapLive(since)
 
+    override suspend fun navStatus(view: String?): AgentResult<JsonObject> = client.nav.status(view)
+
     override suspend fun cameras(): ApiResult<List<RosterCamera>> = when (val r = client.cameraRoster()) {
         is AgentResult.Ok -> ApiResult.Ok(
             r.value.mapNotNull { c ->

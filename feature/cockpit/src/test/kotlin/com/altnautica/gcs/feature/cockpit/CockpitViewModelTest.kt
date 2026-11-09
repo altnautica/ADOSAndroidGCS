@@ -108,6 +108,8 @@ class CockpitViewModelTest {
 
     private val router = mockk<AdosInputRouter>(relaxed = true)
     private val gamepad = MutableStateFlow(false)
+    private val mirror = MutableStateFlow<com.altnautica.gcs.core.agent.mission.MissionMirror?>(null)
+    private val missionMirror = com.altnautica.gcs.core.link.mission.MissionMirrorSource { mirror }
     private val summaries = CockpitSummaryRegistry()
     private val controllers = mockk<ControllerManager>(relaxed = true) {
         every { active } returns MutableStateFlow<ControllerInfo?>(null)
@@ -166,6 +168,7 @@ class CockpitViewModelTest {
             localApis = localApis,
             spec = testSpec,
             controls = ControlsRepository(dataStore, testSpec, flowOf(emptyList())),
+            missionMirror = missionMirror,
         )
         // The screen-only flows run while collected; keep them hot like a visible cockpit.
         listOf(
@@ -178,16 +181,32 @@ class CockpitViewModelTest {
         return vm
     }
 
-    /** An in-process agent whose pilot channel reports one pilot frame ([data]), then stays open. */
+    /**
+     * An in-process agent whose pilot channel reports one pilot frame ([data]), then stays
+     * open. With [radio] its navigation socket cannot open and the status route answers
+     * with [data] as a fresh `pilot` kind; each status request's `view` lands in [views].
+     */
     private fun TestScope.pilotAgent(
         data: String = """{"owner":"fc_mode","armed":true}""",
+        radio: Boolean = false,
+        views: MutableList<String?> = mutableListOf(),
     ): Set<com.altnautica.gcs.core.agent.node.LocalNodeApis> {
         val api = object : com.altnautica.gcs.core.agent.nav.AutonomyFeedApi {
             override fun detections() = kotlinx.coroutines.flow.emptyFlow<String>()
-            override fun navStream(outbound: kotlinx.coroutines.flow.Flow<String>) = flow<String> { kotlinx.coroutines.awaitCancellation() }
+            override fun navStream(outbound: kotlinx.coroutines.flow.Flow<String>) = flow<String> {
+                if (radio) throw java.io.IOException("the socket cannot open over this link")
+                kotlinx.coroutines.awaitCancellation()
+            }
             override fun pilotStream(outgoing: kotlinx.coroutines.flow.Flow<String>) = flow {
+                if (radio) throw java.io.IOException("the socket cannot open over this link")
                 emit("""{"kind":"pilot","ts_ms":${testScheduler.currentTime},"data":$data}""")
                 kotlinx.coroutines.awaitCancellation()
+            }
+            override suspend fun navStatus(view: String?): AgentResult<kotlinx.serialization.json.JsonObject>? {
+                if (!radio) return null
+                views += view
+                val body = """{"pilot":{"ts_ms":${testScheduler.currentTime},"age_ms":100,"data":$data},"pose":null}"""
+                return AgentResult.Ok(kotlinx.serialization.json.Json.parseToJsonElement(body) as kotlinx.serialization.json.JsonObject)
             }
             private val absent = AgentResult.Err(com.altnautica.gcs.core.agent.http.AgentError.FeatureAbsent)
             override suspend fun visionDemand(body: kotlinx.serialization.json.JsonObject) = absent
@@ -231,6 +250,21 @@ class CockpitViewModelTest {
         vm.openLaunch(true)
         runCurrent()
         assertNotNull(vm.launch.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `with no navigation socket the layers poll the status route and say so`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val views = mutableListOf<String?>()
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent("""{"owner":"goto","armed":true}""", radio = true, views = views))
+        assertFalse(vm.autonomy.feed.reducedRate.value)
+        advanceTimeBy(1_100)
+        runCurrent()
+        assertTrue("the status route is polled", views.isNotEmpty())
+        assertTrue("the polled frames are shown as reduced rate", vm.autonomy.feed.reducedRate.value)
+        assertEquals("the polled pilot kind drives the cockpit", "goto", vm.chip.value.ruleId)
         vm.viewModelScope.cancel()
     }
 
@@ -612,6 +646,21 @@ class CockpitViewModelTest {
     }
 
     @Test
+    fun `a VTOL transition reported by the flight controller shows on the chip`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent())
+        advanceTimeBy(600)
+        runCurrent()
+        assertEquals("fc_other", vm.chip.value.ruleId)
+        vehicle.telemetry.vtolTransitioning.value = true
+        advanceTimeBy(600)
+        runCurrent()
+        assertEquals("vtol_transition", vm.chip.value.ruleId)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
     fun `the goto chip reads the distance from the vehicle to the goal`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         vehicle.beat(armed = true, now = testScheduler.currentTime)
@@ -623,6 +672,47 @@ class CockpitViewModelTest {
         runCurrent()
         assertEquals("goto", vm.chip.value.ruleId)
         assertEquals("GOTO · 50 m", vm.chip.value.primary.text)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the first pad connected in the cockpit opens the controller tour once`() = runTest(dispatcher) {
+        val vm = vm(listOf(node("drone-1")), FakeVehicle())
+        runCurrent()
+        assertNull(vm.tourStep.value)
+        gamepad.value = true
+        runCurrent()
+        assertEquals(0, vm.tourStep.value)
+        repeat(CockpitViewModel.TOUR_STEPS) { vm.nextTourStep() }
+        runCurrent()
+        assertNull("past the last card the tour closes", vm.tourStep.value)
+        gamepad.value = false
+        runCurrent()
+        gamepad.value = true
+        runCurrent()
+        assertNull("a seen tour does not come back", vm.tourStep.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the cockpit map draws the route the vehicle holds`() = runTest(dispatcher) {
+        val vm = vm(listOf(node("drone-1")), FakeVehicle())
+        backgroundScope.launch { vm.missionRoute.collect {} }
+        runCurrent()
+        assertTrue(vm.missionRoute.value.waypoints.isEmpty())
+        mirror.value = com.altnautica.gcs.core.agent.mission.MissionMirror(
+            count = 3,
+            homeSlot = true,
+            items = listOf(
+                com.altnautica.gcs.core.agent.mission.MirrorItem(0, 16, x = 470000000, y = 80000000),
+                com.altnautica.gcs.core.agent.mission.MirrorItem(1, 22, x = 470001000, y = 80000000),
+                com.altnautica.gcs.core.agent.mission.MirrorItem(2, 16, x = 470009000, y = 80000000),
+            ),
+        )
+        runCurrent()
+        val route = vm.missionRoute.value
+        assertEquals(listOf("1", "2"), route.waypoints.map { it.label })
+        assertEquals(47.0009, route.waypoints.last().position.latDeg, 1e-9)
         vm.viewModelScope.cancel()
     }
 }
