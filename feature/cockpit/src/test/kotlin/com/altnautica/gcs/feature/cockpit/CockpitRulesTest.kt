@@ -53,6 +53,12 @@ class CockpitRulesTest {
     private val chips = FlightStateChipResolver(testSpec.flightState, testSpec.tokens)
 
     @Test
+    fun `a hold after a skill's lease is taken away reads Skill stopped`() {
+        assertEquals("Skill stopped", chips.holdReasonLabel("lease-revoked"))
+        assertEquals("Another skill has control", chips.holdReasonLabel("lease-busy"))
+    }
+
+    @Test
     fun `chip text follows the flight-state rules, first match wins`() {
         val now = 10_000L
         val pilot = chips.resolve(pilotState(PilotOwner.Pilot, receivedAtMs = now), ChipContext(now))
