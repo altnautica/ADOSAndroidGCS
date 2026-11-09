@@ -171,6 +171,13 @@ data class PilotState(
     val banner: PilotBanner?,
     val rthCountdownS: Float?,
     val receivedAtMs: Long,
+    /** Pilot operations the agent accepts from this surface (`goto`, ...). */
+    val surfaceOps: Set<String> = emptySet(),
+    /** Height above ground and its source (`rangefinder`, `baro`, ...), when the agent knows it. */
+    val aglM: Float? = null,
+    val aglSource: String? = null,
+    /** Recent FC status texts the agent relays, newest last. */
+    val statusTexts: List<PilotStatusText> = emptyList(),
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
@@ -180,6 +187,9 @@ data class PilotState(
         const val STALE_MS = 2_000L
     }
 }
+
+/** One FC status text relayed by the pilot: MAVLink [severity] (0 emergency … 7 debug), [ageMs] since the FC sent it. */
+data class PilotStatusText(val severity: Int, val text: String, val ageMs: Long?)
 
 /**
  * One stick frame for the onboard pilot. Axes are in [-1, 1] after the surface's mode
@@ -205,6 +215,9 @@ data class PilotAction(val name: String, val args: Map<String, Any?> = emptyMap(
 
         /** Cancels a low-battery return countdown without braking (pause also cancels it and brakes). */
         const val RTH_CANCEL = "rth_cancel"
+
+        /** Flies to a map point: `{lat, lon, alt_m}`, altitude above home. Offered when `surface_ops` lists it. */
+        const val GOTO = "goto"
 
         fun profile(p: PilotProfile) = PilotAction("profile:${p.wire}")
         fun controlMode(m: ControlMode) = PilotAction("control_mode:${m.wire}")

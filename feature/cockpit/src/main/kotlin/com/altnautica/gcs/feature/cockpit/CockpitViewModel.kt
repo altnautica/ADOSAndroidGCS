@@ -622,14 +622,20 @@ class CockpitViewModel @AssistedInject constructor(
 
     /**
      * A long-press on the map. On the ground it picks the Launch sheet's go-to point and
-     * opens the sheet on that option; in the air it flies there at the current height
-     * (fly-here, behind its hold confirm).
+     * opens the sheet on that option; in the air it flies there at the current height above
+     * home: through the pilot's goto action when the agent offers it, else the fly-here skill
+     * (behind its hold confirm).
      */
     fun pickMapPoint(point: GeoPoint) {
         val airborne = pilot.state.value?.let { it.armed && !it.landed } ?: (vehicle.value?.telemetry?.heartbeat?.value?.armed == true)
         if (airborne) {
             val alt = telemetry.value?.position?.value?.altRelM ?: return
-            activate(FlyHereSkill.id, mapOf(SkillArgs.LAT to point.latDeg, SkillArgs.LON to point.lonDeg, SkillArgs.ALTITUDE_M to alt))
+            // The agent's pilot flies to the point itself when it offers goto to this surface; otherwise the fly-here skill does.
+            if (pilot.state.value?.surfaceOps?.contains(PilotAction.GOTO) == true) {
+                pilotAction(PilotAction(PilotAction.GOTO, mapOf("lat" to point.latDeg, "lon" to point.lonDeg, "alt_m" to alt)))
+            } else {
+                activate(FlyHereSkill.id, mapOf(SkillArgs.LAT to point.latDeg, SkillArgs.LON to point.lonDeg, SkillArgs.ALTITUDE_M to alt))
+            }
             return
         }
         launchPoint.value = point
@@ -729,15 +735,20 @@ class CockpitViewModel @AssistedInject constructor(
 
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
 
-    /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings. */
-    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, tick500) { a, p, w, _ ->
+    /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings (from the link and the agent's pilot). */
+    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, pilot.state, tick500) { a, p, w, ps, _ ->
         val now = clock.nowMs()
-        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS })
+        val relayed = ps?.statusTexts.orEmpty()
+            .filter { it.severity <= StatusModel.MAV_SEVERITY_WARNING }
+            .map { ReceivedText(it.text, ps!!.receivedAtMs - (it.ageMs ?: 0L)) }
+        val texts = (w + relayed).groupBy { it.text }.map { (_, same) -> same.maxBy { it.atMs } }.sortedBy { it.atMs }
+        StatusModel.items(a, p, texts.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS })
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
-    /** The bottom row; AGL comes from the follow feed while it is fresh. */
-    val flightValues: StateFlow<FlightValues> = combine(hud.flightValues, autonomy.feed.follow) { v, f ->
+    /** The bottom row; AGL comes from the follow feed while it is fresh, else from the agent's pilot while it is fresh. */
+    val flightValues: StateFlow<FlightValues> = combine(hud.flightValues, autonomy.feed.follow, pilot.state) { v, f, p ->
         val agl = f?.takeIf { autonomy.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value?.aglM
+            ?: p?.takeIf { clock.nowMs() - it.receivedAtMs <= PilotState.STALE_MS }?.aglM
         if (agl == v.aglM) v else v.copy(aglM = agl)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlightValues.Empty)
 

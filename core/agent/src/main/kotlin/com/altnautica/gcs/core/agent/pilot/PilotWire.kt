@@ -15,6 +15,7 @@ import com.altnautica.gcs.core.model.PilotInput
 import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotSkillRef
+import com.altnautica.gcs.core.model.PilotStatusText
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.ReadinessItem
@@ -128,6 +129,14 @@ object PilotWire {
             },
             rthCountdownS = data.float("rth_countdown_s"),
             receivedAtMs = receivedAtMs,
+            surfaceOps = (data["surface_ops"] as? JsonArray).orEmpty().mapNotNullTo(mutableSetOf()) { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content },
+            aglM = data.float("agl_m"),
+            aglSource = data.str("agl_source"),
+            statusTexts = (data["statustext"] as? JsonArray).orEmpty().mapNotNull { e ->
+                val o = e as? JsonObject ?: return@mapNotNull null
+                val text = o.str("text") ?: return@mapNotNull null
+                PilotStatusText(o.long("severity")?.toInt() ?: return@mapNotNull null, text, o.long("age_ms"))
+            },
         )
     }
 

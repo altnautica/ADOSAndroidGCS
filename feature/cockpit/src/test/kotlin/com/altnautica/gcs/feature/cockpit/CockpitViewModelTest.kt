@@ -22,6 +22,7 @@ import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
+import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VehicleCommand
@@ -190,6 +191,7 @@ class CockpitViewModelTest {
         data: String = """{"owner":"fc_mode","armed":true}""",
         radio: Boolean = false,
         views: MutableList<String?> = mutableListOf(),
+        sent: MutableList<String> = mutableListOf(),
     ): Set<com.altnautica.gcs.core.agent.node.LocalNodeApis> {
         val api = object : com.altnautica.gcs.core.agent.nav.AutonomyFeedApi {
             override fun detections() = kotlinx.coroutines.flow.emptyFlow<String>()
@@ -198,6 +200,7 @@ class CockpitViewModelTest {
                 kotlinx.coroutines.awaitCancellation()
             }
             override fun pilotStream(outgoing: kotlinx.coroutines.flow.Flow<String>) = flow {
+                backgroundScope.launch { outgoing.collect { sent += it } }
                 if (radio) throw java.io.IOException("the socket cannot open over this link")
                 emit("""{"kind":"pilot","ts_ms":${testScheduler.currentTime},"data":$data}""")
                 kotlinx.coroutines.awaitCancellation()
@@ -250,6 +253,35 @@ class CockpitViewModelTest {
         vm.openLaunch(true)
         runCurrent()
         assertNotNull(vm.launch.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the pilot's goto op, AGL and relayed status texts reach the map, the bottom row and the pill`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime)
+        val sent = mutableListOf<String>()
+        val data = """{"owner":"pilot","armed":true,"landed":false,"surface_ops":["goto"],"agl_m":4.2,"agl_source":"rangefinder",""" +
+            """"statustext":[{"severity":4,"text":"PreArm: Compass not calibrated","age_ms":200}]}"""
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data, sent = sent))
+        backgroundScope.launch { vm.flightValues.collect {} }
+        backgroundScope.launch { vm.statusItems.collect {} }
+        advanceTimeBy(600)
+        runCurrent()
+
+        assertEquals(4.2f, vm.flightValues.value.aglM!!, 1e-6f)
+        assertTrue(vm.statusItems.value.toString(), vm.statusItems.value.any { "Compass not calibrated" in it.toString() })
+
+        vm.pickMapPoint(GeoPoint(47.001, 8.002))
+        runCurrent()
+        val goto = sent.map { kotlinx.serialization.json.Json.parseToJsonElement(it) as kotlinx.serialization.json.JsonObject }
+            .firstOrNull { it["name"]?.toString() == "\"goto\"" }
+        assertNotNull("a map point in the air goes to the pilot's goto action: $sent", goto)
+        val args = goto!!["args"] as kotlinx.serialization.json.JsonObject
+        assertEquals("47.001", args["lat"].toString())
+        assertEquals("8.002", args["lon"].toString())
+        assertEquals("12.0", args["alt_m"].toString())
         vm.viewModelScope.cancel()
     }
 
