@@ -253,10 +253,10 @@ private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, onExit: () -> 
     }
 }
 
-/** The HUD's horizontal inset: the centre zone, so no column ever sits on a tape. */
+/** The HUD's inset: the centre zone's sides and top, so no column or the top bar ever sits on a tape or the heading scale. */
 private fun centreInset(zones: FlightZones): PaddingValues {
     val windowWidth = zones.topBar.right + zones.topBar.x
-    return PaddingValues(start = zones.centre.x, end = windowWidth - zones.centre.right)
+    return PaddingValues(start = zones.centre.x, top = zones.centre.y, end = windowWidth - zones.centre.right)
 }
 
 @Composable
@@ -489,13 +489,19 @@ private fun Centre(vm: CockpitViewModel, width: WidthClass, zones: FlightZones) 
         }
         InZone(rect, Z.ZONES) {
             WidgetZones(vm, Modifier.fillMaxSize())
-            FollowChrome(vm, width, topInset = 0.dp, modifier = Modifier.fillMaxSize())
+            // At Instruments the heading scale and its readout take the centre's top; the lock chip sits below them.
+            val flags by vm.autonomy.layers.flags.collectAsStateWithLifecycle()
+            val instruments = flags.level == LayerLevel.Instruments && flags.isOn(LayerSpec.INSTRUMENTS)
+            FollowChrome(vm, width, topInset = if (instruments) HEADING_SCALE_CLEARANCE else 0.dp, modifier = Modifier.fillMaxSize())
             if (onScreen && (width == WidthClass.Compact || width == WidthClass.Expanded)) {
                 OnScreenSticksRow(vm, Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             }
         }
     }
 }
+
+/** Height the HUD's heading scale and readout take at the top of the centre at the Instruments level. */
+private val HEADING_SCALE_CLEARANCE = 76.dp
 
 @Composable
 private fun InZone(rect: ZoneRect, z: Float, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
@@ -505,7 +511,7 @@ private fun InZone(rect: ZoneRect, z: Float, content: @Composable androidx.compo
 /** The main view: video, map with video picture-in-picture, the two side by side, or video with the vision panel. */
 @Composable
 private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float, hudInset: PaddingValues, modifier: Modifier) {
-    val startOnly = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr))
+    val startOnly = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr), top = hudInset.calculateTopPadding())
     when (view) {
         CockpitView.Pilot -> VideoStage(vm, modifier, hudInset = hudInset, sampleBackdrop = true)
         CockpitView.Map -> Box(modifier) {

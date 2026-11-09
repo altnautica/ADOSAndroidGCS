@@ -47,6 +47,9 @@ import kotlinx.coroutines.delay
 /** Below this surface width candidate tags are hidden and tracked tags shorten to `#id`. */
 private val COMPACT_SURFACE = 600.dp
 
+/** Below this centre-zone height the follow range panel takes its one-line form. */
+private val SHORT_CENTRE = 320.dp
+
 /**
  * The data layers of the main video: one canvas for every layer (targets included),
  * the target resolver driver, the TalkBack nodes and designation (tap or long-press
@@ -158,9 +161,11 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
         }
         if (!followingMode) return@BoxWithConstraints
         state?.let {
-            val panelWidth = if (width.isWide()) 320.dp else Dp.Unspecified
+            // A short centre (a phone in landscape) takes the one-line panel, so the reticle and heading stay clear.
+            val short = maxHeight < SHORT_CENTRE
+            val panelWidth = if (width.isWide() && !short) 320.dp else Dp.Unspecified
             FollowRangePanel(
-                it, stale = !fresh, width = width,
+                it, stale = !fresh, width = if (short) WidthClass.Compact else width,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = AdosSpacing.S2)
