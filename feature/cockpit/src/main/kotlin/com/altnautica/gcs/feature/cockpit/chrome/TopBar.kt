@@ -38,7 +38,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.State
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -61,12 +63,14 @@ import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
 import com.altnautica.gcs.feature.cockpit.alerts.alertTitleRes
+import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.alerts.fcStateDetailRes
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
 
 /** Top-bar items that move into the Menu when the row runs out of room (`top_bar.overflow`). */
-enum class TopBarItem { Controller, NavSource, LinkDetail }
+enum class TopBarItem { Controller, NavSource, LinkDetail, Layers }
 
 /** Lowest priority first: the order items leave the row (`to_menu_order`). */
 val TopBarOverflowOrder = listOf(TopBarItem.Controller, TopBarItem.NavSource, TopBarItem.LinkDetail)
@@ -81,7 +85,9 @@ class TopBarOverflow {
  * The top bar: one row that never scrolls. Left: the flight-state chip, the status pill,
  * battery, link, navigation source and controller. Right: the layer button, Menu and STOP.
  * When the row is too narrow the controller, then the navigation source, then the link's
- * text move into the Menu ([overflow]); the chip, pill, battery and STOP never move.
+ * text move into the Menu ([overflow]); then the chip gives up width, then the layer
+ * button moves into the Menu, and last the pill truncates. Battery, Menu and STOP never
+ * move, and the two groups never overlap.
  */
 @Composable
 fun TopBar(
@@ -106,10 +112,18 @@ fun TopBar(
         ) { measurables, constraints ->
             val gap = c.gap.roundToPx()
             val loose = Constraints(maxHeight = constraints.maxHeight)
-            // Every item but the chip at its natural width; the chip by its intrinsic width, measured last.
-            val placeables = measurables.mapIndexed { i, slot -> if (i == CHIP) null else slot.firstOrNull()?.measure(loose) }.toMutableList()
+            // Every item but the chip and the pill at its natural width; those two by their intrinsic
+            // widths, measured once at the end, since either may have to give up width.
+            val placeables = measurables.mapIndexed { i, slot -> if (i == CHIP || i == PILL) null else slot.firstOrNull()?.measure(loose) }.toMutableList()
             val chipNatural = measurables[CHIP].firstOrNull()?.maxIntrinsicWidth(constraints.maxHeight) ?: 0
-            val width = { i: Int -> if (i == CHIP) chipNatural else placeables[i]?.width ?: 0 }
+            val pillNatural = measurables[PILL].firstOrNull()?.maxIntrinsicWidth(constraints.maxHeight) ?: 0
+            val width = { i: Int ->
+                when (i) {
+                    CHIP -> chipNatural
+                    PILL -> pillNatural
+                    else -> placeables[i]?.width ?: 0
+                }
+            }
             val shown = BooleanArray(placeables.size) { width(it) > 0 }
             fun total(): Int {
                 var sum = 0
@@ -124,14 +138,24 @@ fun TopBar(
                     TopBarItem.Controller -> CONTROLLER
                     TopBarItem.NavSource -> NAV
                     TopBarItem.LinkDetail -> LINK_DETAIL
+                    TopBarItem.Layers -> LAYERS
                 }
                 if (shown[index]) { shown[index] = false; moved += item }
             }
-            // Last resort on a very narrow window: the chip gives up width (it ellipsizes), STOP never does.
+            // Last resorts on a very narrow window: the chip gives up width (it ellipsizes), then
+            // the layer button moves into the Menu, then the pill ellipsizes. STOP never shrinks.
             val over = (total() - constraints.maxWidth).coerceAtLeast(0)
             placeables[CHIP] = measurables[CHIP].firstOrNull()?.measure(
                 Constraints(maxWidth = (chipNatural - over).coerceAtLeast(0), maxHeight = constraints.maxHeight),
             )
+            var rest = over - chipNatural
+            if (rest > 0 && shown[LAYERS]) {
+                shown[LAYERS] = false
+                moved += TopBarItem.Layers
+                rest -= width(LAYERS) + gap
+            }
+            val pillMax = if (rest > 0 && shown[PILL]) (pillNatural - rest).coerceAtLeast(0) else Constraints.Infinity
+            placeables[PILL] = measurables[PILL].firstOrNull()?.measure(Constraints(maxWidth = pillMax, maxHeight = constraints.maxHeight))
             overflow.moved = moved
             layout(constraints.maxWidth, constraints.maxHeight) {
                 var x = 0
@@ -145,6 +169,7 @@ fun TopBar(
                 for (i in placeables.indices.reversed()) {
                     if (i < LAYERS) break
                     val p = placeables[i] ?: continue
+                    if (!shown[i]) continue
                     r -= p.width
                     p.place(r, (constraints.maxHeight - p.height) / 2)
                     r -= gap
@@ -155,23 +180,29 @@ fun TopBar(
 }
 
 private const val CHIP = 0
+private const val PILL = 1
 private const val LINK_DETAIL = 4
 private const val NAV = 5
 private const val CONTROLLER = 6
 private const val LAYERS = 7
 
-/** The status pill: "All systems OK", the one alert's text, or "n warnings"; flashes while unacknowledged. */
+/**
+ * The status pill: "All systems OK", the one alert's text, or "n warnings"; flashes while
+ * unacknowledged. The flash is read only in the draw phase, so it never recomposes or
+ * re-lays out the pill.
+ */
 @Composable
 fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val c = LocalChrome.current
     val tint = severityColor(ui.severity)
     val reduced = rememberReducedMotion()
-    val flash = if (ui.flashing && !reduced) {
+    val flash: State<Float>? = if (ui.flashing && !reduced) {
         val t = rememberInfiniteTransition(label = "status-flash")
-        t.animateFloat(1f, 0.25f, infiniteRepeatable(tween(FLASH_HALF_MS), RepeatMode.Reverse), label = "status-flash-alpha").value
+        t.animateFloat(1f, 0.25f, infiniteRepeatable(tween(FLASH_HALF_MS), RepeatMode.Reverse), label = "status-flash-alpha")
     } else {
-        1f
+        null
     }
+    val ok = ui.severity == StatusSeverity.Ok
     val text = when {
         ui.count == 0 -> specText("cockpit.status.ok")
         ui.count == 1 -> ui.top?.let { statusItemTitle(it) } ?: specText("cockpit.status.one")
@@ -182,7 +213,7 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
             .heightIn(min = 32.dp)
             .widthIn(max = 260.dp)
             .clip(RoundedCornerShape(c.radiusSmall))
-            .background(tint.copy(alpha = if (ui.severity == StatusSeverity.Ok) 0.14f else 0.22f * flash + 0.06f))
+            .drawBehind { drawRect(tint.copy(alpha = if (ok) 0.14f else 0.22f * (flash?.value ?: 1f) + 0.06f)) }
             .clickable(role = Role.Button, onClickLabel = specText("cockpit.alerts.title"), onClick = onOpen)
             .semantics { liveRegion = LiveRegionMode.Polite }
             .testTag("status-pill")
@@ -190,7 +221,7 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.size(8.dp).alpha(flash).background(tint, CircleShape))
+        Box(Modifier.size(8.dp).graphicsLayer { alpha = flash?.value ?: 1f }.background(tint, CircleShape))
         Text(text, style = c.chipText, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -247,17 +278,43 @@ fun StatusList(items: List<StatusItem>, onClose: () -> Unit, modifier: Modifier 
     }
 }
 
-/** Battery: a gauge with the RTL-reserve tick, the percent and the time left. */
+/**
+ * Battery: a gauge with the return-reserve tick, the percent and the time left. [reservePct]
+ * is the flight controller's return reserve (null hides the tick); [toReserve] says whether
+ * [timeLeftS] runs to that reserve or, without one, to empty.
+ */
 @Immutable
-data class BatteryUi(val pct: Int?, val timeLeftS: Int?, val reservePct: Int, val severity: StatusSeverity)
+data class BatteryUi(val pct: Int?, val timeLeftS: Int?, val reservePct: Int?, val toReserve: Boolean, val severity: StatusSeverity)
+
+/**
+ * The gauge from the agent battery engine's [reserve] when there is one: its reserve tick
+ * and its time to that reserve. Without one there is no tick, and the flight controller's
+ * own estimate ([flightControllerTimeS], `BATTERY_STATUS.time_remaining`) is time to empty.
+ */
+fun batteryUi(pct: Int?, reserve: BatteryReserve?, flightControllerTimeS: Int?, severity: StatusSeverity): BatteryUi {
+    val toReserve = reserve?.toReserveS
+    return BatteryUi(
+        pct = pct,
+        timeLeftS = toReserve ?: flightControllerTimeS,
+        reservePct = reserve?.reservePct,
+        toReserve = toReserve != null,
+        severity = severity,
+    )
+}
 
 @Composable
 fun BatteryGauge(ui: BatteryUi, modifier: Modifier = Modifier) {
     val c = LocalChrome.current
     val tint = if (ui.pct == null) c.textDim else severityColor(ui.severity)
     val reserveLabel = specText("cockpit.battery.reserve")
-    val timeLeft = ui.timeLeftS?.let { specText("cockpit.battery.time_left", "time" to formatClock(it)) }
-    val described = listOfNotNull(ui.pct?.let { "$it%" } ?: "—", timeLeft, "$reserveLabel ${ui.reservePct}%").joinToString(", ")
+    val clock = ui.timeLeftS?.let(::formatClock)
+    val timeLeft = clock?.let {
+        stringResource(if (ui.toReserve) R.string.cockpit_battery_to_reserve else R.string.cockpit_battery_to_empty, it)
+    }
+    val shown = clock?.let {
+        stringResource(if (ui.toReserve) R.string.cockpit_battery_to_reserve_short else R.string.cockpit_battery_to_empty_short, it)
+    }
+    val described = listOfNotNull(ui.pct?.let { "$it%" } ?: "—", timeLeft, ui.reservePct?.let { "$reserveLabel $it%" }).joinToString(", ")
     Row(
         modifier.semantics { contentDescription = described; liveRegion = LiveRegionMode.Polite }.testTag("battery"),
         verticalAlignment = Alignment.CenterVertically,
@@ -272,12 +329,14 @@ fun BatteryGauge(ui: BatteryUi, modifier: Modifier = Modifier) {
             ui.pct?.let { p ->
                 drawRect(tint, Offset(stroke * 2, stroke * 2), Size(inner * p.coerceIn(0, 100) / 100f, size.height - stroke * 4))
             }
-            // The RTL reserve: the charge the return home needs.
-            val rx = stroke * 2 + inner * ui.reservePct.coerceIn(0, 100) / 100f
-            drawLine(c.text, Offset(rx, -1f), Offset(rx, size.height + 1f), 1.5.dp.toPx())
+            // The return reserve the flight controller keeps for the trip home, when it reports one.
+            ui.reservePct?.let { r ->
+                val rx = stroke * 2 + inner * r.coerceIn(0, 100) / 100f
+                drawLine(c.text, Offset(rx, -1f), Offset(rx, size.height + 1f), 1.5.dp.toPx())
+            }
         }
         Text(ui.pct?.let { "$it%" } ?: "—", style = c.chipText)
-        timeLeft?.let { Text(formatClock(ui.timeLeftS!!), style = c.topBarText.copy(color = c.textDim)) }
+        shown?.let { Text(it, style = c.topBarText.copy(color = c.textDim), maxLines = 1) }
     }
 }
 

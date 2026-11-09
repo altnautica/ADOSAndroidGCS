@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.agent.nav
 
 import com.altnautica.gcs.core.agent.AgentClient
 import com.altnautica.gcs.core.agent.http.AgentResult
+import com.altnautica.gcs.core.agent.model.BatteryHealth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -50,6 +51,12 @@ interface AutonomyFeedApi {
      * polling fallback when the navigation socket cannot open; null where no agent serves it.
      */
     suspend fun navStatus(view: String?): AgentResult<JsonObject>? = null
+
+    /**
+     * `GET /api/v1/battery`: the agent battery engine, with the FC's return reserve in
+     * `thresholds.reserve_percent` and each pack's time to it. Null where no agent serves it.
+     */
+    suspend fun battery(): AgentResult<BatteryHealth>? = null
 }
 
 /**

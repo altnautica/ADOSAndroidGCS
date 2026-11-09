@@ -13,7 +13,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -81,40 +81,47 @@ internal fun StageBackdrop(modifier: Modifier = Modifier) {
             label = "stage-drift",
         )
     }
-    Canvas(modifier.fillMaxSize().graphicsLayer().testTag("home-stage")) {
-        val w = size.width
-        val h = size.height
-        val horizon = h * 0.58f
-        // Sky: deep navy to a cool horizon.
-        drawRect(Brush.verticalGradient(0f to Color(0xFF05070D), 0.55f to Color(0xFF0B1424), 1f to Color(0xFF05070D)))
-        // Horizon glow in the accent, off-centre right where the hero text is not.
-        drawRect(
-            Brush.radialGradient(
+    // Brushes, colours and geometry are built once per size; only the rungs follow the drift.
+    Spacer(
+        modifier.fillMaxSize().graphicsLayer().testTag("home-stage").drawWithCache {
+            val w = size.width
+            val h = size.height
+            val horizon = h * 0.58f
+            // Sky: deep navy to a cool horizon.
+            val sky = Brush.verticalGradient(0f to Color(0xFF05070D), 0.55f to Color(0xFF0B1424), 1f to Color(0xFF05070D))
+            // Horizon glow in the accent, off-centre right where the hero text is not.
+            val glow = Brush.radialGradient(
                 listOf(accent.copy(alpha = 0.28f), accent.copy(alpha = 0.08f), Color.Transparent),
                 center = Offset(w * 0.72f, horizon),
                 radius = w * 0.55f,
-            ),
-        )
-        drawLine(accent.copy(alpha = 0.35f), Offset(0f, horizon), Offset(w, horizon), 1.dp.toPx())
-        // Ground grid: lines converging on a vanishing point, rungs drifting closer.
-        val vanish = Offset(w * 0.72f, horizon)
-        val line = Color.White.copy(alpha = 0.06f)
-        val stroke = 1.dp.toPx()
-        for (i in -14..14) {
-            val x = vanish.x + i * w * 0.09f
-            drawLine(line, vanish, Offset(vanish.x + (x - vanish.x) * 4f, h), stroke)
-        }
-        val t = drift.value
-        for (k in 0 until RUNGS) {
-            // Rungs spaced on a perspective curve; t slides each toward the next.
-            val p = ((k + t) / RUNGS)
-            val y = horizon + (h - horizon) * p * p
-            val a = (0.02f + 0.08f * p).coerceAtMost(0.1f)
-            drawLine(Color.White.copy(alpha = a), Offset(0f, y), Offset(w, y), stroke)
-        }
-        // Readability: the left side, where the hero text sits, darkens.
-        drawRect(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.72f), 0.55f to Color.Black.copy(alpha = 0.25f), 1f to Color.Transparent))
-    }
+            )
+            // Readability: the left side, where the hero text sits, darkens.
+            val shade = Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.72f), 0.55f to Color.Black.copy(alpha = 0.25f), 1f to Color.Transparent)
+            val horizonLine = accent.copy(alpha = 0.35f)
+            val vanish = Offset(w * 0.72f, horizon)
+            val line = Color.White.copy(alpha = 0.06f)
+            val stroke = 1.dp.toPx()
+            onDrawBehind {
+                drawRect(sky)
+                drawRect(glow)
+                drawLine(horizonLine, Offset(0f, horizon), Offset(w, horizon), stroke)
+                // Ground grid: lines converging on a vanishing point, rungs drifting closer.
+                for (i in -14..14) {
+                    val x = vanish.x + i * w * 0.09f
+                    drawLine(line, vanish, Offset(vanish.x + (x - vanish.x) * 4f, h), stroke)
+                }
+                val t = drift.value
+                for (k in 0 until RUNGS) {
+                    // Rungs spaced on a perspective curve; t slides each toward the next.
+                    val p = ((k + t) / RUNGS)
+                    val y = horizon + (h - horizon) * p * p
+                    val a = (0.02f + 0.08f * p).coerceAtMost(0.1f)
+                    drawLine(Color.White.copy(alpha = a), Offset(0f, y), Offset(w, y), stroke)
+                }
+                drawRect(shade)
+            }
+        },
+    )
 }
 
 private const val STAGE_LOOP_MS = 9_000

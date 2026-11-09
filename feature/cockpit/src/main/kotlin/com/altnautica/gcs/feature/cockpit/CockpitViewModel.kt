@@ -74,6 +74,7 @@ import com.altnautica.gcs.feature.cockpit.alerts.CockpitAlertsController
 import com.altnautica.gcs.feature.cockpit.alerts.ControllerFeedback
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
 import com.altnautica.gcs.feature.cockpit.band.CockpitHudFlows
+import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.chip.ChipButton
 import com.altnautica.gcs.feature.cockpit.chip.ChipContext
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipResolver
@@ -159,6 +160,9 @@ import com.altnautica.gcs.core.map.MapOverlays
 
 /** Severity at or below which a STATUSTEXT raises a critical alert (MAV_SEVERITY_CRITICAL). */
 private const val SEVERITY_CRITICAL = 2
+
+/** A text seen again on the other path within this window is the same message. */
+private const val DUPLICATE_TEXT_MS = 5_000L
 
 /** How long UI-only flows keep running after their last collector leaves. */
 internal const val UI_STOP_MS = 5_000L
@@ -253,31 +257,6 @@ class CockpitViewModel @AssistedInject constructor(
     /** On-screen sticks enabled in Settings › Controls (default off). */
     val onScreenSticksEnabled: StateFlow<Boolean> = controls.onScreenSticks.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    private val _tourStep = MutableStateFlow<Int?>(null)
-
-    /** The first-connect controller tour card on screen (0..[TOUR_STEPS]-1), or null. */
-    val tourStep: StateFlow<Int?> = _tourStep.asStateFlow()
-
-    init {
-        // The first pad connected anywhere opens the three-card tour once, here as in Settings.
-        viewModelScope.launch {
-            combine(router.gamepadConnected, controls.tourSeen) { pad, seen -> pad && !seen }
-                .distinctUntilChanged()
-                .collect { show -> if (show && _tourStep.value == null) _tourStep.value = 0 }
-        }
-    }
-
-    /** Next card; past the last one the tour is marked seen. */
-    fun nextTourStep() {
-        val step = _tourStep.value ?: return
-        if (step + 1 < TOUR_STEPS) _tourStep.value = step + 1 else finishTour()
-    }
-
-    fun finishTour() {
-        _tourStep.value = null
-        viewModelScope.launch { controls.setTourSeen(true) }
-    }
-
     // ---- Clocks -----------------------------------------------------------------------
 
     private fun ticker(periodMs: Long): Flow<Long> = flow {
@@ -306,19 +285,33 @@ class CockpitViewModel @AssistedInject constructor(
 
     init {
         viewModelScope.launch {
-            telemetry.flatMapLatest { it?.statusText ?: emptyFlow() }.collect { st ->
-                val now = clock.nowMs()
-                when {
-                    AlertEngine.isPrearm(st.text) -> prearmText.value = ReceivedText(AlertEngine.prearmBody(st.text), now)
-                    st.severity <= SEVERITY_CRITICAL || AlertEngine.isFailsafeAnnouncement(st.severity, st.text) ->
-                        criticalText.value = ReceivedText(st.text, now)
-                    st.severity <= StatusModel.MAV_SEVERITY_WARNING -> warningTexts.update { list ->
-                        (list.filter { it.text != st.text } + ReceivedText(st.text, now)).takeLast(StatusModel.WARNING_TEXT_MAX)
-                    }
-                }
+            telemetry.flatMapLatest { it?.statusText ?: emptyFlow() }.collect { st -> onStatusText(st.severity, st.text, clock.nowMs(), relayed = false) }
+        }
+    }
+
+    /**
+     * One FC status text, from the MAVLink link or [relayed] by the onboard pilot, classified
+     * once: a prearm reason, a critical or failsafe alert, or a pill warning. A relayed copy
+     * of a text the link already delivered is dropped, so the pill counts it once.
+     */
+    private fun onStatusText(severity: Int, text: String, atMs: Long, relayed: Boolean) {
+        when {
+            AlertEngine.isPrearm(text) -> {
+                val body = AlertEngine.prearmBody(text)
+                if (!relayed || !sameText(prearmText.value, body, atMs)) prearmText.value = ReceivedText(body, atMs)
+            }
+            severity <= SEVERITY_CRITICAL || AlertEngine.isFailsafeAnnouncement(severity, text) ->
+                if (!relayed || !sameText(criticalText.value, text, atMs)) criticalText.value = ReceivedText(text, atMs)
+            severity <= StatusModel.MAV_SEVERITY_WARNING -> warningTexts.update { list ->
+                if (relayed && sameText(list.lastOrNull { it.text == text }, text, atMs)) list
+                else (list.filter { it.text != text } + ReceivedText(text, atMs)).takeLast(StatusModel.WARNING_TEXT_MAX)
             }
         }
     }
+
+    /** True when [held] is [text] received no earlier than [DUPLICATE_TEXT_MS] before [atMs] (or after it): the same message. */
+    private fun sameText(held: ReceivedText?, text: String, atMs: Long): Boolean =
+        held != null && held.text == text && atMs - held.atMs <= DUPLICATE_TEXT_MS
 
     // ---- Video ------------------------------------------------------------------------
 
@@ -351,6 +344,27 @@ class CockpitViewModel @AssistedInject constructor(
     /** The onboard pilot's state, or null for a vehicle without one. */
     val pilotState: StateFlow<PilotState?> = pilot.state
 
+    /** The return reserve from the agent's battery engine for the flown vehicle, or null without one. */
+    val batteryReserve: StateFlow<BatteryReserve?> = vehicleNodeId.flatMapLatest { id ->
+        if (id == null) return@flatMapLatest flowOf<BatteryReserve?>(null)
+        flow {
+            while (true) {
+                val r = autonomyApi(id)?.let { runCatching { it.battery() }.getOrNull() }
+                emit(BatteryReserve.from((r as? com.altnautica.gcs.core.agent.http.AgentResult.Ok)?.value))
+                delay(BatteryReserve.POLL_MS)
+            }
+        }
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
+
+    init {
+        // The pilot's relayed FC texts go through the same classification as the link's.
+        viewModelScope.launch {
+            pilot.state.collect { ps ->
+                ps?.statusTexts?.forEach { onStatusText(it.severity, it.text, ps.receivedAtMs - (it.ageMs ?: 0L), relayed = true) }
+            }
+        }
+    }
+
     // ---- Preflight --------------------------------------------------------------------
 
     private val preflightContext = MutableStateFlow(PreflightContext(null, false, null))
@@ -374,6 +388,41 @@ class CockpitViewModel @AssistedInject constructor(
     )
 
     private val overlays = CockpitOverlays(confirm)
+
+    /** The first-connect controller tour card on screen (0..[TOUR_STEPS]-1), or null. */
+    val tourStep: StateFlow<Int?> = overlays.tour.asStateFlow()
+
+    init {
+        // The first pad connected anywhere opens the three-card tour once, here as in Settings,
+        // but only on the ground: in the air it waits for the landing, and a takeoff puts an
+        // open tour away unseen, so the pad never leaves flight control for it.
+        overlays.onTourClosed = ::finishTour
+        viewModelScope.launch {
+            combine(router.gamepadConnected, controls.tourSeen, tick500) { pad, seen, _ -> (pad && !seen) to airborne() }
+                .distinctUntilChanged()
+                .collect { (show, air) ->
+                    when {
+                        air -> overlays.tour.value = null
+                        show && overlays.tour.value == null -> overlays.tour.value = 0
+                    }
+                }
+        }
+    }
+
+    /** True while armed and not landed: from the pilot when it reports, else from the heartbeat. */
+    private fun airborne(): Boolean =
+        pilot.state.value?.let { it.armed && !it.landed } ?: (vehicle.value?.telemetry?.heartbeat?.value?.armed == true)
+
+    /** Next card; past the last one the tour is marked seen. */
+    fun nextTourStep() {
+        val step = overlays.tour.value ?: return
+        if (step + 1 < TOUR_STEPS) overlays.tour.value = step + 1 else finishTour()
+    }
+
+    fun finishTour() {
+        overlays.tour.value = null
+        viewModelScope.launch { controls.setTourSeen(true) }
+    }
 
     private val session = sessionFactory.create(
         vehicle,
@@ -628,8 +677,7 @@ class CockpitViewModel @AssistedInject constructor(
      * (behind its hold confirm).
      */
     fun pickMapPoint(point: GeoPoint) {
-        val airborne = pilot.state.value?.let { it.armed && !it.landed } ?: (vehicle.value?.telemetry?.heartbeat?.value?.armed == true)
-        if (airborne) {
+        if (airborne()) {
             val alt = telemetry.value?.position?.value?.altRelM ?: return
             // One entry, behind fly-here's hold confirm and gates: the skill sends the pilot's
             // goto only while the pilot owns the vehicle, the FC's guided goto otherwise.
@@ -734,13 +782,9 @@ class CockpitViewModel @AssistedInject constructor(
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
 
     /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings (from the link and the agent's pilot). */
-    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, pilot.state, tick500) { a, p, w, ps, _ ->
+    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, tick500) { a, p, w, _ ->
         val now = clock.nowMs()
-        val relayed = ps?.statusTexts.orEmpty()
-            .filter { it.severity <= StatusModel.MAV_SEVERITY_WARNING }
-            .map { ReceivedText(it.text, ps!!.receivedAtMs - (it.ageMs ?: 0L)) }
-        val texts = (w + relayed).groupBy { it.text }.map { (_, same) -> same.maxBy { it.atMs } }.sortedBy { it.atMs }
-        StatusModel.items(a, p, texts.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS })
+        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS })
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /**
@@ -761,7 +805,7 @@ class CockpitViewModel @AssistedInject constructor(
         if (agl == v.aglM && tag == v.aglTag) v else v.copy(aglM = agl, aglTag = tag)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlightValues.Empty)
 
-    /** The bottom-left card's page; a swipe or L3 steps it. */
+    /** The bottom-left card's page; a swipe or a tap on its dots switches it (L3 swaps video and map). */
     val cardPage: StateFlow<CardPage> = hud.cardPage
 
     fun stepCard(delta: Int) = hud.stepCard(delta)
@@ -1035,7 +1079,7 @@ class CockpitViewModel @AssistedInject constructor(
             }
             CockpitControllerAction.GimbalRecenter -> runCommand(VehicleCommand.GimbalRecenter)
             CockpitControllerAction.ViewNext -> nextView()
-            CockpitControllerAction.SwapVideoMap -> stepCard(1)
+            CockpitControllerAction.SwapVideoMap -> toggleMinimapSwap()
             CockpitControllerAction.QuickSettings -> overlays.quickSettings.update { !it }
             is CockpitControllerAction.Buzz -> feedback.onHoldCue(a.kind, a.level)
         }

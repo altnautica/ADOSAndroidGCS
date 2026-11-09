@@ -39,4 +39,15 @@ class PilotRequestGoldenTest {
     @Test
     fun `an action with arguments and an id matches the agent's decoder fixture`() =
         assertFrame("action", PilotWire.action(PilotAction(PilotAction.HAND_TO_FC, mapOf("mode" to "loiter")), PilotWire.SRC_ANDROID, "3"))
+
+    @Test
+    fun `a map-point goto matches the agent's decoder fixture`() =
+        assertFrame(
+            "goto",
+            PilotWire.action(
+                PilotAction(PilotAction.GOTO, mapOf("lat" to 12.9716, "lon" to 77.5946, "alt_m" to 25.5)),
+                PilotWire.SRC_ANDROID,
+                "4",
+            ),
+        )
 }

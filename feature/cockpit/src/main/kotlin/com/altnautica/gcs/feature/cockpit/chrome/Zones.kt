@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.cockpit.chrome
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -263,7 +264,7 @@ fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
 
 /**
  * The bottom-left card: one page at a time (map, attitude, obstacles), switched by a
- * horizontal swipe (or L3 through [onStep]). Dots show the page.
+ * horizontal swipe or a tap on its dots, both through [onStep]. The dots show the page.
  */
 @Composable
 fun SwitchCard(page: CardPage, label: String, onStep: (Int) -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.(CardPage) -> Unit) {
@@ -290,9 +291,17 @@ fun SwitchCard(page: CardPage, label: String, onStep: (Int) -> Unit, modifier: M
             style = c.labelText.copy(color = c.text),
             modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(c.panelNoBlur, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
         )
-        Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.align(Alignment.BottomCenter), verticalAlignment = Alignment.CenterVertically) {
             for (p in CardPage.entries) {
-                Box(Modifier.size(5.dp).background(if (p == page) c.text else c.textDim.copy(alpha = 0.5f), CircleShape))
+                Box(
+                    Modifier
+                        .size(16.dp)
+                        .clickable { if (p != page) onStep(p.ordinal - page.ordinal) }
+                        .testTag("card-dot-${p.name}"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(5.dp).background(if (p == page) c.text else c.textDim.copy(alpha = 0.5f), CircleShape))
+                }
             }
         }
     }

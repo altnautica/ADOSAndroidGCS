@@ -188,4 +188,9 @@
     <string name="cockpit_all_modes_confirm">Hold to allow</string>
     <string name="cockpit_tour_next">Next</string>
     <string name="cockpit_tour_done">Done</string>
+    <string name="cockpit_tour_close">Close</string>
+    <string name="cockpit_battery_to_reserve">%1$s to the return reserve</string>
+    <string name="cockpit_battery_to_empty">%1$s to empty</string>
+    <string name="cockpit_battery_to_reserve_short">%1$s</string>
+    <string name="cockpit_battery_to_empty_short">%1$s to empty</string>
 </resources>

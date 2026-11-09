@@ -8,6 +8,8 @@ import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSummary
+import com.altnautica.gcs.core.link.mission.MissionMirrorSource
+import com.altnautica.gcs.core.model.MissionStatus
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
 import com.altnautica.gcs.core.skills.input.controller.ControllerInfo
@@ -47,6 +49,11 @@ data class QuickMenuUiState(
     val controller: ControllerInfo? = null,
     /** The open cockpit's summary, or null when no cockpit is started. */
     val cockpit: CockpitSummary? = null,
+    /**
+     * The selected vehicle's mission: from its open cockpit, else from the agent's mission
+     * mirror. Null when neither knows it (not "no mission").
+     */
+    val mission: MissionStatus? = null,
 )
 
 @HiltViewModel
@@ -56,6 +63,7 @@ class QuickMenuViewModel @Inject constructor(
     selectedStore: SelectedVehicleStore,
     controllerManager: ControllerManager,
     cockpitSummaries: CockpitSummaryRegistry,
+    missionMirror: MissionMirrorSource,
 ) : ViewModel() {
 
     /** Same choice Home makes: the stored vehicle when listed, otherwise the first in row order. */
@@ -82,15 +90,38 @@ class QuickMenuViewModel @Inject constructor(
         node?.let { n -> HomeViewModel.card(n, v?.takeIf { it.first == n.id }?.second ?: NodeVitals.UNKNOWN) }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val mirrored: Flow<Pair<DeviceId, MissionStatus?>?> = selectedNode
+        .map { it?.id }
+        .distinctUntilChanged()
+        .flatMapLatest { id -> if (id == null) flowOf(null) else missionMirror.observe(id).map { id to it?.status }.onStart { emit(id to null) } }
+
     val uiState: StateFlow<QuickMenuUiState> = combine(
         vehicle,
         controllerManager.active,
         cockpitSummaries.summary,
-    ) { card, controller, cockpit ->
-        QuickMenuUiState(vehicle = card, surfaces = surfaces(card), controller = controller, cockpit = cockpit)
+        mirrored.onStart { emit(null) },
+    ) { card, controller, cockpit, mirror ->
+        QuickMenuUiState(
+            vehicle = card,
+            surfaces = surfaces(card),
+            controller = controller,
+            cockpit = cockpit,
+            mission = quickMission(card?.node?.id, cockpit, mirror),
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), QuickMenuUiState())
 
     private companion object {
         const val STOP_GRACE_MS = 5_000L
     }
+}
+
+/**
+ * The mission shown for [vehicleId]: its open cockpit's when that cockpit flies this vehicle
+ * and has one, else the agent's mirror for this vehicle; null when neither knows it.
+ */
+internal fun quickMission(vehicleId: DeviceId?, cockpit: CockpitSummary?, mirror: Pair<DeviceId, MissionStatus?>?): MissionStatus? {
+    if (vehicleId == null) return null
+    cockpit?.takeIf { it.nodeId == vehicleId }?.mission?.let { return it }
+    return mirror?.takeIf { it.first == vehicleId }?.second
 }

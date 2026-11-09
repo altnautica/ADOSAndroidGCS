@@ -60,6 +60,14 @@ class LayerRulesTest {
     }
 
     @Test
+    fun `saved state from earlier builds turns hud into centre marks plus instruments at that level`() {
+        val full = checkNotNull(LayerController.decode("""{"level":"full","on":["hud","ar"]}""")).first
+        assertEquals(setOf(LayerSpec.CENTRE_MARKS, "ar"), full.on)
+        val inst = checkNotNull(LayerController.decode("""{"level":"instruments","on":["hud"]}""")).first
+        assertEquals(setOf(LayerSpec.CENTRE_MARKS, LayerSpec.INSTRUMENTS), inst.on)
+    }
+
+    @Test
     fun `levels leave leased layers alone and views force theirs`() {
         val withDepth = full.toggled(LayerSpec.DEPTH)
         assertTrue(withDepth.withLevel(LayerLevel.Off, spec).isOn(LayerSpec.DEPTH))

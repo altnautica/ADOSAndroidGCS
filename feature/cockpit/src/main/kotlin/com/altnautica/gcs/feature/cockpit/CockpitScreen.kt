@@ -83,7 +83,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.MinimapFrame
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChip
 import com.altnautica.gcs.feature.cockpit.chrome.BackdropSampler
 import com.altnautica.gcs.feature.cockpit.chrome.BatteryGauge
-import com.altnautica.gcs.feature.cockpit.chrome.BatteryUi
+import com.altnautica.gcs.feature.cockpit.chrome.batteryUi
 import com.altnautica.gcs.feature.cockpit.chrome.BottomRow
 import com.altnautica.gcs.feature.cockpit.chrome.CardPage
 import com.altnautica.gcs.feature.cockpit.chrome.AttitudeRadar
@@ -269,7 +269,7 @@ private fun FlightTopBar(
 ) {
     val chip by vm.chip.collectAsStateWithLifecycle()
     val band by vm.band.collectAsStateWithLifecycle()
-    val settings by vm.settings.collectAsStateWithLifecycle()
+    val reserve by vm.batteryReserve.collectAsStateWithLifecycle()
     val video by vm.video.collectAsStateWithLifecycle()
     val menu = rememberAdosMenuState()
     val linkText = linkText(band)
@@ -280,10 +280,10 @@ private fun FlightTopBar(
         pill = pill,
         battery = {
             BatteryGauge(
-                BatteryUi(
+                batteryUi(
                     pct = band.batteryPct,
-                    timeLeftS = band.timeToReserveS,
-                    reservePct = settings.batteryBands.lowPct,
+                    reserve = reserve,
+                    flightControllerTimeS = band.timeToReserveS,
                     severity = when (band.batteryLevel) {
                         BatteryBand.Critical -> StatusSeverity.Critical
                         BatteryBand.Low -> StatusSeverity.Warning
@@ -341,6 +341,11 @@ private fun FlightTopBar(
                     vm.toggleStickControl()
                 },
             )
+        }
+        if (TopBarItem.Layers in moved) {
+            val layers = vm.autonomy.layers
+            val flags by layers.flags.collectAsStateWithLifecycle()
+            add(AdosMenuItem(stringResource(R.string.layers_button, com.altnautica.gcs.feature.cockpit.hud.layers.levelLabel(flags.level))) { layers.cycleLevel(1) })
         }
     }
     AdosMenu(menu, items)
@@ -449,7 +454,7 @@ private fun Pad(vm: CockpitViewModel, size: Dp) {
     )
 }
 
-/** The bottom-left card: map, attitude radar or obstacle radar; swipe or L3 switches it, a tap on the map swaps video and map. */
+/** The bottom-left card: map, attitude radar or obstacle radar; a swipe or its dots switch it; a tap on the map or L3 swaps video and map. */
 @Composable
 private fun Card(vm: CockpitViewModel) {
     val page by vm.cardPage.collectAsStateWithLifecycle()
@@ -812,7 +817,10 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
     }
     val tourStep by vm.tourStep.collectAsStateWithLifecycle()
     tourStep?.let { step ->
-        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) { ControllerTourSheet(step, vm::nextTourStep, vm::finishTour) }
+        // No scrim and no touch handler outside the card: STOP and both columns stay usable.
+        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS), contentAlignment = Alignment.Center) {
+            ControllerTourCard(step, vm::nextTourStep, vm::finishTour)
+        }
     }
     val launch by vm.launch.collectAsStateWithLifecycle()
     launch?.let { ui ->

@@ -152,6 +152,45 @@ class FlightLayoutTest {
     }
 
     @Test
+    fun `on a narrow window with a long alert the left group never slides under the right group`() {
+        val overflow = TopBarOverflow()
+        var barWidth by mutableStateOf(640.dp)
+        compose.setContent {
+            Box(Modifier.size(barWidth, 44.dp)) {
+                TopBar(
+                    overflow = overflow,
+                    chip = { Item("chip", 150.dp) },
+                    pill = { Item("pill", 260.dp) },
+                    battery = { Item("battery", 114.dp) },
+                    linkIcon = { Item("link", 20.dp) },
+                    linkDetail = { Item("link-detail", 90.dp) },
+                    navSource = { Item("nav", 110.dp) },
+                    controller = { Item("controller", 80.dp) },
+                    layers = { Item("layers", 150.dp) },
+                    menu = { Item("menu", 40.dp) },
+                    stop = { Item("stop", 72.dp) },
+                )
+            }
+        }
+        for (w in listOf(700.dp, 640.dp, 560.dp)) {
+            barWidth = w
+            compose.waitForIdle()
+            val left = listOf("pill", "battery", "link").map { compose.onNodeWithTag(it).getBoundsInRoot() }
+            val right = listOf("menu", "stop").map { compose.onNodeWithTag(it).getBoundsInRoot() }
+            val leftEnd = left.maxOf { it.right }
+            val rightStart = right.minOf { it.left }
+            assertTrue("left group ends at $leftEnd, right group starts at $rightStart at $w", leftEnd <= rightStart)
+            if (TopBarItem.Layers !in overflow.moved) {
+                val layers = compose.onNodeWithTag("layers").getBoundsInRoot()
+                assertTrue("the layer button is clear of the left group at $w", leftEnd <= layers.left)
+            }
+            val stop = compose.onNodeWithTag("stop").getBoundsInRoot()
+            assertEquals("STOP keeps its width at $w", 72f, (stop.right - stop.left).value, 0.5f)
+        }
+        assertTrue("at 560 dp the layer button is in the Menu", TopBarItem.Layers in overflow.moved)
+    }
+
+    @Test
     fun `the flight screen draws no legacy chrome`() {
         val root = listOf("src/main/kotlin", "feature/cockpit/src/main/kotlin").map(::File).first { it.isDirectory }
         val cockpit = File(root, "com/altnautica/gcs/feature/cockpit")

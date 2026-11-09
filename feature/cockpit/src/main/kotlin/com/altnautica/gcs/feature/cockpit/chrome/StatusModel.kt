@@ -131,7 +131,7 @@ internal fun aglTag(source: String?, ground: String): String? = when (source) {
     else -> source.uppercase()
 }
 
-/** The bottom-left card's pages, switched by swipe or L3. */
+/** The bottom-left card's pages, switched by swipe or by its dots. */
 enum class CardPage { Map, Attitude, Obstacles;
 
     fun step(delta: Int): CardPage = entries[Math.floorMod(ordinal + delta, entries.size)]

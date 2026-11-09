@@ -294,7 +294,7 @@ class CockpitViewModelTest {
         vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime)
         val sent = mutableListOf<String>()
         val data = """{"owner":"pilot","armed":true,"landed":false,"surface_ops":["goto"],"agl_m":4.2,"agl_source":"rangefinder",""" +
-            """"statustext":[{"severity":4,"text":"PreArm: Compass not calibrated","age_ms":200}]}"""
+            """"statustext":[{"severity":4,"text":"EKF variance high","age_ms":200}]}"""
         val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data, sent = sent))
         backgroundScope.launch { vm.flightValues.collect {} }
         backgroundScope.launch { vm.statusItems.collect {} }
@@ -302,8 +302,25 @@ class CockpitViewModelTest {
         runCurrent()
 
         assertEquals(4.2f, vm.flightValues.value.aglM!!, 1e-6f)
-        assertTrue(vm.statusItems.value.toString(), vm.statusItems.value.any { "Compass not calibrated" in it.toString() })
+        assertTrue(vm.statusItems.value.toString(), vm.statusItems.value.any { "EKF variance high" in it.toString() })
 
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a critical FC text arriving on the link and in the pilot's relay counts once in the pill`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val data = """{"owner":"pilot","armed":true,"landed":false,"statustext":[{"severity":2,"text":"Crash: Disarming","age_ms":100}]}"""
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data))
+        backgroundScope.launch { vm.statusItems.collect {} }
+        runCurrent()
+        vehicle.telemetry.statusText.tryEmit(com.altnautica.gcs.core.model.StatusText(2, "Crash: Disarming", testScheduler.currentTime))
+        advanceTimeBy(600)
+        runCurrent()
+        val matching = vm.statusItems.value.filter { "Crash: Disarming" in it.toString() }
+        assertEquals(vm.statusItems.value.toString(), 1, matching.size)
+        assertEquals(com.altnautica.gcs.feature.cockpit.chrome.StatusSeverity.Critical, matching.single().severity)
         vm.viewModelScope.cancel()
     }
 
@@ -819,6 +836,43 @@ class CockpitViewModelTest {
         gamepad.value = true
         runCurrent()
         assertNull("a seen tour does not come back", vm.tourStep.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the controller tour never opens in flight, a takeoff puts it away, and the pad and Back drive it on the ground`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val vm = vm(listOf(node("drone-1")), vehicle)
+        runCurrent()
+        gamepad.value = true
+        advanceTimeBy(600)
+        runCurrent()
+        assertNull("a pad connected in the air opens no tour", vm.tourStep.value)
+
+        vehicle.beat(armed = false, now = testScheduler.currentTime)
+        advanceTimeBy(600)
+        runCurrent()
+        assertEquals("it opens after the landing", 0, vm.tourStep.value)
+
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        advanceTimeBy(600)
+        runCurrent()
+        assertNull("a takeoff puts it away", vm.tourStep.value)
+
+        vehicle.beat(armed = false, now = testScheduler.currentTime)
+        advanceTimeBy(600)
+        runCurrent()
+        assertEquals("unseen, it comes back on the ground", 0, vm.tourStep.value)
+        vm.back()
+        runCurrent()
+        assertNull("Back closes it", vm.tourStep.value)
+        gamepad.value = false
+        runCurrent()
+        gamepad.value = true
+        advanceTimeBy(600)
+        runCurrent()
+        assertNull("closed with Back, it counts as seen", vm.tourStep.value)
         vm.viewModelScope.cancel()
     }
 

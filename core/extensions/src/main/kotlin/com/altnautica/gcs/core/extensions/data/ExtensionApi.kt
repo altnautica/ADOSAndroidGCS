@@ -166,6 +166,8 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
 
     override suspend fun navStatus(view: String?): AgentResult<JsonObject> = client.nav.status(view)
 
+    override suspend fun battery(): AgentResult<com.altnautica.gcs.core.agent.model.BatteryHealth> = client.battery()
+
     override suspend fun cameras(): ApiResult<List<RosterCamera>> = when (val r = client.cameraRoster()) {
         is AgentResult.Ok -> ApiResult.Ok(
             r.value.mapNotNull { c ->

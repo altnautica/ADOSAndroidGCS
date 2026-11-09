@@ -60,6 +60,7 @@
     <string name="home_quick_alerts">Alerts</string>
     <string name="home_quick_mission">Mission</string>
     <string name="home_quick_mission_none">No mission running</string>
+    <string name="home_quick_mission_unknown">Mission state not known yet</string>
     <string name="home_quick_mission_loaded">Loaded, not started</string>
     <string name="home_quick_mission_active">Flying the mission</string>
     <string name="home_quick_mission_paused">Paused</string>

@@ -39,6 +39,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.MissionState
+import com.altnautica.gcs.core.model.MissionStatus
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
 import com.altnautica.gcs.core.skills.input.controller.ControllerInfo
@@ -46,10 +47,12 @@ import com.altnautica.gcs.feature.home.FleetCard
 import com.altnautica.gcs.feature.home.R
 import com.altnautica.gcs.feature.home.livenessLabel
 
-/** The mission on the open cockpit's vehicle: its state and waypoint. Opens the planner. */
+/**
+ * The selected vehicle's mission: its state and waypoint, from its cockpit or the agent's
+ * mirror. Null [mission] is unknown and says so, never "no mission". Opens the planner.
+ */
 @Composable
-internal fun MissionStatusCard(cockpit: CockpitSummary?, onClick: () -> Unit) {
-    val mission = cockpit?.mission
+internal fun MissionStatusCard(mission: MissionStatus?, onClick: () -> Unit) {
     val active = mission != null && mission.state != MissionState.None
     StatusCard(
         title = stringResource(R.string.home_quick_mission),
@@ -57,7 +60,11 @@ internal fun MissionStatusCard(cockpit: CockpitSummary?, onClick: () -> Unit) {
         iconTint = if (active) AdosTheme.colors.accentPrimary else AdosTheme.colors.fgTertiary,
         onClick = onClick,
     ) {
-        if (mission == null || mission.state == MissionState.None) {
+        if (mission == null) {
+            Line(stringResource(R.string.home_quick_mission_unknown))
+            return@StatusCard
+        }
+        if (mission.state == MissionState.None) {
             Line(stringResource(R.string.home_quick_mission_none))
             return@StatusCard
         }

@@ -253,13 +253,20 @@ class LayerController(
             put("depth_range_m", d.rangeM?.let { JsonPrimitive(it) } ?: JsonNull)
         }.toString()
 
+        /** Saved state; state from earlier builds names the reticle and instruments together as `hud`. */
         fun decode(json: String?): Pair<LayerFlags, DepthOptions>? = runCatching {
             val o = Json.parseToJsonElement(json ?: return null).jsonObject
             val level = LayerLevel.of(o["level"]?.jsonPrimitive?.contentOrNull) ?: return null
             val on = o["on"]!!.jsonArray.mapTo(LinkedHashSet()) { it.jsonPrimitive.content }
+            if (on.remove(LEGACY_HUD)) {
+                on += LayerSpec.CENTRE_MARKS
+                if (level == LayerLevel.Instruments) on += LayerSpec.INSTRUMENTS
+            }
             val style = if (o["depth_style"]?.jsonPrimitive?.contentOrNull == "outline") CellStyle.Outline else CellStyle.Solid
             val range = (o["depth_range_m"] as? JsonPrimitive)?.floatOrNull
             LayerFlags(level, on) to DepthOptions(style, range)
         }.getOrNull()
+
+        private const val LEGACY_HUD = "hud"
     }
 }
