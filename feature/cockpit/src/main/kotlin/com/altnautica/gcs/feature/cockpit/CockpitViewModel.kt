@@ -291,27 +291,30 @@ class CockpitViewModel @AssistedInject constructor(
 
     /**
      * One FC status text, from the MAVLink link or [relayed] by the onboard pilot, classified
-     * once: a prearm reason, a critical or failsafe alert, or a pill warning. A relayed copy
-     * of a text the link already delivered is dropped, so the pill counts it once.
+     * once: a prearm reason, a critical or failsafe alert, or a pill warning. The pilot relays
+     * its recent texts on every frame, so a relayed text is placed by the time it was produced:
+     * a copy of a text already held (same text within [DUPLICATE_TEXT_MS]) changes nothing, and
+     * an older text never replaces a newer held one. Re-feeding a relay is therefore a no-op.
      */
     private fun onStatusText(severity: Int, text: String, atMs: Long, relayed: Boolean) {
         when {
             AlertEngine.isPrearm(text) -> {
                 val body = AlertEngine.prearmBody(text)
-                if (!relayed || !sameText(prearmText.value, body, atMs)) prearmText.value = ReceivedText(body, atMs)
+                if (!relayed || replacesHeld(prearmText.value, body, atMs)) prearmText.value = ReceivedText(body, atMs)
             }
             severity <= SEVERITY_CRITICAL || AlertEngine.isFailsafeAnnouncement(severity, text) ->
-                if (!relayed || !sameText(criticalText.value, text, atMs)) criticalText.value = ReceivedText(text, atMs)
+                if (!relayed || replacesHeld(criticalText.value, text, atMs)) criticalText.value = ReceivedText(text, atMs)
             severity <= StatusModel.MAV_SEVERITY_WARNING -> warningTexts.update { list ->
-                if (relayed && sameText(list.lastOrNull { it.text == text }, text, atMs)) list
-                else (list.filter { it.text != text } + ReceivedText(text, atMs)).takeLast(StatusModel.WARNING_TEXT_MAX)
+                val held = list.firstOrNull { it.text == text }
+                if (relayed && held != null && atMs - held.atMs <= DUPLICATE_TEXT_MS) list
+                else (list.filter { it.text != text } + ReceivedText(text, atMs)).sortedBy { it.atMs }.takeLast(StatusModel.WARNING_TEXT_MAX)
             }
         }
     }
 
-    /** True when [held] is [text] received no earlier than [DUPLICATE_TEXT_MS] before [atMs] (or after it): the same message. */
-    private fun sameText(held: ReceivedText?, text: String, atMs: Long): Boolean =
-        held != null && held.text == text && atMs - held.atMs <= DUPLICATE_TEXT_MS
+    /** True when a relayed [text] produced at [atMs] replaces [held]: it is newer, and not a copy of the held text. */
+    private fun replacesHeld(held: ReceivedText?, text: String, atMs: Long): Boolean =
+        held == null || (atMs > held.atMs && !(held.text == text && atMs - held.atMs <= DUPLICATE_TEXT_MS))
 
     // ---- Video ------------------------------------------------------------------------
 

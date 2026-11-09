@@ -69,4 +69,15 @@ object SkillReason {
     const val PLUGIN_STOPPED = "pluginStopped"
     const val STOP_QUEUED = "stopQueued"
     const val VEHICLE_CLASS = "vehicleClass"
+
+    /** A recovery press replaced by a newer one before the pilot answered; it never falls back to the FC. */
+    const val SUPERSEDED = "superseded"
+
+    /** The pilot's goto refusal codes. */
+    const val GOTO_BAD_ARGS = "gotoBadArgs"
+    const val GOTO_NOT_ARMED = "gotoNotArmed"
+    const val GOTO_LANDED = "gotoLanded"
+    const val GOTO_TUNING = "gotoTuning"
+    const val GOTO_NO_HOME = "gotoNoHome"
+    const val GOTO_LAUNCHING = "gotoLaunching"
 }

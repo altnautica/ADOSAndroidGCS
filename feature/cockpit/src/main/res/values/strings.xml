@@ -104,6 +104,13 @@
     <string name="cockpit_reason_command_failed">Command failed</string>
     <string name="cockpit_reason_state_error">Skill state unavailable</string>
     <string name="cockpit_reason_fly_here_target">Fly here needs a point and an altitude of 2 to 120 m</string>
+    <string name="cockpit_reason_superseded">Replaced by a newer recovery command</string>
+    <string name="cockpit_reason_goto_bad_args">Fly Here refused: the point or altitude is not valid</string>
+    <string name="cockpit_reason_goto_not_armed">Fly Here refused: the drone is not armed</string>
+    <string name="cockpit_reason_goto_landed">Fly Here refused: the drone is on the ground</string>
+    <string name="cockpit_reason_goto_tuning">Fly Here refused: a setup step is running</string>
+    <string name="cockpit_reason_goto_no_home">Fly Here refused: the drone has no home position yet</string>
+    <string name="cockpit_reason_goto_launching">Fly Here refused: the drone is still taking off</string>
     <string name="cockpit_reason_no_target">No target in view to designate</string>
     <string name="cockpit_reason_vehicle_class">Not available on this vehicle type</string>
 
@@ -128,7 +135,7 @@
     <string name="cockpit_confirm_mode_message">The vehicle switches to the selected mode.</string>
     <string name="cockpit_confirm_mode_to">The vehicle switches to %1$s.</string>
     <string name="cockpit_confirm_fly_here_title">Fly here</string>
-    <string name="cockpit_confirm_fly_here_message">The vehicle flies to the selected point.</string>
+    <string name="cockpit_confirm_fly_here_message">The vehicle flies to the selected point, taking over from any running mission or skill.</string>
     <string name="cockpit_confirm_checklist_failing">Preflight checks not passed:</string>
     <string name="cockpit_confirm_override">Override checklist</string>
     <string name="cockpit_confirm_slide">Slide to confirm</string>

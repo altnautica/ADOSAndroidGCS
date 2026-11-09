@@ -12,7 +12,6 @@ import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PilotLink
-import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Skill
@@ -28,7 +27,9 @@ import com.altnautica.gcs.core.skills.spec.Ds4Spec
 import com.altnautica.gcs.core.skills.spec.SpecArmRequirement
 import com.altnautica.gcs.core.skills.spec.SpecConfirmKind
 import com.altnautica.gcs.core.skills.spec.SpecStaleLink
+import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /** A skill whose confirm policy depends on the activation arguments (mode changes). */
 interface ArgumentConfirm {
@@ -298,6 +299,9 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
         if (spec.id == BuiltinIds.TAKE_CONTROL) return ctx.sendPilot(PilotAction(spec.pilotAction))
         val recovery = spec.id in RECOVERY_BUILTINS
         val link = ctx.pilotLink
+        // Every recovery press supersedes the ones before it on this link: an older press
+        // still waiting on the pilot never falls back to the FC after a newer one went out.
+        val generation = if (recovery && link != null) recoveryGeneration(link).incrementAndGet() else 0L
         // A second recovery press while the first still waits on the pilot goes to the FC at once.
         val escalate = recovery && link != null && link in pendingRecovery
         if (!escalate && ctx.builtinRoutesToPilot(spec.id)) {
@@ -312,9 +316,11 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
             when (answer) {
                 PilotActionResult.Accepted -> return CommandResult.Accepted
                 is PilotActionResult.Refused -> return CommandResult.Rejected(-1, answer.reason.orEmpty())
-                // The pilot did not answer: the flight controller takes the action when it can.
-                PilotActionResult.NoAnswer, PilotActionResult.Unavailable -> if (!ctx.linkFresh) {
-                    return if (answer == PilotActionResult.NoAnswer) CommandResult.Timeout else CommandResult.Denied(SkillReason.PILOT_UNAVAILABLE)
+                // The pilot did not answer: the flight controller takes the action when it can,
+                // unless a newer recovery command went out meanwhile.
+                PilotActionResult.NoAnswer, PilotActionResult.Unavailable -> when {
+                    recoveryGeneration(link).get() != generation -> return CommandResult.Denied(SkillReason.SUPERSEDED)
+                    !ctx.linkFresh -> return if (answer == PilotActionResult.NoAnswer) CommandResult.Timeout else CommandResult.Denied(SkillReason.PILOT_UNAVAILABLE)
                 }
             }
         }
@@ -363,6 +369,11 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
 
         /** Pilot links with a recovery action still waiting on the pilot's answer. */
         val pendingRecovery: MutableSet<PilotLink> = ConcurrentHashMap.newKeySet()
+
+        /** Per pilot link, a count of recovery presses: a waiting press compares it to tell a newer one went out. */
+        private val generations = WeakHashMap<PilotLink, AtomicLong>()
+
+        fun recoveryGeneration(link: PilotLink): AtomicLong = synchronized(generations) { generations.getOrPut(link) { AtomicLong() } }
     }
 }
 
@@ -411,18 +422,26 @@ object SetModeSkill : BuiltinSkill(
     }
 }
 
-/** Pilot owners a map goto may replace: the pilot itself, an idle pilot or an earlier goto. */
-private val GOTO_REPLACES = setOf(PilotOwner.Idle, PilotOwner.Pilot, PilotOwner.Goto)
-
 /**
- * True when a map point goes to the onboard pilot's `goto`: ADOS Pilot control, the pilot
- * offers `goto` to this surface, and the pilot itself owns the vehicle. A mission, a skill
- * or manual flight keeps the flight controller's route, behind the same hold confirm.
+ * True when a map point goes to the onboard pilot's `goto`: ADOS Pilot control and the pilot
+ * offers `goto` to this surface. The goto takes over from any running mission or skill, as the
+ * hold confirm says. Under FC manual or ELRS control, or with no `goto` offered, the point
+ * takes the flight controller's route.
  */
 internal fun SkillContext.flyHereToPilot(): Boolean {
     val p = pilot ?: return false
-    return routesToPilot() && PilotAction.GOTO in p.surfaceOps && p.owner in GOTO_REPLACES
+    return routesToPilot() && PilotAction.GOTO in p.surfaceOps
 }
+
+/** The pilot's goto refusal codes, each with its own operator sentence; any other code is shown verbatim. */
+private val GOTO_REFUSALS = mapOf(
+    "bad_args" to SkillReason.GOTO_BAD_ARGS,
+    "not_armed" to SkillReason.GOTO_NOT_ARMED,
+    "landed" to SkillReason.GOTO_LANDED,
+    "tuning" to SkillReason.GOTO_TUNING,
+    "no_home" to SkillReason.GOTO_NO_HOME,
+    "launching" to SkillReason.GOTO_LAUNCHING,
+)
 
 /**
  * Flies to a map point at a relative altitude; dispatched from the map's own control, behind
@@ -453,7 +472,8 @@ object FlyHereSkill : BuiltinSkill(
             return CommandResult.Rejected(-1, SkillReason.FLY_HERE_TARGET)
         }
         if (ctx.flyHereToPilot()) {
-            return ctx.sendPilot(PilotAction(PilotAction.GOTO, mapOf(PILOT_LAT to lat, PILOT_LON to lon, PILOT_ALT_M to alt)))
+            val r = ctx.sendPilot(PilotAction(PilotAction.GOTO, mapOf(PILOT_LAT to lat, PILOT_LON to lon, PILOT_ALT_M to alt)))
+            return if (r is CommandResult.Rejected) r.copy(reason = GOTO_REFUSALS[r.reason] ?: r.reason) else r
         }
         return send(ctx, VehicleCommand.FlyTo(lat, lon, alt))
     }

@@ -103,6 +103,13 @@ private val REASONS = mapOf(
     SkillReason.EKF_SOURCE_SET to R.string.cockpit_reason_ekf_set,
     SkillReason.PILOT_UNAVAILABLE to R.string.cockpit_pilot_unavailable,
     SkillReason.VEHICLE_CLASS to R.string.cockpit_reason_vehicle_class,
+    SkillReason.SUPERSEDED to R.string.cockpit_reason_superseded,
+    SkillReason.GOTO_BAD_ARGS to R.string.cockpit_reason_goto_bad_args,
+    SkillReason.GOTO_NOT_ARMED to R.string.cockpit_reason_goto_not_armed,
+    SkillReason.GOTO_LANDED to R.string.cockpit_reason_goto_landed,
+    SkillReason.GOTO_TUNING to R.string.cockpit_reason_goto_tuning,
+    SkillReason.GOTO_NO_HOME to R.string.cockpit_reason_goto_no_home,
+    SkillReason.GOTO_LAUNCHING to R.string.cockpit_reason_goto_launching,
 )
 
 /** Built-in labels are localized; an extension's label is shown as the extension provides it. */

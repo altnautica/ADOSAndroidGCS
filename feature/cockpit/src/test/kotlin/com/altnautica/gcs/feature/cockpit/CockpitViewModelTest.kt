@@ -373,7 +373,7 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `a map point in the air goes to the pilot's goto after the hold only while the pilot owns`() = runTest(dispatcher) {
+    fun `a map point in the air goes to the pilot's goto after the hold`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         val goto = mapGoto("""{"owner":"pilot","control_mode":"ados","armed":true,"landed":false,"surface_ops":["goto"]}""", vehicle)
         assertNotNull("the pilot's goto flies the point", goto)
@@ -385,17 +385,83 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `a map point during a mission, a skill or manual flight takes the FC route after the hold, never the pilot's goto`() = runTest(dispatcher) {
+    fun `under ADOS control a map point during a mission or a skill goes to the pilot's goto after the hold`() = runTest(dispatcher) {
         for (data in listOf(
             """{"owner":"mission_fc","control_mode":"ados","armed":true,"landed":false,"surface_ops":["goto"]}""",
             """{"owner":"skill","control_mode":"ados","armed":true,"landed":false,"surface_ops":["goto"]}""",
+        )) {
+            val vehicle = FakeVehicle()
+            assertNotNull(data, mapGoto(data, vehicle))
+            assertTrue("the FC gets no reposition the router would swallow: $data", vehicle.control.sent.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a map point under FC manual or ELRS control, or with no pilot goto, takes the FC route after the hold`() = runTest(dispatcher) {
+        for (data in listOf(
             """{"owner":"pilot","control_mode":"fc_manual","armed":true,"landed":false,"surface_ops":["goto"]}""",
             """{"owner":"pilot","control_mode":"elrs","armed":true,"landed":false,"surface_ops":["goto"]}""",
+            """{"owner":"pilot","control_mode":"ados","armed":true,"landed":false,"surface_ops":[]}""",
         )) {
             val vehicle = FakeVehicle()
             assertNull(data, mapGoto(data, vehicle))
             assertEquals(data, listOf<VehicleCommand>(VehicleCommand.FlyTo(47.001, 8.002, 12f)), vehicle.control.sent)
         }
+    }
+
+    @Test
+    fun `two relayed critical texts keep the newest critical alert`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val data = """{"owner":"pilot","armed":true,"landed":false,"statustext":[""" +
+            """{"severity":2,"text":"Crash: Disarming","age_ms":100},{"severity":2,"text":"Thrust loss","age_ms":15000}]}"""
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data))
+        backgroundScope.launch { vm.statusItems.collect {} }
+        advanceTimeBy(600)
+        runCurrent()
+        val items = vm.statusItems.value
+        assertTrue(items.toString(), items.any { "Crash: Disarming" in it.toString() && it.severity == com.altnautica.gcs.feature.cockpit.chrome.StatusSeverity.Critical })
+        assertFalse("an older text never replaces the newest: $items", items.any { "Thrust loss" in it.toString() })
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `five relayed warnings keep the newest four in the pill`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        // The pilot relays newest first.
+        val texts = (5 downTo 1).joinToString(",") { n -> """{"severity":4,"text":"warn $n","age_ms":${(6 - n) * 100}}""" }
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent("""{"owner":"pilot","armed":true,"landed":false,"statustext":[$texts]}"""))
+        backgroundScope.launch { vm.statusItems.collect {} }
+        advanceTimeBy(600)
+        runCurrent()
+        val shown = vm.statusItems.value.toString()
+        for (n in 2..5) assertTrue("warn $n in $shown", "warn $n" in shown)
+        assertFalse("the oldest leaves the pill: $shown", "warn 1" in shown)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `L3 swaps video and map and leaves the card page alone`() = runTest(dispatcher) {
+        val vm = vm(listOf(node("drone-1")), FakeVehicle())
+        vm.attachInput()
+        runCurrent()
+        val page = vm.cardPage.value
+        assertFalse(vm.minimapSwapped.value)
+        hold("l3")
+        advanceTimeBy(100)
+        hold()
+        advanceTimeBy(100)
+        runCurrent()
+        assertTrue("L3 swaps", vm.minimapSwapped.value)
+        assertEquals("L3 never steps the card", page, vm.cardPage.value)
+        hold("l3")
+        advanceTimeBy(100)
+        hold()
+        advanceTimeBy(100)
+        runCurrent()
+        assertFalse("a second L3 swaps back", vm.minimapSwapped.value)
+        vm.viewModelScope.cancel()
     }
 
     @Test
@@ -573,7 +639,7 @@ class CockpitViewModelTest {
         runCurrent()
         vm.setQuickSettings(true)
         hold("triangle")
-        advanceTimeBy(1_600)
+        advanceTimeBy(600)
         runCurrent()
         assertTrue(vehicle.control.sent.isEmpty())
         assertTrue(vm.quickSettingsOpen.value)

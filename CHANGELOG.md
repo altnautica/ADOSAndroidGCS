@@ -47,7 +47,14 @@ app's `versionName`.
   Changing the flight mode stops the active motion skill first.
 - Sticks reach the flight controller directly only in manual control or for a
   flight controller attached to the phone.
-- Going to a map point while in the air asks for confirmation.
+- Going to a map point while in the air asks for a hold to confirm. Under ADOS
+  control, when the drone offers it, the onboard pilot flies the point and takes
+  over from any running mission or skill; otherwise the flight controller's
+  reposition flies it. Each pilot refusal reads as a sentence.
+- A newer pause, return, land or kill always wins: an older press still waiting
+  on the pilot never falls back to the flight controller after it.
+- Relayed flight controller texts keep the newest critical alert and the newest
+  warnings in the status pill.
 
 ### Setup
 

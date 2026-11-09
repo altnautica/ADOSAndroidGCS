@@ -20,6 +20,8 @@ import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.skills.builtin.BuiltinSkills
+import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
+import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -153,6 +155,51 @@ class PilotRoutingTest {
             link.gate!!.complete(Unit)
             first.await()
         }
+    }
+
+    @Test
+    fun `an older unanswered recovery press never falls back to the FC after a newer one went out`() = runTest {
+        for ((older, newer, want) in listOf(
+            Triple("rth", "land", VehicleCommand.Land),
+            Triple("pause", "rth", VehicleCommand.ReturnToLaunch),
+            Triple("land", "kill", VehicleCommand.Kill),
+        )) {
+            vehicle.control.sent.clear()
+            val link = FakePilotLink(answer = PilotActionResult.NoAnswer).apply { gate = CompletableDeferred() }
+            val first = async { builtin(older).activate(ctx(link), emptyMap()) }
+            testScheduler.runCurrent()
+            assertEquals(CommandResult.Accepted, builtin(newer).activate(ctx(link), emptyMap()))
+            link.gate!!.complete(Unit)
+            assertEquals("$older after $newer", CommandResult.Denied(SkillReason.SUPERSEDED), first.await())
+            assertEquals("$older after $newer", listOf<VehicleCommand>(want), vehicle.control.sent)
+        }
+    }
+
+    @Test
+    fun `an unanswered recovery press with no newer one still falls back to the FC`() = runTest {
+        val link = FakePilotLink(answer = PilotActionResult.NoAnswer)
+        builtin("land").activate(ctx(link), emptyMap())
+        assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(link), emptyMap()))
+        assertEquals(listOf(VehicleCommand.Land, VehicleCommand.ReturnToLaunch), vehicle.control.sent)
+    }
+
+    @Test
+    fun `each pilot goto refusal code carries its own reason, an unknown code stays verbatim`() = runTest {
+        val pilot = adosPilot().copy(surfaceOps = setOf(PilotAction.GOTO))
+        val args = mapOf(SkillArgs.LAT to 47.0, SkillArgs.LON to 8.0, SkillArgs.ALTITUDE_M to 20f)
+        for ((code, key) in listOf(
+            "bad_args" to SkillReason.GOTO_BAD_ARGS,
+            "not_armed" to SkillReason.GOTO_NOT_ARMED,
+            "landed" to SkillReason.GOTO_LANDED,
+            "tuning" to SkillReason.GOTO_TUNING,
+            "no_home" to SkillReason.GOTO_NO_HOME,
+            "launching" to SkillReason.GOTO_LAUNCHING,
+            "something_new" to "something_new",
+        )) {
+            val link = FakePilotLink(answer = PilotActionResult.Refused(code))
+            assertEquals(code, CommandResult.Rejected(-1, key), FlyHereSkill.activate(ctx(link, pilot = pilot), args))
+        }
+        assertTrue(vehicle.control.sent.isEmpty())
     }
 
     @Test
