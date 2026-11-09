@@ -68,4 +68,5 @@ object SkillReason {
     const val NO_RESPONSE = "noResponse"
     const val PLUGIN_STOPPED = "pluginStopped"
     const val STOP_QUEUED = "stopQueued"
+    const val VEHICLE_CLASS = "vehicleClass"
 }

@@ -287,13 +287,26 @@ class AdosInputRouterTest {
     }
 
     @Test
-    fun `with a flight capture Home still reaches the app`() = runTest {
+    fun `with a flight capture PS belongs to the cockpit and only a Start hold reaches the app`() = runTest {
         val r = router()
         val ui = collectUi(r)
+        val events = mutableListOf<InputEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { r.events.collect { events += it } }
+        // A PS tap brakes and a 2 s hold returns home in the cockpit: neither may open the Quick menu or go Home.
         press(r, KeyEvent.KEYCODE_BUTTON_MODE, holdMs = 100)
+        press(r, KeyEvent.KEYCODE_BUTTON_MODE, holdMs = 2_100)
         press(r, KeyEvent.KEYCODE_BUTTON_START, holdMs = 100)
         press(r, KeyEvent.KEYCODE_BUTTON_START, holdMs = 700)
-        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.QuickMenu), UiInput.Command(UiCommand.QuickMenu)), ui)
+        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.QuickMenu)), ui)
+        assertTrue("the cockpit still sees PS", events.any { it is InputEvent.Button && it.button == GamepadButton.HOME })
+    }
+
+    @Test
+    fun `a cockpit sheet navigating with buttons still leaves PS to the cockpit`() = runTest {
+        val r = router(capture(uiNavigation = true))
+        val ui = collectUi(r)
+        press(r, KeyEvent.KEYCODE_BUTTON_MODE, holdMs = 2_100)
+        assertTrue(ui.isEmpty())
     }
 
     @Test

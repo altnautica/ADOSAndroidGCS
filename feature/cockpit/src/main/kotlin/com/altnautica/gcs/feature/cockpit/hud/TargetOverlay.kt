@@ -73,15 +73,20 @@ internal class TargetDrawer(
     private val autonomy: CockpitAutonomy,
     private val compact: Boolean,
 ) {
+    /** Tag rects placed this draw; cleared and reused, so a steady draw allocates no list. */
+    private val placed = ArrayList<Rect>()
+    private val layerPaint = androidx.compose.ui.graphics.Paint()
+
     fun DrawScope.draw(state: TargetLayerState, alpha: Float) {
         val items = state.items
         if (items.isEmpty()) return
         val (left, top, scale) = state.fit(size.width, size.height)
         val view = Rect(left, top, left + state.frameW * scale, top + state.frameH * scale)
         val painter = TargetPainter(this, colors, measurer, style, text, motion, view, scale, state.nowMs, autonomy)
-        val placed = ArrayList<Rect>()
+        placed.clear()
         if (alpha < 1f) {
-            drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha })
+            layerPaint.alpha = alpha
+            drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), layerPaint)
             for (item in items) painter.draw(item, false, compact, placed)
             drawContext.canvas.restore()
         } else {
@@ -130,7 +135,7 @@ internal fun TargetSemantics(
     Box(modifier.fillMaxSize().onSizeChanged { size = it }) {
         val density = LocalDensity.current
         val (left, top, scale) = state.fit(size.width.toFloat(), size.height.toFloat())
-        for (item in state.items) {
+        for (item in state.spoken) {
             val r = item.rect ?: continue
             val label = text.spoken(item, item.detection?.classLabel, follow?.rangeM?.takeIf { item.kind == TargetKind.Following })
             with(density) {

@@ -3,13 +3,16 @@ package com.altnautica.gcs.feature.cockpit.pilot
 import com.altnautica.gcs.core.agent.pilot.PilotFrame
 import com.altnautica.gcs.core.agent.pilot.PilotWire
 import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PilotInput
 import com.altnautica.gcs.core.model.PilotLink
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -21,9 +24,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 
 /** Where the stick streamer sends its frames: the pilot channel of the flown vehicle. */
@@ -161,10 +166,21 @@ internal class PilotChannel(
         if (_connected.value) outgoing.trySend(PilotWire.release(src, session))
     }
 
-    override fun action(action: PilotAction): Boolean {
-        if (!_connected.value) return false
+    override suspend fun action(action: PilotAction): PilotActionResult {
+        if (!_connected.value) return PilotActionResult.Unavailable
         val id = synchronized(this) { (++actionId).toString() }
-        return outgoing.trySend(PilotWire.action(action, src, id)).isSuccess
+        return coroutineScope {
+            // Listen before sending: the results flow keeps no replay.
+            val answer = async(start = CoroutineStart.UNDISPATCHED) {
+                withTimeoutOrNull(ACTION_ANSWER_MS) { _results.first { it.id == id } }
+            }
+            if (!outgoing.trySend(PilotWire.action(action, src, id)).isSuccess) {
+                answer.cancel()
+                return@coroutineScope PilotActionResult.Unavailable
+            }
+            val r = answer.await() ?: return@coroutineScope PilotActionResult.NoAnswer
+            if (r.ok) PilotActionResult.Accepted else PilotActionResult.Refused(r.err)
+        }
     }
 
     override fun takeSession(): Boolean {
@@ -176,6 +192,9 @@ internal class PilotChannel(
         const val TICK_MS = 250L
         const val HB_MS = 1_000L
         const val STALE_MS = 3_000L
+
+        /** How long an action waits for the pilot's `action_result`. */
+        const val ACTION_ANSWER_MS = 3_000L
         const val RETRY_MS = 1_000L
         const val MAX_RETRY_MS = 10_000L
         private const val OUTGOING_CAPACITY = 64

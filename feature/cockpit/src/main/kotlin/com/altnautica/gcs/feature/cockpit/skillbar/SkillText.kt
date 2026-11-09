@@ -101,6 +101,8 @@ private val REASONS = mapOf(
     SkillReason.FLY_HERE_TARGET to R.string.cockpit_reason_fly_here_target,
     CockpitAutonomy.REASON_NO_TARGET to R.string.cockpit_reason_no_target,
     SkillReason.EKF_SOURCE_SET to R.string.cockpit_reason_ekf_set,
+    SkillReason.PILOT_UNAVAILABLE to R.string.cockpit_pilot_unavailable,
+    SkillReason.VEHICLE_CLASS to R.string.cockpit_reason_vehicle_class,
 )
 
 /** Built-in labels are localized; an extension's label is shown as the extension provides it. */

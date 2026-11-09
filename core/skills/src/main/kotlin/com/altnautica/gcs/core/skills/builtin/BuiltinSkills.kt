@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Skill
@@ -113,6 +114,20 @@ fun modeChangeConfirm(modeName: String): ConfirmPolicy? {
 /** True when actions go to the onboard pilot rather than straight to the flight controller. */
 fun SkillContext.routesToPilot(): Boolean = pilotLink != null && pilot?.controlMode == ControlMode.Ados
 
+/** Built-ins that must not depend on a pilot that stopped answering. */
+private val RECOVERY_BUILTINS = setOf(BuiltinIds.PAUSE, BuiltinIds.RTH, BuiltinIds.LAND, BuiltinIds.KILL)
+
+/**
+ * Where built-in [id] goes. In ADOS Pilot control it goes to the onboard pilot; a
+ * recovery action (pause, return, land, kill) whose pilot channel is down or stale goes
+ * to the flight controller's command path instead, so it is never refused for want of
+ * the pilot and never written into a dead channel.
+ */
+internal fun SkillContext.builtinRoutesToPilot(id: String): Boolean {
+    if (!routesToPilot()) return false
+    return id !in RECOVERY_BUILTINS || pilotLink?.connected?.value == true
+}
+
 /** The vehicle can be commanded at all: present and not receive-only. */
 private fun disabledIfNoCommandPath(ctx: SkillContext): SkillState? {
     val vehicle = ctx.vehicle ?: return disabledState(SkillReason.NO_FC_LINK)
@@ -124,10 +139,13 @@ private fun disabledIfNoCommandPath(ctx: SkillContext): SkillState? {
     return null
 }
 
-/** Command skills need a fresh, commandable link: the pilot channel in ADOS Pilot mode, the FC link otherwise. */
-internal fun disabledIfNoLink(ctx: SkillContext): SkillState? {
+/**
+ * Command skills need a fresh, commandable link: the pilot channel when the action goes
+ * to the pilot ([toPilot]), the FC link otherwise.
+ */
+internal fun disabledIfNoLink(ctx: SkillContext, toPilot: Boolean = ctx.routesToPilot()): SkillState? {
     disabledIfNoCommandPath(ctx)?.let { return it }
-    val fresh = if (ctx.routesToPilot()) ctx.pilotLink?.connected?.value == true else ctx.linkFresh
+    val fresh = if (toPilot) ctx.pilotLink?.connected?.value == true else ctx.linkFresh
     return if (fresh) null else disabledState(SkillReason.NO_FC_LINK)
 }
 
@@ -137,10 +155,14 @@ internal fun ctxModes(ctx: SkillContext): List<FlightMode> =
 private suspend fun SkillContext.run(command: VehicleCommand): CommandResult =
     vehicle?.control?.run(command) ?: CommandResult.Denied(SkillReason.NO_FC_LINK)
 
-private fun SkillContext.sendPilot(action: PilotAction): CommandResult = when (pilotLink?.action(action)) {
-    true -> CommandResult.Accepted
-    else -> CommandResult.Denied(SkillReason.PILOT_UNAVAILABLE)
-}
+/** Sends [action] to the pilot and reports its answer: a refusal carries the pilot's reason. */
+private suspend fun SkillContext.sendPilot(action: PilotAction): CommandResult =
+    when (val r = pilotLink?.action(action) ?: PilotActionResult.Unavailable) {
+        PilotActionResult.Accepted -> CommandResult.Accepted
+        is PilotActionResult.Refused -> CommandResult.Rejected(-1, r.reason.orEmpty())
+        PilotActionResult.NoAnswer -> CommandResult.Timeout
+        PilotActionResult.Unavailable -> CommandResult.Denied(SkillReason.PILOT_UNAVAILABLE)
+    }
 
 /** Base for the built-ins: one-shot, sourced from the app itself. */
 abstract class BuiltinSkill(
@@ -228,7 +250,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
     sendsBlind = spec.staleLink == SpecStaleLink.SendBlind,
 ) {
     override fun state(ctx: SkillContext): SkillState {
-        val link = if (sendsBlind) disabledIfNoCommandPath(ctx) else disabledIfNoLink(ctx)
+        val link = if (sendsBlind) disabledIfNoCommandPath(ctx) else disabledIfNoLink(ctx, ctx.builtinRoutesToPilot(spec.id))
         link?.let { return it }
         if (spec.id == BuiltinIds.TAKE_CONTROL && ctx.pilotLink == null) return disabledState(SkillReason.PILOT_UNAVAILABLE)
         armGate(ctx)?.let { return it }
@@ -271,7 +293,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
 
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
         if (spec.id == BuiltinIds.TAKE_CONTROL) return ctx.sendPilot(PilotAction(spec.pilotAction))
-        if (ctx.routesToPilot()) {
+        if (ctx.builtinRoutesToPilot(spec.id)) {
             val pilotArgs = if (spec.id == BuiltinIds.TAKEOFF) mapOf(PILOT_ARG_ALT_M to takeoffAltitude(args)) else emptyMap()
             return ctx.sendPilot(PilotAction(spec.pilotAction, pilotArgs))
         }

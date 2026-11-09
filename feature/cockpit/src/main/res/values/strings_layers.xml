@@ -15,6 +15,7 @@
     <string name="layer_unavailable">%1$s unavailable</string>
     <string name="layer_depth_unscaled">Depth unscaled</string>
     <string name="layer_ar_approx">AR ≈</string>
+    <string name="layer_reduced_rate">Reduced update rate (radio)</string>
     <string name="vision_panel_title">Vision</string>
     <string name="vision_detections">Detections</string>
     <string name="vision_detections_none">No detections</string>

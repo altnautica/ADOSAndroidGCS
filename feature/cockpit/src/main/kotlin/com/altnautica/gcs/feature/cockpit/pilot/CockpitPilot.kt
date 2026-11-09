@@ -1,26 +1,23 @@
 package com.altnautica.gcs.feature.cockpit.pilot
 
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
-import com.altnautica.gcs.core.agent.pilot.PilotFrame
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.runningFold
-import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import java.io.IOException
 
@@ -29,7 +26,7 @@ enum class StickRoute {
     /** The onboard pilot over the pilot channel (`control_mode` ados). */
     Pilot,
 
-    /** MANUAL_CONTROL to the flight controller (`fc_manual`, or no onboard pilot). */
+    /** MANUAL_CONTROL to the flight controller (`fc_manual`, or a flight controller attached to the phone). */
     FcManual,
 
     /** Nowhere from this surface: an ELRS lane flies, or the pilot channel is down in ados mode. */
@@ -38,14 +35,16 @@ enum class StickRoute {
 
 /**
  * Stick routing: the pilot channel when the vehicle's pilot is in `ados` and the channel
- * is up; MANUAL_CONTROL when the pilot is in `fc_manual` or the vehicle has no onboard
- * pilot (a flight controller without an agent); otherwise nothing, so the two paths
- * never fight.
+ * is up; MANUAL_CONTROL when the pilot is in `fc_manual`, or when the flight controller is
+ * attached to the phone ([directFc]) and no onboard pilot reports a control mode;
+ * otherwise nothing, so the two paths never fight. A vehicle reached through an agent
+ * whose pilot has not reported a control mode gets no sticks.
  */
-fun stickRoute(pilotLinked: Boolean, pilot: PilotState?): StickRoute = when (pilot?.controlMode) {
+fun stickRoute(pilotLinked: Boolean, pilot: PilotState?, directFc: Boolean): StickRoute = when (pilot?.controlMode) {
     ControlMode.Ados -> if (pilotLinked) StickRoute.Pilot else StickRoute.None
     ControlMode.Elrs -> StickRoute.None
-    ControlMode.FcManual, null -> StickRoute.FcManual
+    ControlMode.FcManual -> StickRoute.FcManual
+    null -> if (directFc) StickRoute.FcManual else StickRoute.None
 }
 
 /** The newer of two pilot states by local receive time. */
@@ -68,6 +67,8 @@ internal class CockpitPilot(
     vehicleNodeId: StateFlow<DeviceId?>,
     private val api: suspend (DeviceId) -> AutonomyFeedApi?,
     navPilot: StateFlow<PilotState?>,
+    /** How the flown vehicle is reached, or null without one. */
+    reach: Flow<Reach?>,
 ) {
     /** The flown node's pilot channel, or null without a node. */
     val link: StateFlow<PilotChannel?> = vehicleNodeId
@@ -87,12 +88,8 @@ internal class CockpitPilot(
         .stateIn(scope, SharingStarted.Eagerly, null)
 
     /** Where the sticks go. */
-    val route: StateFlow<StickRoute> = combine(linked, state, ::stickRoute)
-        .stateIn(scope, SharingStarted.Eagerly, StickRoute.FcManual)
-
-    /** The pilot's answer to each action sent on the channel. */
-    val actionResults: SharedFlow<PilotFrame.ActionResult> = link.flatMapLatest { it?.results ?: emptyFlow() }
-        .shareIn(scope, SharingStarted.Eagerly)
+    val route: StateFlow<StickRoute> = combine(linked, state, reach.map { it == Reach.DirectFc }, ::stickRoute)
+        .stateIn(scope, SharingStarted.Eagerly, StickRoute.None)
 
     /** The sink the stick streamer sends to: the channel while the route is the pilot. */
     val stickSink: StateFlow<StickSink?> = combine(link, route) { l, r -> l?.takeIf { r == StickRoute.Pilot } }

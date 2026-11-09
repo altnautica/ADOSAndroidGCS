@@ -52,8 +52,6 @@ enum class CellStyle { Solid, Outline, Measured }
 class LayerPainter(private val measurer: TextMeasurer) {
     private val path = Path()
     private val halo = Path()
-    private val near = ByteArray(MAX_CELLS)
-    private val measured = ByteArray(MAX_CELLS / 8 + 1)
     private val labels = HashMap<String, TextLayoutResult>()
     private val labelStyle = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     private val prevByKey = HashMap<String, ArItem>()
@@ -62,6 +60,55 @@ class LayerPainter(private val measurer: TextMeasurer) {
     private var keyedPrev: ArCamera? = null
     private val dashed = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))
     private val dotted = PathEffect.dashPathEffect(floatArrayOf(2f, 10f))
+    private val strokes = ArrayList<Stroke>()
+
+    /** Chip texts built once per frame item (items are replaced with each new frame). */
+    private val texts = java.util.IdentityHashMap<Any, String>()
+    private val textsNoEta = java.util.IdentityHashMap<Any, String>()
+    private var nearestText = ""
+    private var nearestFor = Float.NaN
+    private val grids = arrayOf(DecodedGrid(), DecodedGrid())
+    private var nextGrid = 0
+
+    /** False on the layout classes that show distances only (`labels: distance_only`): no waypoint ETA. */
+    var etaInLabels: Boolean = true
+
+    /** A grid's decoded cells, kept until another grid needs the buffer. */
+    private class DecodedGrid {
+        var key: CameraGrid? = null
+        val near = ByteArray(MAX_CELLS)
+        val measured = ByteArray(MAX_CELLS / 8 + 1)
+        var nearCount = 0
+        var measuredCount = 0
+    }
+
+    /** Decodes [grid] once per frame (keyed by identity); two buffers serve the depth and obstacle grids. */
+    private fun decoded(grid: CameraGrid): DecodedGrid {
+        for (g in grids) if (g.key === grid) return g
+        val g = grids[nextGrid]
+        nextGrid = (nextGrid + 1) % grids.size
+        g.key = grid
+        g.nearCount = GridCodec.decode(grid.near, g.near)
+        g.measuredCount = GridCodec.decode(grid.measured, g.measured)
+        return g
+    }
+
+    /** A stroke style, built once per width, cap and effect. */
+    private fun stroke(width: Float, cap: StrokeCap = StrokeCap.Butt, effect: PathEffect? = null): Stroke {
+        for (i in strokes.indices) {
+            val s = strokes[i]
+            if (s.width == width && s.cap == cap && s.pathEffect === effect) return s
+        }
+        if (strokes.size >= MAX_STROKES) strokes.clear()
+        return Stroke(width, cap = cap, pathEffect = effect).also { strokes += it }
+    }
+
+    /** The chip text of [key], built by [build] the first time it is drawn. */
+    private inline fun text(cache: java.util.IdentityHashMap<Any, String>, key: Any, build: () -> String): String {
+        cache[key]?.let { return it }
+        if (cache.size > MAX_LABELS) cache.clear()
+        return build().also { cache[key] = it }
+    }
 
     /** Label layouts measured once per text value; bounded so stale ETA texts do not pile up. */
     private fun label(text: String): TextLayoutResult {
@@ -80,8 +127,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
     private fun DrawScope.px(v: Float) = v * density
 
     private fun DrawScope.haloStroke(p: Path, color: Color, width: Float, alpha: Float, effect: PathEffect? = null) {
-        drawPath(p, LayerColors.Halo, alpha = alpha, style = Stroke(width + px(4f), cap = StrokeCap.Round, pathEffect = effect))
-        drawPath(p, color, alpha = alpha, style = Stroke(width, cap = StrokeCap.Round, pathEffect = effect))
+        drawPath(p, LayerColors.Halo, alpha = alpha, style = stroke(width + px(4f), StrokeCap.Round, effect))
+        drawPath(p, color, alpha = alpha, style = stroke(width, StrokeCap.Round, effect))
     }
 
     // ---- AR -----------------------------------------------------------------------------
@@ -92,9 +139,9 @@ class LayerPainter(private val measurer: TextMeasurer) {
         keyedFrame = cur
         keyedPrev = prev
         curByKey.clear()
-        cur?.items?.forEach { curByKey[it.key] = it }
+        cur?.items?.let { for (i in it.indices) curByKey[it[i].key] = it[i] }
         prevByKey.clear()
-        prev?.items?.forEach { prevByKey[it.key] = it }
+        prev?.items?.let { for (i in it.indices) prevByKey[it[i].key] = it[i] }
     }
 
     /**
@@ -108,16 +155,22 @@ class LayerPainter(private val measurer: TextMeasurer) {
         rekey(cur, prev)
         val f = slot.fraction(now)
         val fade = ((now - slot.curAt).toFloat() / LayerSlot.FADE_MS).coerceIn(0f, 1f)
-        cur?.items?.forEach { item ->
-            if (!ArRules.include(item, flags, route)) return@forEach
-            val before = prevByKey[item.key]
-            val a = if (before == null && slot.prev != null) fade else 1f
-            item(item, before, f, view, route, layerAlpha * a)
+        val items = cur?.items
+        if (items != null) {
+            for (i in items.indices) {
+                val item = items[i]
+                if (!ArRules.include(item, flags, route)) continue
+                val before = prevByKey[item.key]
+                val a = if (before == null && slot.prev != null) fade else 1f
+                item(item, before, f, view, route, layerAlpha * a)
+            }
         }
-        if (fade < 1f) {
-            prevByKey.values.forEach { gone ->
-                if (curByKey.containsKey(gone.key) || !ArRules.include(gone, flags, route)) return@forEach
-                item(gone, null, 1f, view, route, layerAlpha * (1f - fade))
+        val gone = prev?.items
+        if (fade < 1f && gone != null) {
+            for (i in gone.indices) {
+                val g = gone[i]
+                if (curByKey.containsKey(g.key) || !ArRules.include(g, flags, route)) continue
+                item(g, null, 1f, view, route, layerAlpha * (1f - fade))
             }
         }
     }
@@ -163,7 +216,7 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 if (!polyline(it, before, f, view)) return
                 when {
                     route == RouteStyle.Normal && it.role == "active" -> {
-                        drawPath(path, LayerColors.Route, alpha = alpha * 0.35f, style = Stroke(px(6f), cap = StrokeCap.Round))
+                        drawPath(path, LayerColors.Route, alpha = alpha * 0.35f, style = stroke(px(6f), StrokeCap.Round))
                         haloStroke(path, LayerColors.Route, px(2f), alpha)
                     }
                     route == RouteStyle.Normal && it.role == "next" -> haloStroke(path, Color.White, px(2f), alpha)
@@ -196,7 +249,11 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 val hollow = it.role == "after" || route == RouteStyle.Paused || route == RouteStyle.Preview
                 if (!hollow) drawPath(path, routeColor, alpha = alpha, style = Fill)
                 haloStroke(path, routeColor, px(2f), alpha, if (it.role == "after") dashed else null)
-                if (it.role == "next") chip(ArRules.wpChip(it.seq, it.distM, it.etaS.takeIf { route == RouteStyle.Normal }), Offset(c.x + s, c.y - s), alpha = alpha)
+                if (it.role == "next") {
+                    val eta = etaInLabels && route == RouteStyle.Normal
+                    val chipText = text(if (eta) texts else textsNoEta, it) { ArRules.wpChip(it.seq, it.distM, it.etaS.takeIf { eta }) }
+                    chip(chipText, Offset(c.x + s, c.y - s), alpha = alpha)
+                }
             }
             "home" -> {
                 if (x == null || y == null) return
@@ -204,17 +261,17 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 val emph = route == RouteStyle.Returning
                 val r = px(if (emph) 18f else 12f)
                 drawCircle(LayerColors.Halo, r + px(2f), c, alpha = alpha)
-                drawCircle(LayerColors.Home, r, c, alpha = alpha, style = Stroke(px(if (emph) 3f else 2f)))
+                drawCircle(LayerColors.Home, r, c, alpha = alpha, style = stroke(px(if (emph) 3f else 2f)))
                 val l = label("H")
                 drawText(l, color = LayerColors.Home, topLeft = Offset(c.x - l.size.width / 2f, c.y - l.size.height / 2f), alpha = alpha)
-                if (emph) it.distM?.let { d -> chip("H · ${Math.round(d)} m", Offset(c.x + r + px(4f), c.y - r), LayerColors.Home, alpha) }
+                if (emph) it.distM?.let { d -> chip(text(texts, it) { "H · ${Math.round(d)} m" }, Offset(c.x + r + px(4f), c.y - r), LayerColors.Home, alpha) }
             }
             "fpv" -> {
                 if (x == null || y == null) return
                 val c = pt(view, x, y)
                 val r = px(6f)
-                drawCircle(LayerColors.Halo, r + px(2f), c, alpha = alpha, style = Stroke(px(4f)))
-                drawCircle(Color.White, r, c, alpha = alpha, style = Stroke(px(2f)))
+                drawCircle(LayerColors.Halo, r + px(2f), c, alpha = alpha, style = stroke(px(4f)))
+                drawCircle(Color.White, r, c, alpha = alpha, style = stroke(px(2f)))
                 path.rewind()
                 path.moveTo(c.x - px(18f) / 2 - r, c.y)
                 path.lineTo(c.x - r, c.y)
@@ -247,8 +304,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
             "fgoal" -> {
                 if (x == null || y == null) return
                 val c = pt(view, x, y)
-                drawCircle(LayerColors.Halo, px(9f), c, alpha = alpha, style = Stroke(px(4f)))
-                drawCircle(LayerColors.Follow, px(9f), c, alpha = alpha, style = Stroke(px(2f)))
+                drawCircle(LayerColors.Halo, px(9f), c, alpha = alpha, style = stroke(px(4f)))
+                drawCircle(LayerColors.Follow, px(9f), c, alpha = alpha, style = stroke(px(2f)))
                 drawCircle(LayerColors.Follow, px(2.5f), c, alpha = alpha)
             }
             "orbit" -> {
@@ -274,9 +331,9 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 path.lineTo(tip.x - dx * s + dy * s * 0.5f, tip.y - dy * s - dx * s * 0.5f)
                 path.close()
                 val color = if (it.of == "home") LayerColors.Home else routeColor
-                drawPath(path, LayerColors.Halo, alpha = alpha, style = Stroke(px(4f)))
+                drawPath(path, LayerColors.Halo, alpha = alpha, style = stroke(px(4f)))
                 drawPath(path, color, alpha = alpha)
-                val text = (if (it.of == "home") "H" else "WP${it.seq ?: ""}") + (it.distM?.let { d -> " · ${Math.round(d)} m" } ?: "")
+                val text = text(texts, it) { (if (it.of == "home") "H" else "WP${it.seq ?: ""}") + (it.distM?.let { d -> " · ${Math.round(d)} m" } ?: "") }
                 val l = label(text)
                 val lx = (tip.x - dx * s * 2 - l.size.width / 2f).coerceIn(view.left, view.right - l.size.width)
                 val ly = (tip.y - dy * s * 2 - l.size.height / 2f).coerceIn(view.top, view.bottom - l.size.height)
@@ -317,11 +374,14 @@ class LayerPainter(private val measurer: TextMeasurer) {
     fun DrawScope.drawGrid(grid: CameraGrid, view: Rect, maxM: Float, style: CellStyle, alpha: Float) {
         val cells = grid.cols * grid.rows
         if (cells <= 0 || cells > MAX_CELLS) return
-        if (GridCodec.decode(grid.near, near) < cells) return
-        val hasMask = GridCodec.decode(grid.measured, measured) >= (cells + 7) / 8
+        val g = decoded(grid)
+        if (g.nearCount < cells) return
+        val near = g.near
+        val measured = g.measured
+        val hasMask = g.measuredCount >= (cells + 7) / 8
         val cw = view.width / grid.cols
         val ch = view.height / grid.rows
-        val outline = Stroke(px(1f))
+        val outline = stroke(px(1f))
         for (i in 0 until cells) {
             val v = near[i].toInt() and 0xFF
             if (v == 0) continue
@@ -357,10 +417,14 @@ class LayerPainter(private val measurer: TextMeasurer) {
             if (d > 5f) continue
             val color = if (d <= 2f) LayerColors.Blocked else LayerColors.Detour
             val start = -90f + i * 5f - 2.5f
-            drawArc(color, start, 5f, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), alpha = alpha, style = Stroke(px(6f)))
+            drawArc(color, start, 5f, false, Offset(c.x - r, c.y - r), Size(2 * r, 2 * r), alpha = alpha, style = stroke(px(6f)))
         }
         if (nearest < Float.MAX_VALUE) {
-            val text = String.format(java.util.Locale.ROOT, "%.1f m", nearest)
+            if (nearest != nearestFor) {
+                nearestFor = nearest
+                nearestText = String.format(java.util.Locale.ROOT, "%.1f m", nearest)
+            }
+            val text = nearestText
             val l = label(text)
             val ink = if (nearest <= 2f) LayerColors.Blocked else if (nearest <= 5f) LayerColors.Detour else Color.White
             chip(text, Offset(c.x - l.size.width / 2f - px(4f), c.y - r - l.size.height - px(10f)), ink, alpha)
@@ -370,18 +434,21 @@ class LayerPainter(private val measurer: TextMeasurer) {
     // ---- Surfaces --------------------------------------------------------------------------------
 
     fun DrawScope.drawSurfaces(frame: SurfacesFrame, view: Rect, alpha: Float) {
-        for (z in frame.zones) {
-            if (z.pts.size < 3) continue
+        val zones = frame.zones
+        for (zi in zones.indices) {
+            val z = zones[zi]
+            val pts = z.pts
+            if (pts.size < 3) continue
             path.rewind()
-            z.pts.forEachIndexed { i, p ->
-                val o = pt(view, p[0], p[1])
+            for (i in pts.indices) {
+                val o = pt(view, pts[i][0], pts[i][1])
                 if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
             }
             path.close()
             drawPath(path, LayerColors.Zone, alpha = alpha * 0.15f)
             haloStroke(path, LayerColors.Zone, px(2f), alpha, dashed)
-            val p0 = z.pts[0]
-            chip("${Math.round(z.score * 100)}", pt(view, p0[0], p0[1]), LayerColors.Zone, alpha)
+            val p0 = pts[0]
+            chip(text(texts, z) { "${Math.round(z.score * 100)}" }, pt(view, p0[0], p0[1]), LayerColors.Zone, alpha)
         }
     }
 
@@ -389,5 +456,6 @@ class LayerPainter(private val measurer: TextMeasurer) {
         const val SECTORS = 72
         const val MAX_CELLS = 32 * 18 * 4
         const val MAX_LABELS = 128
+        private const val MAX_STROKES = 32
     }
 }

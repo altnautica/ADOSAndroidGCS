@@ -215,9 +215,23 @@ data class PilotAction(val name: String, val args: Map<String, Any?> = emptyMap(
     }
 }
 
+/** The pilot's answer to one action sent on the [PilotLink]. */
+sealed interface PilotActionResult {
+    data object Accepted : PilotActionResult
+
+    /** The pilot refused the action; [reason] is its `err` text when it gave one. */
+    data class Refused(val reason: String?) : PilotActionResult
+
+    /** Sent, but no `action_result` arrived within the answer window. */
+    data object NoAnswer : PilotActionResult
+
+    /** Not sent: the channel is down. */
+    data object Unavailable : PilotActionResult
+}
+
 /**
  * The live pilot channel of one vehicle (`/api/v1/pilot/stream`). Input frames are
- * dropped while [connected] is false; actions report whether they were handed to the link.
+ * dropped while [connected] is false; an action waits for the pilot's `action_result`.
  */
 interface PilotLink {
     /** Name this surface reports as its input source. */
@@ -233,7 +247,8 @@ interface PilotLink {
     /** Ends this surface's stick session; the pilot brakes to a hold. */
     fun release()
 
-    fun action(action: PilotAction): Boolean
+    /** Sends [action] and suspends until the pilot answers it or the answer window ends. */
+    suspend fun action(action: PilotAction): PilotActionResult
 
     /** Takes the stick session over from another surface. */
     fun takeSession(): Boolean

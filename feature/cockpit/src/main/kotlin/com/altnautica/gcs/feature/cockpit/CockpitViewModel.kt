@@ -102,6 +102,8 @@ import com.altnautica.gcs.feature.cockpit.pilot.OnScreenSticks
 import com.altnautica.gcs.feature.cockpit.pilot.PilotStickStreamer
 import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
 import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
+import com.altnautica.gcs.feature.cockpit.pilot.pilotActionEvent
+import com.altnautica.gcs.feature.cockpit.pilot.sendModeSheetAction
 import com.altnautica.gcs.feature.cockpit.preflight.ArmRequest
 import com.altnautica.gcs.feature.cockpit.preflight.FirstArmGate
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightContext
@@ -302,7 +304,7 @@ class CockpitViewModel @AssistedInject constructor(
     private suspend fun autonomyApi(id: DeviceId): AutonomyFeedApi? =
         localApis.firstNotNullOfOrNull { it.autonomy(id) } ?: extensions.api(id)
 
-    internal val pilot = CockpitPilot(viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot)
+    internal val pilot = CockpitPilot(viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot, vehicle.flatMapLatest { it?.reach ?: flowOf(null) })
 
     /** The onboard pilot's state, or null for a vehicle without one. */
     val pilotState: StateFlow<PilotState?> = pilot.state
@@ -516,15 +518,23 @@ class CockpitViewModel @AssistedInject constructor(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
 
-    private fun pilotAction(action: PilotAction) {
-        if (pilot.link.value?.action(action) != true) _events.tryEmit(CockpitEvent.PilotUnavailable)
+    /** Sends [action] to the pilot and reports a refusal, a missing answer or a down channel. */
+    private fun pilotAction(action: PilotAction, stopsMotion: Boolean = false) {
+        viewModelScope.launch {
+            val result = sendModeSheetAction(action, pilot.link.value, stopMotion = { if (stopsMotion) stopMotionSkill() })
+            pilotActionEvent(result)?.let(_events::tryEmit)
+        }
+    }
+
+    private suspend fun stopMotionSkill() {
+        session.activeMotionSkill()?.let { session.stop(it.id) }
     }
 
     val modeSheetActions = object : ModeSheetActions {
-        override fun onProfile(profile: PilotProfile) = pilotAction(PilotAction.profile(profile))
-        override fun onControlMode(mode: ControlMode) = pilotAction(PilotAction.controlMode(mode))
-        override fun onAvoid(mode: AvoidMode) = pilotAction(PilotAction.avoid(mode))
-        override fun onHandToFc(mode: String) = pilotAction(PilotAction(PilotAction.HAND_TO_FC, mapOf("mode" to mode)))
+        override fun onProfile(profile: PilotProfile) = pilotAction(PilotAction.profile(profile), stopsMotion = true)
+        override fun onControlMode(mode: ControlMode) = pilotAction(PilotAction.controlMode(mode), stopsMotion = true)
+        override fun onAvoid(mode: AvoidMode) = pilotAction(PilotAction.avoid(mode), stopsMotion = true)
+        override fun onHandToFc(mode: String) = pilotAction(PilotAction(PilotAction.HAND_TO_FC, mapOf("mode" to mode)), stopsMotion = true)
         override fun onTakeControl() = pilotAction(PilotAction(PilotAction.TAKE_CONTROL))
         override fun onFcMode(name: String) {
             overlays.modePicker.value = false
@@ -707,7 +717,7 @@ class CockpitViewModel @AssistedInject constructor(
                 nowMs = clock.nowMs(),
                 missionCompleteSinceMs = done,
                 homeDistM = homeDistanceM(map),
-                goalDistM = p?.let(::goalDistanceM),
+                goalDistM = p?.goalNed?.let { goalDistanceM(it, telemetry.value?.localPosition?.value) },
                 fcModeName = b.modeName,
             ),
         )
@@ -984,13 +994,6 @@ class CockpitViewModel @AssistedInject constructor(
         announcer.shutdown()
     }
 
-    private fun goalDistanceM(p: PilotState): Float? {
-        val goal = p.goalNed ?: return null
-        val sp = p.setpointNed ?: return null
-        if (goal.size < 2 || sp.size < 2) return null
-        return hypot(goal[0] - sp[0], goal[1] - sp[1])
-    }
-
     private fun homeDistanceM(map: MinimapState): Float? {
         val v = map.vehicle?.position ?: return null
         val h = map.home ?: return null
@@ -1009,4 +1012,10 @@ class CockpitViewModel @AssistedInject constructor(
 
         private val SAFETY_BUILTINS = setOf(BuiltinIds.PAUSE, BuiltinIds.RTH, BuiltinIds.KILL)
     }
+}
+
+/** Horizontal metres from the vehicle's local position to [goal] (NED); null when either is unknown. */
+internal fun goalDistanceM(goal: List<Float>, local: com.altnautica.gcs.core.model.LocalPosition?): Float? {
+    if (local == null || goal.size < 2) return null
+    return hypot(goal[0] - local.northM, goal[1] - local.eastM)
 }

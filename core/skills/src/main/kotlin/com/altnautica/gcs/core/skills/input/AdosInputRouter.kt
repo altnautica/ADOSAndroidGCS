@@ -385,7 +385,12 @@ class AdosInputRouter @Inject constructor(
         val held = setButton(button, down)
         if (held == null) publish()
         if (held != null && !(down && event.repeatCount > 0)) {
-            val inputs = if (ui) uiInputsForButton(button, down, held) else captureUiInputsForButton(button, down, held)
+            // With the cockpit open, PS is its brake/RTH button even while one of its sheets navigates.
+            val inputs = when {
+                button == GamepadButton.HOME && capture != null -> emptyList()
+                ui -> uiInputsForButton(button, down, held)
+                else -> captureUiInputsForButton(button, down, held)
+            }
             inputs.forEach { _uiInput.tryEmit(it) }
         }
         return !passThrough

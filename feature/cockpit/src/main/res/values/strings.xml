@@ -105,6 +105,7 @@
     <string name="cockpit_reason_state_error">Skill state unavailable</string>
     <string name="cockpit_reason_fly_here_target">Fly here needs a point and an altitude of 2 to 120 m</string>
     <string name="cockpit_reason_no_target">No target in view to designate</string>
+    <string name="cockpit_reason_vehicle_class">Not available on this vehicle type</string>
 
     <!-- Confirm sheet -->
     <string name="cockpit_confirm_arm_title">Arm motors</string>

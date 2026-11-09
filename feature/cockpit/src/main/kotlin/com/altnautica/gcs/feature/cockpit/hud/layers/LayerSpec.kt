@@ -32,8 +32,8 @@ data class LayerSpec(val layers: List<LayerDef>, val routeLevel: Set<String>, va
     /** The layers [view] forces on while it is open. */
     fun forced(view: String): Set<String> = views[view].orEmpty()
 
-    /** The canvas layers (everything but the HUD chrome) in ascending z. */
-    val canvasOrder: List<String> get() = layers.filter { it.id != HUD }.map { it.id }
+    /** The canvas layers (everything but the HUD chrome) in ascending z; built once, read every draw. */
+    val canvasOrder: List<String> by lazy(LazyThreadSafetyMode.PUBLICATION) { layers.filter { it.id != HUD }.map { it.id } }
 
     fun def(id: String): LayerDef? = layers.firstOrNull { it.id == id } ?: if (id.startsWith(PLUGIN_PREFIX)) LayerDef(id, true, "plugin", false) else null
 

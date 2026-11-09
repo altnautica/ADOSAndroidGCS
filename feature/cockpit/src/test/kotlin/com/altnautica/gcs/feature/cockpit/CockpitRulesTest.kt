@@ -161,4 +161,12 @@ class CockpitRulesTest {
         assertEquals(near, CockpitAutonomy.centreDetection(batch.copy(items = listOf(far, near))))
         assertNull(CockpitAutonomy.centreDetection(batch.copy(items = emptyList())))
     }
+
+    @Test
+    fun `the goto distance is measured from the vehicle, not from the setpoint`() {
+        val here = com.altnautica.gcs.core.model.LocalPosition(0f, 0f, -10f, 0f, 0f, 0f, 0L)
+        // The planner puts the setpoint on the goal on a clear path; the chip must still read 50 m.
+        assertEquals(50f, goalDistanceM(listOf(30f, 40f, -10f), here)!!, 0.01f)
+        assertNull(goalDistanceM(listOf(30f, 40f, -10f), null))
+    }
 }

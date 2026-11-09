@@ -50,11 +50,11 @@ internal fun uiInputsForButton(button: Int, pressed: Boolean, heldMs: Long): Lis
 
 /**
  * The app-level commands a gamepad button still produces while the cockpit captures
- * flight input: Home opens the Quick menu (tap) or goes Home (hold); a Start hold opens
- * the Quick menu. Every other button belongs to the cockpit.
+ * flight input: only a Start hold, which opens the Quick menu. The PS (Home) button
+ * belongs to the cockpit there (brake on press, return home on a hold), so it never also
+ * opens the Quick menu or leaves for Home.
  */
 internal fun captureUiInputsForButton(button: Int, pressed: Boolean, heldMs: Long): List<UiInput> = when (button) {
-    GamepadButton.HOME -> homeRelease(pressed, heldMs)
     GamepadButton.START -> if (!pressed && heldMs >= LONG_PRESS_MS) command(UiCommand.QuickMenu) else emptyList()
     else -> emptyList()
 }

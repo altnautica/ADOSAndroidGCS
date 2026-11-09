@@ -102,8 +102,14 @@ class SkillActivator @Inject constructor(
         return until
     }
 
-    /** The skill's computed state with the dispatcher's cooldown window merged in. */
+    /**
+     * The skill's computed state with the dispatcher's cooldown window merged in. A skill
+     * that excludes the pilot's vehicle class is disabled, so no activation path (picker,
+     * keyboard, gamepad) can fire it.
+     */
     fun mergedState(vehicle: DeviceId?, skill: Skill, ctx: SkillContext): SkillState {
+        val cls = ctx.pilot?.vehicleClass
+        if (cls != null && cls !in skill.vehicleClasses) return disabledState(SkillReason.VEHICLE_CLASS)
         val computed = try {
             skill.state(ctx)
         } catch (e: CancellationException) {

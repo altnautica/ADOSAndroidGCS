@@ -44,6 +44,7 @@ import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
+import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
 import io.mockk.coEvery
@@ -120,6 +121,7 @@ class CockpitViewModelTest {
         vehicleDelayMs: Long = 0,
         streamCatalog: StreamCatalog = mockk(relaxed = true),
         agentBaseUrl: String? = null,
+        localApis: Set<com.altnautica.gcs.core.agent.node.LocalNodeApis> = emptySet(),
     ): CockpitViewModel {
         val clock = MonotonicClock { testScheduler.currentTime }
         val dataStore = MemoryPreferences()
@@ -161,7 +163,7 @@ class CockpitViewModelTest {
                 every { acquire(any()) } returns {}
                 every { batches(any()) } returns null
             },
-            localApis = emptySet(),
+            localApis = localApis,
             spec = testSpec,
             controls = ControlsRepository(dataStore, testSpec, flowOf(emptyList())),
         )
@@ -170,7 +172,38 @@ class CockpitViewModelTest {
             vm.status, vm.maxBrightness, vm.canRecord, vm.recordingActive, vm.skillStates, vm.pickerChip,
             vm.modeSheet, vm.chip, vm.flow, vm.targetActions, vm.band, vm.strip, vm.minimap,
         ).forEach { flow -> backgroundScope.launch { flow.collect {} } }
+        // A failed assertion skips the test's own cancel; without this the VM's endless
+        // tickers would keep the scheduler's final drain spinning instead of failing.
+        backgroundScope.coroutineContext[kotlinx.coroutines.Job]!!.invokeOnCompletion { vm.viewModelScope.cancel() }
         return vm
+    }
+
+    /** An in-process agent whose pilot channel reports one pilot frame ([data]), then stays open. */
+    private fun TestScope.pilotAgent(
+        data: String = """{"owner":"fc_mode","armed":true}""",
+    ): Set<com.altnautica.gcs.core.agent.node.LocalNodeApis> {
+        val api = object : com.altnautica.gcs.core.agent.nav.AutonomyFeedApi {
+            override fun detections() = kotlinx.coroutines.flow.emptyFlow<String>()
+            override fun navStream(outbound: kotlinx.coroutines.flow.Flow<String>) = flow<String> { kotlinx.coroutines.awaitCancellation() }
+            override fun pilotStream(outgoing: kotlinx.coroutines.flow.Flow<String>) = flow {
+                emit("""{"kind":"pilot","ts_ms":${testScheduler.currentTime},"data":$data}""")
+                kotlinx.coroutines.awaitCancellation()
+            }
+            private val absent = AgentResult.Err(com.altnautica.gcs.core.agent.http.AgentError.FeatureAbsent)
+            override suspend fun visionDemand(body: kotlinx.serialization.json.JsonObject) = absent
+            override suspend fun visionStatus() = absent
+            override suspend fun setDetector(modelId: String) = absent
+            override suspend fun mapLive(since: Long) = absent
+        }
+        return setOf(
+            object : com.altnautica.gcs.core.agent.node.LocalNodeApis {
+                override fun handles(id: DeviceId) = false
+                override fun capture(id: DeviceId) = null
+                override fun sensors(id: DeviceId) = null
+                override fun capturePreview(id: DeviceId, camera: String?) = null
+                override fun autonomy(id: DeviceId) = api
+            },
+        )
     }
 
     @Test
@@ -451,7 +484,8 @@ class CockpitViewModelTest {
 
     @Test
     fun `stopping the cockpit turns stick control off and centres the sticks`() = runTest(dispatcher) {
-        val vehicle = FakeVehicle()
+        // A flight controller attached to the phone: MANUAL_CONTROL is its stick path.
+        val vehicle = FakeVehicle().apply { reach.value = Reach.DirectFc }
         val streamer = FakeStreamer()
         val services = mockk<VehicleServices>(relaxed = true) { every { manualControl } returns streamer }
         gamepad.value = true
@@ -475,6 +509,25 @@ class CockpitViewModelTest {
         vm.attachInput()
         runCurrent()
         assertFalse(streamer.enabled.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a drone reached through its agent gets no MANUAL_CONTROL before its pilot reports a control mode`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        val streamer = FakeStreamer()
+        val services = mockk<VehicleServices>(relaxed = true) { every { manualControl } returns streamer }
+        gamepad.value = true
+        advanceTimeBy(5_000)
+        vehicle.beat(armed = true, now = testScheduler.currentTime, mode = "LOITER")
+        val vm = vm(listOf(node("drone-1")), vehicle, services = services)
+        vm.attachInput()
+        runCurrent()
+        assertEquals(StickRoute.None, vm.pilot.route.value)
+        vm.toggleStickControl()
+        runCurrent()
+        assertFalse("sticks must not reach the FC by MANUAL_CONTROL", streamer.enabled.value)
+        assertEquals(StickChip.LinkBlocked, vm.band.value.stick)
         vm.viewModelScope.cancel()
     }
 
@@ -555,6 +608,21 @@ class CockpitViewModelTest {
         runCurrent()
         assertTrue(vm.modeSheet.value != null)
         assertTrue(vehicle.control.sent.isEmpty())
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the goto chip reads the distance from the vehicle to the goal`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        vehicle.telemetry.localPosition.value = com.altnautica.gcs.core.model.LocalPosition(0f, 0f, -10f, 0f, 0f, 0f, 0L)
+        // On a clear path the planner puts the setpoint on the goal; the goal is 50 m from the vehicle.
+        val goto = """{"owner":"goto","armed":true,"goal_ned":[30,40,-10],"setpoint_ned":[30,40,-10]}"""
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(goto))
+        advanceTimeBy(600)
+        runCurrent()
+        assertEquals("goto", vm.chip.value.ruleId)
+        assertEquals("GOTO · 50 m", vm.chip.value.primary.text)
         vm.viewModelScope.cancel()
     }
 }

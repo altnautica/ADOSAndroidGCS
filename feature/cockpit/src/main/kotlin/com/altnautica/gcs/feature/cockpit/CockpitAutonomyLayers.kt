@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,7 +35,6 @@ import com.altnautica.gcs.feature.cockpit.hud.LockChip
 import com.altnautica.gcs.feature.cockpit.hud.ProximityRadar
 import com.altnautica.gcs.feature.cockpit.hud.RailUi
 import com.altnautica.gcs.feature.cockpit.hud.TargetDesignator
-import com.altnautica.gcs.feature.cockpit.hud.TargetLayerDriver
 import com.altnautica.gcs.feature.cockpit.hud.TargetLayerState
 import com.altnautica.gcs.feature.cockpit.hud.TargetSemantics
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerStack
@@ -64,15 +64,21 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
     val designator = remember { DesignatorState() }
     // Overlays clear on video loss: no frame for over a second reads as Frozen or not Live.
     val videoLost = videoState !is VideoState.Live
-    TargetLayerDriver(layer, a, videoLost, { telemetry?.attitude?.value?.yawRad?.let { Math.toDegrees(it.toDouble()).toFloat() } }, motion)
     BoxWithConstraints(modifier.fillMaxSize()) {
         val compact = maxWidth < COMPACT_SURFACE
         val surfaceW = constraints.maxWidth.toFloat()
         val surfaceH = constraints.maxHeight.toFloat()
         val drawer = rememberTargetDrawer(a, motion, compact)
+        SideEffect {
+            layer.autonomy = a
+            layer.drawer = drawer
+            layer.videoLost = videoLost
+            layer.motion = motion
+            layer.vehicleYawDeg = { telemetry?.attitude?.value?.yawRad?.let { Math.toDegrees(it.toDouble()).toFloat() } }
+        }
         LayerStack(
             a.layers, cameraId, layer.frameW, layer.frameH, Modifier.fillMaxSize(),
-            targets = { alpha -> with(drawer) { draw(layer, alpha) } },
+            targets = layer,
         )
         TargetSemantics(layer, a, onSelect = { item ->
             item.rect?.let { r ->

@@ -49,4 +49,7 @@
 
     <!-- Pilot channel -->
     <string name="cockpit_pilot_unavailable">The onboard pilot is not reachable.</string>
+    <string name="cockpit_pilot_refused">The onboard pilot refused: %1$s</string>
+    <string name="cockpit_pilot_refused_no_reason">The onboard pilot refused the change.</string>
+    <string name="cockpit_pilot_no_answer">No answer from the onboard pilot.</string>
 </resources>

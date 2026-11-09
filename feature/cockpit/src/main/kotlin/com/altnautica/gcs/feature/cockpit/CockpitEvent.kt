@@ -22,6 +22,12 @@ sealed interface CockpitEvent {
     /** A pilot action could not be sent: the vehicle's pilot channel is down. */
     data object PilotUnavailable : CockpitEvent
 
+    /** The pilot refused an action; [reason] is its own text when it gave one. */
+    data class PilotRefused(val reason: String?) : CockpitEvent
+
+    /** An action went to the pilot but no answer came back in time. */
+    data object PilotNoAnswer : CockpitEvent
+
     /** The chip's "Set up aircraft" was pressed. */
     data object SetUpAircraft : CockpitEvent
 }

@@ -126,6 +126,11 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
                 CockpitEvent.ReacquireModeNotApplied -> snackbar.showSnackbar(resources.getString(R.string.hud_rail_mode_not_applied))
                 CockpitEvent.MinimapLocal -> snackbar.showSnackbar(resources.getString(R.string.hud_map_toast_local))
                 CockpitEvent.PilotUnavailable -> snackbar.showSnackbar(resources.getString(R.string.cockpit_pilot_unavailable))
+                is CockpitEvent.PilotRefused -> snackbar.showSnackbar(
+                    event.reason?.takeIf { it.isNotBlank() }?.let { resources.getString(R.string.cockpit_pilot_refused, it) }
+                        ?: resources.getString(R.string.cockpit_pilot_refused_no_reason),
+                )
+                CockpitEvent.PilotNoAnswer -> snackbar.showSnackbar(resources.getString(R.string.cockpit_pilot_no_answer))
                 CockpitEvent.SetUpAircraft -> (vm.extensionNodeId.value ?: nodeId).let(onSetUpAircraft)
             }
         }
@@ -149,7 +154,7 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
     val windowWidthPx = LocalWindowInfo.current.containerSize.width
     val width = widthClassFor(with(LocalDensity.current) { windowWidthPx.toDp().value })
 
-    // The band and Skill Bar stay clear of the cutout and of system bars swiped in over the cockpit.
+    // The cockpit chrome stays clear of the cutout and of system bars swiped in over the cockpit.
     Box(modifier.fillMaxSize().background(AdosTheme.colors.mediaLetterbox).windowInsetsPadding(WindowInsets.safeDrawing)) {
         when (status) {
             CockpitStatus.UnknownNode -> EmptyState(

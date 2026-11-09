@@ -44,6 +44,7 @@ class FakeTelemetry : VehicleTelemetry {
     override val fence = MutableStateFlow<FenceStatus?>(null)
     override val obstacles = MutableStateFlow<ObstacleSectors?>(null)
     override val statusText = MutableSharedFlow<StatusText>(extraBufferCapacity = 16)
+    override val localPosition = MutableStateFlow<com.altnautica.gcs.core.model.LocalPosition?>(null)
 }
 
 class FakeControl : VehicleControl {
