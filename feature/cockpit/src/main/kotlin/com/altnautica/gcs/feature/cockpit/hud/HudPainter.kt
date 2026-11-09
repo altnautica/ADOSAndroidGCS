@@ -45,7 +45,12 @@ internal class HudPainter(
     private val dimMedium = medium.copy(color = colors.hudMuted)
     private val path = Path()
 
-    fun DrawScope.paint(t: VehicleTelemetry?, altRef: AltitudeReference, density: CockpitDensity, now: Long) {
+    /**
+     * The centre: always the reticle and the small heading and horizon marks; with
+     * [instruments] the flight instruments as well (pitch ladder, roll arc, flight-path
+     * marker, speed and altitude tapes, vertical-speed bar, heading tape and wind).
+     */
+    fun DrawScope.paint(t: VehicleTelemetry?, altRef: AltitudeReference, density: CockpitDensity, now: Long, instruments: Boolean = true) {
         val stroke = 1.5.dp.toPx()
         val cx = size.width / 2
         val cy = size.height / 2
@@ -62,6 +67,10 @@ internal class HudPainter(
         val pitchDeg = att?.let { Math.toDegrees(it.pitchRad.toDouble()).toFloat() } ?: 0f
         val headingDeg = vfr?.headingDeg ?: att?.let { HudMath.wrap360(Math.toDegrees(it.yawRad.toDouble()).toFloat()) }
 
+        if (!instruments) {
+            centreMarks(att != null, rollDeg, pitchDeg, headingDeg, ppd, stroke)
+            return
+        }
         // Horizon and pitch ladder.
         val lineColor = if (att != null) colors.hudPrimary else colors.hudMuted
         clipRect(0f, size.height * 0.12f, size.width, size.height * 0.88f) {
@@ -174,6 +183,37 @@ internal class HudPainter(
             val text = measurer.measure("${wind.speedMs.roundToInt()} m/s", smallStyle)
             drawText(text, topLeft = Offset(origin.x - text.size.width / 2f, origin.y + 18.dp.toPx()))
         }
+    }
+
+    /** Reticle, two short horizon marks (roll and pitch) and the heading in degrees above the reticle. */
+    private fun DrawScope.centreMarks(fresh: Boolean, rollDeg: Float, pitchDeg: Float, heading: Float?, ppd: Float, stroke: Float) {
+        val cx = size.width / 2
+        val cy = size.height / 2
+        val ink = if (fresh) colors.hudInk else colors.hudMuted
+        // Horizon marks: short bars either side of the reticle, never a full line across the view.
+        rotate(-rollDeg, Offset(cx, cy)) {
+            val y = cy + (pitchDeg * ppd).coerceIn(-size.height * 0.3f, size.height * 0.3f)
+            val inner = 46.dp.toPx()
+            val outer = 84.dp.toPx()
+            drawLine(ink, Offset(cx - outer, y), Offset(cx - inner, y), stroke * 1.4f, StrokeCap.Round)
+            drawLine(ink, Offset(cx + inner, y), Offset(cx + outer, y), stroke * 1.4f, StrokeCap.Round)
+        }
+        // Reticle.
+        val cross = 9.dp.toPx()
+        drawLine(colors.hudInk, Offset(cx - cross * 2, cy), Offset(cx - cross * 0.7f, cy), stroke * 1.4f, StrokeCap.Round)
+        drawLine(colors.hudInk, Offset(cx + cross * 0.7f, cy), Offset(cx + cross * 2, cy), stroke * 1.4f, StrokeCap.Round)
+        drawLine(colors.hudInk, Offset(cx, cy + cross * 0.7f), Offset(cx, cy + cross * 1.5f), stroke * 1.4f, StrokeCap.Round)
+        drawCircle(colors.hudInk, 1.8.dp.toPx(), Offset(cx, cy))
+        // Heading: a small caret and the degrees, above the reticle.
+        val label = measurer.measure(heading?.let { "%03d°".format(HudMath.wrap360(it).roundToInt() % 360) } ?: DASH, if (fresh) smallStyle else dimSmall)
+        val top = cy - 64.dp.toPx()
+        drawText(label, topLeft = Offset(cx - label.size.width / 2f, top - label.size.height))
+        path.reset()
+        path.moveTo(cx, top + 6.dp.toPx())
+        path.lineTo(cx - 4.dp.toPx(), top + 1.dp.toPx())
+        path.lineTo(cx + 4.dp.toPx(), top + 1.dp.toPx())
+        path.close()
+        drawPath(path, ink)
     }
 
     private fun DrawScope.headingTape(heading: Float?, homeBearing: Float?, stroke: Float) {

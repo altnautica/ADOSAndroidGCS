@@ -19,8 +19,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerLevel
-import com.altnautica.gcs.feature.cockpit.panels.StripCell
-import com.altnautica.gcs.feature.cockpit.panels.stripCells
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -49,7 +47,7 @@ class LayoutClassTest {
     }
 
     @Test
-    fun `the spec's class values reach the layers, the level and the strip`() {
+    fun `the spec's class values reach the layers and the level`() {
         val tv = classes["tv"]
         assertEquals(30, tv.layerPresentation().fpsCap)
         assertTrue(tv.focusRingsAlways)
@@ -61,8 +59,6 @@ class LayoutClassTest {
             assertTrue(id, c.distanceOnly)
             assertFalse(id, c.focusRingsAlways)
         }
-        assertEquals(listOf(StripCell.Dist, StripCell.Home), stripCells(distanceOnly = true))
-        assertEquals(StripCell.entries.toList(), stripCells(distanceOnly = false))
     }
 
     private fun ringPixel(on: Boolean): Color {

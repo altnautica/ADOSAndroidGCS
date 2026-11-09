@@ -30,9 +30,23 @@ data class NodeVitals(
     val batteryPct: Int?,
     val modeName: String?,
     val armed: Boolean?,
+    val gpsFix: com.altnautica.gcs.core.model.GpsFix? = null,
+    val satellites: Int? = null,
 ) {
     companion object {
         val UNKNOWN = NodeVitals(null, null, null)
+
+        /** MAVLink `GPS_FIX_TYPE` to [com.altnautica.gcs.core.model.GpsFix]; null when unknown. */
+        fun fixOf(fixType: Int?): com.altnautica.gcs.core.model.GpsFix? = when (fixType) {
+            0 -> com.altnautica.gcs.core.model.GpsFix.NoGps
+            1 -> com.altnautica.gcs.core.model.GpsFix.NoFix
+            2 -> com.altnautica.gcs.core.model.GpsFix.Fix2D
+            3 -> com.altnautica.gcs.core.model.GpsFix.Fix3D
+            4 -> com.altnautica.gcs.core.model.GpsFix.DGps
+            5 -> com.altnautica.gcs.core.model.GpsFix.RtkFloat
+            6 -> com.altnautica.gcs.core.model.GpsFix.RtkFixed
+            else -> null
+        }
     }
 }
 
@@ -61,6 +75,8 @@ class NodeVitalsRepository @Inject constructor(
                     batteryPct = t?.battery?.remaining?.takeIf { it in 0..100 },
                     modeName = t?.mode?.takeIf { it.isNotBlank() },
                     armed = t?.armed,
+                    gpsFix = NodeVitals.fixOf(t?.gps?.fixType),
+                    satellites = t?.gps?.satellites?.takeIf { it >= 0 },
                 )
             }
             ground != null -> fresh(agentStatus.observe(ground.groundId)) { poll ->
@@ -102,11 +118,13 @@ class NodeVitalsRepository @Inject constructor(
         .flatMapLatest { v -> if (v == null) flowOf(NodeVitals.UNKNOWN) else telemetryVitals(v) }
 
     private fun telemetryVitals(v: Vehicle): Flow<NodeVitals> =
-        combine(v.telemetry.battery, v.telemetry.heartbeat) { b, hb ->
+        combine(v.telemetry.battery, v.telemetry.heartbeat, v.telemetry.gps) { b, hb, gps ->
             NodeVitals(
                 batteryPct = b?.remainingPct?.takeIf { it >= 0 },
                 modeName = hb?.mode?.name,
                 armed = hb?.armed,
+                gpsFix = gps?.fix,
+                satellites = gps?.satellites,
             )
         }
 

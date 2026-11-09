@@ -18,7 +18,8 @@ import com.altnautica.gcs.feature.cockpit.BatteryBand
 import com.altnautica.gcs.feature.cockpit.Geo
 import com.altnautica.gcs.feature.cockpit.MinimapState
 import com.altnautica.gcs.feature.cockpit.StickChip
-import com.altnautica.gcs.feature.cockpit.StripValues
+import com.altnautica.gcs.feature.cockpit.chrome.CardPage
+import com.altnautica.gcs.feature.cockpit.chrome.FlightValues
 import com.altnautica.gcs.feature.cockpit.UI_STOP_MS
 import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
@@ -39,8 +40,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.hypot
 
-/** The safety band, telemetry strip and minimap, all sampled on the shared 2 Hz tick. */
+/** The band, bottom-row values, card page and minimap, all sampled on the shared 2 Hz tick. */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class CockpitHudFlows(
     scope: CoroutineScope,
@@ -125,27 +127,30 @@ internal class CockpitHudFlows(
         else -> BatteryBand.Good
     }
 
-    val strip: StateFlow<StripValues> = telemetry.flatMapLatest { t ->
-        if (t == null) return@flatMapLatest flowOf(EMPTY_STRIP)
+    /** The bottom row's distance home, height, and horizontal and vertical speed, at 2 Hz (AGL is added by the caller). */
+    val flightValues: StateFlow<FlightValues> = telemetry.flatMapLatest { t ->
+        if (t == null) return@flatMapLatest flowOf(FlightValues.Empty)
         tick500.map {
-            val pos = t.position.value
+            val now = clock.nowMs()
+            val pos = t.position.value?.takeIf { now - it.tMs <= HudMath.STALE_MS }
             val home = t.home.value
-            val vfr = t.vfr.value
-            val gps = t.gps.value
-            val mission = t.missionProgress.value
-            val homeVec = if (pos != null && home != null) Geo.distanceBearing(pos.latDeg, pos.lonDeg, home.latDeg, home.lonDeg) else null
-            StripValues(
-                homeDistanceM = homeVec?.first,
-                homeBearingDeg = homeVec?.second,
-                climbMs = vfr?.climbMs,
-                throttlePct = vfr?.throttlePct,
-                missionSeq = mission?.currentSeq,
-                missionTotal = mission?.total,
-                satellites = gps?.satellites,
-                hdop = gps?.hdop,
+            val vfr = t.vfr.value?.takeIf { now - it.tMs <= HudMath.STALE_MS }
+            FlightValues(
+                distanceM = if (pos != null && home != null) Geo.distanceBearing(pos.latDeg, pos.lonDeg, home.latDeg, home.lonDeg).first else null,
+                heightM = pos?.altRelM,
+                hSpeedMs = vfr?.groundspeedMs ?: pos?.let { hypot(it.vxMs, it.vyMs) },
+                vSpeedMs = vfr?.climbMs ?: pos?.let { -it.vzMs },
+                aglM = null,
             )
         }
-    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), EMPTY_STRIP)
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlightValues.Empty)
+
+    private val _cardPage = MutableStateFlow(CardPage.Map)
+
+    /** The bottom-left card's page (map, attitude, obstacles). */
+    val cardPage: StateFlow<CardPage> = _cardPage.asStateFlow()
+
+    fun stepCard(delta: Int) = _cardPage.update { it.step(delta) }
 
     /** Minimap vehicle, home and trail, sampled at 2 Hz; the trail keeps points at least 2 m apart. */
     val minimap: StateFlow<MinimapState> = telemetry.flatMapLatest { t ->
@@ -205,6 +210,5 @@ internal class CockpitHudFlows(
     private companion object {
         const val TRAIL_MIN_STEP_M = 2f
         const val TRAIL_MAX_POINTS = 600
-        val EMPTY_STRIP = StripValues(null, null, null, null, null, null, null, null)
     }
 }

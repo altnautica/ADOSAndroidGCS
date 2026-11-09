@@ -33,7 +33,7 @@ object ArRules {
     /** True when [item] draws. */
     fun include(item: ArItem, flags: LayerFlags, route: RouteStyle?): Boolean {
         val routeShown = route != null && route != RouteStyle.Returning
-        val full = flags.level == LayerLevel.Full
+        val full = flags.level == LayerLevel.Full || flags.level == LayerLevel.Instruments
         return when (item.t) {
             "wp" -> flags.isOn(LayerSpec.AR_ROUTE) && routeShown && (full || item.role == "next" || item.role == "after")
             "leg" -> flags.isOn(LayerSpec.AR_ROUTE) && routeShown && (full || item.role == "active" || item.role == "next")

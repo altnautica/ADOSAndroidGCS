@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.NearMe
+import androidx.compose.material.icons.outlined.SatelliteAlt
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,6 +57,7 @@ import com.altnautica.gcs.core.designsystem.component.node.profileLabel
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.NodeProfile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -68,18 +70,18 @@ internal const val HERO_WIDTH = 0.55f
 
 /**
  * Hero backdrop: the selected vehicle's live still, cropped and dimmed from the left
- * so the text stays readable, or a large faint profile icon when there is no still.
+ * so the text stays readable, or the Home stage (sky, horizon glow and a drifting ground
+ * grid) with a faint profile mark when there is no still.
  */
 @Composable
 internal fun BoxScope.HeroBackground(card: FleetCard?, thumbnails: (DeviceId) -> Flow<ByteArray?>) {
     val colors = AdosTheme.colors
     Box(Modifier.matchParentSize().background(colors.bgCanvas))
-    if (card == null) return
-    val bitmap = if (card.showThumbnail) key(card.node.id) { rememberThumbnail(card.node.id, thumbnails) } else null
+    val bitmap = if (card?.showThumbnail == true) key(card.node.id) { rememberThumbnail(card.node.id, thumbnails) } else null
     if (bitmap != null) {
         Image(
             bitmap = bitmap,
-            contentDescription = stringResource(R.string.home_thumbnail, card.node.name),
+            contentDescription = stringResource(R.string.home_thumbnail, card!!.node.name),
             contentScale = ContentScale.Crop,
             modifier = Modifier.matchParentSize(),
         )
@@ -89,12 +91,15 @@ internal fun BoxScope.HeroBackground(card: FleetCard?, thumbnails: (DeviceId) ->
             ),
         )
     } else {
-        Icon(
-            profileIcon(card.node.profile),
-            contentDescription = null,
-            tint = colors.fgPrimary,
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = AdosSpacing.S8).size(FaintIconSize).alpha(0.05f),
-        )
+        StageBackdrop(Modifier.matchParentSize())
+        if (card != null) {
+            Icon(
+                profileIcon(card.node.profile),
+                contentDescription = null,
+                tint = colors.fgPrimary,
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = AdosSpacing.S8).size(FaintIconSize).alpha(0.07f),
+            )
+        }
     }
 }
 
@@ -168,6 +173,39 @@ private fun VitalsChips(card: FleetCard) {
             icon = if (armed) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
         )
     }
+    GpsChip(card.vitals.gpsFix, card.vitals.satellites)
+}
+
+/** GPS fix and satellites; a fix below 3D reads as a warning, unknown as a dash. */
+@Composable
+private fun GpsChip(fix: GpsFix?, satellites: Int?) {
+    val fixText = when (fix) {
+        null -> null
+        GpsFix.NoGps -> null
+        GpsFix.NoFix -> stringResource(R.string.home_gps_fix, "—")
+        GpsFix.Fix2D -> "2D"
+        GpsFix.Fix3D -> "3D"
+        GpsFix.DGps -> "DGPS"
+        GpsFix.RtkFloat -> "RTK float"
+        GpsFix.RtkFixed -> "RTK"
+    }
+    val label = when {
+        fix == null -> stringResource(R.string.home_gps_unknown)
+        fix == GpsFix.NoGps -> stringResource(R.string.home_gps_none)
+        fix == GpsFix.NoFix -> fixText!!
+        satellites != null -> stringResource(R.string.home_gps, fixText!!, satellites)
+        else -> stringResource(R.string.home_gps_fix, fixText!!)
+    }
+    val good = fix != null && fix >= GpsFix.Fix3D
+    StatusChip(
+        level = when {
+            fix == null -> StatusLevel.Neutral
+            good -> StatusLevel.Success
+            else -> StatusLevel.Warning
+        },
+        label = label,
+        icon = Icons.Outlined.SatelliteAlt,
+    )
 }
 
 @Composable

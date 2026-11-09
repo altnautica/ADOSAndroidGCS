@@ -70,6 +70,9 @@ class AgentClient internal constructor(
     /** Host navigation and live map routes (`/api/v1/nav/...`, `/api/v1/map/...`). */
     val nav: NavApi = NavApi(this)
 
+    /** Gimbal rate control (`/api/v1/gimbal/rate`). */
+    val gimbal: com.altnautica.gcs.core.agent.gimbal.GimbalApi = com.altnautica.gcs.core.agent.gimbal.AgentGimbalApi(this)
+
     /** Flight-controller setup wizards (`/api/v1/fc-setup/...`). */
     val fcSetup: com.altnautica.gcs.core.agent.fcsetup.FcSetupApi =
         com.altnautica.gcs.core.agent.fcsetup.FcSetupApi(this)

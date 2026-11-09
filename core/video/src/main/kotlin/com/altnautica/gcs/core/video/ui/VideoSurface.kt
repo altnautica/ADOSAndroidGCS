@@ -53,13 +53,16 @@ private fun rememberVideoSessionManager(): VideoSessionManager {
 /**
  * Shows [source] and keeps its session alive while composed. A null source,
  * or one no factory can play, draws nothing; read [rememberVideoState] to
- * show the matching empty state over it.
+ * show the matching empty state over it. [onSurfaceView] receives the main
+ * role's SurfaceView while it exists (null after release), for callers that
+ * sample its pixels (the cockpit's panel backdrop).
  */
 @Composable
 fun VideoSurface(
     source: VideoSource?,
     modifier: Modifier = Modifier,
     role: VideoSurfaceRole = VideoSurfaceRole.Main,
+    onSurfaceView: ((SurfaceView?) -> Unit)? = null,
 ) {
     val manager = rememberVideoSessionManager()
     var handle by remember { mutableStateOf<VideoSessionHandle?>(null) }
@@ -72,7 +75,7 @@ fun VideoSurface(
         }
     }
     val h = handle ?: return
-    VideoSessionView(h, role, modifier)
+    VideoSessionView(h, role, modifier, onSurfaceView)
 }
 
 /**
@@ -82,15 +85,20 @@ fun VideoSurface(
  * on screen is always the session whose state the band reports.
  */
 @Composable
-internal fun VideoSessionView(handle: VideoSessionHandle, role: VideoSurfaceRole, modifier: Modifier) {
+internal fun VideoSessionView(
+    handle: VideoSessionHandle,
+    role: VideoSurfaceRole,
+    modifier: Modifier,
+    onSurfaceView: ((SurfaceView?) -> Unit)? = null,
+) {
     key(handle) {
         when (val out = handle.output) {
             is VideoOutput.Sinks -> when (role) {
-                VideoSurfaceRole.Main -> SinkSurfaceView(out, modifier)
+                VideoSurfaceRole.Main -> SinkSurfaceView(out, modifier, onSurfaceView)
                 VideoSurfaceRole.Pip -> SinkTextureView(out, modifier)
             }
             is VideoOutput.SurfaceTarget -> when (role) {
-                VideoSurfaceRole.Main -> TargetSurfaceView(out, modifier)
+                VideoSurfaceRole.Main -> TargetSurfaceView(out, modifier, onSurfaceView)
                 VideoSurfaceRole.Pip -> TargetTextureView(out, modifier)
             }
         }
@@ -117,7 +125,7 @@ fun rememberVideoState(source: VideoSource?): State<VideoState> {
  * constructor), so the EGL surface is ready before the first frame arrives.
  */
 @Composable
-private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier) {
+private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier, onSurfaceView: ((SurfaceView?) -> Unit)?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -131,9 +139,11 @@ private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier) {
                     override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) = Unit
                     override fun surfaceDestroyed(holder: SurfaceHolder) = out.removeSink(renderer)
                 })
+                onSurfaceView?.invoke(this)
             }
         },
         onRelease = { view ->
+            onSurfaceView?.invoke(null)
             out.removeSink(view)
             view.release()
         },
@@ -179,7 +189,7 @@ private fun SinkTextureView(out: VideoOutput.Sinks, modifier: Modifier) {
 }
 
 @Composable
-private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier) {
+private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onSurfaceView: ((SurfaceView?) -> Unit)?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -195,9 +205,13 @@ private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier
                         if (w > 0 && h > 0) holder.setFixedSize(w, h)
                     }
                 }
+                onSurfaceView?.invoke(this)
             }
         },
-        onRelease = { out.setSurface(null) },
+        onRelease = {
+            onSurfaceView?.invoke(null)
+            out.setSurface(null)
+        },
     )
 }
 

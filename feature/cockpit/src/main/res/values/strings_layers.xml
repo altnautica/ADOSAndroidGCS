@@ -4,6 +4,7 @@
     <string name="layers_button_description">Video layers, level %1$s. Tap to change the level, long-press for each layer.</string>
     <string name="layers_menu_on">On</string>
     <string name="layers_menu_off">Off</string>
+    <string name="layers_level_instruments">Instruments</string>
     <string name="layers_level_full">Full</string>
     <string name="layers_level_route">Route</string>
     <string name="layers_level_off">Off</string>

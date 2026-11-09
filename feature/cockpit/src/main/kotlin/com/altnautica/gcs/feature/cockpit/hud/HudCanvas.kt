@@ -38,6 +38,8 @@ fun HudCanvas(
     telemetry: VehicleTelemetry?,
     altitudeReference: AltitudeReference,
     density: CockpitDensity,
+    /** False draws only the centre marks (reticle, heading and horizon marks); true adds the flight instruments. */
+    instruments: Boolean = true,
     modifier: Modifier = Modifier,
     nowMs: () -> Long = SystemClock::elapsedRealtime,
     recompositionProbe: (() -> Unit)? = null,
@@ -83,7 +85,7 @@ fun HudCanvas(
                 // Reading the counter subscribes the draw pass, not composition.
                 frame.longValue
                 drawProbe?.invoke()
-                with(painter) { paint(telemetry, altitudeReference, density, nowMs()) }
+                with(painter) { paint(telemetry, altitudeReference, density, nowMs(), instruments) }
             },
     )
 }

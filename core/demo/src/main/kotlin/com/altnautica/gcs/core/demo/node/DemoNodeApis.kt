@@ -27,6 +27,7 @@ class DemoNodeApis @Inject constructor(private val hub: DemoVehicleHub) : LocalN
     private val groundSensors by lazy { DemoGroundSensors() }
     private val autonomy by lazy { DemoAutonomy(hub) }
     private val fcSetup by lazy { DemoFcSetup(CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
+    private val gimbal by lazy { DemoGimbal() }
 
     override fun handles(id: DeviceId): Boolean = id == DemoIds.VISOR || id == DemoIds.GROUND
 
@@ -47,4 +48,7 @@ class DemoNodeApis @Inject constructor(private val hub: DemoVehicleHub) : LocalN
 
     /** The setup wizards of the demo drone's flight controller. */
     override fun fcSetup(id: DeviceId): SetupBackend? = if (id == DemoIds.DRONE) fcSetup else null
+
+    /** The demo drone's gimbal takes rate commands. */
+    override fun gimbal(id: DeviceId): com.altnautica.gcs.core.agent.gimbal.GimbalApi? = if (id == DemoIds.DRONE) gimbal else null
 }

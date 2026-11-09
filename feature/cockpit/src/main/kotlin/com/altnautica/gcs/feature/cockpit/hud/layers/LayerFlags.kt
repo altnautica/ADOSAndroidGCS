@@ -2,9 +2,12 @@ package com.altnautica.gcs.feature.cockpit.hud.layers
 
 import androidx.compose.runtime.Immutable
 
-/** The data-layer clutter level: Full, Route or Off. */
+/**
+ * The data-layer level, densest first (`levels.order`): Instruments (Full plus the flight
+ * instruments), Full, Route or Off. Every control steps through all four and wraps.
+ */
 enum class LayerLevel(val wire: String) {
-    Full("full"), Route("route"), Off("off");
+    Instruments("instruments"), Full("full"), Route("route"), Off("off");
 
     fun cycle(step: Int): LayerLevel = entries[Math.floorMod(ordinal + step, entries.size)]
 

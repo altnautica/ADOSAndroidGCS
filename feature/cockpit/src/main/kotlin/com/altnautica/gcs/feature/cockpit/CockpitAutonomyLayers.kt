@@ -163,7 +163,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 it, stale = !fresh, width = width,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = CockpitLayout.bottomClearance(width) + 12.dp)
+                    .padding(bottom = AdosSpacing.S2)
                     .let { m -> if (panelWidth != Dp.Unspecified) m.widthIn(min = panelWidth) else m },
             )
         }
@@ -189,7 +189,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 recording = recording,
             ),
             width = width,
-            safeHeight = maxHeight - topInset - CockpitLayout.bottomClearance(width),
+            safeHeight = maxHeight - topInset,
             onFollow = { vm.activate(CockpitAutonomy.FOLLOW_SKILL_ID) },
             onReacquireMode = a::setReacquireMode,
             onSwap = {

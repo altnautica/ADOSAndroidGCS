@@ -27,6 +27,7 @@ import com.altnautica.gcs.feature.cockpit.R
 @Composable
 internal fun levelLabel(level: LayerLevel): String = stringResource(
     when (level) {
+        LayerLevel.Instruments -> R.string.layers_level_instruments
         LayerLevel.Full -> R.string.layers_level_full
         LayerLevel.Route -> R.string.layers_level_route
         LayerLevel.Off -> R.string.layers_level_off

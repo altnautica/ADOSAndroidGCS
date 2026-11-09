@@ -64,12 +64,23 @@ class LayerRulesTest {
         val withDepth = full.toggled(LayerSpec.DEPTH)
         assertTrue(withDepth.withLevel(LayerLevel.Off, spec).isOn(LayerSpec.DEPTH))
         assertFalse(full.withLevel(LayerLevel.Route, spec).isOn(LayerSpec.DEPTH))
-        assertEquals(setOf(LayerSpec.HUD), off.on)
+        assertEquals(setOf(LayerSpec.CENTRE_MARKS), off.on)
         val vision = off.forcing(spec.forced(LayerSpec.VIEW_VISION))
         assertTrue(vision.isOn(LayerSpec.DEPTH) && vision.isOn(LayerSpec.SURFACES) && vision.isOn(LayerSpec.TARGETS))
         assertEquals(LayerLevel.Off, vision.level)
         assertEquals(LayerLevel.Route, LayerLevel.Full.cycle(1))
-        assertEquals(LayerLevel.Off, LayerLevel.Full.cycle(-1))
+        assertEquals(LayerLevel.Instruments, LayerLevel.Full.cycle(-1))
+        assertEquals(LayerLevel.Instruments, LayerLevel.Off.cycle(1))
+    }
+
+    @Test
+    fun `instruments draw only at the instruments level and centre marks at every level`() {
+        for (level in LayerLevel.entries) {
+            val on = spec.levelSet(level)
+            assertTrue("$level centre marks", LayerSpec.CENTRE_MARKS in on)
+            assertEquals("$level instruments", level == LayerLevel.Instruments, LayerSpec.INSTRUMENTS in on)
+        }
+        assertEquals(LayerLevel.Full, spec.defaults().level)
     }
 
     @Test

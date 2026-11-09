@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-/** Cockpit-only state shown outside the cockpit (the Quick menu): preflight, alerts, stick control. */
+/** Cockpit-only state shown outside the cockpit (the Quick menu): preflight, alerts, stick control, mission. */
 data class CockpitSummary(
     val nodeId: DeviceId,
     val preflightDone: Int,
@@ -16,6 +16,8 @@ data class CockpitSummary(
     val alertCount: Int,
     val topAlert: String?,
     val stickOn: Boolean,
+    /** The onboard pilot's mission state; null before the pilot reports one. */
+    val mission: com.altnautica.gcs.core.model.MissionStatus? = null,
 )
 
 /**

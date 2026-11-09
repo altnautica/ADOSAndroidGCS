@@ -118,6 +118,12 @@ import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerModel
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerUi
 import com.altnautica.gcs.feature.cockpit.skillbar.firesDirectly
 import com.altnautica.gcs.feature.cockpit.video.CockpitVideoController
+import com.altnautica.gcs.feature.cockpit.autonomy.TargetState
+import com.altnautica.gcs.feature.cockpit.chrome.CardPage
+import com.altnautica.gcs.feature.cockpit.chrome.FlightValues
+import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
+import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
+import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -294,6 +300,9 @@ class CockpitViewModel @AssistedInject constructor(
     private val criticalText = MutableStateFlow<ReceivedText?>(null)
     private val prearmText = MutableStateFlow<ReceivedText?>(null)
 
+    /** Recent FC status text at WARNING or ERROR severity, newest last, for the status pill. */
+    private val warningTexts = MutableStateFlow<List<ReceivedText>>(emptyList())
+
     init {
         viewModelScope.launch {
             telemetry.flatMapLatest { it?.statusText ?: emptyFlow() }.collect { st ->
@@ -302,6 +311,9 @@ class CockpitViewModel @AssistedInject constructor(
                     AlertEngine.isPrearm(st.text) -> prearmText.value = ReceivedText(AlertEngine.prearmBody(st.text), now)
                     st.severity <= SEVERITY_CRITICAL || AlertEngine.isFailsafeAnnouncement(st.severity, st.text) ->
                         criticalText.value = ReceivedText(st.text, now)
+                    st.severity <= StatusModel.MAV_SEVERITY_WARNING -> warningTexts.update { list ->
+                        (list.filter { it.text != st.text } + ReceivedText(st.text, now)).takeLast(StatusModel.WARNING_TEXT_MAX)
+                    }
                 }
             }
         }
@@ -716,7 +728,28 @@ class CockpitViewModel @AssistedInject constructor(
     )
 
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
-    val strip: StateFlow<StripValues> = hud.strip
+
+    /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings. */
+    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, tick500) { a, p, w, _ ->
+        val now = clock.nowMs()
+        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS })
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
+
+    /** The bottom row; AGL comes from the follow feed while it is fresh. */
+    val flightValues: StateFlow<FlightValues> = combine(hud.flightValues, autonomy.feed.follow) { v, f ->
+        val agl = f?.takeIf { autonomy.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value?.aglM
+        if (agl == v.aglM) v else v.copy(aglM = agl)
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlightValues.Empty)
+
+    /** The bottom-left card's page; a swipe or L3 steps it. */
+    val cardPage: StateFlow<CardPage> = hud.cardPage
+
+    fun stepCard(delta: Int) = hud.stepCard(delta)
+
+    /** Gimbal rate control for the pad, shown only where the agent reports it available. */
+    internal val gimbal = GimbalRateController(viewModelScope, vehicleNodeId) { id ->
+        localApis.firstNotNullOfOrNull { it.gimbal(id) } ?: extensions.api(id)?.gimbal
+    }
 
     /** Minimap vehicle, home and trail, sampled at 2 Hz; the trail keeps points at least 2 m apart. */
     val minimap: StateFlow<MinimapState> = hud.minimap
@@ -891,8 +924,10 @@ class CockpitViewModel @AssistedInject constructor(
         streamer.start()
         feedback.start()
         summaryJob = viewModelScope.launch {
-            combine(preflight, alerts, sticks.stickOn) { p, a, on ->
-                CockpitSummary(cockpitNodeId, p.passed, p.total, a.size, a.firstOrNull()?.let(announcer::alertText), on)
+            // The mission without its age, so the summary changes only when what it shows does.
+            val mission = pilot.state.map { it?.mission?.copy(ageMs = null) }.distinctUntilChanged()
+            combine(preflight, alerts, sticks.stickOn, mission) { p, a, on, m ->
+                CockpitSummary(cockpitNodeId, p.passed, p.total, a.size, a.firstOrNull()?.let(announcer::alertText), on, m)
             }.distinctUntilChanged().collect(summaries::publish)
         }
     }
@@ -980,7 +1015,7 @@ class CockpitViewModel @AssistedInject constructor(
             }
             CockpitControllerAction.GimbalRecenter -> runCommand(VehicleCommand.GimbalRecenter)
             CockpitControllerAction.ViewNext -> nextView()
-            CockpitControllerAction.SwapVideoMap -> toggleMinimapSwap()
+            CockpitControllerAction.SwapVideoMap -> stepCard(1)
             CockpitControllerAction.QuickSettings -> overlays.quickSettings.update { !it }
             is CockpitControllerAction.Buzz -> feedback.onHoldCue(a.kind, a.level)
         }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCard
 import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
@@ -55,9 +57,9 @@ private val TopStripHeight = 40.dp
 private val TileSize = 56.dp
 private val LivenessDot = 12.dp
 
-/** Wordmark on the left, the controller chip (while a controller is in use) on the right. */
+/** Wordmark on the left; on the right the controller chip (while a controller is in use) and the Quick menu button. */
 @Composable
-internal fun HomeTopStrip(modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
+internal fun HomeTopStrip(modifier: Modifier = Modifier, onOpenQuickMenu: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
     val colors = AdosTheme.colors
     Row(
         modifier = modifier.fillMaxWidth().height(TopStripHeight).padding(horizontal = AdosSpacing.S6),
@@ -70,6 +72,22 @@ internal fun HomeTopStrip(modifier: Modifier = Modifier, trailing: @Composable (
         )
         Spacer(Modifier.weight(1f))
         ControllerChip()
+        onOpenQuickMenu?.let { open ->
+            val label = stringResource(R.string.home_quick_open)
+            Spacer(Modifier.width(AdosSpacing.S2))
+            Box(
+                Modifier
+                    .size(TopStripHeight)
+                    .consoleFocus(CircleShape)
+                    .clip(CircleShape)
+                    .clickable(role = Role.Button, onClickLabel = label, onClick = open)
+                    .semantics { contentDescription = label }
+                    .testTag("home-quick-menu"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.Apps, contentDescription = null, tint = colors.fgPrimary, modifier = Modifier.size(AdosSize.IconMd))
+            }
+        }
         trailing()
     }
 }
@@ -231,6 +249,16 @@ private fun SurfaceLaunchCard(
     onOpen: (HomeSurface) -> Unit,
     emphasis: Boolean = card.surface == HomeSurface.Fly,
 ) {
+    if (emphasis && card.surface == HomeSurface.Fly) {
+        FlyCard(
+            title = stringResource(card.surface.label),
+            subtitle = card.reason?.takeIf { !card.enabled }?.let { stringResource(it) } ?: stringResource(R.string.home_fly_tagline),
+            enabled = card.enabled,
+            onClick = { onOpen(card.surface) },
+            focusRequester = if (initialFocus) focusRequester else null,
+        )
+        return
+    }
     ConsoleCard(
         title = stringResource(card.surface.label),
         icon = card.surface.icon,

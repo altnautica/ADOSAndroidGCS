@@ -141,6 +141,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         },
                         onAddVehicle = { BackStackOps.push(backStack, ConnectKey()) },
                         onOpenController = { BackStackOps.push(backStack, ControllerKey) },
+                        onOpenQuickMenu = { quickMenuOpen = true },
                     )
                 }
                 entry<PlanKey> { key ->

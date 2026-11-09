@@ -173,7 +173,7 @@ class CockpitViewModelTest {
         // The screen-only flows run while collected; keep them hot like a visible cockpit.
         listOf(
             vm.status, vm.maxBrightness, vm.canRecord, vm.recordingActive, vm.skillStates, vm.pickerChip,
-            vm.modeSheet, vm.chip, vm.flow, vm.targetActions, vm.band, vm.strip, vm.minimap,
+            vm.modeSheet, vm.chip, vm.flow, vm.targetActions, vm.band, vm.flightValues, vm.minimap,
         ).forEach { flow -> backgroundScope.launch { flow.collect {} } }
         // A failed assertion skips the test's own cancel; without this the VM's endless
         // tickers would keep the scheduler's final drain spinning instead of failing.
@@ -332,7 +332,7 @@ class CockpitViewModelTest {
         val vm = vm(listOf(node("drone-1")), vehicle, vehicleDelayMs = 250)
         advanceTimeBy(600)
         runCurrent()
-        assertEquals(0f, vm.strip.value.homeDistanceM!!, 0.5f)
+        assertEquals(0f, vm.flightValues.value.distanceM!!, 0.5f)
         assertFalse(vm.recordingActive.value)
 
         // About 100 m north of home.
@@ -341,14 +341,14 @@ class CockpitViewModelTest {
         advanceTimeBy(250)
         runCurrent()
         // 500 ms after the telemetry arrived, but the shared tick has not come round yet.
-        assertEquals(0f, vm.strip.value.homeDistanceM!!, 0.5f)
+        assertEquals(0f, vm.flightValues.value.distanceM!!, 0.5f)
         assertEquals(47.0, vm.minimap.value.vehicle!!.position.latDeg, 1e-9)
         val ageBefore = vm.band.value.linkAgeDeciS
 
         advanceTimeBy(200)
         runCurrent()
         // One tick moves the strip, the minimap and the band's link age together.
-        assertEquals(100f, vm.strip.value.homeDistanceM!!, 1f)
+        assertEquals(100f, vm.flightValues.value.distanceM!!, 1f)
         assertEquals(47.0009, vm.minimap.value.vehicle!!.position.latDeg, 1e-9)
         assertTrue(vm.band.value.linkAgeDeciS != ageBefore)
         vm.viewModelScope.cancel()

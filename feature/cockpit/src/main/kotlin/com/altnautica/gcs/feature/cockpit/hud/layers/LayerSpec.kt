@@ -19,10 +19,17 @@ data class LayerDef(val id: String, val defaultOn: Boolean, val source: String, 
  * (`layers.json`, `views.json`). Every surface draws the same layers in the same order.
  */
 @Immutable
-data class LayerSpec(val layers: List<LayerDef>, val routeLevel: Set<String>, val offLevel: Set<String>, val views: Map<String, Set<String>>) {
+data class LayerSpec(
+    val layers: List<LayerDef>,
+    val routeLevel: Set<String>,
+    val offLevel: Set<String>,
+    val views: Map<String, Set<String>>,
+    /** Layers drawn only at the listed levels (`levels.only_at_levels`): the instruments only at Instruments. */
+    val onlyAt: Map<String, Set<LayerLevel>> = mapOf(INSTRUMENTS to setOf(LayerLevel.Instruments)),
+) {
     /** The layers on at [level]. */
     fun levelSet(level: LayerLevel): Set<String> = when (level) {
-        LayerLevel.Full -> layers.filter { it.defaultOn }.mapTo(LinkedHashSet()) { it.id }
+        LayerLevel.Instruments, LayerLevel.Full -> layers.filter { it.defaultOn && onlyAt[it.id]?.contains(level) != false }.mapTo(LinkedHashSet()) { it.id }
         LayerLevel.Route -> routeLevel
         LayerLevel.Off -> offLevel
     }
@@ -32,13 +39,17 @@ data class LayerSpec(val layers: List<LayerDef>, val routeLevel: Set<String>, va
     /** The layers [view] forces on while it is open. */
     fun forced(view: String): Set<String> = views[view].orEmpty()
 
-    /** The canvas layers (everything but the HUD chrome) in ascending z; built once, read every draw. */
-    val canvasOrder: List<String> by lazy(LazyThreadSafetyMode.PUBLICATION) { layers.filter { it.id != HUD }.map { it.id } }
+    /** The canvas layers (everything but the centre marks and instruments, drawn by the HUD) in ascending z; built once, read every draw. */
+    val canvasOrder: List<String> by lazy(LazyThreadSafetyMode.PUBLICATION) { layers.filter { it.id != CENTRE_MARKS && it.id != INSTRUMENTS }.map { it.id } }
 
     fun def(id: String): LayerDef? = layers.firstOrNull { it.id == id } ?: if (id.startsWith(PLUGIN_PREFIX)) LayerDef(id, true, "plugin", false) else null
 
     companion object {
-        const val HUD = "hud"
+        /** Reticle and the small heading and horizon marks, at every level. */
+        const val CENTRE_MARKS = "centre_marks"
+
+        /** Pitch ladder, roll arc, tapes and flight-path marker, only at the Instruments level. */
+        const val INSTRUMENTS = "instruments"
         const val TARGETS = "targets"
         const val AR_ROUTE = "ar_route"
         const val AR_MOTION = "ar_motion"
@@ -73,7 +84,10 @@ data class LayerSpec(val layers: List<LayerDef>, val routeLevel: Set<String>, va
                 val o = e.jsonObject
                 o["id"]!!.jsonPrimitive.content to o["forced_layers"]!!.jsonArray.mapTo(LinkedHashSet()) { it.jsonPrimitive.content }
             }
-            LayerSpec(defs, ids("route"), ids("off"), views)
+            val onlyAt = levels["only_at_levels"]?.jsonObject?.mapValues { (_, lv) ->
+                lv.jsonArray.mapNotNullTo(HashSet()) { LayerLevel.of(it.jsonPrimitive.content) }
+            }.orEmpty()
+            LayerSpec(defs, ids("route"), ids("off"), views, onlyAt)
         }.getOrNull()
 
         /** Reads the spec from the module's `cockpit-spec` assets; the built-in copy if they are unreadable. */
@@ -93,10 +107,11 @@ data class LayerSpec(val layers: List<LayerDef>, val routeLevel: Set<String>, va
                 LayerDef(TARGETS, true, "vision detections", false, 40),
                 LayerDef(AR_ROUTE, true, "ar", false, 50),
                 LayerDef(AR_MOTION, true, "ar", false, 60),
-                LayerDef(HUD, true, "telemetry", false, 100),
+                LayerDef(CENTRE_MARKS, true, "telemetry", false, 100),
+                LayerDef(INSTRUMENTS, true, "telemetry", false, 101),
             ),
-            routeLevel = setOf(HUD, TARGETS, AR_ROUTE, AR_MOTION, OBSTACLES),
-            offLevel = setOf(HUD),
+            routeLevel = setOf(CENTRE_MARKS, TARGETS, AR_ROUTE, AR_MOTION, OBSTACLES),
+            offLevel = setOf(CENTRE_MARKS),
             views = mapOf(
                 VIEW_PILOT to emptySet(),
                 VIEW_MAP to emptySet(),

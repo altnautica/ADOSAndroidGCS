@@ -163,12 +163,19 @@
     <string name="cockpit_qs_pip">Picture-in-picture</string>
     <string name="cockpit_qs_start_recording">Start recording</string>
     <string name="cockpit_qs_stop_recording">Stop recording</string>
-    <string name="cockpit_strip_dist">DIST</string>
-    <string name="cockpit_strip_home">HOME</string>
-    <string name="cockpit_strip_vs">V/S</string>
-    <string name="cockpit_strip_thr">THR</string>
-    <string name="cockpit_strip_wp">WP</string>
-    <string name="cockpit_strip_sats">SATS · HDOP</string>
+    <string name="grid_card_page_map">Map</string>
+    <string name="grid_card_attitude">Attitude</string>
+    <string name="grid_card_obstacles">Obstacles</string>
+    <string name="grid_mode_photo">Photo mode</string>
+    <string name="grid_mode_video">Video mode</string>
+    <string name="cockpit_menu_home">Back to Home</string>
+    <string name="cockpit_menu_preflight">Pre-flight checklist (%1$d/%2$d)</string>
+    <string name="cockpit_menu_modes">Flight modes</string>
+    <string name="cockpit_menu_settings">Camera and display settings</string>
+    <string name="cockpit_menu_camera">Camera: %1$s</string>
+    <string name="cockpit_menu_view">Next view</string>
+    <string name="cockpit_menu_link">Link: %1$s</string>
+    <string name="cockpit_menu_controller">Controller: %1$s</string>
     <!-- Controller stick control: alerts, mode picker line, all-modes opt-in -->
     <string name="cockpit_alert_stick_mode">Stick control off: not an assisted mode</string>
     <string name="cockpit_alert_controller_lost">Controller disconnected: stick control off</string>

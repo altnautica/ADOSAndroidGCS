@@ -92,6 +92,10 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
     }
 
     KeepScreenOn()
+    // The flight screen holds landscape; Home, Settings and Planner keep rotating.
+    com.altnautica.gcs.feature.cockpit.chrome.OrientationLock(
+        vm.cockpitSpec.layout.orientationLock[com.altnautica.gcs.feature.cockpit.chrome.FLIGHT_SCREEN_LOCK_KEY],
+    )
     MaxBrightness(maxBrightness)
     HardwareInput(onAttach = vm::attachInput, onDetach = vm::detachInput)
     val palette = AdosTheme.colors

@@ -95,11 +95,16 @@ interface ExtensionApi : AutonomyFeedApi {
 
     /** `GET /api/video/roster`. */
     suspend fun cameras(): ApiResult<List<RosterCamera>>
+
+    /** The node's gimbal rate control, when it is reached over the agent's REST API. */
+    val gimbal: com.altnautica.gcs.core.agent.gimbal.GimbalApi? get() = null
 }
 
 /** [ExtensionApi] over the agent REST client. */
 class AgentExtensionApi(private val client: AgentClient, private val sockets: AgentSockets) : ExtensionApi {
     private val p get() = client.plugins
+
+    override val gimbal: com.altnautica.gcs.core.agent.gimbal.GimbalApi get() = client.gimbal
 
     override suspend fun list() = p.list().toApi()
     override suspend fun detail(pluginId: String) = p.detail(pluginId).toApi()

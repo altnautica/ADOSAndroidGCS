@@ -110,18 +110,6 @@ data class VideoUi(
     val switchingStreamId: String?,
 )
 
-/** Telemetry strip values, sampled at 2 Hz. Null fields render as a dash. */
-data class StripValues(
-    val homeDistanceM: Float?,
-    val homeBearingDeg: Float?,
-    val climbMs: Float?,
-    val throttlePct: Int?,
-    val missionSeq: Int?,
-    val missionTotal: Int?,
-    val satellites: Int?,
-    val hdop: Float?,
-)
-
 /** Minimap content. */
 data class MinimapState(
     val vehicle: com.altnautica.gcs.core.map.MapVehicle?,

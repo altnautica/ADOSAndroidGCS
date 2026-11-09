@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,8 @@ import com.altnautica.gcs.feature.cockpit.autonomy.NavLabel
 import com.altnautica.gcs.feature.cockpit.autonomy.NavSource
 import com.altnautica.gcs.feature.cockpit.autonomy.NavTone
 import com.altnautica.gcs.feature.cockpit.autonomy.TargetText
+import com.altnautica.gcs.feature.cockpit.chrome.ChipTone
+import com.altnautica.gcs.feature.cockpit.chrome.ChromeChip
 
 /**
  * Safety-band nav-source chip: what the EKF navigates on (icon, label, quality word),
@@ -61,7 +64,7 @@ internal fun NavSourceChip(chip: NavChip?, inputs: NavInputs?, compact: Boolean,
         NavTone.Muted -> ChipTone.Neutral
     }
     val label = text.navLabel(chipValue) + (chipValue.quality?.takeIf { !compact }?.let { " · " + text.quality(it) } ?: "")
-    BandChip(icon, label, tone, onClick = { open = true })
+    ChromeChip(icon, label, tone, onClick = { open = true }, modifier = Modifier.testTag("nav-source"))
     if (open) NavSourceSheet(chipValue, inputs, text, onUseSet) { open = false }
 }
 

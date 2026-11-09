@@ -1,6 +1,5 @@
 package com.altnautica.gcs.feature.cockpit
 
-import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotOwner
@@ -22,7 +21,6 @@ import com.altnautica.gcs.feature.cockpit.launch.launchGotoNed
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerContext
 import com.altnautica.gcs.feature.cockpit.pilot.LightbarState
 import com.altnautica.gcs.feature.cockpit.pilot.lightbarState
-import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -30,7 +28,7 @@ import org.junit.Test
 import io.mockk.every
 import io.mockk.mockk
 
-/** Rules the cockpit draws from the spec: light bar, chip, launch arguments, grid fit and designation. */
+/** Rules the cockpit draws from the spec: light bar, chip, launch arguments and designation. */
 class CockpitRulesTest {
 
     private fun light(owner: PilotOwner, mission: MissionState? = null, mode: String = "GUIDED", failsafe: Boolean = false, lowBattery: Boolean = false): LightbarState {
@@ -108,45 +106,6 @@ class CockpitRulesTest {
         assertEquals(2f + 111.3f, p.n, 0.2f)
         assertEquals(3f + 55.66f, p.e, 0.2f)
         assertEquals(-6f, p.d, 0f)
-    }
-
-    @Test
-    fun `on a short landscape phone the left column clears the map card and the right column clears the picker chip`() {
-        // A 2400 x 1080 px phone at 420 dpi is 914 dp wide (expanded) and about 363 dp tall below the top bar.
-        val sizes = gridSizes(WidthClass.Expanded)
-        val h = 363.dp
-        val fit = gridFit(h, sizes, record = false)
-        val card = fit.card!!
-        // The left column, centred in the space above the card, fits in it.
-        assertTrue(leftColumnHeight(sizes) <= h - GridEdge - fit.leftBottom)
-        assertTrue(card.second < 180.dp)
-        assertEquals(280f / 180f, card.first / card.second, 0.01f)
-        assertTrue(rightColumnHeight(sizes, record = false, cameraSettings = fit.cameraSettingsInColumn) <= h - 8.dp - fit.rightBottom)
-
-        // With record offered, camera settings move to a long-press and the small buttons shrink to 48 dp.
-        val tight = gridFit(h, sizes, record = true)
-        assertTrue(!tight.cameraSettingsInColumn)
-        assertEquals(48.dp, tight.rightButton)
-        assertTrue(rightColumnHeight(sizes, record = true, cameraSettings = false, button = tight.rightButton) <= h - 8.dp - tight.rightBottom)
-
-        // A tall tablet keeps the spec card and every button.
-        val tall = gridFit(700.dp, sizes, record = true)
-        assertEquals(280.dp to 180.dp, tall.card)
-        assertTrue(tall.cameraSettingsInColumn)
-    }
-
-    @Test
-    fun `on a medium window too short to stack, the map card keeps its spec size beside the left column`() {
-        // 2400 x 1080 px at density 560 is 685 dp wide (medium); about 265 dp of body below the top bar.
-        val sizes = gridSizes(WidthClass.Medium)
-        val fit = gridFit(265.dp, sizes, record = false)
-        assertEquals(200.dp to 140.dp, fit.card)
-        assertTrue(fit.cardBesideColumn)
-        assertEquals(GridEdge, fit.leftBottom)
-        // Tall enough to stack: the card sits below the column as before.
-        val tall = gridFit(420.dp, sizes, record = false)
-        assertEquals(200.dp to 140.dp, tall.card)
-        assertTrue(!tall.cardBesideColumn)
     }
 
     @Test

@@ -30,4 +30,7 @@ interface LocalNodeApis {
      * `/api/v1/fc-setup` routes and step stream). Independent of [handles], like [autonomy].
      */
     fun fcSetup(id: DeviceId): SetupBackend? = null
+
+    /** Gimbal rate control served in-process for [id]; independent of [handles], like [autonomy]. */
+    fun gimbal(id: DeviceId): com.altnautica.gcs.core.agent.gimbal.GimbalApi? = null
 }

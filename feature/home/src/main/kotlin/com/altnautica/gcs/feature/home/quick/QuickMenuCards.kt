@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -37,12 +38,44 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
+import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
 import com.altnautica.gcs.core.skills.input.controller.ControllerInfo
 import com.altnautica.gcs.feature.home.FleetCard
 import com.altnautica.gcs.feature.home.R
 import com.altnautica.gcs.feature.home.livenessLabel
+
+/** The mission on the open cockpit's vehicle: its state and waypoint. Opens the planner. */
+@Composable
+internal fun MissionStatusCard(cockpit: CockpitSummary?, onClick: () -> Unit) {
+    val mission = cockpit?.mission
+    val active = mission != null && mission.state != MissionState.None
+    StatusCard(
+        title = stringResource(R.string.home_quick_mission),
+        icon = Icons.Outlined.Route,
+        iconTint = if (active) AdosTheme.colors.accentPrimary else AdosTheme.colors.fgTertiary,
+        onClick = onClick,
+    ) {
+        if (mission == null || mission.state == MissionState.None) {
+            Line(stringResource(R.string.home_quick_mission_none))
+            return@StatusCard
+        }
+        Line(
+            stringResource(
+                when (mission.state) {
+                    MissionState.Loaded -> R.string.home_quick_mission_loaded
+                    MissionState.Active -> R.string.home_quick_mission_active
+                    MissionState.Paused -> R.string.home_quick_mission_paused
+                    MissionState.Complete -> R.string.home_quick_mission_complete
+                    MissionState.Returning -> R.string.home_quick_mission_returning
+                    MissionState.None -> R.string.home_quick_mission_none
+                },
+            ),
+        )
+        if (mission.total > 0) Line(stringResource(R.string.home_quick_mission_wp, mission.seq, mission.total))
+    }
+}
 
 private val CardWidth = 232.dp
 private val CardMinHeight = 132.dp

@@ -53,6 +53,7 @@ fun HomeRoute(
     onOpenSurface: (surface: HomeSurface, nodeId: DeviceId?) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenController: () -> Unit,
+    onOpenQuickMenu: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -66,6 +67,7 @@ fun HomeRoute(
         onOpenSurface = onOpenSurface,
         onAddVehicle = onAddVehicle,
         onOpenController = onOpenController,
+        onOpenQuickMenu = onOpenQuickMenu,
     )
 }
 
@@ -80,6 +82,7 @@ internal fun HomeScreen(
     onOpenSurface: (HomeSurface, DeviceId?) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenController: () -> Unit,
+    onOpenQuickMenu: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val selected = state.selected
@@ -121,7 +124,7 @@ internal fun HomeScreen(
     }
     val hints = homeHints()
     val topStrip: @Composable () -> Unit = {
-        HomeTopStrip(trailing = { Box(Modifier.size(1.dp).adosMenuAnchor(homeMenu)) })
+        HomeTopStrip(onOpenQuickMenu = onOpenQuickMenu, trailing = { Box(Modifier.size(1.dp).adosMenuAnchor(homeMenu)) })
     }
     val vehicleRow: @Composable () -> Unit = {
         VehicleRow(state.vehicles, selectedId, onSelect, onAddVehicle)
@@ -176,7 +179,10 @@ private fun HeroContent(
                 // No vehicle listed because the saved ones cannot be read is not "no vehicles".
                 selected == null && state.savedNodesUnreadable -> Unit
                 selected == null -> HeroEmpty(onAddVehicle, onEnableDemo, compact = landscape)
-                else -> HeroInfo(selected, cards.firstOrNull { it.surface == HomeSurface.Fly }, Modifier.adosMenuAnchor(vehicleMenu))
+                // A new vehicle's hero eases in: fade and a short rise, snapped under reduced motion.
+                else -> HeroSwap(selected, key = { it.node.id }) { card ->
+                    HeroInfo(card, surfaces(card).firstOrNull { it.surface == HomeSurface.Fly }, Modifier.adosMenuAnchor(vehicleMenu))
+                }
             }
         }
         if (state.savedNodesUnreadable) {

@@ -2,7 +2,6 @@ package com.altnautica.gcs.feature.cockpit
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -11,31 +10,28 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.absoluteOffset
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CenterFocusStrong
-import androidx.compose.material.icons.outlined.FiberManualRecord
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.FlightLand
 import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.PauseCircle
-import androidx.compose.material.icons.outlined.PhotoCamera
-import androidx.compose.material.icons.outlined.Radar
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.outlined.ZoomIn
-import androidx.compose.material.icons.outlined.ZoomOut
-import androidx.compose.material3.Icon
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.SatelliteAlt
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -48,27 +44,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.designsystem.component.LoadingState
-import com.altnautica.gcs.core.designsystem.component.console.isLandscape
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
-import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.extensions.ui.ExtensionMarksLayer
 import com.altnautica.gcs.core.extensions.ui.ExtensionParametersPanel
 import com.altnautica.gcs.core.extensions.ui.ExtensionSlotHost
 import com.altnautica.gcs.core.map.AdosMinimap
+import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.StreamSwitchKind
@@ -77,9 +78,41 @@ import com.altnautica.gcs.core.skills.builtin.BuiltinIds
 import com.altnautica.gcs.core.video.ui.VideoSurface
 import com.altnautica.gcs.core.video.ui.VideoSurfaceRole
 import com.altnautica.gcs.feature.cockpit.alerts.AlertStack
+import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
 import com.altnautica.gcs.feature.cockpit.autonomy.MinimapFrame
-import com.altnautica.gcs.feature.cockpit.band.SafetyBand
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChip
+import com.altnautica.gcs.feature.cockpit.chrome.BackdropSampler
+import com.altnautica.gcs.feature.cockpit.chrome.BatteryGauge
+import com.altnautica.gcs.feature.cockpit.chrome.BatteryUi
+import com.altnautica.gcs.feature.cockpit.chrome.BottomRow
+import com.altnautica.gcs.feature.cockpit.chrome.CardPage
+import com.altnautica.gcs.feature.cockpit.chrome.AttitudeRadar
+import com.altnautica.gcs.feature.cockpit.chrome.Chrome
+import com.altnautica.gcs.feature.cockpit.chrome.ChromeBackdrop
+import com.altnautica.gcs.feature.cockpit.chrome.ChromeText
+import com.altnautica.gcs.feature.cockpit.chrome.ControllerIndicator
+import com.altnautica.gcs.feature.cockpit.chrome.FlightGrid
+import com.altnautica.gcs.feature.cockpit.chrome.FlightZones
+import com.altnautica.gcs.feature.cockpit.chrome.GimbalPad
+import com.altnautica.gcs.feature.cockpit.chrome.LinkIcon
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChromeBackdrop
+import com.altnautica.gcs.feature.cockpit.chrome.MenuButton
+import com.altnautica.gcs.feature.cockpit.chrome.PhotoVideoSwitch
+import com.altnautica.gcs.feature.cockpit.chrome.RoundButton
+import com.altnautica.gcs.feature.cockpit.chrome.Shutter
+import com.altnautica.gcs.feature.cockpit.chrome.StatusList
+import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
+import com.altnautica.gcs.feature.cockpit.chrome.StatusPill
+import com.altnautica.gcs.feature.cockpit.chrome.StatusSeverity
+import com.altnautica.gcs.feature.cockpit.chrome.StopButton
+import com.altnautica.gcs.feature.cockpit.chrome.SwitchCard
+import com.altnautica.gcs.feature.cockpit.chrome.TopBar
+import com.altnautica.gcs.feature.cockpit.chrome.TopBarItem
+import com.altnautica.gcs.feature.cockpit.chrome.TopBarOverflow
+import com.altnautica.gcs.feature.cockpit.chrome.ZoneRect
+import com.altnautica.gcs.feature.cockpit.chrome.ZoomPill
+import com.altnautica.gcs.feature.cockpit.chrome.flightSizes
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmHost
 import com.altnautica.gcs.feature.cockpit.flow.GateRing
 import com.altnautica.gcs.feature.cockpit.flow.HandoverBanner
@@ -87,15 +120,15 @@ import com.altnautica.gcs.feature.cockpit.flow.LinkLossBanner
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.LowBatteryBanner
 import com.altnautica.gcs.feature.cockpit.flow.SticksWithBanner
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.hud.HudCanvas
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerLevel
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerLevelButton
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerSpec
 import com.altnautica.gcs.feature.cockpit.hud.layers.VisionSidePanel
 import com.altnautica.gcs.feature.cockpit.launch.LaunchSheet
 import com.altnautica.gcs.feature.cockpit.modes.ModeSheet
 import com.altnautica.gcs.feature.cockpit.panels.QuickSettingsPanel
-import com.altnautica.gcs.feature.cockpit.panels.StreamTabs
-import com.altnautica.gcs.feature.cockpit.panels.TelemetryStrip
-import com.altnautica.gcs.feature.cockpit.pilot.ON_SCREEN_PAD
 import com.altnautica.gcs.feature.cockpit.pilot.ThumbPad
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightSheet
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerChip
@@ -110,8 +143,6 @@ private object Z {
     const val HUD = 15f
     const val ZONES = 20f
     const val PIP = 25f
-    const val CONTROLS = 30f
-    const val BAND = 40f
     const val ALERTS = 45f
     const val SHEETS = 50f
 }
@@ -119,14 +150,14 @@ private object Z {
 private val WIDGET_ZONES = listOf("top-left", "top-right", "bottom-left", "bottom-right")
 
 /**
- * The cockpit grid. Landscape: the top bar (flight-state chip, status, battery, link, nav
- * source, controller, layers, settings), the left column (take off or land, return home,
- * pause), the right column (shutter, record, zoom, gimbal recentre, camera settings), the
- * bottom-left card (map or radar), the bottom row (distance, height and speeds), the skill
- * picker chip at the bottom right, and the HUD and data layers in the centre. The main view
- * is the video, the map, both side by side, or the video with the vision panel. Portrait:
- * the status band, then the chip and layers row, the 16:9 video, the left-column actions as a row, the skill
- * picker, telemetry and the map. Each region collects only the flows it draws.
+ * The flight screen (landscape only; the route locks the orientation). The video fills the
+ * window; over it, on translucent blurred panels: the top bar (flight-state chip, status
+ * pill, battery, link, navigation source, controller, layers, Menu, STOP), the left column
+ * (take off or land, return home, pause), the right column (shutter, photo/video, zoom,
+ * gimbal pad, camera settings), the bottom-left card (map, attitude, obstacles), the bottom
+ * row (D, H, H.S, V.S, AGL) and the skills chip. The centre stays clean: reticle, heading
+ * and horizon marks, data layers; the flight instruments only at the Instruments level.
+ * No status band, telemetry strip, navigation rail or hint bar is drawn here.
  */
 @Composable
 internal fun CockpitScreen(
@@ -136,11 +167,19 @@ internal fun CockpitScreen(
     onExit: () -> Unit,
     snackbar: @Composable () -> Unit,
 ) {
-    val landscape = isLandscape()
-    val layoutClass = vm.cockpitSpec.layout.classes[layoutClassId(width, landscape)]
-    CompositionLocalProvider(LocalCockpitStrings provides vm.specStrings, LocalLayoutClass provides layoutClass) {
-        Box(Modifier.fillMaxSize().focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing)) {
-            if (!landscape) PortraitLayout(vm, width, onExit) else LandscapeGrid(vm, width, onExit)
+    // The flight screen is locked to landscape, so it always takes the width's landscape class.
+    val layoutClass = vm.cockpitSpec.layout.classes[layoutClassId(width, landscape = true)]
+    val chrome = remember(vm) { Chrome.from(vm.cockpitSpec.tokens.chrome) }
+    val backdrop = remember { ChromeBackdrop() }
+    CompositionLocalProvider(
+        LocalCockpitStrings provides vm.specStrings,
+        LocalLayoutClass provides layoutClass,
+        LocalChrome provides chrome,
+        LocalChromeBackdrop provides backdrop,
+    ) {
+        BackdropSampler(backdrop)
+        Box(Modifier.fillMaxSize().background(Color.Black).focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing)) {
+            FlightScreen(vm, width, onExit)
             if (connecting) {
                 Box(Modifier.align(Alignment.Center).zIndex(Z.ALERTS)) {
                     LoadingState(stringResource(R.string.cockpit_connecting))
@@ -153,100 +192,314 @@ internal fun CockpitScreen(
     }
 }
 
-/** The top bar: the flight-state chip, then the status band and the layer level button. */
 @Composable
-private fun TopBar(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit, modifier: Modifier = Modifier) {
-    val chip by vm.chip.collectAsStateWithLifecycle()
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-        FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton, modifier = Modifier.padding(start = AdosSpacing.S2))
-        Band(vm, width, onExit, Modifier.weight(1f))
-        LayerLevelButton(vm.autonomy.layers, Modifier.padding(end = AdosSpacing.S2))
-    }
-}
-
-/**
- * The portrait top bar, above the video: the status band across the full width (so the exit
- * arrow and vehicle name keep their room), then the flight-state chip and the layer level
- * button on their own row.
- */
-@Composable
-private fun PortraitTopBar(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit, modifier: Modifier = Modifier) {
-    val chip by vm.chip.collectAsStateWithLifecycle()
-    Column(modifier.fillMaxWidth()) {
-        Band(vm, width, onExit, Modifier.fillMaxWidth())
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
-        ) {
-            FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton)
-            Box(Modifier.weight(1f))
-            LayerLevelButton(vm.autonomy.layers)
+private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit) {
+    val view by vm.view.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val gimbal by vm.gimbal.available.collectAsStateWithLifecycle()
+    val statusItems by vm.statusItems.collectAsStateWithLifecycle()
+    var acknowledged by remember { mutableStateOf(emptySet<String>()) }
+    var statusOpen by remember { mutableStateOf(false) }
+    var pillX by remember { mutableFloatStateOf(0f) }
+    val overflow = remember { TopBarOverflow() }
+    val sizes = remember(width) { flightSizes(width) }
+    Box(Modifier.fillMaxSize()) {
+        FlightGrid(
+            width = width,
+            gimbal = gimbal,
+            background = { zones ->
+                MainView(vm, view, settings.splitRatio, centreInset(zones), Modifier.fillMaxSize())
+            },
+            topBar = {
+                FlightTopBar(
+                    vm = vm,
+                    width = width,
+                    overflow = overflow,
+                    onExit = onExit,
+                    pill = {
+                        StatusPill(
+                            StatusModel.pill(statusItems, acknowledged),
+                            onOpen = {
+                                // Opening the list acknowledges what it shows.
+                                acknowledged = statusItems.mapTo(HashSet()) { it.key }
+                                statusOpen = true
+                            },
+                            modifier = Modifier.onGloballyPositioned { pillX = it.boundsInRoot().left },
+                        )
+                    },
+                )
+            },
+            leftColumn = { LeftColumn(vm, sizes.leftButton, sizes.leftGap) },
+            rightColumn = { inColumn -> RightColumn(vm, sizes, inColumn) },
+            gimbalPad = { Pad(vm, sizes.gimbalPad) },
+            card = { Card(vm) },
+            bottomRow = {
+                val values by vm.flightValues.collectAsStateWithLifecycle()
+                BottomRow(values)
+            },
+            skills = { PickerChip(vm, Modifier.align(Alignment.BottomEnd)) },
+            centre = { zones -> Centre(vm, width, zones) },
+        )
+        if (statusOpen) {
+            val density = LocalDensity.current
+            StatusList(
+                statusItems,
+                onClose = { statusOpen = false },
+                modifier = Modifier
+                    .absoluteOffset(x = with(density) { pillX.toDp() }, y = sizes.edge + sizes.topBar + 4.dp)
+                    .zIndex(Z.SHEETS),
+            )
         }
     }
 }
 
+/** The HUD's horizontal inset: the centre zone, so no column ever sits on a tape. */
+private fun centreInset(zones: FlightZones): PaddingValues {
+    val windowWidth = zones.topBar.right + zones.topBar.x
+    return PaddingValues(start = zones.centre.x, end = windowWidth - zones.centre.right)
+}
+
 @Composable
-private fun Band(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit, modifier: Modifier) {
+private fun FlightTopBar(
+    vm: CockpitViewModel,
+    width: WidthClass,
+    overflow: TopBarOverflow,
+    onExit: () -> Unit,
+    pill: @Composable () -> Unit,
+) {
+    val chip by vm.chip.collectAsStateWithLifecycle()
     val band by vm.band.collectAsStateWithLifecycle()
-    SafetyBand(
-        state = band,
-        onExit = onExit,
-        onToggleStick = vm::toggleStickControl,
-        onOpenPreflight = { vm.setPreflight(true) },
-        onOpenQuickSettings = { vm.setQuickSettings(true) },
-        onOpenModes = vm::openModeSheet,
-        onKill = { vm.activate(BuiltinIds.KILL) },
-        navChip = { NavChipSlot(vm, width) },
-        modifier = modifier,
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val video by vm.video.collectAsStateWithLifecycle()
+    val menu = rememberAdosMenuState()
+    val linkText = linkText(band)
+    val controllerText = controllerText(band.stick)
+    TopBar(
+        overflow = overflow,
+        chip = { FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton) },
+        pill = pill,
+        battery = {
+            BatteryGauge(
+                BatteryUi(
+                    pct = band.batteryPct,
+                    timeLeftS = band.timeToReserveS,
+                    reservePct = settings.batteryBands.lowPct,
+                    severity = when (band.batteryLevel) {
+                        BatteryBand.Critical -> StatusSeverity.Critical
+                        BatteryBand.Low -> StatusSeverity.Warning
+                        else -> StatusSeverity.Ok
+                    },
+                ),
+            )
+        },
+        linkIcon = { LinkIcon(band.link, linkText) },
+        linkDetail = { if (band.link != LinkHealth.None) ChromeText(linkText, dim = true) },
+        navSource = { NavChipSlot(vm, width) },
+        controller = {
+            when (val s = band.stick) {
+                is StickChip.Available -> ControllerIndicator(controllerText.orEmpty(), s.on, vm::toggleStickControl)
+                is StickChip.Pilot -> ControllerIndicator(controllerText.orEmpty(), s.streaming, null)
+                is StickChip.ModeBlocked, StickChip.LinkBlocked -> ControllerIndicator(controllerText.orEmpty(), false, null)
+                StickChip.NoGamepad -> Unit
+            }
+        },
+        layers = { LayerLevelButton(vm.autonomy.layers) },
+        menu = { MenuButton(onClick = { menu.expanded = true }, modifier = Modifier.adosMenuAnchor(menu)) },
+        stop = { StopButton(onClick = { vm.activate(BuiltinIds.KILL) }) },
+    )
+    val items = buildList {
+        band.nodeName?.let { name ->
+            add(AdosMenuItem(name + (band.reach?.let { " · " + reachText(it) } ?: ""), enabled = false) {})
+        }
+        add(AdosMenuItem(stringResource(R.string.cockpit_menu_home), Icons.AutoMirrored.Outlined.ArrowBack) { onExit() })
+        if (band.preflightTotal > 0) {
+            add(AdosMenuItem(stringResource(R.string.cockpit_menu_preflight, band.preflightPassed, band.preflightTotal), Icons.Outlined.Checklist) { vm.setPreflight(true) })
+        }
+        add(AdosMenuItem(stringResource(R.string.cockpit_menu_modes), Icons.Outlined.FlightTakeoff) { vm.openModeSheet() })
+        add(AdosMenuItem(stringResource(R.string.cockpit_menu_settings), Icons.Outlined.Tune) { vm.setQuickSettings(true) })
+        add(AdosMenuItem(stringResource(R.string.cockpit_menu_view), Icons.Outlined.GridView) { vm.nextView() })
+        val live = video.streams.filter { it.live }
+        if (live.size > 1) {
+            for (s in live) {
+                add(AdosMenuItem(stringResource(R.string.cockpit_menu_camera, s.role), Icons.Outlined.Videocam, enabled = s.id != video.selectedStreamId) { vm.selectStream(s.id) })
+            }
+        }
+        // Items the top bar had no room for.
+        val moved = overflow.moved
+        if (TopBarItem.NavSource in moved) {
+            val nav by vm.autonomy.navChip.collectAsStateWithLifecycle()
+            val text = com.altnautica.gcs.feature.cockpit.autonomy.TargetText(androidx.compose.ui.platform.LocalResources.current)
+            nav?.let { add(AdosMenuItem(text.navLabel(it), Icons.Outlined.SatelliteAlt, enabled = false) {}) }
+        }
+        if (TopBarItem.LinkDetail in moved && band.link != LinkHealth.None) {
+            add(AdosMenuItem(stringResource(R.string.cockpit_menu_link, linkText), enabled = false) {})
+        }
+        if (TopBarItem.Controller in moved && controllerText != null) {
+            val stick = band.stick
+            add(
+                AdosMenuItem(stringResource(R.string.cockpit_menu_controller, controllerText), enabled = stick is StickChip.Available) {
+                    vm.toggleStickControl()
+                },
+            )
+        }
+    }
+    AdosMenu(menu, items)
+}
+
+@Composable
+private fun linkText(band: BandState): String = when {
+    band.link == LinkHealth.None -> stringResource(R.string.cockpit_link_none)
+    band.rssiDbm != null -> "${band.rssiDbm} dBm" + (band.lqPct?.let { " · $it%" } ?: "")
+    band.lqPct != null -> "LQ ${band.lqPct}%"
+    band.linkAgeDeciS != null -> "%.1f s".format(band.linkAgeDeciS / 10f)
+    else -> "—"
+}
+
+@Composable
+private fun controllerText(stick: StickChip): String? {
+    val pct = com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi.current.batteryPct
+    return when (stick) {
+        StickChip.NoGamepad -> null
+        StickChip.LinkBlocked -> stringResource(R.string.cockpit_stick_blocked)
+        is StickChip.ModeBlocked -> stringResource(R.string.cockpit_stick_mode_blocked, stick.mode.uppercase())
+        is StickChip.Available, is StickChip.Pilot -> pct?.let { "$it%" } ?: "—"
+    }
+}
+
+@Composable
+private fun reachText(badge: ReachBadge): String = stringResource(
+    when (badge) {
+        ReachBadge.Direct -> R.string.cockpit_reach_direct
+        ReachBadge.Lan -> R.string.cockpit_reach_lan
+        ReachBadge.ViaGround -> R.string.cockpit_reach_via_ground
+        ReachBadge.Cloud -> R.string.cockpit_reach_cloud
+        ReachBadge.PhoneRadio -> R.string.cockpit_reach_phone_radio
+        ReachBadge.Blocked -> R.string.cockpit_reach_blocked
+    },
+)
+
+/** Take off (opens the Launch sheet) or land, return home, pause: the built-ins' own gates and confirms apply. */
+@Composable
+private fun LeftColumn(vm: CockpitViewModel, size: Dp, gap: Dp) {
+    val pilot by vm.pilotState.collectAsStateWithLifecycle()
+    val band by vm.band.collectAsStateWithLifecycle()
+    val airborne = pilot?.let { it.armed && !it.landed } ?: (band.armed == true)
+    val labels = vm.cockpitSpec.builtins.builtins.associate { it.id to it.label }
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically)) {
+        if (airborne) {
+            RoundButton(Icons.Outlined.FlightLand, labels[BuiltinIds.LAND].orEmpty(), size, "grid-land", { vm.activate(BuiltinIds.LAND) })
+        } else {
+            RoundButton(Icons.Outlined.FlightTakeoff, labels[BuiltinIds.TAKEOFF].orEmpty(), size, "grid-takeoff", { vm.openLaunch(true) })
+        }
+        RoundButton(Icons.Outlined.Home, labels[BuiltinIds.RTH].orEmpty(), size, "grid-rth", { vm.activate(BuiltinIds.RTH) })
+        RoundButton(Icons.Outlined.PauseCircle, labels[BuiltinIds.PAUSE].orEmpty(), size, "grid-pause", { vm.activate(BuiltinIds.PAUSE) })
+    }
+}
+
+/** Shutter, photo/video switch, zoom, the gimbal pad when it fits here, camera settings. */
+@Composable
+private fun RightColumn(vm: CockpitViewModel, sizes: com.altnautica.gcs.feature.cockpit.chrome.FlightSizes, gimbalInColumn: Boolean) {
+    val recording by vm.recordingActive.collectAsStateWithLifecycle()
+    val canRecord by vm.canRecord.collectAsStateWithLifecycle()
+    var videoMode by rememberSaveable { mutableStateOf(false) }
+    val video = videoMode && canRecord
+    Column(
+        Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(sizes.rightGap, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Shutter(
+            video = video,
+            recording = recording,
+            label = stringResource(if (video) R.string.grid_record else R.string.grid_shutter),
+            size = sizes.shutter,
+            onClick = { if (video) vm.toggleRecording() else vm.capturePhoto() },
+        )
+        PhotoVideoSwitch(
+            video = video,
+            videoEnabled = canRecord,
+            photoLabel = stringResource(R.string.grid_mode_photo),
+            videoLabel = stringResource(R.string.grid_mode_video),
+            onVideo = { videoMode = it },
+            width = sizes.shutter,
+            height = sizes.modeSwitch,
+        )
+        ZoomPill(
+            inLabel = stringResource(R.string.grid_zoom_in),
+            outLabel = stringResource(R.string.grid_zoom_out),
+            onIn = vm::zoomIn,
+            onOut = vm::zoomOut,
+            onLongPress = null,
+            width = sizes.rightButton,
+            height = sizes.zoom,
+        )
+        if (gimbalInColumn) Pad(vm, sizes.gimbalPad)
+        RoundButton(Icons.Outlined.Tune, stringResource(R.string.grid_camera_settings), sizes.rightButton, "grid-camera-settings", { vm.setQuickSettings(true) })
+    }
+}
+
+@Composable
+private fun Pad(vm: CockpitViewModel, size: Dp) {
+    GimbalPad(
+        label = specText("cockpit.gimbal_pad"),
+        hint = specText("cockpit.gimbal_pad.hint"),
+        size = size,
+        onRate = vm.gimbal::deflect,
+        onRecenter = vm::recenterGimbal,
     )
 }
 
+/** The bottom-left card: map, attitude radar or obstacle radar; swipe or L3 switches it, a tap on the map swaps video and map. */
 @Composable
-private fun LandscapeGrid(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit) {
-    val view by vm.view.collectAsStateWithLifecycle()
-    val settings by vm.settings.collectAsStateWithLifecycle()
-    val onScreen by vm.onScreenSticksEnabled.collectAsStateWithLifecycle()
-    val canRecord by vm.canRecord.collectAsStateWithLifecycle()
-    val sizes = gridSizes(width)
-    val sticksShown = onScreen && (width == WidthClass.Compact || width == WidthClass.Expanded)
-    val inward = if (sticksShown) ON_SCREEN_PAD + AdosSpacing.S4 else 0.dp
-    Column(Modifier.fillMaxSize()) {
-        TopBar(vm, width, onExit, Modifier.zIndex(Z.BAND))
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val fit = gridFit(maxHeight, sizes, canRecord)
-            // A card beside the left column starts after it.
-            val cardShift = if (fit.cardBesideColumn) sizes.leftButton + AdosSpacing.S2 else 0.dp
-            // The HUD is the centre zone: between the columns, so their buttons never cover its tapes.
-            val hudInset = PaddingValues(start = GridEdge * 2 + sizes.leftButton, end = GridEdge * 2 + sizes.rightWidth)
-            MainView(vm, view, settings.splitRatio, hudInset, Modifier.fillMaxSize())
-            Column(Modifier.align(Alignment.TopCenter).padding(top = AdosSpacing.S2).zIndex(Z.ALERTS), horizontalAlignment = Alignment.CenterHorizontally) {
-                Tabs(vm)
-                Alerts(vm, Modifier.padding(top = AdosSpacing.S2))
-                FlowBanners(vm, Modifier.padding(top = AdosSpacing.S2).width(560.dp))
+private fun Card(vm: CockpitViewModel) {
+    val page by vm.cardPage.collectAsStateWithLifecycle()
+    val telemetry by vm.telemetry.collectAsStateWithLifecycle()
+    val label = stringResource(
+        when (page) {
+            CardPage.Map -> R.string.grid_card_page_map
+            CardPage.Attitude -> R.string.grid_card_attitude
+            CardPage.Obstacles -> R.string.grid_card_obstacles
+        },
+    )
+    SwitchCard(page, label, vm::stepCard) { p ->
+        when (p) {
+            CardPage.Map -> Minimap(vm, Modifier.fillMaxSize(), onClick = vm::toggleMinimapSwap)
+            CardPage.Attitude -> AttitudeRadar(telemetry?.attitude)
+            CardPage.Obstacles -> BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                AutonomyRadar(vm, Modifier, minOf(maxWidth, maxHeight) - 8.dp)
             }
-            CentreRings(vm, Modifier.align(Alignment.Center).zIndex(Z.ALERTS))
-            WidgetZones(vm, Modifier.fillMaxSize().padding(horizontal = sizes.column + AdosSpacing.S4, vertical = 72.dp).zIndex(Z.ZONES))
-            FollowChrome(vm, width, topInset = 0.dp, modifier = Modifier.zIndex(Z.ZONES))
-            Box(Modifier.fillMaxHeight().padding(start = GridEdge, top = GridEdge, bottom = fit.leftBottom).zIndex(Z.CONTROLS)) {
-                LeftColumn(vm, sizes, Modifier.align(Alignment.CenterStart))
-            }
-            Box(Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(end = GridEdge, top = GridEdge, bottom = fit.rightBottom).zIndex(Z.CONTROLS)) {
-                RightColumn(vm, sizes.shutter, fit.rightButton, fit.cameraSettingsInColumn, Modifier.align(Alignment.CenterEnd))
-            }
-            // Bottom row: the card, the telemetry row between it and the picker chip, the chip.
-            Row(
-                Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = GridEdge + inward + cardShift, end = GridEdge + inward, bottom = GridEdge).zIndex(Z.CONTROLS),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
-            ) {
-                BottomLeftCard(vm, width, fit)
-                Box(Modifier.weight(1f), contentAlignment = Alignment.BottomCenter) { Strip(vm) }
-                PickerChip(vm)
-            }
-            if (sticksShown) OnScreenSticksRow(vm, Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(AdosSpacing.S2).zIndex(Z.CONTROLS))
         }
     }
+}
+
+/** Centre overlays, all inside the centre zone: banners and the critical alert at its top, rings at the screen centre. */
+@Composable
+private fun Centre(vm: CockpitViewModel, width: WidthClass, zones: FlightZones) {
+    val onScreen by vm.onScreenSticksEnabled.collectAsStateWithLifecycle()
+    val rect = zones.centre
+    Box(Modifier.fillMaxSize()) {
+        CentreRings(vm, Modifier.align(Alignment.Center).zIndex(Z.ALERTS))
+        InZone(rect, Z.ALERTS) {
+            Column(Modifier.align(Alignment.TopCenter).padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                val alerts by vm.alerts.collectAsStateWithLifecycle()
+                // Warnings live in the status pill; only a critical alert takes the centre.
+                AlertStack(alerts.filter { it.level == AlertLevel.Critical }, maxVisible = 1)
+                FlowBanners(vm, Modifier.padding(top = 4.dp).widthIn(max = 520.dp))
+            }
+        }
+        InZone(rect, Z.ZONES) {
+            WidgetZones(vm, Modifier.fillMaxSize())
+            FollowChrome(vm, width, topInset = 0.dp, modifier = Modifier.fillMaxSize())
+            if (onScreen && (width == WidthClass.Compact || width == WidthClass.Expanded)) {
+                OnScreenSticksRow(vm, Modifier.align(Alignment.BottomCenter).fillMaxWidth())
+            }
+        }
+    }
+}
+
+@Composable
+private fun InZone(rect: ZoneRect, z: Float, content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit) {
+    Box(Modifier.absoluteOffset(rect.x, rect.y).size(rect.width, rect.height).zIndex(z), content = content)
 }
 
 /** The main view: video, map with video picture-in-picture, the two side by side, or video with the vision panel. */
@@ -254,13 +507,12 @@ private fun LandscapeGrid(vm: CockpitViewModel, width: WidthClass, onExit: () ->
 private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float, hudInset: PaddingValues, modifier: Modifier) {
     val startOnly = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr))
     when (view) {
-        CockpitView.Pilot -> VideoStage(vm, modifier, hudInset = hudInset)
+        CockpitView.Pilot -> VideoStage(vm, modifier, hudInset = hudInset, sampleBackdrop = true)
         CockpitView.Map -> Box(modifier) {
             Minimap(vm, Modifier.fillMaxSize())
             Box(
                 Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 64.dp, end = 72.dp)
+                    .align(Alignment.Center)
                     .size(width = 240.dp, height = 135.dp)
                     .clip(RoundedCornerShape(AdosRadius.Lg))
                     .zIndex(Z.PIP),
@@ -270,7 +522,7 @@ private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float,
         }
         CockpitView.Split -> SplitView(vm, savedRatio, startOnly, modifier)
         CockpitView.Vision -> Row(modifier) {
-            VideoStage(vm, Modifier.weight(1f).fillMaxHeight(), hudInset = startOnly)
+            VideoStage(vm, Modifier.weight(1f).fillMaxHeight(), hudInset = startOnly, sampleBackdrop = true)
             val video by vm.video.collectAsStateWithLifecycle()
             VisionSidePanel(vm, vm.autonomy.mainCamera(video), Modifier.width(320.dp).fillMaxHeight())
         }
@@ -284,7 +536,7 @@ private fun SplitView(vm: CockpitViewModel, savedRatio: Float, hudInset: Padding
     BoxWithConstraints(modifier) {
         val total = constraints.maxWidth.toFloat()
         Row(Modifier.fillMaxSize()) {
-            VideoStage(vm, Modifier.weight(ratio).fillMaxHeight(), hudInset = hudInset)
+            VideoStage(vm, Modifier.weight(ratio).fillMaxHeight(), hudInset = hudInset, sampleBackdrop = true)
             Box(
                 Modifier
                     .width(12.dp)
@@ -303,148 +555,6 @@ private fun SplitView(vm: CockpitViewModel, savedRatio: Float, hudInset: Padding
                 Box(Modifier.size(width = 4.dp, height = 40.dp).background(AdosTheme.colors.borderStrong, RoundedCornerShape(AdosRadius.Sm)))
             }
             Minimap(vm, Modifier.weight(1f - ratio).fillMaxHeight())
-        }
-    }
-}
-
-@Composable
-private fun PortraitLayout(vm: CockpitViewModel, width: WidthClass, onExit: () -> Unit) {
-    val sizes = gridSizes(width)
-    Column(Modifier.fillMaxSize().background(AdosTheme.colors.bgCanvas)) {
-        PortraitTopBar(vm, width, onExit, Modifier.zIndex(Z.BAND))
-        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-            VideoStage(vm, Modifier.fillMaxSize())
-            CentreRings(vm, Modifier.align(Alignment.Center).zIndex(Z.ALERTS))
-            FollowChrome(vm, width, topInset = 0.dp, modifier = Modifier.zIndex(Z.ZONES))
-        }
-        Column(Modifier.padding(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {
-                FlightActions(vm, sizes.shutter)
-                Box(Modifier.weight(1f))
-                PickerChip(vm)
-            }
-            FlowBanners(vm, Modifier.fillMaxWidth())
-            Tabs(vm)
-            Alerts(vm, Modifier.fillMaxWidth())
-            Strip(vm)
-        }
-        Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S2)) {
-            Minimap(vm, Modifier.fillMaxSize().clip(RoundedCornerShape(AdosRadius.Xl)))
-            Radar(vm, width, Modifier.align(Alignment.BottomEnd).padding(AdosSpacing.S2))
-        }
-    }
-}
-
-/** A round grid button: icon, label for accessibility, 48 dp minimum. */
-@Composable
-private fun GridButton(
-    icon: ImageVector,
-    label: String,
-    size: Dp,
-    tag: String,
-    onClick: () -> Unit,
-    active: Boolean = false,
-    onLongClick: (() -> Unit)? = null,
-    longClickLabel: String? = null,
-) {
-    val colors = AdosTheme.colors
-    Box(
-        Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(if (active) colors.accentPrimary else colors.hudGlass)
-            .combinedClickable(onClickLabel = label, role = Role.Button, onLongClickLabel = longClickLabel, onLongClick = onLongClick, onClick = onClick)
-            .semantics { contentDescription = label }
-            .testTag(tag),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(icon, contentDescription = null, tint = if (active) colors.accentForeground else colors.hudInk)
-    }
-}
-
-/** Take off (opens the Launch sheet) or land, return home, pause: the built-ins' own gates and confirms apply. */
-@Composable
-private fun FlightActions(vm: CockpitViewModel, size: Dp) {
-    val pilot by vm.pilotState.collectAsStateWithLifecycle()
-    val band by vm.band.collectAsStateWithLifecycle()
-    val airborne = pilot?.let { it.armed && !it.landed } ?: (band.armed == true)
-    val labels = vm.cockpitSpec.builtins.builtins.associate { it.id to it.label }
-    if (airborne) {
-        GridButton(Icons.Outlined.FlightLand, labels[BuiltinIds.LAND].orEmpty(), size, "grid-land", { vm.activate(BuiltinIds.LAND) })
-    } else {
-        GridButton(Icons.Outlined.FlightTakeoff, labels[BuiltinIds.TAKEOFF].orEmpty(), size, "grid-takeoff", { vm.openLaunch(true) })
-    }
-    GridButton(Icons.Outlined.Home, labels[BuiltinIds.RTH].orEmpty(), size, "grid-rth", { vm.activate(BuiltinIds.RTH) })
-    GridButton(Icons.Outlined.PauseCircle, labels[BuiltinIds.PAUSE].orEmpty(), size, "grid-pause", { vm.activate(BuiltinIds.PAUSE) })
-}
-
-@Composable
-private fun LeftColumn(vm: CockpitViewModel, sizes: GridSizes, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3), horizontalAlignment = Alignment.CenterHorizontally) {
-        FlightActions(vm, sizes.leftButton)
-    }
-}
-
-/** The right column; without room for every button, camera settings move to zoom-in's long-press. */
-@Composable
-private fun RightColumn(vm: CockpitViewModel, shutter: Dp, button: Dp, cameraSettings: Boolean, modifier: Modifier) {
-    val recording by vm.recordingActive.collectAsStateWithLifecycle()
-    val canRecord by vm.canRecord.collectAsStateWithLifecycle()
-    val openSettings = { vm.setQuickSettings(true) }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2), horizontalAlignment = Alignment.CenterHorizontally) {
-        GridButton(
-            Icons.Outlined.ZoomIn,
-            stringResource(R.string.grid_zoom_in),
-            button,
-            "grid-zoom-in",
-            vm::zoomIn,
-            onLongClick = if (cameraSettings) null else openSettings,
-            longClickLabel = if (cameraSettings) null else stringResource(R.string.grid_camera_settings),
-        )
-        GridButton(Icons.Outlined.PhotoCamera, stringResource(R.string.grid_shutter), shutter, "grid-shutter", vm::capturePhoto)
-        if (canRecord) {
-            GridButton(Icons.Outlined.FiberManualRecord, stringResource(R.string.grid_record), button, "grid-record", vm::toggleRecording, active = recording)
-        }
-        GridButton(Icons.Outlined.ZoomOut, stringResource(R.string.grid_zoom_out), button, "grid-zoom-out", vm::zoomOut)
-        GridButton(Icons.Outlined.CenterFocusStrong, stringResource(R.string.grid_gimbal_recenter), button, "grid-gimbal", vm::recenterGimbal)
-        if (cameraSettings) {
-            GridButton(Icons.Outlined.Tune, stringResource(R.string.grid_camera_settings), button, "grid-camera-settings", openSettings)
-        }
-    }
-}
-
-/**
- * The bottom-left card: the map or the radar, switched by tapping its toggle (or L3 swaps video
- * and map). Where it is too short for a card ([GridFit.card] null) it is the square map chip.
- * A long-press on the map picks the Launch sheet's map point.
- */
-@Composable
-private fun BottomLeftCard(vm: CockpitViewModel, width: WidthClass, fit: GridFit) {
-    var radar by rememberSaveable { mutableStateOf(false) }
-    val shape = RoundedCornerShape(AdosRadius.Xl)
-    val card = fit.card
-    if (card == null) {
-        // A chip; tapping it swaps video and map.
-        Box(Modifier.size(fit.chip).clip(shape).testTag("grid-card")) {
-            Minimap(vm, Modifier.fillMaxSize(), onClick = vm::toggleMinimapSwap)
-        }
-        return
-    }
-    val (w, h) = card
-    Box(Modifier.size(width = w, height = h).clip(shape).background(AdosTheme.colors.hudGlass).testTag("grid-card")) {
-        if (radar) {
-            Radar(vm, width, Modifier.align(Alignment.Center))
-        } else {
-            Minimap(vm, Modifier.fillMaxSize(), onClick = vm::toggleMinimapSwap)
-        }
-        Box(Modifier.align(Alignment.TopEnd).padding(AdosSpacing.S1)) {
-            GridButton(
-                if (radar) Icons.Outlined.Map else Icons.Outlined.Radar,
-                stringResource(if (radar) R.string.grid_card_map else R.string.grid_card_radar),
-                48.dp,
-                "grid-card-toggle",
-                { radar = !radar },
-            )
         }
     }
 }
@@ -469,7 +579,7 @@ private fun OnScreenSticksRow(vm: CockpitViewModel, modifier: Modifier) {
 private fun FlowBanners(vm: CockpitViewModel, modifier: Modifier) {
     val flow by vm.flow.collectAsStateWithLifecycle()
     val pilot by vm.pilotState.collectAsStateWithLifecycle()
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         flow.banner?.let { HandoverBanner(it) }
         flow.sticksWith?.let { SticksWithBanner(it, vm::takeSticks) }
         flow.linkLossInS?.let { LinkLossBanner(it, pilot?.banner?.args?.get("action") ?: LINK_LOSS_DEFAULT_ACTION) }
@@ -507,7 +617,11 @@ private fun GateRingProgress(progress: Float) {
     }
 }
 
-/** Video, extension overlay, marks, data layers and HUD. */
+/**
+ * Video, extension overlay, marks, data layers and the centre: the reticle and small
+ * heading and horizon marks at every level, the flight instruments only at Instruments.
+ * With [sampleBackdrop] the panels blur this video behind themselves.
+ */
 @Composable
 private fun VideoStage(
     vm: CockpitViewModel,
@@ -515,6 +629,7 @@ private fun VideoStage(
     showHud: Boolean = true,
     showLayers: Boolean = true,
     hudInset: PaddingValues = PaddingValues(),
+    sampleBackdrop: Boolean = false,
 ) {
     val video by vm.video.collectAsStateWithLifecycle()
     val videoState by vm.videoState.collectAsStateWithLifecycle()
@@ -522,12 +637,22 @@ private fun VideoStage(
     val settings by vm.settings.collectAsStateWithLifecycle()
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
     val swapped by vm.minimapSwapped.collectAsStateWithLifecycle()
+    val flags by vm.autonomy.layers.flags.collectAsStateWithLifecycle()
+    val backdrop = LocalChromeBackdrop.current
     Box(modifier.background(AdosTheme.colors.mediaLetterbox)) {
         if (swapped && showHud) {
             Minimap(vm, Modifier.fillMaxSize())
             return@Box
         }
-        VideoSurface(video.main, Modifier.fillMaxSize().zIndex(Z.VIDEO))
+        val sampler = backdrop?.takeIf { sampleBackdrop }
+        VideoSurface(
+            video.main,
+            Modifier
+                .fillMaxSize()
+                .zIndex(Z.VIDEO)
+                .let { m -> if (sampler != null) m.onGloballyPositioned { sampler.videoBounds = it.boundsInRoot() } else m },
+            onSurfaceView = sampler?.let { b -> { view -> b.surfaceView = view } },
+        )
         if (videoState !is VideoState.Live) {
             val text = when (videoState) {
                 VideoState.Connecting -> stringResource(R.string.cockpit_video_connecting_long)
@@ -542,15 +667,16 @@ private fun VideoStage(
             ExtensionMarksLayer(node, Modifier.fillMaxSize().zIndex(Z.MARKS))
         }
         if (showLayers) VideoLayers(vm, vm.autonomy.mainCamera(video), modifier = Modifier.fillMaxSize().zIndex(Z.MARKS))
-        if (showHud) {
+        if (showHud && flags.isOn(LayerSpec.CENTRE_MARKS)) {
             HudCanvas(
                 telemetry = telemetry,
                 altitudeReference = settings.altitudeReference,
                 density = settings.density,
-                modifier = Modifier.fillMaxSize().padding(hudInset).zIndex(Z.HUD),
+                instruments = flags.level == LayerLevel.Instruments && flags.isOn(LayerSpec.INSTRUMENTS),
+                modifier = Modifier.fillMaxSize().padding(hudInset).zIndex(Z.HUD).testTag("hud"),
             )
         }
-        Pip(vm, Modifier.align(Alignment.BottomCenter).padding(bottom = 72.dp).zIndex(Z.PIP))
+        Pip(vm, Modifier.align(Alignment.Center).zIndex(Z.PIP))
     }
 }
 
@@ -586,29 +712,7 @@ private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Un
 private const val MINIMAP_ZOOM = 16.0
 
 @Composable
-private fun Tabs(vm: CockpitViewModel) {
-    val video by vm.video.collectAsStateWithLifecycle()
-    StreamTabs(video.streams, video.selectedStreamId, video.switchingStreamId, vm::selectStream)
-}
 
-@Composable
-private fun Strip(vm: CockpitViewModel, modifier: Modifier = Modifier) {
-    val strip by vm.strip.collectAsStateWithLifecycle()
-    TelemetryStrip(strip, modifier, distanceOnly = LocalLayoutClass.current.distanceOnly)
-}
-
-@Composable
-private fun Alerts(vm: CockpitViewModel, modifier: Modifier) {
-    val alerts by vm.alerts.collectAsStateWithLifecycle()
-    AlertStack(alerts, modifier)
-}
-
-@Composable
-private fun Radar(vm: CockpitViewModel, width: WidthClass, modifier: Modifier) {
-    AutonomyRadar(vm, modifier, radarDiameter(width))
-}
-
-@Composable
 private fun Pip(vm: CockpitViewModel, modifier: Modifier) {
     val video by vm.video.collectAsStateWithLifecycle()
     val pip = video.pip ?: return
@@ -622,7 +726,7 @@ private fun Pip(vm: CockpitViewModel, modifier: Modifier) {
 private fun WidgetZones(vm: CockpitViewModel, modifier: Modifier) {
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
     val node = extNode ?: return
-    Box(modifier.padding(AdosSpacing.S2)) {
+    Box(modifier.padding(8.dp)) {
         for (zone in WIDGET_ZONES) {
             val align = when (zone) {
                 "top-left" -> Alignment.TopStart
@@ -649,8 +753,8 @@ private fun SkillTweak(vm: CockpitViewModel, skill: Skill) {
 /** Quick settings and the sheets, all drawn in the cockpit window above the flight surface (z 50). */
 @Composable
 private fun Overlays(vm: CockpitViewModel, width: WidthClass) {
-    val preflightOpen by vm.preflightOpen.collectAsStateWithLifecycle()
     val quickOpen by vm.quickSettingsOpen.collectAsStateWithLifecycle()
+    val preflightOpen by vm.preflightOpen.collectAsStateWithLifecycle()
     val confirm by vm.confirm.state.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val maxBrightness by vm.maxBrightness.collectAsStateWithLifecycle()

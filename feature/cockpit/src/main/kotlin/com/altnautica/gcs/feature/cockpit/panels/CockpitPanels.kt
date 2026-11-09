@@ -1,7 +1,5 @@
 package com.altnautica.gcs.feature.cockpit.panels
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,18 +32,14 @@ import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommand
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommandHandler
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
-import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamDescriptor
 import com.altnautica.gcs.feature.cockpit.R
-import com.altnautica.gcs.feature.cockpit.StripValues
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
-import kotlin.math.roundToInt
 
-private const val DASH = "—"
 
 /** Stream tabs under the band; shown only with more than one stream. */
 @Composable
@@ -92,46 +86,6 @@ fun StreamTabs(
     }
 }
 
-/** The strip cells in order; a distance-only layout class (compact, portrait) keeps the home distance and bearing. */
-enum class StripCell { Dist, Home, Vs, Thr, Wp, Sats }
-
-fun stripCells(distanceOnly: Boolean): List<StripCell> =
-    if (distanceOnly) listOf(StripCell.Dist, StripCell.Home) else StripCell.entries
-
-/** Telemetry strip: distance and bearing home, climb, throttle, waypoint, satellites/HDOP. */
-@Composable
-fun TelemetryStrip(values: StripValues, modifier: Modifier = Modifier, vertical: Boolean = false, distanceOnly: Boolean = false) {
-    val labels = mapOf(
-        StripCell.Dist to stringResource(R.string.cockpit_strip_dist),
-        StripCell.Home to stringResource(R.string.cockpit_strip_home),
-        StripCell.Vs to stringResource(R.string.cockpit_strip_vs),
-        StripCell.Thr to stringResource(R.string.cockpit_strip_thr),
-        StripCell.Wp to stringResource(R.string.cockpit_strip_wp),
-        StripCell.Sats to stringResource(R.string.cockpit_strip_sats),
-    )
-    val items = stripCells(distanceOnly).map { c ->
-        labels.getValue(c) to when (c) {
-            StripCell.Dist -> values.homeDistanceM?.let { "${it.roundToInt()} m" } ?: DASH
-            StripCell.Home -> values.homeBearingDeg?.let { "%03d°".format(it.roundToInt() % 360) } ?: DASH
-            StripCell.Vs -> values.climbMs?.let { "%+.1f m/s".format(it) } ?: DASH
-            StripCell.Thr -> values.throttlePct?.let { "$it%" } ?: DASH
-            StripCell.Wp ->
-                if (values.missionSeq != null && values.missionTotal != null && values.missionTotal > 0) "${values.missionSeq}/${values.missionTotal}" else DASH
-            StripCell.Sats -> values.satellites?.let { sats -> "$sats" + (values.hdop?.let { " · %.1f".format(it) } ?: "") } ?: DASH
-        }
-    }
-    val colors = AdosTheme.colors
-    val cell: @Composable (Pair<String, String>) -> Unit = { (label, value) ->
-        Column(Modifier.padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1)) {
-            // Cells never wrap: a squeezed strip scrolls sideways instead of growing tall.
-            Text(label, style = MaterialTheme.typography.labelSmall, color = colors.hudMuted, maxLines = 1, softWrap = false)
-            Text(value, style = AdosTypography.numeric.medium, color = colors.hudInk, maxLines = 1, softWrap = false)
-        }
-    }
-    Surface(modifier, shape = RoundedCornerShape(AdosRadius.Xl), color = colors.hudGlass, border = BorderStroke(1.dp, colors.hudHair)) {
-        if (vertical) Column { items.forEach { cell(it) } } else Row(Modifier.horizontalScroll(rememberScrollState())) { items.forEach { cell(it) } }
-    }
-}
 
 /**
  * Cockpit quick settings in a side sheet, so it traps controller focus and closes with

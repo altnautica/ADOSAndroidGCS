@@ -205,6 +205,10 @@ data class LayoutSpec(
     val classes: Map<String, LayoutClassSpec>,
     @SerialName("on_screen_sticks") val onScreenSticks: OnScreenSticksSpec,
     val banners: BannersSpec,
+    /** Screen orientation locks by surface, e.g. `android_flight_screen` to `landscape`. */
+    @SerialName("orientation_lock") val orientationLock: Map<String, String> = emptyMap(),
+    /** `none`: the flight screen draws no status band, telemetry strip, navigation rail or hint bar. */
+    @SerialName("legacy_chrome") val legacyChrome: String = "none",
 )
 
 @Serializable
@@ -586,6 +590,42 @@ data class TokensSpec(
     val state: Map<String, String>,
     val lightbar: Map<String, String>,
     val controller: Map<String, String> = emptyMap(),
+    val chrome: ChromeTokensSpec = ChromeTokensSpec(),
+)
+
+/** The flight-screen panel look: translucent blurred panels, hairline border, type scale and spacing. */
+@Serializable
+data class ChromeTokensSpec(
+    @SerialName("panel_bg") val panelBg: String = "#080A0E8C",
+    @SerialName("panel_bg_no_blur") val panelBgNoBlur: String = "#080A0ED1",
+    @SerialName("panel_blur_px") val panelBlurPx: Float = 16f,
+    val border: String = "#FFFFFF1F",
+    @SerialName("border_px") val borderPx: Float = 1f,
+    @SerialName("radius_px") val radiusPx: Float = 12f,
+    @SerialName("radius_small_px") val radiusSmallPx: Float = 8f,
+    val text: String = "#F5F7FA",
+    @SerialName("text_dim") val textDim: String = "#FFFFFFA3",
+    @SerialName("severity_ok") val severityOk: String = "#00C853",
+    @SerialName("severity_warning") val severityWarning: String = "#F59E0B",
+    @SerialName("severity_critical") val severityCritical: String = "#EF4444",
+    @SerialName("stop_bg") val stopBg: String = "#EF4444",
+    @SerialName("stop_text") val stopText: String = "#FFFFFF",
+    val type: ChromeTypeSpec = ChromeTypeSpec(),
+    @SerialName("icon_px") val iconPx: Float = 18f,
+    @SerialName("gap_px") val gapPx: Float = 8f,
+    @SerialName("pad_px") val padPx: Float = 10f,
+    @SerialName("edge_inset_px") val edgeInsetPx: Float = 8f,
+)
+
+/** The flight-screen type scale, in CSS px (one px is one dp on Android). */
+@Serializable
+data class ChromeTypeSpec(
+    @SerialName("top_bar_px") val topBarPx: Float = 13f,
+    @SerialName("top_bar_line_px") val topBarLinePx: Float = 15f,
+    @SerialName("value_px") val valuePx: Float = 16f,
+    @SerialName("label_px") val labelPx: Float = 11f,
+    @SerialName("chip_px") val chipPx: Float = 13f,
+    @SerialName("chip_weight") val chipWeight: Int = 600,
 )
 
 // ---- controller art and hotspots -----------------------------------------------------
