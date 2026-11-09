@@ -21,20 +21,49 @@ fun localProperty(key: String): String =
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")
 
+// Release signing comes from the environment so no key material lands in the
+// repository. The release workflow sets all four; a build without them (local,
+// pull request, the push build) stays unsigned.
+val releaseKeystore = providers.environmentVariable("ADOS_RELEASE_KEYSTORE").orNull
+val releaseStorePassword = providers.environmentVariable("ADOS_RELEASE_STORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ADOS_RELEASE_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("ADOS_RELEASE_KEY_PASSWORD").orNull
+val releaseSigningAvailable = listOf(
+    releaseKeystore,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrEmpty() }
+
 android {
     namespace = "com.altnautica.gcs"
 
     defaultConfig {
         applicationId = "com.altnautica.gcs"
-        versionCode = 9
-        versionName = "0.3.0"
+        versionCode = 10
+        versionName = "0.4.0"
 
         buildConfigField("String", "CONVEX_URL", "\"${localProperty("ados.convexUrl")}\"")
         buildConfigField("String", "MAP_TOKEN", "\"${localProperty("ados.mapToken")}\"")
     }
 
+    signingConfigs {
+        if (releaseSigningAvailable) {
+            create("release") {
+                storeFile = file(releaseKeystore!!)
+                storeType = "pkcs12"
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseSigningAvailable) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
