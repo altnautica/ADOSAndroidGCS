@@ -20,6 +20,7 @@ class PilotActionsTest {
         override val src = "android"
         override val connected = MutableStateFlow(true)
         override val state = MutableStateFlow<PilotState?>(null)
+        override val stateFresh = true
         override fun input(frame: PilotInput) = Unit
         override fun release() = Unit
         override suspend fun action(action: PilotAction): PilotActionResult {

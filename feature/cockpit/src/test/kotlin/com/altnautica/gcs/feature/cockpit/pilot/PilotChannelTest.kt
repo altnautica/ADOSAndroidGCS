@@ -10,6 +10,8 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,5 +56,20 @@ class PilotChannelTest {
     fun `a down channel sends nothing`() = runTest {
         val ch = PilotChannel(backgroundScope, MonotonicClock { testScheduler.currentTime }) { emptyFlow() }
         assertEquals(PilotActionResult.Unavailable, ch.action(PilotAction(PilotAction.PAUSE)))
+    }
+
+    @Test
+    fun `keepalives keep the channel up but never make the pilot state fresh`() = runTest {
+        val ch = channel()
+        assertTrue(ch.connected.value)
+        assertFalse("no state yet", ch.stateFresh)
+        ch.onText("""{"kind":"pilot","ts_ms":1,"data":{"owner":"idle","armed":true}}""")
+        assertTrue(ch.stateFresh)
+        repeat(5) {
+            advanceTimeBy(1_000)
+            ch.onText("""{"kind":"keepalive","ts_ms":1}""")
+        }
+        assertTrue("keepalives keep the socket up", ch.connected.value)
+        assertFalse("a pilot state older than its stale window is not fresh", ch.stateFresh)
     }
 }

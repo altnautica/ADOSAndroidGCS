@@ -72,6 +72,13 @@ internal class PilotChannel(
     @Volatile private var seq: Long = 0
     @Volatile private var lastInputMs: Long? = null
     @Volatile private var lastFrameMs: Long = 0
+    @Volatile private var lastStateMs: Long? = null
+
+    override val stateFresh: Boolean
+        get() {
+            val at = lastStateMs ?: return false
+            return _connected.value && clock.nowMs() - at <= PilotState.STALE_MS
+        }
     @Volatile private var lastHbMs: Long? = null
     private var actionId = 0L
     private var job: Job? = null
@@ -126,7 +133,10 @@ internal class PilotChannel(
         lastFrameMs = now
         _connected.value = true
         when (frame) {
-            is PilotFrame.State -> _state.value = frame.state
+            is PilotFrame.State -> {
+                lastStateMs = now
+                _state.value = frame.state
+            }
             is PilotFrame.ActionResult -> _results.tryEmit(frame)
             is PilotFrame.Keepalive -> Unit
         }

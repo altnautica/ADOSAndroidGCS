@@ -124,6 +124,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.FlightValues
 import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
 import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
+import com.altnautica.gcs.feature.cockpit.chrome.aglTag
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -630,12 +631,9 @@ class CockpitViewModel @AssistedInject constructor(
         val airborne = pilot.state.value?.let { it.armed && !it.landed } ?: (vehicle.value?.telemetry?.heartbeat?.value?.armed == true)
         if (airborne) {
             val alt = telemetry.value?.position?.value?.altRelM ?: return
-            // The agent's pilot flies to the point itself when it offers goto to this surface; otherwise the fly-here skill does.
-            if (pilot.state.value?.surfaceOps?.contains(PilotAction.GOTO) == true) {
-                pilotAction(PilotAction(PilotAction.GOTO, mapOf("lat" to point.latDeg, "lon" to point.lonDeg, "alt_m" to alt)))
-            } else {
-                activate(FlyHereSkill.id, mapOf(SkillArgs.LAT to point.latDeg, SkillArgs.LON to point.lonDeg, SkillArgs.ALTITUDE_M to alt))
-            }
+            // One entry, behind fly-here's hold confirm and gates: the skill sends the pilot's
+            // goto only while the pilot owns the vehicle, the FC's guided goto otherwise.
+            activate(FlyHereSkill.id, mapOf(SkillArgs.LAT to point.latDeg, SkillArgs.LON to point.lonDeg, SkillArgs.ALTITUDE_M to alt))
             return
         }
         launchPoint.value = point
@@ -745,11 +743,22 @@ class CockpitViewModel @AssistedInject constructor(
         StatusModel.items(a, p, texts.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS })
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
-    /** The bottom row; AGL comes from the follow feed while it is fresh, else from the agent's pilot while it is fresh. */
-    val flightValues: StateFlow<FlightValues> = combine(hud.flightValues, autonomy.feed.follow, pilot.state) { v, f, p ->
-        val agl = f?.takeIf { autonomy.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value?.aglM
-            ?: p?.takeIf { clock.nowMs() - it.receivedAtMs <= PilotState.STALE_MS }?.aglM
-        if (agl == v.aglM) v else v.copy(aglM = agl)
+    /**
+     * The bottom row. AGL comes from the follow feed while it is fresh, else from the agent's
+     * pilot while it is fresh; a height not measured by a rangefinder carries its reference
+     * as a tag. The 2 Hz tick re-checks freshness, so AGL goes to a dash with the other
+     * cells after a link loss.
+     */
+    val flightValues: StateFlow<FlightValues> = combine(hud.flightValues, autonomy.feed.follow, pilot.state, tick500) { v, f, p, _ ->
+        val follow = f?.takeIf { autonomy.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value?.takeIf { it.aglM != null }
+        val fromPilot = p?.takeIf { clock.nowMs() - it.receivedAtMs <= PilotState.STALE_MS && it.aglM != null }
+        val (agl, tag) = when {
+            v == FlightValues.Empty -> null to null
+            follow != null -> follow.aglM to aglTag(follow.aglSource, ground = "rng")
+            fromPilot != null -> fromPilot.aglM to aglTag(fromPilot.aglSource, ground = "rangefinder")
+            else -> null to null
+        }
+        if (agl == v.aglM && tag == v.aglTag) v else v.copy(aglM = agl, aglTag = tag)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlightValues.Empty)
 
     /** The bottom-left card's page; a swipe or L3 steps it. */

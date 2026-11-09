@@ -75,7 +75,9 @@ class AutonomyParseTest {
         ) as kotlinx.serialization.json.JsonObject
         val frames = AutonomyFeed.statusFrames(body)
         assertEquals(1, frames.size)
-        val f = kotlinx.serialization.json.Json.parseToJsonElement(frames.single()) as kotlinx.serialization.json.JsonObject
+        assertEquals(300L, frames.single().ageMs)
+        assertEquals(7L, frames.single().tsMs)
+        val f = kotlinx.serialization.json.Json.parseToJsonElement(frames.single().text) as kotlinx.serialization.json.JsonObject
         assertEquals("\"pilot\"", f["kind"].toString())
         assertEquals("7", f["ts_ms"].toString())
     }

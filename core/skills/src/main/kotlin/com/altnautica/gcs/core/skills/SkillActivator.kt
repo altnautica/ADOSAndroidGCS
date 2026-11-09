@@ -9,6 +9,8 @@ import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillCategory
 import com.altnautica.gcs.core.model.SkillContext
 import com.altnautica.gcs.core.model.SkillState
+import com.altnautica.gcs.core.model.SkillSource
+import com.altnautica.gcs.core.skills.builtin.RECOVERY_BUILTINS
 import com.altnautica.gcs.core.skills.builtin.ArgumentConfirm
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.builtin.disabledState
@@ -86,6 +88,9 @@ class SkillActivator @Inject constructor(
     private val clock: MonotonicClock,
 ) {
     private val busy: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    /** Keys whose skill is running its activation (not waiting on a confirm). */
+    private val activating: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val debounceUntil = ConcurrentHashMap<String, Long>()
     private val cooldownUntil = ConcurrentHashMap<String, Long>()
 
@@ -136,8 +141,11 @@ class SkillActivator @Inject constructor(
 
         // 2. Busy: an in-flight activation or open confirm drops further presses. The brake
         // is safe to repeat and must never wait on another command, so it skips this gate.
+        // A recovery built-in pressed again while its first press still waits on the pilot
+        // escalates: the built-in sends it to the flight controller, never dropped as busy.
         val brake = skill.id in NEVER_BLOCKED
-        if (!brake && k in busy) return ActivationOutcome.Busy
+        val escalate = skill.source == SkillSource.Builtin && skill.id in RECOVERY_BUILTINS && k in activating
+        if (!brake && !escalate && k in busy) return ActivationOutcome.Busy
 
         // 3. Disabled gate: report the reason, never open a confirm.
         val state = mergedState(vehicleId, skill, ctx)
@@ -158,7 +166,8 @@ class SkillActivator @Inject constructor(
         var overridden = false
         val policy = (skill as? ArgumentConfirm)?.confirmFor(args) ?: skill.confirm
         if (policy != null && policy.gesture != ConfirmGesture.Tap) {
-            if (!busy.add(k)) return ActivationOutcome.Busy
+            val confirmLocked = busy.add(k)
+            if (!confirmLocked && !escalate) return ActivationOutcome.Busy
             val result = try {
                 confirmer.confirm(
                     ConfirmRequest(
@@ -171,7 +180,7 @@ class SkillActivator @Inject constructor(
                     ),
                 )
             } finally {
-                busy.remove(k)
+                if (confirmLocked) busy.remove(k)
             }
             when (result) {
                 ConfirmResult.Cancelled -> return ActivationOutcome.Cancelled
@@ -183,7 +192,7 @@ class SkillActivator @Inject constructor(
         }
 
         // 8. One-shot debounce.
-        if (!skill.toggle && !brake) {
+        if (!skill.toggle && !brake && !escalate) {
             val now = clock.nowMs()
             val until = debounceUntil[k] ?: 0L
             if (now < until) return ActivationOutcome.Debounced
@@ -205,7 +214,8 @@ class SkillActivator @Inject constructor(
 
         // 10. Activate.
         val locked = busy.add(k)
-        if (!locked && !brake) return ActivationOutcome.Busy
+        if (!locked && !brake && !escalate) return ActivationOutcome.Busy
+        if (locked) activating.add(k)
         return try {
             val result = skill.activate(ctx, activateArgs)
             if (!skill.toggle && result.succeeded() && skill.cooldownMs > 0) {
@@ -217,7 +227,10 @@ class SkillActivator @Inject constructor(
         } catch (e: Exception) {
             ActivationOutcome.Failed(e.message ?: e.javaClass.simpleName)
         } finally {
-            if (locked) busy.remove(k)
+            if (locked) {
+                activating.remove(k)
+                busy.remove(k)
+            }
         }
     }
 

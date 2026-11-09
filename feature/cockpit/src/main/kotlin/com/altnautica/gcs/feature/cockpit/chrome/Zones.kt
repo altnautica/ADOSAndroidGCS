@@ -232,7 +232,7 @@ fun GimbalPad(label: String, hint: String, size: Dp, onRate: (Float, Float) -> U
     }
 }
 
-/** The bottom row: D, H, H.S, V.S and AGL, tabular, one line each. */
+/** The bottom row: D, H, H.S, V.S and AGL, tabular, one line each. AGL not measured above the ground names its reference. */
 @Composable
 fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
     val c = LocalChrome.current
@@ -251,7 +251,8 @@ fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
         ) {
             for ((label, value, unit) in cells) {
                 Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.semantics(mergeDescendants = true) {}.testTag("value-$label")) {
-                    Text(label, style = c.labelText, modifier = Modifier.padding(end = 4.dp, bottom = 2.dp), maxLines = 1)
+                    val shown = if (label == "AGL" && values.aglTag != null) "AGL ${values.aglTag}" else label
+                    Text(shown, style = c.labelText, modifier = Modifier.padding(end = 4.dp, bottom = 2.dp), maxLines = 1)
                     Text(formatValue(value), style = c.valueText, maxLines = 1, overflow = TextOverflow.Clip)
                     Text(unit, style = c.labelText, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp), maxLines = 1)
                 }

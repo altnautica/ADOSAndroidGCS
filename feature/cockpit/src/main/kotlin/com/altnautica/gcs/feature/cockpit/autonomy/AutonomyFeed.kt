@@ -146,10 +146,13 @@ internal class AutonomyFeed(
     /**
      * The radio fallback: while the navigation socket has delivered nothing for
      * [STREAM_QUIET_MS], polls the status route at 2 Hz with this client's view lease and
-     * feeds each fresh kind through [onNavText]. [reducedRate] is on only while the poll
-     * brings fresh frames the socket did not, so an idle agent never reads as degraded.
+     * feeds each fresh kind through [onNavText], stamped with its agent-side age so that
+     * layer and pilot freshness measure the data, not the poll. A kind whose `ts_ms` was
+     * already fed is skipped. [reducedRate] is on only while the poll brings fresh frames
+     * the socket did not, so an idle agent never reads as degraded.
      */
     private suspend fun pollStatus(id: DeviceId) {
+        val fed = HashMap<String, Long>()
         while (true) {
             delay(STATUS_POLL_MS)
             val now = clock.nowMs()
@@ -159,7 +162,13 @@ internal class AutonomyFeed(
                 _reducedRate.value = false
                 continue
             }
-            _reducedRate.value = statusFrames(body).onEach(::onNavText).isNotEmpty()
+            val frames = statusFrames(body)
+            for (f in frames) {
+                if (fed[f.kind] == f.tsMs) continue
+                fed[f.kind] = f.tsMs
+                onNavText(f.text, clock.nowMs() - f.ageMs)
+            }
+            _reducedRate.value = frames.isNotEmpty()
         }
     }
 
@@ -182,8 +191,9 @@ internal class AutonomyFeed(
         _batches.update { it + (b.cameraId to b) }
     }
 
-    internal fun onNavText(text: String) {
-        val now = clock.nowMs()
+    /** Applies one navigation frame received (or, for a polled frame, produced) at [receivedAtMs]. */
+    internal fun onNavText(text: String, receivedAtMs: Long = clock.nowMs()) {
+        val now = receivedAtMs
         when (val f = AutonomyParse.navFrame(text, now) ?: return) {
             is NavFrame.Pose -> {
                 _pose.value = f.pose
@@ -236,7 +246,8 @@ internal class AutonomyFeed(
     companion object {
         const val MAP_POLL_MS = 1_000L
         const val STATUS_POLL_MS = 500L
-        const val STREAM_QUIET_MS = 3_000L
+        /** Above the agent socket's 5 s keepalive, so a healthy but quiet socket never starts the poll. */
+        const val STREAM_QUIET_MS = 6_000L
         const val STATUS_FRESH_MS = 2_000L
         private const val NEVER = Long.MIN_VALUE
 
@@ -248,17 +259,22 @@ internal class AutonomyFeed(
             return if (camera.isEmpty() || layers.isEmpty()) null else "$camera:${layers.joinToString(",")}"
         }
 
-        /** Stream-shaped `{kind, ts_ms, data}` texts for every kind in a status body fresher than [STATUS_FRESH_MS]. */
-        fun statusFrames(body: kotlinx.serialization.json.JsonObject): List<String> = body.mapNotNull { (kind, entry) ->
+        /** One kind of a status body as a stream-shaped `{kind, ts_ms, data}` text, with its agent-side age. */
+        data class PolledFrame(val kind: String, val tsMs: Long, val ageMs: Long, val text: String)
+
+        /** Every kind in a status body fresher than [STATUS_FRESH_MS]. */
+        fun statusFrames(body: kotlinx.serialization.json.JsonObject): List<PolledFrame> = body.mapNotNull { (kind, entry) ->
             val e = entry as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
             val age = (e["age_ms"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() ?: return@mapNotNull null
             val data = e["data"] ?: return@mapNotNull null
             if (age > STATUS_FRESH_MS) return@mapNotNull null
-            kotlinx.serialization.json.buildJsonObject {
+            val ts = (e["ts_ms"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() ?: 0L
+            val text = kotlinx.serialization.json.buildJsonObject {
                 put("kind", kotlinx.serialization.json.JsonPrimitive(kind))
-                put("ts_ms", e["ts_ms"] ?: kotlinx.serialization.json.JsonPrimitive(0))
+                put("ts_ms", kotlinx.serialization.json.JsonPrimitive(ts))
                 put("data", data)
             }.toString()
+            PolledFrame(kind, ts, age.coerceAtLeast(0), text)
         }
         const val MAP_DIM_MS = 5_000L
         const val RETRY_MS = 1_000L

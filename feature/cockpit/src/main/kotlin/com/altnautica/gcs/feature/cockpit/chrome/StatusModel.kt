@@ -105,7 +105,11 @@ object StatusModel {
     const val WARNING_TEXT_MAX = 4
 }
 
-/** The bottom row's values (D, H, H.S, V.S, AGL); null renders as a dash, never as zero. */
+/**
+ * The bottom row's values (D, H, H.S, V.S, AGL); null renders as a dash, never as zero.
+ * [aglTag] is null when AGL is measured above the ground (a rangefinder); otherwise it names
+ * the reference the height is really from (`HOME`, `BARO`), shown beside the AGL label.
+ */
 @Immutable
 data class FlightValues(
     val distanceM: Float?,
@@ -113,10 +117,18 @@ data class FlightValues(
     val hSpeedMs: Float?,
     val vSpeedMs: Float?,
     val aglM: Float?,
+    val aglTag: String? = null,
 ) {
     companion object {
         val Empty = FlightValues(null, null, null, null, null)
     }
+}
+
+/** The AGL tag for a height from [source]: null when it is the [ground] (rangefinder) source, else the reference it is from. */
+internal fun aglTag(source: String?, ground: String): String? = when (source) {
+    ground -> null
+    null, "" -> "EST"
+    else -> source.uppercase()
 }
 
 /** The bottom-left card's pages, switched by swipe or L3. */

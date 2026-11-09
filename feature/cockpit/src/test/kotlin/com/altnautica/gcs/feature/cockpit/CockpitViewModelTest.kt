@@ -192,6 +192,8 @@ class CockpitViewModelTest {
         radio: Boolean = false,
         views: MutableList<String?> = mutableListOf(),
         sent: MutableList<String> = mutableListOf(),
+        /** The status route's body; the default carries a fresh `pilot` kind. */
+        statusBody: (() -> String)? = null,
     ): Set<com.altnautica.gcs.core.agent.node.LocalNodeApis> {
         val api = object : com.altnautica.gcs.core.agent.nav.AutonomyFeedApi {
             override fun detections() = kotlinx.coroutines.flow.emptyFlow<String>()
@@ -208,7 +210,7 @@ class CockpitViewModelTest {
             override suspend fun navStatus(view: String?): AgentResult<kotlinx.serialization.json.JsonObject>? {
                 if (!radio) return null
                 views += view
-                val body = """{"pilot":{"ts_ms":${testScheduler.currentTime},"age_ms":100,"data":$data},"pose":null}"""
+                val body = statusBody?.invoke() ?: """{"pilot":{"ts_ms":${testScheduler.currentTime},"age_ms":100,"data":$data},"pose":null}"""
                 return AgentResult.Ok(kotlinx.serialization.json.Json.parseToJsonElement(body) as kotlinx.serialization.json.JsonObject)
             }
             private val absent = AgentResult.Err(com.altnautica.gcs.core.agent.http.AgentError.FeatureAbsent)
@@ -226,6 +228,35 @@ class CockpitViewModelTest {
                 override fun autonomy(id: DeviceId) = api
             },
         )
+    }
+
+    @Test
+    fun `polled frames carry their agent-side age and a repeated frame is not fed again`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val obstacles = javaClass.classLoader!!.getResource("fixtures/obstacles-frame.json")!!.readText()
+        // The agent produced both kinds once; every poll returns the same frames, older each time.
+        val body = {
+            val t = testScheduler.currentTime
+            """{"obstacles":{"ts_ms":7,"age_ms":${600 + (t - 500)},"data":$obstacles},""" +
+                """"pilot":{"ts_ms":9,"age_ms":${1_500 + (t - 500)},"data":{"owner":"goto","armed":true}}}"""
+        }
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(radio = true, statusBody = body))
+        val store = vm.autonomy.layers.store
+        fun freshness() = com.altnautica.gcs.feature.cockpit.hud.layers.LayerStore.freshness(store.obstacles.ageMs(testScheduler.currentTime))
+        advanceTimeBy(501)
+        runCurrent()
+        assertEquals("one frame fed", 1L, store.received)
+        assertEquals("data 0.6 s old is dimmed, not fresh", com.altnautica.gcs.feature.cockpit.hud.layers.Freshness.Dim, freshness())
+        assertEquals("the polled pilot state is as old as the agent says", 500L - 1_500, vm.autonomy.feed.pilot.value!!.receivedAtMs)
+        advanceTimeBy(1_100)
+        runCurrent()
+        assertTrue("the poll kept running", vm.autonomy.feed.reducedRate.value)
+        assertEquals("the same frame on later polls is never fed again", 1L, store.received)
+        assertEquals(com.altnautica.gcs.feature.cockpit.hud.layers.Freshness.Dim, freshness())
+        advanceTimeBy(500)
+        assertEquals("hidden 2 s after the agent produced it", com.altnautica.gcs.feature.cockpit.hud.layers.Freshness.Hidden, freshness())
+        vm.viewModelScope.cancel()
     }
 
     @Test
@@ -257,7 +288,7 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `the pilot's goto op, AGL and relayed status texts reach the map, the bottom row and the pill`() = runTest(dispatcher) {
+    fun `the pilot's AGL and relayed status texts reach the bottom row and the pill`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         vehicle.beat(armed = true, now = testScheduler.currentTime)
         vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime)
@@ -273,16 +304,81 @@ class CockpitViewModelTest {
         assertEquals(4.2f, vm.flightValues.value.aglM!!, 1e-6f)
         assertTrue(vm.statusItems.value.toString(), vm.statusItems.value.any { "Compass not calibrated" in it.toString() })
 
+        vm.viewModelScope.cancel()
+    }
+
+    /** Long-presses a map point in the air with pilot state [data], holds the confirm, and returns the goto sent to the pilot. */
+    private fun TestScope.mapGoto(data: String, vehicle: FakeVehicle): kotlinx.serialization.json.JsonObject? {
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime)
+        val sent = mutableListOf<String>()
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data, sent = sent))
+        advanceTimeBy(600)
+        runCurrent()
         vm.pickMapPoint(GeoPoint(47.001, 8.002))
         runCurrent()
-        val goto = sent.map { kotlinx.serialization.json.Json.parseToJsonElement(it) as kotlinx.serialization.json.JsonObject }
-            .firstOrNull { it["name"]?.toString() == "\"goto\"" }
-        assertNotNull("a map point in the air goes to the pilot's goto action: $sent", goto)
+        val gotoOf = {
+            sent.map { kotlinx.serialization.json.Json.parseToJsonElement(it) as kotlinx.serialization.json.JsonObject }
+                .firstOrNull { it["name"]?.toString() == "\"goto\"" }
+        }
+        assertEquals("a map point in the air asks for the hold", ConfirmGesture.Hold, vm.confirm.state.value!!.gesture)
+        assertNull("nothing is sent before the hold completes", gotoOf())
+        assertTrue(vehicle.control.sent.isEmpty())
+        vm.confirm.onTouchHold(true)
+        advanceTimeBy(1_000)
+        runCurrent()
+        vm.confirm.onTouchHold(false)
+        runCurrent()
+        val goto = gotoOf()
+        vm.viewModelScope.cancel()
+        return goto
+    }
+
+    @Test
+    fun `an AGL from home is tagged as such and goes to a dash with the other cells after link loss`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        // The last position is a little older than the last pilot frame, as on a real link drop.
+        vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime - 400)
+        val data = """{"owner":"pilot","armed":true,"landed":false,"agl_m":12.0,"agl_source":"home"}"""
+        val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data))
+        backgroundScope.launch { vm.flightValues.collect {} }
+        advanceTimeBy(600)
+        runCurrent()
+        assertEquals(12f, vm.flightValues.value.aglM!!, 1e-6f)
+        assertEquals("a height above home is never labelled as ground clearance", "HOME", vm.flightValues.value.aglTag)
+
+        advanceTimeBy(2_500)
+        runCurrent()
+        assertNull("D and H are dashes", vm.flightValues.value.heightM)
+        assertNull("AGL is a dash with them", vm.flightValues.value.aglM)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a map point in the air goes to the pilot's goto after the hold only while the pilot owns`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        val goto = mapGoto("""{"owner":"pilot","control_mode":"ados","armed":true,"landed":false,"surface_ops":["goto"]}""", vehicle)
+        assertNotNull("the pilot's goto flies the point", goto)
         val args = goto!!["args"] as kotlinx.serialization.json.JsonObject
         assertEquals("47.001", args["lat"].toString())
         assertEquals("8.002", args["lon"].toString())
         assertEquals("12.0", args["alt_m"].toString())
-        vm.viewModelScope.cancel()
+        assertTrue("the FC gets no goto of its own", vehicle.control.sent.isEmpty())
+    }
+
+    @Test
+    fun `a map point during a mission, a skill or manual flight takes the FC route after the hold, never the pilot's goto`() = runTest(dispatcher) {
+        for (data in listOf(
+            """{"owner":"mission_fc","control_mode":"ados","armed":true,"landed":false,"surface_ops":["goto"]}""",
+            """{"owner":"skill","control_mode":"ados","armed":true,"landed":false,"surface_ops":["goto"]}""",
+            """{"owner":"pilot","control_mode":"fc_manual","armed":true,"landed":false,"surface_ops":["goto"]}""",
+            """{"owner":"pilot","control_mode":"elrs","armed":true,"landed":false,"surface_ops":["goto"]}""",
+        )) {
+            val vehicle = FakeVehicle()
+            assertNull(data, mapGoto(data, vehicle))
+            assertEquals(data, listOf<VehicleCommand>(VehicleCommand.FlyTo(47.001, 8.002, 12f)), vehicle.control.sent)
+        }
     }
 
     @Test

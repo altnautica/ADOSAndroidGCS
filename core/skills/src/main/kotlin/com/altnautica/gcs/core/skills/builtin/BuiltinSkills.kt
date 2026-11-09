@@ -11,6 +11,8 @@ import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.PilotLink
+import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Skill
@@ -26,6 +28,7 @@ import com.altnautica.gcs.core.skills.spec.Ds4Spec
 import com.altnautica.gcs.core.skills.spec.SpecArmRequirement
 import com.altnautica.gcs.core.skills.spec.SpecConfirmKind
 import com.altnautica.gcs.core.skills.spec.SpecStaleLink
+import java.util.concurrent.ConcurrentHashMap
 
 /** A skill whose confirm policy depends on the activation arguments (mode changes). */
 interface ArgumentConfirm {
@@ -115,17 +118,17 @@ fun modeChangeConfirm(modeName: String): ConfirmPolicy? {
 fun SkillContext.routesToPilot(): Boolean = pilotLink != null && pilot?.controlMode == ControlMode.Ados
 
 /** Built-ins that must not depend on a pilot that stopped answering. */
-private val RECOVERY_BUILTINS = setOf(BuiltinIds.PAUSE, BuiltinIds.RTH, BuiltinIds.LAND, BuiltinIds.KILL)
+internal val RECOVERY_BUILTINS = setOf(BuiltinIds.PAUSE, BuiltinIds.RTH, BuiltinIds.LAND, BuiltinIds.KILL)
 
 /**
  * Where built-in [id] goes. In ADOS Pilot control it goes to the onboard pilot; a
- * recovery action (pause, return, land, kill) whose pilot channel is down or stale goes
- * to the flight controller's command path instead, so it is never refused for want of
- * the pilot and never written into a dead channel.
+ * recovery action (pause, return, land, kill) goes to the pilot only while its state is
+ * fresh. A channel kept up by keepalives alone, or a stale one, sends it to the flight
+ * controller's command path instead, so it never waits on a pilot that stopped answering.
  */
 internal fun SkillContext.builtinRoutesToPilot(id: String): Boolean {
     if (!routesToPilot()) return false
-    return id !in RECOVERY_BUILTINS || pilotLink?.connected?.value == true
+    return id !in RECOVERY_BUILTINS || pilotLink?.stateFresh == true
 }
 
 /** The vehicle can be commanded at all: present and not receive-only. */
@@ -293,9 +296,27 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
 
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
         if (spec.id == BuiltinIds.TAKE_CONTROL) return ctx.sendPilot(PilotAction(spec.pilotAction))
-        if (ctx.builtinRoutesToPilot(spec.id)) {
+        val recovery = spec.id in RECOVERY_BUILTINS
+        val link = ctx.pilotLink
+        // A second recovery press while the first still waits on the pilot goes to the FC at once.
+        val escalate = recovery && link != null && link in pendingRecovery
+        if (!escalate && ctx.builtinRoutesToPilot(spec.id)) {
             val pilotArgs = if (spec.id == BuiltinIds.TAKEOFF) mapOf(PILOT_ARG_ALT_M to takeoffAltitude(args)) else emptyMap()
-            return ctx.sendPilot(PilotAction(spec.pilotAction, pilotArgs))
+            if (!recovery || link == null) return ctx.sendPilot(PilotAction(spec.pilotAction, pilotArgs))
+            pendingRecovery.add(link)
+            val answer = try {
+                link.action(PilotAction(spec.pilotAction, pilotArgs))
+            } finally {
+                pendingRecovery.remove(link)
+            }
+            when (answer) {
+                PilotActionResult.Accepted -> return CommandResult.Accepted
+                is PilotActionResult.Refused -> return CommandResult.Rejected(-1, answer.reason.orEmpty())
+                // The pilot did not answer: the flight controller takes the action when it can.
+                PilotActionResult.NoAnswer, PilotActionResult.Unavailable -> if (!ctx.linkFresh) {
+                    return if (answer == PilotActionResult.NoAnswer) CommandResult.Timeout else CommandResult.Denied(SkillReason.PILOT_UNAVAILABLE)
+                }
+            }
         }
         return when (spec.id) {
             BuiltinIds.ARM -> send(ctx, VehicleCommand.Arm())
@@ -339,6 +360,9 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
     private companion object {
         const val GUIDED = "GUIDED"
         const val PILOT_ARG_ALT_M = "alt_m"
+
+        /** Pilot links with a recovery action still waiting on the pilot's answer. */
+        val pendingRecovery: MutableSet<PilotLink> = ConcurrentHashMap.newKeySet()
     }
 }
 
@@ -387,7 +411,23 @@ object SetModeSkill : BuiltinSkill(
     }
 }
 
-/** Flies to a map point at a relative altitude; dispatched from the map's own control. */
+/** Pilot owners a map goto may replace: the pilot itself, an idle pilot or an earlier goto. */
+private val GOTO_REPLACES = setOf(PilotOwner.Idle, PilotOwner.Pilot, PilotOwner.Goto)
+
+/**
+ * True when a map point goes to the onboard pilot's `goto`: ADOS Pilot control, the pilot
+ * offers `goto` to this surface, and the pilot itself owns the vehicle. A mission, a skill
+ * or manual flight keeps the flight controller's route, behind the same hold confirm.
+ */
+internal fun SkillContext.flyHereToPilot(): Boolean {
+    val p = pilot ?: return false
+    return routesToPilot() && PilotAction.GOTO in p.surfaceOps && p.owner in GOTO_REPLACES
+}
+
+/**
+ * Flies to a map point at a relative altitude; dispatched from the map's own control, behind
+ * a hold confirm. The pilot's `goto` flies it when [flyHereToPilot], the FC's guided goto otherwise.
+ */
 object FlyHereSkill : BuiltinSkill(
     id = "fly-here", labelKey = "skills.flyHere", icon = "near_me", category = SkillCategory.Flight,
     armRequirement = ArmRequirement.Armed,
@@ -395,7 +435,7 @@ object FlyHereSkill : BuiltinSkill(
     bindable = false,
 ) {
     override fun state(ctx: SkillContext): SkillState {
-        disabledIfNoLink(ctx)?.let { return it }
+        disabledIfNoLink(ctx, ctx.flyHereToPilot())?.let { return it }
         return when (ctx.armed) {
             false -> disabledState(SkillReason.NOT_ARMED)
             null -> disabledState(SkillReason.NO_FC_LINK)
@@ -412,8 +452,15 @@ object FlyHereSkill : BuiltinSkill(
         ) {
             return CommandResult.Rejected(-1, SkillReason.FLY_HERE_TARGET)
         }
+        if (ctx.flyHereToPilot()) {
+            return ctx.sendPilot(PilotAction(PilotAction.GOTO, mapOf(PILOT_LAT to lat, PILOT_LON to lon, PILOT_ALT_M to alt)))
+        }
         return send(ctx, VehicleCommand.FlyTo(lat, lon, alt))
     }
+
+    private const val PILOT_LAT = "lat"
+    private const val PILOT_LON = "lon"
+    private const val PILOT_ALT_M = "alt_m"
 }
 
 /** Makes an EKF3 source set active; dispatched from the nav-source chip's popover. */

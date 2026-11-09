@@ -255,6 +255,12 @@ interface PilotLink {
     /** Latest pilot state pushed on this link, or null before the first. */
     val state: StateFlow<PilotState?>
 
+    /**
+     * True while a pilot state arrived within [PilotState.STALE_MS]. Channel keepalives
+     * keep [connected] up but say nothing about whether the pilot itself answers.
+     */
+    val stateFresh: Boolean
+
     fun input(frame: PilotInput)
 
     /** Ends this surface's stick session; the pilot brakes to a hold. */
