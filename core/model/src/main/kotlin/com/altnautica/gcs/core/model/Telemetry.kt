@@ -157,6 +157,7 @@ data class LocalPosition(
 
 private val NO_LOCAL_POSITION: StateFlow<LocalPosition?> = MutableStateFlow(null)
 private val NO_VTOL_TRANSITION: StateFlow<Boolean> = MutableStateFlow(false)
+private val NO_LANDED_STATE: StateFlow<Boolean?> = MutableStateFlow(null)
 
 /** One flow per telemetry topic so consumers only observe what they draw. */
 interface VehicleTelemetry {
@@ -182,4 +183,10 @@ interface VehicleTelemetry {
 
     /** True while a VTOL airframe is transitioning (`EXTENDED_SYS_STATE.vtol_state` 1 or 2). */
     val vtolTransitioning: StateFlow<Boolean> get() = NO_VTOL_TRANSITION
+
+    /**
+     * On the ground by the FC's own `EXTENDED_SYS_STATE.landed_state`: true for ON_GROUND, false
+     * for in air, taking off or landing; null when never received or undefined.
+     */
+    val onGround: StateFlow<Boolean?> get() = NO_LANDED_STATE
 }

@@ -16,7 +16,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FailsafeGateTest {
-    private val vehicle = FakeVehicle()
+    private val vehicle = FakeVehicle("failsafe-gate-${System.nanoTime()}")
     private val builtins = BuiltinSkills.from(testSpec.builtins, testSpec.ds4)
     private fun builtin(id: String) = builtins.first { it.id == id }
     private val rtl = FlightMode(6, "RTL")
@@ -63,11 +63,11 @@ class FailsafeGateTest {
     @Test
     fun `a return the operator commanded here can be paused`() = runTest {
         builtin("rth").activate(ctx(mode = FlightMode(5, "LOITER")), emptyMap())
-        OperatorRecovery.observeMode(vehicle, "RTL")
+        OperatorRecovery.observeMode(vehicle.id, "RTL", 0L)
         assertTrue(builtin("pause").state(ctx()).enabled)
         // Once the vehicle leaves the return, a later RTL is the FC's own again.
-        OperatorRecovery.observeMode(vehicle, "LOITER")
-        OperatorRecovery.observeMode(vehicle, "RTL")
+        OperatorRecovery.observeMode(vehicle.id, "LOITER", 0L)
+        OperatorRecovery.observeMode(vehicle.id, "RTL", 0L)
         assertFalse(builtin("pause").state(ctx()).enabled)
     }
 
@@ -75,7 +75,7 @@ class FailsafeGateTest {
     fun `a return picked on the Mode sheet counts as the operator's`() = runTest {
         vehicle.control.availableModes.value = vehicle.control.availableModes.value + rtl
         SetModeSkill.activate(ctx(mode = FlightMode(5, "LOITER")), mapOf(SkillArgs.TARGET_MODE to "RTL"))
-        OperatorRecovery.observeMode(vehicle, "RTL")
+        OperatorRecovery.observeMode(vehicle.id, "RTL", 0L)
         assertTrue(builtin("pause").state(ctx()).enabled)
     }
 
@@ -88,5 +88,33 @@ class FailsafeGateTest {
         assertTrue(disarm.state(ctx(mode = loiter, fcLanded = true)).enabled)
         assertEquals(SkillReason.NOT_LANDED, disarm.state(ctx(mode = loiter, pilot = adosPilot().copy(landed = false), link = FakePilotLink())).reasonKey)
         assertEquals(SkillReason.ALREADY_DISARMED, disarm.state(ctx(mode = loiter, armed = false)).reasonKey)
+    }
+
+    @Test
+    fun `a refused return is not noted as the operator's`() = runTest {
+        vehicle.control.result = CommandResult.Rejected(4, "denied")
+        builtin("rth").activate(ctx(mode = FlightMode(5, "LOITER")), emptyMap())
+        OperatorRecovery.observeMode(vehicle.id, "RTL", 0L)
+        assertFalse(builtin("pause").state(ctx()).enabled)
+    }
+
+    @Test
+    fun `a note expires after the entry grace on the session clock`() = runTest {
+        builtin("rth").activate(ctx(mode = FlightMode(5, "LOITER")), emptyMap())
+        OperatorRecovery.observeMode(vehicle.id, "LOITER", 1_000L)
+        OperatorRecovery.observeMode(vehicle.id, "LOITER", 1_000L + OperatorRecovery.ENTRY_GRACE_MS)
+        assertTrue(OperatorRecovery.commanded(vehicle.id))
+        OperatorRecovery.observeMode(vehicle.id, "LOITER", 1_001L + OperatorRecovery.ENTRY_GRACE_MS)
+        OperatorRecovery.observeMode(vehicle.id, "RTL", 1_002L + OperatorRecovery.ENTRY_GRACE_MS)
+        assertFalse(builtin("pause").state(ctx()).enabled)
+    }
+
+    @Test
+    fun `a landing after an operator return is the FC's own`() = runTest {
+        builtin("rth").activate(ctx(mode = FlightMode(5, "LOITER")), emptyMap())
+        OperatorRecovery.observeMode(vehicle.id, "RTL", 0L)
+        assertTrue(builtin("pause").state(ctx()).enabled)
+        OperatorRecovery.observeMode(vehicle.id, "LAND", 0L)
+        assertFalse(builtin("pause").state(ctx(mode = FlightMode(9, "LAND"))).enabled)
     }
 }

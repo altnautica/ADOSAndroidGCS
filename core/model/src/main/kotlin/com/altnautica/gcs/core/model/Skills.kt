@@ -67,7 +67,7 @@ data class SkillContext(
     val pilotLink: PilotLink? = null,
     /** `HEARTBEAT.system_status` (MAV_STATE) from the FC, when known. */
     val systemStatus: Int? = null,
-    /** On the ground by the FC's own position (height above home and vertical speed near zero); null when unknown. */
+    /** On the ground by the FC's own `EXTENDED_SYS_STATE.landed_state`; null when never received. */
     val fcLanded: Boolean? = null,
 )
 

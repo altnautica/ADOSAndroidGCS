@@ -1,7 +1,6 @@
 package com.altnautica.gcs.core.skills
 
 import com.altnautica.gcs.core.skills.builtin.OperatorRecovery
-import com.altnautica.gcs.core.skills.builtin.fcLandedFrom
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.HeartbeatState
 import com.altnautica.gcs.core.model.PilotLink
@@ -113,9 +112,9 @@ class SkillSession internal constructor(
                 combine(
                     v.telemetry.heartbeat,
                     v.telemetry.systemHealth,
-                    v.telemetry.position.map { it?.let(::fcLandedFrom) }.distinctUntilChanged(),
+                    v.telemetry.onGround,
                 ) { hb, sh, landed ->
-                    hb?.let { OperatorRecovery.observeMode(v, it.mode.name) }
+                    hb?.let { OperatorRecovery.observeMode(v.id, it.mode.name, clock.nowMs()) }
                     Triple(hb?.let { Triple(it.armed, it.mode, autonomousNav(it)) }, sh?.systemStatus, landed)
                 }.distinctUntilChanged(),
                 freshness(v),

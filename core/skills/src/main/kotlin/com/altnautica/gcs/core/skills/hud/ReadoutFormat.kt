@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.skills.hud
 
-import java.util.Locale
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -12,13 +13,13 @@ object ReadoutFormat {
     /** One decimal with its sign ("1.2", "-0.4"); |v| < 0.05 reads "0.0", never "-0.0"; unknown reads a dash. */
     fun signed1(v: Double?): String {
         if (v == null || !v.isFinite()) return NO_DATA
-        return if (abs(v) < 0.05) "0.0" else String.format(Locale.ROOT, "%.1f", v)
+        return if (abs(v) < 0.05) "0.0" else toFixed(v, 1)
     }
 
     /** Whole metres below 1 km ("120 m"), kilometres with two decimals from 1 km ("1.25 km"); unknown reads a dash. */
     fun distance(m: Double?): String {
         if (m == null || !m.isFinite()) return NO_DATA
-        return if (abs(m) >= 1000) String.format(Locale.ROOT, "%.2f km", m / 1000) else "${jsRound(m)} m"
+        return if (abs(m) >= 1000) "${toFixed(m / 1000, 2)} km" else "${jsRound(m)} m"
     }
 
     /** Whole seconds left on a countdown: 1.2 s left reads 2, never below 0. */
@@ -43,4 +44,7 @@ object ReadoutFormat {
 
     /** JavaScript `Math.round`: halves round up. */
     private fun jsRound(v: Double): Long = floor(v + 0.5).toLong()
+
+    /** JavaScript `toFixed`: rounds the exact binary value half away from zero (0.35 reads "0.3"). */
+    private fun toFixed(v: Double, digits: Int): String = BigDecimal(v).setScale(digits, RoundingMode.HALF_UP).toPlainString()
 }

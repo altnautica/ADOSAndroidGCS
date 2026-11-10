@@ -82,6 +82,7 @@ class MavlinkVehicleTelemetry(
     private val _obstacles = MutableStateFlow<ObstacleSectors?>(null)
     private val _localPosition = MutableStateFlow<LocalPosition?>(null)
     private val _vtolTransitioning = MutableStateFlow(false)
+    private val _onGround = MutableStateFlow<Boolean?>(null)
     private val _statusText = MutableSharedFlow<StatusText>(extraBufferCapacity = 64)
 
     override val attitude: StateFlow<Attitude?> = _attitude.asStateFlow()
@@ -102,6 +103,7 @@ class MavlinkVehicleTelemetry(
     override val statusText: SharedFlow<StatusText> = _statusText.asSharedFlow()
     override val localPosition: StateFlow<LocalPosition?> = _localPosition.asStateFlow()
     override val vtolTransitioning: StateFlow<Boolean> = _vtolTransitioning.asStateFlow()
+    override val onGround: StateFlow<Boolean?> = _onGround.asStateFlow()
 
     /** BATTERY_STATUS for battery 0 wins over SYS_STATUS while it keeps arriving. */
     private var batteryStatusAtMs: Long = Long.MIN_VALUE
@@ -189,8 +191,16 @@ class MavlinkVehicleTelemetry(
             )
             is HomePositionMsg -> _home.value = HomePosition(msg.latitude / 1e7, msg.longitude / 1e7, msg.altitude / 1000f, now)
             is LocalPositionNed -> _localPosition.value = LocalPosition(msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz, now)
-            // MAV_VTOL_STATE_TRANSITION_TO_FW = 1, MAV_VTOL_STATE_TRANSITION_TO_MC = 2.
-            is ExtendedSysState -> _vtolTransitioning.value = msg.vtolState == 1 || msg.vtolState == 2
+            is ExtendedSysState -> {
+                // MAV_VTOL_STATE_TRANSITION_TO_FW = 1, MAV_VTOL_STATE_TRANSITION_TO_MC = 2.
+                _vtolTransitioning.value = msg.vtolState == 1 || msg.vtolState == 2
+                // MAV_LANDED_STATE: 0 undefined, 1 on ground, 2 in air, 3 takeoff, 4 landing.
+                _onGround.value = when (msg.landedState) {
+                    1 -> true
+                    2, 3, 4 -> false
+                    else -> null
+                }
+            }
             is Wind -> _wind.value = WindState(msg.direction, msg.speed, now)
             is WindCov -> if (!msg.windX.isNaN() && !msg.windY.isNaN()) {
                 // WIND_COV is the velocity the air moves toward (NED); the topic reports where it comes from.
