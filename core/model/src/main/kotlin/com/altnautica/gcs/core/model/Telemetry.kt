@@ -189,4 +189,7 @@ interface VehicleTelemetry {
      * for in air, taking off or landing; null when never received or undefined.
      */
     val onGround: StateFlow<Boolean?> get() = NO_LANDED_STATE
+
+    /** False for firmware with no landed-state source at all (MSP flight controllers). */
+    val reportsLandedState: Boolean get() = true
 }

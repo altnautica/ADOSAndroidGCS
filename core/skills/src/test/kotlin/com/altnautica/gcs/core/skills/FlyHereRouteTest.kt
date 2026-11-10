@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.skills
 
+import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.SkillContext
 import com.altnautica.gcs.core.model.VehicleCommand
@@ -14,8 +15,8 @@ class FlyHereRouteTest {
     private val vehicle = FakeVehicle()
     private val args = mapOf(SkillArgs.LAT to 47.1, SkillArgs.LON to 8.5, SkillArgs.ALTITUDE_M to 10f)
 
-    private fun ctx(link: FakePilotLink) = SkillContext(
-        vehicle, armed = true, mode = null, linkFresh = true, checklistReady = true, autonomousNav = true,
+    private fun ctx(link: FakePilotLink, mode: String? = "GUIDED") = SkillContext(
+        vehicle, armed = true, mode = mode?.let { com.altnautica.gcs.core.model.FlightMode(4, it) }, linkFresh = true, checklistReady = true, autonomousNav = true,
         pilot = adosPilot().copy(surfaceOps = setOf(PilotAction.GOTO)), pilotLink = link,
     )
 
@@ -34,6 +35,15 @@ class FlyHereRouteTest {
         assertTrue(link.actions.isEmpty())
         assertEquals(listOf<VehicleCommand>(VehicleCommand.FlyTo(47.1, 8.5, 10f)), vehicle.control.sent)
     }
+
+    @Test
+    fun `a stale pilot outside GUIDED sends nothing, matching the offer`() = runTest {
+        val link = FakePilotLink(connected = true).apply { fresh = false }
+        val result = FlyHereSkill.activate(ctx(link, mode = "LOITER"), args)
+        assertEquals(CommandResult.Denied(SkillReason.FLY_HERE_NOT_GUIDED), result)
+        assertTrue(link.actions.isEmpty())
+        assertTrue(vehicle.control.sent.isEmpty())
+    }
 }
 
 class FlyHereFcRouteTest {
@@ -48,6 +58,15 @@ class FlyHereFcRouteTest {
     fun `without the pilot route, Fly Here is offered only while the FC flies GUIDED`() {
         assertEquals(SkillReason.FLY_HERE_NOT_GUIDED, FlyHereSkill.state(ctx("LOITER")).reasonKey)
         assertTrue(FlyHereSkill.state(ctx("GUIDED")).enabled)
+    }
+
+    @Test
+    fun `an unknown landed state does not hide Fly Here on the FC route`() {
+        val c = SkillContext(
+            vehicle, armed = true, mode = com.altnautica.gcs.core.model.FlightMode(4, "GUIDED"), linkFresh = true,
+            checklistReady = true, autonomousNav = true, fcLanded = null,
+        )
+        assertTrue(FlyHereSkill.state(c).enabled)
     }
 }
 

@@ -325,6 +325,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
     /**
      * The table's arm requirement. Landed comes from a fresh pilot, else from the FC's own
      * landed state; a disarm waits until one of them says landed, so it can never cut motors in the air.
+     * Firmware with no landed-state source (MSP) skips the landed check: disarm there is a motor stop.
      */
     private fun armGate(ctx: SkillContext): SkillState? {
         val armed = ctx.armed
@@ -344,12 +345,15 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
             SpecArmRequirement.ArmedLanded -> when {
                 armed == null -> disabledState(SkillReason.NO_FC_LINK)
                 !armed -> disabledState(SkillReason.ALREADY_DISARMED)
-                landed != true -> disabledState(SkillReason.NOT_LANDED)
+                ctx.vehicle?.telemetry?.reportsLandedState == false -> null
+                landed == null -> disabledState(SkillReason.LANDED_UNKNOWN)
+                !landed -> disabledState(SkillReason.NOT_LANDED)
                 else -> null
             }
             SpecArmRequirement.DisarmedOrLanded -> when {
                 armed == null -> disabledState(SkillReason.NO_FC_LINK)
-                armed && landed != true -> disabledState(SkillReason.ALREADY_ARMED)
+                armed && landed == null -> disabledState(SkillReason.LANDED_UNKNOWN)
+                armed && landed == false -> disabledState(SkillReason.ALREADY_ARMED)
                 else -> null
             }
         }
@@ -532,7 +536,8 @@ object FlyHereSkill : BuiltinSkill(
         ) {
             return CommandResult.Rejected(-1, SkillReason.FLY_HERE_TARGET)
         }
-        if (ctx.flyHereRoute() == FlyHereRoute.Pilot) {
+        val route = ctx.flyHereRoute() ?: return CommandResult.Denied(ctx.flyHereRefusal())
+        if (route == FlyHereRoute.Pilot) {
             val r = ctx.sendPilot(PilotAction(PilotAction.GOTO, mapOf(PILOT_LAT to lat, PILOT_LON to lon, PILOT_ALT_M to alt)))
             return if (r is CommandResult.Rejected) r.copy(reason = GOTO_REFUSALS[r.reason] ?: r.reason) else r
         }

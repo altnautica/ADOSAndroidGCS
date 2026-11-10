@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeTelemetry : VehicleTelemetry {
+    override var reportsLandedState: Boolean = true
     override val attitude = MutableStateFlow<Attitude?>(null)
     override val position = MutableStateFlow<PositionFix?>(null)
     override val vfr = MutableStateFlow<Vfr?>(null)

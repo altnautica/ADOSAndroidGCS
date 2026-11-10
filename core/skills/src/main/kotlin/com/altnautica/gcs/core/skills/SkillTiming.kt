@@ -67,6 +67,7 @@ object SkillReason {
     /** Spec refusal codes: they read through the spec's `refusal.*` texts. */
     const val NO_PAUSED_MISSION = "nothing_paused"
     const val NOT_LANDED = "not_landed"
+    const val LANDED_UNKNOWN = "landed_unknown"
 
     /** The FC flies a failsafe return or landing; pause would cancel it. Same code as the pilot's refusal. */
     const val FAILSAFE = "failsafe"

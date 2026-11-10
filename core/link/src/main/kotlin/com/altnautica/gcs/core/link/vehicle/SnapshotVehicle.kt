@@ -99,6 +99,9 @@ class SnapshotVehicle(
         private val texts = MutableSharedFlow<StatusText>(extraBufferCapacity = 16)
         override val statusText: SharedFlow<StatusText> = texts.asSharedFlow()
 
+        /** Only MSP flight controllers are fed from the snapshot, and MSP has no landed state. */
+        override val reportsLandedState: Boolean get() = false
+
         fun update(s: com.altnautica.gcs.core.agent.model.TelemetrySnapshot, now: Long) {
             SnapshotMapping.attitude(s, now)?.let { attitude.value = it }
             SnapshotMapping.position(s, now)?.let { position.value = it }

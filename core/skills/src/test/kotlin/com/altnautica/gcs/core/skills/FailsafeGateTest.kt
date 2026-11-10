@@ -83,11 +83,22 @@ class FailsafeGateTest {
     fun `disarm needs landed known from the pilot or the FC`() {
         val loiter = FlightMode(5, "LOITER")
         val disarm = builtin("disarm")
-        assertEquals(SkillReason.NOT_LANDED, disarm.state(ctx(mode = loiter)).reasonKey)
+        assertEquals(SkillReason.LANDED_UNKNOWN, disarm.state(ctx(mode = loiter)).reasonKey)
         assertEquals(SkillReason.NOT_LANDED, disarm.state(ctx(mode = loiter, fcLanded = false)).reasonKey)
         assertTrue(disarm.state(ctx(mode = loiter, fcLanded = true)).enabled)
         assertEquals(SkillReason.NOT_LANDED, disarm.state(ctx(mode = loiter, pilot = adosPilot().copy(landed = false), link = FakePilotLink())).reasonKey)
         assertEquals(SkillReason.ALREADY_DISARMED, disarm.state(ctx(mode = loiter, armed = false)).reasonKey)
+    }
+
+    @Test
+    fun `disarm skips the landed check on firmware with no landed state`() {
+        val disarm = builtin("disarm")
+        vehicle.telemetry.reportsLandedState = false
+        try {
+            assertTrue(disarm.state(ctx(mode = FlightMode(5, "LOITER"))).enabled)
+        } finally {
+            vehicle.telemetry.reportsLandedState = true
+        }
     }
 
     @Test

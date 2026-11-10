@@ -41,7 +41,7 @@ internal fun SkillContext.flyHereRoute(): FlyHereRoute? {
     val fc = FlyHereFc(
         guided = mode?.name.equals(GUIDED_MODE, ignoreCase = true),
         armed = armed == true,
-        landed = knownLanded() ?: true,
+        landed = knownLanded() == true,
     )
     return flyHereOffered(pilot, ageMs, fc)
 }

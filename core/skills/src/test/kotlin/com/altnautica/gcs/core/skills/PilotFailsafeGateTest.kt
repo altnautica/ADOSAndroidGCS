@@ -67,13 +67,20 @@ class PilotFailsafeGateTest {
     fun `a stale pilot's landed does not allow disarm`() {
         val link = FakePilotLink(connected = true).apply { fresh = false }
         val c = ctx(mode = loiter, link = link, pilot = adosPilot().copy(landed = true))
-        assertEquals(SkillReason.NOT_LANDED, builtin("disarm").state(c).reasonKey)
+        assertEquals(SkillReason.LANDED_UNKNOWN, builtin("disarm").state(c).reasonKey)
     }
 
     @Test
     fun `the FC's own landed state allows disarm`() {
         assertTrue(builtin("disarm").state(ctx(mode = loiter, fcLanded = true)).enabled)
-        assertEquals(SkillReason.NOT_LANDED, builtin("disarm").state(ctx(mode = loiter, fcLanded = null)).reasonKey)
+        assertEquals(SkillReason.LANDED_UNKNOWN, builtin("disarm").state(ctx(mode = loiter, fcLanded = null)).reasonKey)
+        assertEquals(SkillReason.NOT_LANDED, builtin("disarm").state(ctx(mode = loiter, fcLanded = false)).reasonKey)
+    }
+
+    @Test
+    fun `an armed take-off with the landed state unknown reads landed unknown`() {
+        assertEquals(SkillReason.LANDED_UNKNOWN, builtin("takeoff").state(ctx(mode = loiter, fcLanded = null)).reasonKey)
+        assertEquals(SkillReason.ALREADY_ARMED, builtin("takeoff").state(ctx(mode = loiter, fcLanded = false)).reasonKey)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -91,7 +98,7 @@ class PilotFailsafeGateTest {
         )
         runCurrent()
         assertNull(s.context.value.fcLanded)
-        assertEquals(SkillReason.NOT_LANDED, s.states.value.getValue("disarm").reasonKey)
+        assertEquals(SkillReason.LANDED_UNKNOWN, s.states.value.getValue("disarm").reasonKey)
     }
 
     @Test
@@ -111,10 +118,11 @@ class PilotFailsafeGateTest {
     @Test
     fun `not landed and nothing paused read as spec refusal text`() {
         val text = SpecText(testSpec.setupStrings)
-        for (code in listOf(SkillReason.NOT_LANDED, SkillReason.NO_PAUSED_MISSION)) {
+        for (code in listOf(SkillReason.NOT_LANDED, SkillReason.LANDED_UNKNOWN, SkillReason.NO_PAUSED_MISSION)) {
             assertTrue(code, text.knowsRefusal(code))
         }
         assertEquals(testSpec.setupStrings.strings.getValue("refusal.not_landed"), text.refusalText(SkillReason.NOT_LANDED))
+        assertEquals(testSpec.setupStrings.strings.getValue("refusal.landed_unknown"), text.refusalText(SkillReason.LANDED_UNKNOWN))
         assertEquals(testSpec.setupStrings.strings.getValue("refusal.nothing_paused"), text.refusalText(SkillReason.NO_PAUSED_MISSION))
     }
 }

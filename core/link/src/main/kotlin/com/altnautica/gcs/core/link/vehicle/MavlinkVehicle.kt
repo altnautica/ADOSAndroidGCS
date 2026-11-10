@@ -8,6 +8,8 @@ import com.altnautica.gcs.core.link.log.MavlinkLogService
 import com.altnautica.gcs.core.link.manual.ManualControlStreamer
 import com.altnautica.gcs.core.link.manual.MavlinkManualControlStreamer
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
+import com.altnautica.gcs.core.link.mavlink.MavlinkLink
+import com.altnautica.gcs.core.link.mavlink.VehicleTarget
 import com.altnautica.gcs.core.link.mavlink.TransportMavlinkLink
 import com.altnautica.gcs.core.link.mission.MavlinkMissionService
 import com.altnautica.gcs.core.link.mission.MissionService
@@ -19,6 +21,7 @@ import com.altnautica.gcs.core.mavlink.enums.MavDataStream
 import com.altnautica.gcs.core.mavlink.messages.CommandLong
 import com.altnautica.gcs.core.mavlink.messages.HomePosition
 import com.altnautica.gcs.core.mavlink.messages.RequestDataStream
+import com.altnautica.gcs.core.mavlink.messages.ExtendedSysState
 import com.altnautica.gcs.core.mavlink.modes.FirmwareFamily
 import com.altnautica.gcs.core.model.BlockReason
 import com.altnautica.gcs.core.model.DeviceId
@@ -92,11 +95,7 @@ class MavlinkVehicle(
                 .distinctUntilChanged()
                 .collectLatest { t ->
                     if (t == null) return@collectLatest
-                    if (t.family != FirmwareFamily.Px4) {
-                        STREAM_RATES.forEach { (stream, hz) ->
-                            link.send(RequestDataStream(t.sysId, t.compId, stream, hz, 1))
-                        }
-                    }
+                    link.requestStreams(t)
                     while (mavTelemetry.home.value == null) {
                         link.send(
                             CommandLong(
@@ -124,15 +123,37 @@ class MavlinkVehicle(
 
     private companion object {
         const val HOME_REQUEST_PERIOD_MS = 5_000L
-
-        /** ArduPilot stream groups and rates (Hz). */
-        val STREAM_RATES = listOf(
-            MavDataStream.MAV_DATA_STREAM_EXTENDED_STATUS to 2,
-            MavDataStream.MAV_DATA_STREAM_POSITION to 5,
-            MavDataStream.MAV_DATA_STREAM_EXTRA1 to 10,
-            MavDataStream.MAV_DATA_STREAM_EXTRA2 to 5,
-            MavDataStream.MAV_DATA_STREAM_EXTRA3 to 2,
-            MavDataStream.MAV_DATA_STREAM_RC_CHANNELS to 2,
-        )
     }
+}
+
+/** ArduPilot stream groups and rates (Hz). */
+private val STREAM_RATES = listOf(
+    MavDataStream.MAV_DATA_STREAM_EXTENDED_STATUS to 2,
+    MavDataStream.MAV_DATA_STREAM_POSITION to 5,
+    MavDataStream.MAV_DATA_STREAM_EXTRA1 to 10,
+    MavDataStream.MAV_DATA_STREAM_EXTRA2 to 5,
+    MavDataStream.MAV_DATA_STREAM_EXTRA3 to 2,
+    MavDataStream.MAV_DATA_STREAM_RC_CHANNELS to 2,
+)
+
+private const val EXTENDED_SYS_STATE_INTERVAL_US = 1_000_000f
+
+/**
+ * Asks [t] for its telemetry: ArduPilot stream groups, and `EXTENDED_SYS_STATE` at 1 Hz for the
+ * landed state. The interval request is sent once without waiting; an FC that refuses or ignores
+ * it simply leaves the landed state unknown.
+ */
+internal suspend fun MavlinkLink.requestStreams(t: VehicleTarget) {
+    if (t.family != FirmwareFamily.Px4) {
+        STREAM_RATES.forEach { (stream, hz) -> send(RequestDataStream(t.sysId, t.compId, stream, hz, 1)) }
+    }
+    send(
+        CommandLong(
+            targetSystem = t.sysId,
+            targetComponent = t.compId,
+            command = MavCmd.MAV_CMD_SET_MESSAGE_INTERVAL,
+            param1 = ExtendedSysState.ID.toFloat(),
+            param2 = EXTENDED_SYS_STATE_INTERVAL_US,
+        ),
+    )
 }
