@@ -27,6 +27,11 @@ app's `versionName`.
 - The pilot frame's link-loss action, VTOL transition and setup step are read.
 - A pilot height not measured by a rangefinder is marked HOME from the spec.
 - Take-off defaults to 3 m, within 1 to 120 m, as the spec sets.
+- A pilot refusal reads as the spec's sentence ("Not ready: Controller",
+  "Armed; disarm first"), never as its raw code; an unknown code reads
+  "Refused: <code>".
+- Without a camera that zooms or shoots, zoom goes digital (1×, 2×, 4×) and a
+  photo saves the shown frame on the device.
 - The aircraft setup wizard no longer opens by itself on connect: the app
   offers it once per flight controller, on the ground. The notification
   permission is asked only on Home with no vehicle armed.

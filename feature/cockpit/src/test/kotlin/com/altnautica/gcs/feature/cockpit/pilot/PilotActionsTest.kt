@@ -9,11 +9,14 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.feature.cockpit.CockpitEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.feature.cockpit.testSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PilotActionsTest {
+    private val text = SpecText(testSpec.setupStrings)
     private val log = mutableListOf<String>()
 
     private inner class Link(private val answer: PilotActionResult) : PilotLink {
@@ -46,9 +49,11 @@ class PilotActionsTest {
 
     @Test
     fun `the pilot's answer becomes the cockpit event`() {
-        assertNull(pilotActionEvent(PilotActionResult.Accepted))
-        assertEquals(CockpitEvent.PilotRefused("armed"), pilotActionEvent(PilotActionResult.Refused("armed")))
-        assertEquals(CockpitEvent.PilotNoAnswer, pilotActionEvent(PilotActionResult.NoAnswer))
-        assertEquals(CockpitEvent.PilotUnavailable, pilotActionEvent(PilotActionResult.Unavailable))
+        assertNull(pilotActionEvent(PilotActionResult.Accepted, text))
+        assertEquals(CockpitEvent.PilotRefused("Armed; disarm first"), pilotActionEvent(PilotActionResult.Refused("armed"), text))
+        assertEquals(CockpitEvent.PilotRefused("Not ready: no_such_item"), pilotActionEvent(PilotActionResult.Refused("not_ready:no_such_item"), text))
+        assertEquals(CockpitEvent.PilotRefused("Refused: odd_code"), pilotActionEvent(PilotActionResult.Refused("odd_code"), text))
+        assertEquals(CockpitEvent.PilotNoAnswer, pilotActionEvent(PilotActionResult.NoAnswer, text))
+        assertEquals(CockpitEvent.PilotUnavailable, pilotActionEvent(PilotActionResult.Unavailable, text))
     }
 }

@@ -51,9 +51,12 @@ class FakeTelemetry : VehicleTelemetry {
 class FakeControl : VehicleControl {
     override val availableModes = MutableStateFlow(listOf(FlightMode(0, "STABILIZE"), FlightMode(5, "LOITER")))
     val sent = mutableListOf<VehicleCommand>()
+
+    /** What every command answers; a camera-less vehicle answers Unsupported. */
+    var result: CommandResult = CommandResult.Accepted
     override suspend fun run(command: VehicleCommand): CommandResult {
         sent += command
-        return CommandResult.Accepted
+        return result
     }
 }
 

@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.pilot.PilotWire
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
+import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.agent.video.StreamCatalog
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
@@ -125,6 +126,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.FlightValues
 import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
 import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
+import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.aglMark
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -215,6 +217,9 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** The cockpit spec's shared strings, provided to the composition. */
     val specStrings: SetupStringsSpec get() = spec.setupStrings
+
+    /** Spec strings with the shared interpolation rules (refusals, link loss, AGL marks). */
+    private val specText by lazy { SpecText(spec.setupStrings) }
     internal val cockpitSpec: CockpitSpecRepository get() = spec
 
     // ---- Node and vehicle -------------------------------------------------------------
@@ -617,7 +622,7 @@ class CockpitViewModel @AssistedInject constructor(
     private fun pilotAction(action: PilotAction, stopsMotion: Boolean = false) {
         viewModelScope.launch {
             val result = sendModeSheetAction(action, pilot.link.value, stopMotion = { if (stopsMotion) stopMotionSkill() })
-            pilotActionEvent(result)?.let(_events::tryEmit)
+            pilotActionEvent(result, specText)?.let(_events::tryEmit)
         }
     }
 
@@ -1076,9 +1081,9 @@ class CockpitViewModel @AssistedInject constructor(
                 pilotAction(PilotAction.profile(profiles[(at + a.delta).mod(profiles.size)]))
             }
             CockpitControllerAction.Designate -> autonomy.designateCentre(autonomy.mainCamera())
-            CockpitControllerAction.Photo -> runCommand(VehicleCommand.CapturePhoto)
+            CockpitControllerAction.Photo -> capturePhoto()
             CockpitControllerAction.RecordToggle -> toggleRecording()
-            is CockpitControllerAction.Zoom -> runCommand(VehicleCommand.CameraZoom(a.step))
+            is CockpitControllerAction.Zoom -> zoom(a.step)
             is CockpitControllerAction.GimbalPitchRate -> if (a.dps != lastGimbalDps) {
                 lastGimbalDps = a.dps
                 runCommand(VehicleCommand.GimbalRate(a.dps, 0f))
@@ -1091,11 +1096,46 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
-    fun capturePhoto() = runCommand(VehicleCommand.CapturePhoto)
+    private val _digitalZoom = MutableStateFlow(1)
 
-    fun zoomIn() = runCommand(VehicleCommand.CameraZoom(1))
+    /**
+     * Digital zoom of the shown video (1, 2 or 4) once the vehicle's camera refused a zoom
+     * command; label `camera.digital_zoom`. Stays 1 while the camera zooms itself.
+     */
+    val digitalZoom: StateFlow<Int> = _digitalZoom
 
-    fun zoomOut() = runCommand(VehicleCommand.CameraZoom(-1))
+    private val _frameGrabs = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** A photo the vehicle's camera could not take: the screen saves the shown frame on the device (`camera.saved`). */
+    val frameGrabs: SharedFlow<Unit> = _frameGrabs
+
+    /** The vehicle's camera takes the photo when it can; otherwise the shown frame is saved here. */
+    fun capturePhoto() {
+        val v = vehicle.value
+        if (v == null) {
+            _frameGrabs.tryEmit(Unit)
+            return
+        }
+        viewModelScope.launch {
+            if (!v.control.run(VehicleCommand.CapturePhoto).cameraTookIt()) _frameGrabs.tryEmit(Unit)
+        }
+    }
+
+    fun zoomIn() = zoom(1)
+
+    fun zoomOut() = zoom(-1)
+
+    /** The vehicle's camera zooms when it can; otherwise the video zooms digitally 1× → 2× → 4×. */
+    private fun zoom(step: Int) {
+        val v = vehicle.value
+        if (_digitalZoom.value > 1 || v == null) {
+            _digitalZoom.value = digitalZoomStep(_digitalZoom.value, step)
+            return
+        }
+        viewModelScope.launch {
+            if (!v.control.run(VehicleCommand.CameraZoom(step)).cameraTookIt()) _digitalZoom.value = digitalZoomStep(_digitalZoom.value, step)
+        }
+    }
 
     fun recenterGimbal() = runCommand(VehicleCommand.GimbalRecenter)
 
@@ -1165,4 +1205,14 @@ class CockpitViewModel @AssistedInject constructor(
 internal fun goalDistanceM(goal: List<Float>, local: com.altnautica.gcs.core.model.LocalPosition?): Float? {
     if (local == null || goal.size < 2) return null
     return hypot(goal[0] - local.northM, goal[1] - local.eastM)
+}
+
+/** The camera accepted (or queued) the command itself. */
+private fun CommandResult.cameraTookIt(): Boolean = this == CommandResult.Accepted || this is CommandResult.Queued
+
+/** The next digital zoom level, 1× ↔ 2× ↔ 4×. */
+internal fun digitalZoomStep(current: Int, step: Int): Int {
+    val levels = listOf(1, 2, 4)
+    val at = levels.indexOf(current).coerceAtLeast(0)
+    return levels[(at + step.coerceIn(-1, 1)).coerceIn(0, levels.lastIndex)]
 }

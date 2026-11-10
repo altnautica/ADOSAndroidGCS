@@ -3,6 +3,8 @@ package com.altnautica.gcs.feature.cockpit.pilot
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PilotLink
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.refusalText
 import com.altnautica.gcs.feature.cockpit.CockpitEvent
 
 /**
@@ -15,10 +17,13 @@ internal suspend fun sendModeSheetAction(action: PilotAction, link: PilotLink?, 
     return link?.action(action) ?: PilotActionResult.Unavailable
 }
 
-/** The cockpit event that reports a pilot action's answer, or null when it was accepted. */
-internal fun pilotActionEvent(result: PilotActionResult): CockpitEvent? = when (result) {
+/**
+ * The cockpit event that reports a pilot action's answer, or null when it was accepted. A
+ * refusal carries the spec's sentence for its code, never the raw code.
+ */
+internal fun pilotActionEvent(result: PilotActionResult, text: SpecText): CockpitEvent? = when (result) {
     PilotActionResult.Accepted -> null
-    is PilotActionResult.Refused -> CockpitEvent.PilotRefused(result.reason)
+    is PilotActionResult.Refused -> CockpitEvent.PilotRefused(text.refusalText(result.reason))
     PilotActionResult.NoAnswer -> CockpitEvent.PilotNoAnswer
     PilotActionResult.Unavailable -> CockpitEvent.PilotUnavailable
 }
