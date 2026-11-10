@@ -97,6 +97,14 @@ class TransportMavlinkLink(
     /** Receive time of the newest frame from the target, on [clock]. */
     val lastTargetFrameAtMs: StateFlow<Long?> = _lastFrameAtMs.asStateFlow()
 
+    private val _targetSession = MutableStateFlow(0)
+
+    /**
+     * Bumps when the target is heard again after [TARGET_SILENCE_MS] without a frame, as after
+     * a flight controller reboot behind a transport that stayed open: per-boot requests repeat on it.
+     */
+    val targetSession: StateFlow<Int> = _targetSession.asStateFlow()
+
     private val writeLock = Mutex()
     private var transport: MavlinkByteTransport? = null
     private var writer = MavlinkFrameWriter()
@@ -155,7 +163,10 @@ class TransportMavlinkLink(
         }
         val t = _target.value
         if (t != null && frame.sysId == t.sysId && frame.compId == t.compId) {
-            _lastFrameAtMs.value = clock.nowMs()
+            val now = clock.nowMs()
+            val last = _lastFrameAtMs.value
+            if (last != null && now - last > TARGET_SILENCE_MS) _targetSession.value += 1
+            _lastFrameAtMs.value = now
         }
         _frames.emit(frame)
     }
@@ -172,6 +183,9 @@ class TransportMavlinkLink(
 
     companion object {
         const val HEARTBEAT_PERIOD_MS = 1000L
+
+        /** Target silence after which its next frame starts a new session (three missed heartbeats). */
+        const val TARGET_SILENCE_MS = 3_000L
 
         private val gcsHeartbeat = Heartbeat(
             type = MavType.MAV_TYPE_GCS,

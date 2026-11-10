@@ -89,12 +89,13 @@ class MavlinkVehicle(
                 mavTelemetry.heartbeat.filterNotNull().collect { activity.heartbeat(id, it.tMs, it.autopilot) }
             }
         }
-        // Ask for streams and the home position whenever a vehicle is identified on an open transport.
+        // Ask for streams and the home position whenever a vehicle is identified on an open transport,
+        // and again when it is heard after a silence (a reboot forgets the message intervals).
         scope.launch {
-            combine(link.target, link.transportState) { t, s -> if (s == TransportState.Open) t else null }
+            combine(link.target, link.transportState, link.targetSession) { t, s, n -> if (s == TransportState.Open && t != null) t to n else null }
                 .distinctUntilChanged()
-                .collectLatest { t ->
-                    if (t == null) return@collectLatest
+                .collectLatest { session ->
+                    val t = session?.first ?: return@collectLatest
                     link.requestStreams(t)
                     while (mavTelemetry.home.value == null) {
                         link.send(
