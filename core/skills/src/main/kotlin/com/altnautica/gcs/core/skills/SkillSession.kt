@@ -1,5 +1,7 @@
 package com.altnautica.gcs.core.skills
 
+import com.altnautica.gcs.core.skills.builtin.OperatorRecovery
+import com.altnautica.gcs.core.skills.builtin.fcLandedFrom
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.HeartbeatState
 import com.altnautica.gcs.core.model.PilotLink
@@ -108,12 +110,19 @@ class SkillSession internal constructor(
             combine(checklist, pilotInputs) { ready, (p, l) -> SkillContext(null, null, null, false, ready, null, p, l) }
         } else {
             combine(
-                v.telemetry.heartbeat.map { hb -> hb?.let { Triple(it.armed, it.mode, autonomousNav(it)) } }.distinctUntilChanged(),
+                combine(
+                    v.telemetry.heartbeat,
+                    v.telemetry.systemHealth,
+                    v.telemetry.position.map { it?.let(::fcLandedFrom) }.distinctUntilChanged(),
+                ) { hb, sh, landed ->
+                    hb?.let { OperatorRecovery.observeMode(v, it.mode.name) }
+                    Triple(hb?.let { Triple(it.armed, it.mode, autonomousNav(it)) }, sh?.systemStatus, landed)
+                }.distinctUntilChanged(),
                 freshness(v),
                 checklist,
                 combine(v.reach, v.control.availableModes) { r, m -> r to m },
                 pilotInputs,
-            ) { hb, fresh, ready, _, (p, l) ->
+            ) { (hb, status, fcLanded), fresh, ready, _, (p, l) ->
                 SkillContext(
                     vehicle = v,
                     armed = hb?.first,
@@ -123,6 +132,8 @@ class SkillSession internal constructor(
                     autonomousNav = hb?.third,
                     pilot = p,
                     pilotLink = l,
+                    systemStatus = status,
+                    fcLanded = fcLanded,
                 )
             }
         }

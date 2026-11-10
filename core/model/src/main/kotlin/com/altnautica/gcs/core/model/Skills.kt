@@ -65,6 +65,10 @@ data class SkillContext(
     val autonomousNav: Boolean?,
     val pilot: PilotState? = null,
     val pilotLink: PilotLink? = null,
+    /** `HEARTBEAT.system_status` (MAV_STATE) from the FC, when known. */
+    val systemStatus: Int? = null,
+    /** On the ground by the FC's own position (height above home and vertical speed near zero); null when unknown. */
+    val fcLanded: Boolean? = null,
 )
 
 data class Binding(

@@ -65,6 +65,9 @@ object SkillReason {
     const val PILOT_UNAVAILABLE = "pilotUnavailable"
     const val NO_PAUSED_MISSION = "noPausedMission"
     const val NOT_LANDED = "notLanded"
+
+    /** The FC flies a failsafe return or landing; pause would cancel it. Same code as the pilot's refusal. */
+    const val FAILSAFE = "failsafe"
     const val NO_RESPONSE = "noResponse"
     const val PLUGIN_STOPPED = "pluginStopped"
     const val STOP_QUEUED = "stopQueued"

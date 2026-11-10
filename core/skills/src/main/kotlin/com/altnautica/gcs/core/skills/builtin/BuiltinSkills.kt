@@ -19,6 +19,8 @@ import com.altnautica.gcs.core.model.SkillCategory
 import com.altnautica.gcs.core.model.SkillContext
 import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.SkillState
+import com.altnautica.gcs.core.model.PositionFix
+import com.altnautica.gcs.core.model.Vehicle
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.core.skills.spec.BuiltinSpec
@@ -30,6 +32,7 @@ import com.altnautica.gcs.core.skills.spec.SpecStaleLink
 import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.abs
 
 /** A skill whose confirm policy depends on the activation arguments (mode changes). */
 interface ArgumentConfirm {
@@ -131,6 +134,58 @@ internal fun SkillContext.builtinRoutesToPilot(id: String): Boolean {
     if (!routesToPilot()) return false
     return id !in RECOVERY_BUILTINS || pilotLink?.stateFresh == true
 }
+
+/** FC modes a failsafe flies; the same modes entered on an operator's command are not a failsafe. */
+internal val FAILSAFE_MODES = setOf("RTL", "SMART_RTL", "AUTO_RTL", "LAND", "QRTL", "QLAND", "AUTO.RTL", "AUTO.LAND")
+
+/**
+ * Which vehicles an operator on this surface sent into a return or landing. A note waits up to
+ * [ENTRY_GRACE_MS] for the vehicle to enter such a mode, lasts while it stays there, and ends
+ * once it leaves: the next entry is the FC's own again.
+ */
+internal object OperatorRecovery {
+    private class Note(val atMs: Long, @Volatile var entered: Boolean = false)
+
+    private const val ENTRY_GRACE_MS = 10_000L
+    private val notes = ConcurrentHashMap<Vehicle, Note>()
+    private fun nowMs() = System.nanoTime() / 1_000_000
+
+    fun note(vehicle: Vehicle) {
+        notes[vehicle] = Note(nowMs())
+    }
+
+    /** Called on every heartbeat with the FC's mode. */
+    fun observeMode(vehicle: Vehicle, modeName: String) {
+        val n = notes[vehicle] ?: return
+        when {
+            modeName.uppercase() in FAILSAFE_MODES -> n.entered = true
+            n.entered || nowMs() - n.atMs > ENTRY_GRACE_MS -> notes.remove(vehicle, n)
+        }
+    }
+
+    fun commanded(vehicle: Vehicle): Boolean = notes.containsKey(vehicle)
+}
+
+/** On the ground by the FC's position: within [LANDED_ALT_M] of home and nearly still vertically. */
+internal fun fcLandedFrom(p: PositionFix): Boolean = abs(p.altRelM) < LANDED_ALT_M && abs(p.vzMs) < LANDED_VZ_MS
+
+private const val LANDED_ALT_M = 1f
+private const val LANDED_VZ_MS = 0.5f
+
+/**
+ * The flight controller flies a failsafe: it reports MAV_STATE critical or emergency, or it is
+ * armed in a return or landing mode no operator here commanded. A pilot frame's own failsafe
+ * refusal covers the pilot route; this covers the routes straight to the FC.
+ */
+fun SkillContext.fcFailsafe(): Boolean {
+    if (systemStatus == MAV_STATE_CRITICAL || systemStatus == MAV_STATE_EMERGENCY) return true
+    val v = vehicle ?: return false
+    val modeName = mode?.name?.uppercase() ?: return false
+    return armed == true && modeName in FAILSAFE_MODES && !OperatorRecovery.commanded(v)
+}
+
+private const val MAV_STATE_CRITICAL = 5
+private const val MAV_STATE_EMERGENCY = 6
 
 /** The vehicle can be commanded at all: present and not receive-only. */
 private fun disabledIfNoCommandPath(ctx: SkillContext): SkillState? {
@@ -313,6 +368,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
         link?.let { return it }
         if (spec.id == BuiltinIds.TAKE_CONTROL && ctx.pilotLink == null) return disabledState(SkillReason.PILOT_UNAVAILABLE)
         armGate(ctx)?.let { return it }
+        if (spec.id == BuiltinIds.PAUSE && ctx.fcFailsafe()) return disabledState(SkillReason.FAILSAFE)
         if (spec.id == BuiltinIds.RESUME && !ctx.routesToPilot()) {
             val mission = ctx.pilot?.mission?.state
             if (mission != null && mission != MissionState.Paused) return disabledState(SkillReason.NO_PAUSED_MISSION)
@@ -320,10 +376,13 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
         return IDLE_STATE
     }
 
-    /** The table's arm requirement; landed comes from the pilot and is unknown without it. */
+    /**
+     * The table's arm requirement. Landed comes from the pilot, else from the FC's position;
+     * a disarm waits until one of them says landed, so it can never cut motors in the air.
+     */
     private fun armGate(ctx: SkillContext): SkillState? {
         val armed = ctx.armed
-        val landed = ctx.pilot?.landed
+        val landed = ctx.pilot?.landed ?: ctx.fcLanded
         return when (spec.armRequirement) {
             SpecArmRequirement.Any -> null
             SpecArmRequirement.Armed -> when (armed) {
@@ -339,7 +398,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
             SpecArmRequirement.ArmedLanded -> when {
                 armed == null -> disabledState(SkillReason.NO_FC_LINK)
                 !armed -> disabledState(SkillReason.ALREADY_DISARMED)
-                landed == false -> disabledState(SkillReason.NOT_LANDED)
+                landed != true -> disabledState(SkillReason.NOT_LANDED)
                 else -> null
             }
             SpecArmRequirement.DisarmedOrLanded -> when {
@@ -352,6 +411,9 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
 
     override suspend fun activate(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
         if (spec.id == BuiltinIds.TAKE_CONTROL) return ctx.sendPilot(PilotAction(spec.pilotAction))
+        // Pause never cancels a failsafe return or landing, on any route.
+        if (spec.id == BuiltinIds.PAUSE && ctx.fcFailsafe()) return CommandResult.Denied(SkillReason.FAILSAFE)
+        if (spec.id == BuiltinIds.RTH || spec.id == BuiltinIds.LAND) ctx.vehicle?.let(OperatorRecovery::note)
         val recovery = spec.id in RECOVERY_BUILTINS
         val link = ctx.pilotLink
         // A second recovery press while the first still waits on the pilot goes to the FC at once.
@@ -475,6 +537,7 @@ object SetModeSkill : BuiltinSkill(
         val name = target(args) ?: return CommandResult.Rejected(-1, SkillReason.MODE_UNAVAILABLE)
         val mode = ctxModes(ctx).firstOrNull { it.name.equals(name, ignoreCase = true) }
             ?: return CommandResult.Rejected(-1, SkillReason.MODE_UNAVAILABLE)
+        if (mode.name.uppercase() in FAILSAFE_MODES) ctx.vehicle?.let(OperatorRecovery::note)
         return send(ctx, VehicleCommand.SetMode(mode))
     }
 }

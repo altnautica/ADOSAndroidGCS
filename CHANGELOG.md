@@ -8,6 +8,12 @@ app's `versionName`.
 - Switching views no longer freezes the flight screen: a video drawn with a
   software canvas (the demo drone) renders into a texture view, whose teardown
   wakes the drawing thread instead of waiting on it.
+- Pause is refused while the flight controller flies a failsafe return or
+  landing, on every route: the pilot's own refusal, and on the routes straight
+  to the flight controller when it reports a critical state or entered a return
+  or landing no operator commanded here.
+- Disarm waits until the drone is known to be on the ground, from the pilot or
+  the flight controller's own height and vertical speed.
 
 ## [0.4.0] - 2026-11-10
 
