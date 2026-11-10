@@ -125,7 +125,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.FlightValues
 import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
 import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
-import com.altnautica.gcs.feature.cockpit.chrome.aglTag
+import com.altnautica.gcs.core.skills.hud.aglMark
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -801,8 +801,10 @@ class CockpitViewModel @AssistedInject constructor(
         val fromPilot = p?.takeIf { clock.nowMs() - it.receivedAtMs <= PilotState.STALE_MS && it.aglM != null }
         val (agl, tag) = when {
             v == FlightValues.Empty -> null to null
-            follow != null -> follow.aglM to aglTag(follow.aglSource, ground = "rng")
-            fromPilot != null -> fromPilot.aglM to aglTag(fromPilot.aglSource, ground = "rangefinder")
+            // The pilot's height is measured only from a rangefinder, else it is the EKF height
+            // above home; the follow kind's is measured unless it is the barometer's.
+            fromPilot != null -> fromPilot.aglM to specStrings.aglMark(home = fromPilot.aglSource != "rangefinder")
+            follow != null -> follow.aglM to specStrings.aglMark(baro = follow.aglSource == "baro")
             else -> null to null
         }
         if (agl == v.aglM && tag == v.aglTag) v else v.copy(aglM = agl, aglTag = tag)
@@ -858,6 +860,7 @@ class CockpitViewModel @AssistedInject constructor(
                 missionEtaS = autonomy.layers.store.ar.let { ArRules.nextWaypointEtaS(it.cur, it.ageMs(autonomy.nowMs())) },
                 vtolTransitioning = telemetry.value?.vtolTransitioning?.value == true,
                 fcModeName = b.modeName,
+                modeDetail = p?.let { FlightStateChipResolver.modeDetail(it.ownerLabel, it.skill?.label?.uppercase()) },
             ),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), chipResolver.resolve(null, ChipContext(clock.nowMs())))

@@ -14,6 +14,7 @@ import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -75,6 +76,30 @@ class PilotWireTest {
         assertEquals(1_793_960_003_000L, b.untilMs)
         assertNull(s.rthCountdownS)
         assertEquals(42L, s.receivedAtMs)
+    }
+
+    @Test
+    fun `link loss action, VTOL transition and setup step parse from the pilot frame`() {
+        val golden = checkNotNull(PilotWire.parseState(data, 0L))
+        assertEquals("rth", golden.linkLossAction)
+        assertFalse(golden.vtolTransitioning)
+        assertNull(golden.setupStep)
+
+        val tuning = JsonObject(data + mapOf(
+            "owner" to JsonPrimitive("tuning"),
+            "setup_step" to JsonPrimitive("autotune_roll"),
+            "link_loss_action" to JsonPrimitive("land"),
+            "vtol_transitioning" to JsonPrimitive(true),
+        ))
+        val s = checkNotNull(PilotWire.parseState(tuning, 0L))
+        assertEquals("autotune_roll", s.setupStep)
+        assertEquals("land", s.linkLossAction)
+        assertTrue(s.vtolTransitioning)
+
+        val bare = checkNotNull(PilotWire.parseState(Json.parseToJsonElement("""{"owner":"idle"}""") as JsonObject, 0L))
+        assertNull(bare.linkLossAction)
+        assertNull(bare.setupStep)
+        assertFalse(bare.vtolTransitioning)
     }
 
     @Test

@@ -184,7 +184,7 @@ class ConfirmTiersTest {
         val c = controller()
         val result = async { c.confirm(request(takeoff)) }
         runCurrent()
-        assertEquals(10f, c.state.value!!.altitudeM)
+        assertEquals(com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.DEFAULT_M, c.state.value!!.altitudeM)
         c.setAltitude(25f)
         c.onTouchHold(true)
         advanceTimeBy(1_520)
@@ -226,17 +226,17 @@ class ConfirmTiersTest {
         val c = controller()
         val result = async { c.confirm(request(takeoff, GamepadButton.L2)) }
         runCurrent()
-        assertEquals(10f, c.state.value!!.altitudeM)
+        assertEquals(com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.DEFAULT_M, c.state.value!!.altitudeM)
         c.onGamepadButton(GamepadButton.DPAD_UP, pressed = true)
         c.onGamepadButton(GamepadButton.DPAD_UP, pressed = false)
         c.onGamepadButton(GamepadButton.DPAD_UP, pressed = true)
-        assertEquals(12f, c.state.value!!.altitudeM)
+        assertEquals(com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.DEFAULT_M + 2f, c.state.value!!.altitudeM)
         c.onGamepadButton(GamepadButton.DPAD_DOWN, pressed = true)
-        assertEquals(11f, c.state.value!!.altitudeM)
+        assertEquals(com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.DEFAULT_M + 1f, c.state.value!!.altitudeM)
         c.onGamepadButton(GamepadButton.L2, pressed = true)
         advanceTimeBy(1_520)
         runCurrent()
-        assertEquals(ConfirmResult.Confirmed(mapOf(SkillArgs.ALTITUDE_M to 11f)), result.await())
+        assertEquals(ConfirmResult.Confirmed(mapOf(SkillArgs.ALTITUDE_M to com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.DEFAULT_M + 1f)), result.await())
     }
 
     @Test

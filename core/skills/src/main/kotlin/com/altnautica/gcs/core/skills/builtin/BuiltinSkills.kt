@@ -81,7 +81,7 @@ object BuiltinIds {
 object TakeoffAltitude {
     const val MIN_M = 1f
     const val MAX_M = 120f
-    const val DEFAULT_M = 10f
+    const val DEFAULT_M = 3f
     const val STEP_M = 1f
 }
 

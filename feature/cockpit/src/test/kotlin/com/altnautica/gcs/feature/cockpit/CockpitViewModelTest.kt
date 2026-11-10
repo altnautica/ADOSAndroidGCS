@@ -352,6 +352,23 @@ class CockpitViewModelTest {
     }
 
     @Test
+    fun `a pilot AGL not from a rangefinder reads the spec HOME mark, a rangefinder none`() = runTest(dispatcher) {
+        for ((source, mark) in listOf("baro" to "HOME", "rangefinder" to null)) {
+            val vehicle = FakeVehicle()
+            vehicle.beat(armed = true, now = testScheduler.currentTime)
+            vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime)
+            val data = """{"owner":"pilot","armed":true,"landed":false,"agl_m":12.0,"agl_source":"$source"}"""
+            val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data))
+            val job = backgroundScope.launch { vm.flightValues.collect {} }
+            advanceTimeBy(600)
+            runCurrent()
+            assertEquals(source, mark, vm.flightValues.value.aglTag)
+            job.cancel()
+            vm.viewModelScope.cancel()
+        }
+    }
+
+    @Test
     fun `an AGL from home is tagged as such and goes to a dash with the other cells after link loss`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         vehicle.beat(armed = true, now = testScheduler.currentTime)

@@ -1,12 +1,15 @@
 package com.altnautica.gcs.feature.cockpit.chip
 
+import com.altnautica.gcs.core.model.PilotOwner
+import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
+import com.altnautica.gcs.core.skills.spec.FcModeClassSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateRuleSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateSpec
 import com.altnautica.gcs.core.skills.spec.SpecColor
 import com.altnautica.gcs.core.skills.spec.TokensSpec
-import kotlin.math.roundToInt
+import kotlin.math.floor
 
 /** A button the chip offers beside its text. */
 enum class ChipButton { SetUpAircraft, Resume, TakeControl }
@@ -16,7 +19,7 @@ data class ChipText(val text: String, val colorKey: String, val color: Long)
 
 /**
  * The flight-state chip as drawn: the matched rule, its text and colour, whether it is
- * dimmed, its button, and the secondary line (hold reason or avoidance, then control mode).
+ * dimmed, its button, and the secondary line (hold reason, avoidance state, control mode).
  */
 data class FlightStateChipUi(
     val ruleId: String,
@@ -36,23 +39,32 @@ data class ChipContext(
     val goalDistM: Float? = null,
     /** Seconds to the next waypoint while a mission flies. */
     val missionEtaS: Float? = null,
+    /** A VTOL transition the flight controller reports; the pilot state's own flag counts too. */
     val vtolTransitioning: Boolean = false,
-    val setupStep: String? = null,
+    /** The running skill's detail line (`ORBIT 8 m`); read only while a skill owns. */
+    val modeDetail: String? = null,
     /** Flight mode from the FC heartbeat, used when the vehicle reports no pilot state. */
     val fcModeName: String? = null,
 )
 
 /**
  * Evaluates `flight-state.json`: rules in order, first match wins; `{placeholders}` fill from
- * the pilot state and [ChipContext]. A placeholder with no value drops its ` · ` segment, so
- * the chip never shows an empty field. A vehicle with no pilot state shows its FC mode.
+ * the pilot state and [ChipContext], a missing number reads `—`, and a trailing empty ` · `
+ * segment is dropped. A vehicle with no pilot state shows its FC mode.
  */
 class FlightStateChipResolver(private val spec: FlightStateSpec, private val tokens: TokensSpec) {
 
     fun resolve(pilot: PilotState?, ctx: ChipContext): FlightStateChipUi {
         if (pilot == null) return noPilot(ctx)
         val stale = ctx.nowMs - pilot.receivedAtMs > spec.staleAfterMs
-        val rule = spec.rules.firstOrNull { matches(it, pilot, ctx, stale) } ?: spec.rules.last()
+        val rule = spec.rules.firstOrNull { matches(it, pilot, ctx, stale) }
+            ?: return FlightStateChipUi(
+                ruleId = RULE_NONE,
+                primary = chipText(pilot.owner.wire.uppercase(), FC_KEY),
+                dim = false,
+                button = null,
+                secondary = secondary(pilot),
+            )
         val text = fill(rule.text, values(pilot, ctx)) +
             (rule.suffixIfLandingSeq?.takeIf { pilot.mission?.landingSeq == true }.orEmpty())
         return FlightStateChipUi(
@@ -60,7 +72,7 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
             primary = chipText(text, rule.color),
             dim = rule.dim,
             button = button(rule.button, pilot),
-            secondary = if (stale) emptyList() else secondary(pilot),
+            secondary = if (rule.id == RULE_LINK_STALE) emptyList() else secondary(pilot),
         )
     }
 
@@ -69,7 +81,7 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
         val mode = ctx.fcModeName?.uppercase()
         return FlightStateChipUi(
             ruleId = rule.id,
-            primary = chipText(fill(rule.text, mapOf("fc_mode_name_upper" to mode)), rule.color),
+            primary = chipText(fill(rule.text, mapOf("fc_mode_name_upper" to (mode ?: NO_VALUE))), rule.color),
             dim = mode == null,
             button = null,
             secondary = emptyList(),
@@ -86,7 +98,7 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
             val since = ctx.missionCompleteSinceMs ?: return false
             if (ctx.nowMs - since >= limit) return false
         }
-        m.vtolTransitioning?.let { if (it != ctx.vtolTransitioning) return false }
+        m.vtolTransitioning?.let { if ((p.vtolTransitioning || ctx.vtolTransitioning) != it) return false }
         m.fcModeClass?.let { if (fcModeClass(p) != it) return false }
         m.controlMode?.let { if (p.controlMode?.wire != it) return false }
         return true
@@ -96,7 +108,7 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
     fun fcModeClass(p: PilotState): String? {
         val mode = p.fcMode ?: return null
         val plane = p.vehicleClass == PilotVehicleClass.FixedWing || p.vehicleClass == PilotVehicleClass.Vtol
-        fun inClass(c: com.altnautica.gcs.core.skills.spec.FcModeClassSpec) = mode in (if (plane) c.plane else c.copter)
+        fun inClass(c: FcModeClassSpec) = mode in (if (plane) c.plane else c.copter)
         return when {
             inClass(spec.fcModeClasses.rtl) -> "rtl"
             inClass(spec.fcModeClasses.land) -> "land"
@@ -104,77 +116,70 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
         }
     }
 
-    private fun values(p: PilotState, ctx: ChipContext): Map<String, String?> {
-        val skillLabel = p.skill?.label?.uppercase()
-        return mapOf(
-            "first_block_msg" to p.firstBlock?.msg,
-            "profile_upper" to p.profile?.wire?.uppercase(),
-            "skill_label_upper" to (skillLabel ?: p.ownerLabel?.uppercase()),
-            "mode_detail" to modeDetail(p.ownerLabel, skillLabel),
-            "dist_m" to ctx.goalDistM?.roundToInt()?.toString(),
-            "setup_step" to ctx.setupStep,
-            "seq" to p.mission?.seq?.toString(),
-            "total" to p.mission?.total?.toString(),
-            "eta" to ctx.missionEtaS?.let(::formatEta),
-            "home_dist_m" to ctx.homeDistM?.roundToInt()?.toString(),
-            "fc_mode_name_upper" to p.fcModeName?.uppercase(),
-        )
-    }
+    private fun values(p: PilotState, ctx: ChipContext): Map<String, String> = mapOf(
+        "first_block_msg" to p.firstBlock?.msg.orEmpty(),
+        "profile_upper" to (p.profile ?: PilotProfile.Normal).wire.uppercase(),
+        "skill_label_upper" to (p.skill?.label ?: DEFAULT_SKILL_LABEL).uppercase(),
+        "mode_detail" to (ctx.modeDetail?.takeIf { p.owner == PilotOwner.Skill } ?: DEFAULT_MODE_DETAIL),
+        "dist_m" to num(ctx.goalDistM),
+        "home_dist_m" to num(ctx.homeDistM),
+        "setup_step" to p.setupStep.orEmpty().uppercase(),
+        "seq" to num(p.mission?.seq),
+        "total" to num(p.mission?.total),
+        "eta" to formatEta(ctx.missionEtaS),
+        "fc_mode_name_upper" to (p.fcModeName ?: NO_VALUE).uppercase(),
+    )
 
+    /** The rule's button; the setup link shows only while the setup-needed readiness item is unmet. */
     private fun button(id: String?, p: PilotState): ChipButton? = when (id) {
-        "setup_link_when_setup_needed" -> ChipButton.SetUpAircraft.takeIf { p.firstBlock != null }
+        "setup_link_when_setup_needed" -> ChipButton.SetUpAircraft.takeIf { p.readiness.any { it.id == SETUP_NEEDED && !it.ok } }
         "resume" -> ChipButton.Resume
         "take_control" -> ChipButton.TakeControl
         else -> null
     }
 
-    private fun secondary(p: PilotState): List<ChipText> {
-        val lines = ArrayList<ChipText>(2)
-        var attention: ChipText? = null
-        for (item in spec.secondary.order) {
-            when (item) {
-                "hold_reason" -> if (attention == null) {
-                    p.holdReason?.let { reason ->
-                        val label = holdReasonLabel(reason)
-                        attention = chipText(fill(spec.secondary.holdReason.text, mapOf("hold_reason_label" to label)), spec.secondary.holdReason.color)
-                    }
-                }
-                "avoid_state" -> if (attention == null) {
-                    p.avoidState?.let { s -> spec.secondary.avoidState[s.wire]?.let { attention = chipText(it.text, it.color) } }
-                }
-                "control_mode" -> {
-                    attention?.let(lines::add)
-                    attention = null
-                    p.controlMode?.let { m -> spec.secondary.controlMode[m.wire]?.let { lines += chipText(it, CONTROL_MODE_COLOR) } }
-                }
+    /** The secondary line in the spec's order: hold reason, avoidance state, control mode. */
+    private fun secondary(p: PilotState): List<ChipText> = spec.secondary.order.mapNotNull { part ->
+        when (part) {
+            "hold_reason" -> p.holdReason?.takeIf { it.isNotEmpty() }?.let { reason ->
+                val hold = spec.secondary.holdReason
+                chipText(fill(hold.text, mapOf("hold_reason_label" to holdReasonLabel(reason))), hold.color)
             }
+            "avoid_state" -> p.avoidState?.let { spec.secondary.avoidState[it.wire] }?.let { chipText(it.text, it.color) }
+            "control_mode" -> p.controlMode?.let { chipText(spec.secondary.controlMode[it.wire] ?: it.wire.uppercase(), FC_KEY) }
+            else -> null
         }
-        attention?.let(lines::add)
-        return lines
     }
 
-    /** Label of a hold reason; the spec's table is keyed with underscores, the wire uses hyphens. */
+    /** Label of a hold reason, keyed by its exact wire string; an unlisted reason reads with spaces. */
     fun holdReasonLabel(reason: String): String =
-        spec.holdReasonLabels[reason]
-            ?: spec.holdReasonLabels[reason.replace('-', '_')]
-            ?: spec.holdReasonLabels[reason.replace('_', '-')]
-            ?: reason.replace('-', ' ').replace('_', ' ').uppercase()
+        spec.holdReasonLabels[reason] ?: reason.replace('-', ' ').replace('_', ' ')
 
     private fun chipText(text: String, colorKey: String) = ChipText(text, colorKey, color(colorKey))
 
-    /** The `tokens.json` state colour for [key]; the stale grey when the key is unknown. */
+    /** The `tokens.json` state colour for [key]; the FC colour when the key is unknown. */
     fun color(key: String): Long =
-        tokens.state[key]?.let(SpecColor::argb) ?: tokens.state[STALE_KEY]?.let(SpecColor::argb) ?: FALLBACK_GREY
+        tokens.state[key]?.let(SpecColor::argb) ?: tokens.state[FC_KEY]?.let(SpecColor::argb) ?: FALLBACK_GREY
 
     companion object {
         const val RULE_FC_OTHER = "fc_other"
-        private const val STALE_KEY = "stale"
-        private const val CONTROL_MODE_COLOR = "stale"
+        const val RULE_LINK_STALE = "link_stale"
+
+        /** Rule id reported when no spec rule matches. */
+        const val RULE_NONE = "none"
+        private const val FC_KEY = "fc"
+        private const val SETUP_NEEDED = "setup_needed"
+        private const val DEFAULT_SKILL_LABEL = "SKILL"
+        private const val DEFAULT_MODE_DETAIL = "ACTIVE"
+        private const val NO_VALUE = "—"
         private const val FALLBACK_GREY = 0xFF909090L
         private const val SEPARATOR = " · "
         private val PLACEHOLDER = Regex("\\{([a-z_]+)\\}")
 
-        /** The part of the pilot's owner label after the skill label (`FOLLOW · ORBIT 8 m` → `ORBIT 8 m`). */
+        /**
+         * The part of the pilot's owner label after the skill label (`FOLLOW · ORBIT 8 m` →
+         * `ORBIT 8 m`): a source for [ChipContext.modeDetail].
+         */
         fun modeDetail(ownerLabel: String?, skillLabelUpper: String?): String? {
             val label = ownerLabel?.trim()?.takeIf { it.isNotEmpty() } ?: return null
             if (skillLabelUpper == null) return null
@@ -186,23 +191,22 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
             }
         }
 
-        /** Fills `{name}` placeholders; a segment between ` · ` separators whose value is missing is dropped. */
-        fun fill(template: String, values: Map<String, String?>): String =
-            template.split(SEPARATOR).mapNotNull { segment ->
-                var missing = false
-                val filled = PLACEHOLDER.replace(segment) { m ->
-                    values[m.groupValues[1]] ?: run {
-                        missing = true
-                        ""
-                    }
-                }
-                filled.takeUnless { missing }
-            }.joinToString(SEPARATOR)
+        /** Fills `{name}` placeholders (an unknown one reads empty), then drops one trailing ` · `. */
+        fun fill(template: String, values: Map<String, String>): String =
+            PLACEHOLDER.replace(template) { values[it.groupValues[1]].orEmpty() }.removeSuffix(SEPARATOR)
 
-        /** ETA as `m:ss`, or `s s` under a minute. */
-        fun formatEta(s: Float): String {
-            val total = s.roundToInt().coerceAtLeast(0)
-            return if (total < 60) "$total s" else "%d:%02d".format(total / 60, total % 60)
+        /** A number rounded half up, or `—` when unknown. */
+        fun num(v: Number?): String {
+            val d = v?.toDouble()
+            return if (d == null || !d.isFinite()) NO_VALUE else Math.round(d).toString()
+        }
+
+        /** `ETA m:ss`, or `ETA s s` under a minute; empty when unknown. */
+        fun formatEta(s: Float?): String {
+            val d = s?.toDouble()
+            if (d == null || !d.isFinite()) return ""
+            val m = floor(d / 60).toLong()
+            return if (m > 0) "ETA $m:${Math.round(d % 60).toString().padStart(2, '0')}" else "ETA ${Math.round(d)} s"
         }
 
         /** True when the pilot state is older than the chip's staleness limit. */

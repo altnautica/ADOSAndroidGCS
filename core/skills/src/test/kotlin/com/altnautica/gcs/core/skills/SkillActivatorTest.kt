@@ -207,7 +207,7 @@ class SkillActivatorTest {
     fun `a takeoff already in GUIDED does not switch mode and stops when the switch is refused`() = runTest {
         val guided = SkillContext(vehicle, false, FlightMode(4, "GUIDED"), true, true, true)
         activator.activate(takeoff, guided, emptyMap(), confirmAll)
-        assertEquals(listOf(VehicleCommand.Arm(), VehicleCommand.Takeoff(10f)), vehicle.control.sent)
+        assertEquals(listOf(VehicleCommand.Arm(), VehicleCommand.Takeoff(com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.DEFAULT_M)), vehicle.control.sent)
 
         vehicle.control.sent.clear()
         vehicle.control.result = CommandResult.Rejected(4, "failed")

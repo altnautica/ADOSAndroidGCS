@@ -92,6 +92,11 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
     LaunchedEffect(pairLinks) {
         pairLinks.collect { link -> BackStackOps.push(backStack, ConnectKey(link.code, link.host)) }
     }
+    val topRoute = backStack.lastOrNull()
+    LaunchedEffect(topRoute) { viewModel.topRouteChanged(topRoute) }
+    LaunchedEffect(viewModel) {
+        viewModel.setupNavigation.collect { id -> BackStackOps.push(backStack, AircraftSetupKey(id.value, GROUND_WIZARD)) }
+    }
     NotificationPermissionPrompt(viewModel)
 
     // Cockpits leaving the stack without their own exit (Home, pop-to) still close a replay.
@@ -210,9 +215,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onBack = { BackStackOps.pop(backStack) },
                         onOpenCloud = { BackStackOps.push(backStack, CloudKey) },
                         onOpenPhoneRadio = { BackStackOps.push(backStack, PhoneRadioKey) },
-                        onConnected = { id ->
-                            viewModel.connected(id, ::goHome) { needing -> BackStackOps.push(backStack, AircraftSetupKey(needing.value, GROUND_WIZARD)) }
-                        },
+                        onConnected = { id -> viewModel.connected(id, ::goHome) },
                     )
                 }
                 entry<FlightKey> { key ->
@@ -276,7 +279,7 @@ private fun fly(backStack: MutableList<NavKey>, viewModel: AppViewModel, id: Dev
     BackStackOps.push(backStack, CockpitKey(id.value))
 }
 
-/** Asks for the notification permission on the first open link, after a rationale (Android 13+). */
+/** Asks for the notification permission once a link has opened, on Home and disarmed, after a rationale (Android 13+). */
 @Composable
 private fun NotificationPermissionPrompt(viewModel: AppViewModel) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return

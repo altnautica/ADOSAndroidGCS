@@ -21,6 +21,15 @@ app's `versionName`.
   shared ports held to the same golden cases as the web cockpit.
 - Fly Here sends a map point to the flight controller when the pilot's state
   is stale, instead of waiting on a pilot that cannot answer.
+- The flight-state chip follows the shared rules case for case: hold reasons by
+  their wire names, the setup button only when aircraft setup is needed, the
+  tuning step from the pilot frame, a skill's detail, missing values as a dash.
+- The pilot frame's link-loss action, VTOL transition and setup step are read.
+- A pilot height not measured by a rangefinder is marked HOME from the spec.
+- Take-off defaults to 3 m, within 1 to 120 m, as the spec sets.
+- The aircraft setup wizard no longer opens by itself on connect: the app
+  offers it once per flight controller, on the ground. The notification
+  permission is asked only on Home with no vehicle armed.
 
 ## [0.4.0] - 2026-11-10
 

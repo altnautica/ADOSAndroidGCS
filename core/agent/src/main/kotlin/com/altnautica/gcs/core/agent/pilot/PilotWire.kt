@@ -137,6 +137,9 @@ object PilotWire {
                 val text = o.str("text") ?: return@mapNotNull null
                 PilotStatusText(o.long("severity")?.toInt() ?: return@mapNotNull null, text, o.long("age_ms"))
             },
+            linkLossAction = data.str("link_loss_action"),
+            vtolTransitioning = data.bool("vtol_transitioning") == true,
+            setupStep = data.str("setup_step"),
         )
     }
 

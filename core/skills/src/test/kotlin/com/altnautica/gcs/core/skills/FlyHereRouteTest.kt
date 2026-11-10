@@ -35,3 +35,13 @@ class FlyHereRouteTest {
         assertEquals(listOf<VehicleCommand>(VehicleCommand.FlyTo(47.1, 8.5, 10f)), vehicle.control.sent)
     }
 }
+
+class LaunchRangeTest {
+    @Test
+    fun `take-off altitude range and default are the spec's launch values`() {
+        val launch = testSpec.layout.launch!!
+        assertEquals(launch.altMinM, com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.MIN_M)
+        assertEquals(launch.altMaxM, com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.MAX_M)
+        assertEquals(launch.altDefaultM, com.altnautica.gcs.core.skills.builtin.TakeoffAltitude.DEFAULT_M)
+    }
+}
