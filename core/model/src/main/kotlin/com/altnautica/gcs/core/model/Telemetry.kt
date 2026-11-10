@@ -158,6 +158,7 @@ data class LocalPosition(
 private val NO_LOCAL_POSITION: StateFlow<LocalPosition?> = MutableStateFlow(null)
 private val NO_VTOL_TRANSITION: StateFlow<Boolean> = MutableStateFlow(false)
 private val NO_LANDED_STATE: StateFlow<Boolean?> = MutableStateFlow(null)
+private val NO_EKF_ORIGIN: StateFlow<Boolean> = MutableStateFlow(false)
 
 /** One flow per telemetry topic so consumers only observe what they draw. */
 interface VehicleTelemetry {
@@ -192,4 +193,7 @@ interface VehicleTelemetry {
 
     /** False for firmware with no landed-state source at all (MSP flight controllers). */
     val reportsLandedState: Boolean get() = true
+
+    /** True once the FC reported its EKF origin (`GPS_GLOBAL_ORIGIN`): its position frame is anchored. */
+    val ekfOriginSet: StateFlow<Boolean> get() = NO_EKF_ORIGIN
 }

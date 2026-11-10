@@ -9,6 +9,7 @@ import com.altnautica.gcs.core.mavlink.messages.BatteryStatus
 import com.altnautica.gcs.core.mavlink.messages.EkfStatusReport
 import com.altnautica.gcs.core.mavlink.messages.FenceStatus as FenceStatusMsg
 import com.altnautica.gcs.core.mavlink.messages.GlobalPositionInt
+import com.altnautica.gcs.core.mavlink.messages.GpsGlobalOrigin
 import com.altnautica.gcs.core.mavlink.messages.GpsRawInt
 import com.altnautica.gcs.core.mavlink.messages.Heartbeat
 import com.altnautica.gcs.core.mavlink.messages.ExtendedSysState
@@ -83,6 +84,7 @@ class MavlinkVehicleTelemetry(
     private val _localPosition = MutableStateFlow<LocalPosition?>(null)
     private val _vtolTransitioning = MutableStateFlow(false)
     private val _onGround = MutableStateFlow<Boolean?>(null)
+    private val _ekfOriginSet = MutableStateFlow(false)
     private val _statusText = MutableSharedFlow<StatusText>(extraBufferCapacity = 64)
 
     override val attitude: StateFlow<Attitude?> = _attitude.asStateFlow()
@@ -104,6 +106,7 @@ class MavlinkVehicleTelemetry(
     override val localPosition: StateFlow<LocalPosition?> = _localPosition.asStateFlow()
     override val vtolTransitioning: StateFlow<Boolean> = _vtolTransitioning.asStateFlow()
     override val onGround: StateFlow<Boolean?> = _onGround.asStateFlow()
+    override val ekfOriginSet: StateFlow<Boolean> = _ekfOriginSet.asStateFlow()
 
     /** BATTERY_STATUS for battery 0 wins over SYS_STATUS while it keeps arriving. */
     private var batteryStatusAtMs: Long = Long.MIN_VALUE
@@ -190,6 +193,7 @@ class MavlinkVehicleTelemetry(
                 tMs = now,
             )
             is HomePositionMsg -> _home.value = HomePosition(msg.latitude / 1e7, msg.longitude / 1e7, msg.altitude / 1000f, now)
+            is GpsGlobalOrigin -> _ekfOriginSet.value = true
             is LocalPositionNed -> _localPosition.value = LocalPosition(msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz, now)
             is ExtendedSysState -> {
                 // MAV_VTOL_STATE_TRANSITION_TO_FW = 1, MAV_VTOL_STATE_TRANSITION_TO_MC = 2.

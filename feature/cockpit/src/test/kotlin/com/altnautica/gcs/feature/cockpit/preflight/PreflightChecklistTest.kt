@@ -71,6 +71,14 @@ class PreflightChecklistTest {
     }
 
     @Test
+    fun `home passes on the ground from the flight controller's home position or its EKF origin`() {
+        // No arming needed: HOME_POSITION alone passes, and so does an EKF origin before any home is reported.
+        assertTrue(PreflightItem.Home !in failing(good.copy(home = HomePosition(47.0, 8.0, 400f, now), ekfOriginSet = false)))
+        assertTrue(PreflightItem.Home !in failing(good.copy(home = null, ekfOriginSet = true)))
+        assertEquals(listOf(PreflightItem.Home), failing(good.copy(home = null, ekfOriginSet = false)))
+    }
+
+    @Test
     fun `a prearm failure blocks for five seconds`() {
         assertEquals(listOf(PreflightItem.NoPrearm), failing(good.copy(lastPrearmMs = now - 4_000)))
         assertTrue(PreflightChecklist.evaluate(good.copy(lastPrearmMs = now - 5_000), now).ready)

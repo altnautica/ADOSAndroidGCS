@@ -69,11 +69,11 @@ internal fun cockpitPreflight(
 ): StateFlow<PreflightResult> = telemetry.flatMapLatest { t ->
     if (t == null) {
         combine(settings, context, tick500) { s, c, _ ->
-            PreflightChecklist.evaluate(inputs(null, null, null, null, false, null, s, c, storageUsedPct(), storageWarnPct), clock.nowMs())
+            PreflightChecklist.evaluate(inputs(null, null, null, null, false, false, null, s, c, storageUsedPct(), storageWarnPct), clock.nowMs())
         }
     } else {
         combine(
-            combine(t.gps, t.battery, t.ekf, t.home) { gps, batt, ekf, home -> listOf(gps, batt, ekf, home) },
+            combine(t.gps, t.battery, t.ekf, t.home, t.ekfOriginSet) { gps, batt, ekf, home, origin -> listOf(gps, batt, ekf, home, origin) },
             t.heartbeat,
             combine(settings, prearmText, context) { s, p, c -> Triple(s, p, c) },
             tick500,
@@ -85,6 +85,7 @@ internal fun cockpitPreflight(
                     battery = parts[1] as BatteryState?,
                     ekf = parts[2] as EkfState?,
                     home = parts[3] as HomePosition?,
+                    ekfOriginSet = parts[4] as Boolean,
                     linkFresh = isLinkFresh(hb, now),
                     lastPrearmMs = prearm?.atMs,
                     settings = s,
@@ -103,6 +104,7 @@ private fun inputs(
     battery: BatteryState?,
     ekf: EkfState?,
     home: HomePosition?,
+    ekfOriginSet: Boolean,
     linkFresh: Boolean,
     lastPrearmMs: Long?,
     settings: CockpitSettings,
@@ -115,6 +117,7 @@ private fun inputs(
     bands = settings.batteryBands,
     ekf = ekf,
     home = home,
+    ekfOriginSet = ekfOriginSet,
     linkFresh = linkFresh,
     lastPrearmMs = lastPrearmMs,
     readiness = context.pilot?.readiness.orEmpty(),

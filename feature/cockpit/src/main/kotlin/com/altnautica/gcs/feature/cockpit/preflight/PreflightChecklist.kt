@@ -58,6 +58,8 @@ data class PreflightInputs(
     val bands: BatteryBands,
     val ekf: EkfState?,
     val home: HomePosition?,
+    /** The FC reported its EKF origin (`GPS_GLOBAL_ORIGIN`). */
+    val ekfOriginSet: Boolean = false,
     val linkFresh: Boolean,
     /** Receive time of the last prearm STATUSTEXT, or null when none was seen. */
     val lastPrearmMs: Long?,
@@ -100,7 +102,8 @@ object PreflightChecklist {
             add(PreflightCheck(PreflightItem.Gps3d, gpsOk, i.gps != null))
             add(PreflightCheck(PreflightItem.Battery, batteryOk, batteryKnown))
             add(PreflightCheck(PreflightItem.Ekf, ekfOk, ekf != null))
-            add(PreflightCheck(PreflightItem.Home, i.home != null, true))
+            // Home from the FC's HOME_POSITION or its EKF origin, both set on the ground once position is good; never waits for arming.
+            add(PreflightCheck(PreflightItem.Home, i.home != null || i.ekfOriginSet, true))
             add(PreflightCheck(PreflightItem.Link, i.linkFresh, true))
             add(PreflightCheck(PreflightItem.NoPrearm, prearmQuiet, true))
             add(PreflightCheck(PreflightItem.NavSource, navOk, nav != null))

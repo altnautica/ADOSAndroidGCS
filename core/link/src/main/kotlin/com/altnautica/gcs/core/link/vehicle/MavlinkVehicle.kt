@@ -20,6 +20,7 @@ import com.altnautica.gcs.core.mavlink.enums.MavCmd
 import com.altnautica.gcs.core.mavlink.enums.MavDataStream
 import com.altnautica.gcs.core.mavlink.messages.CommandLong
 import com.altnautica.gcs.core.mavlink.messages.HomePosition
+import com.altnautica.gcs.core.mavlink.messages.GpsGlobalOrigin
 import com.altnautica.gcs.core.mavlink.messages.RequestDataStream
 import com.altnautica.gcs.core.mavlink.messages.ExtendedSysState
 import com.altnautica.gcs.core.mavlink.modes.FirmwareFamily
@@ -97,15 +98,18 @@ class MavlinkVehicle(
                 .collectLatest { session ->
                     val t = session?.first ?: return@collectLatest
                     link.requestStreams(t)
+                    // Until a home arrives, ask for it and for the EKF origin, either of which anchors the vehicle.
                     while (mavTelemetry.home.value == null) {
-                        link.send(
-                            CommandLong(
-                                targetSystem = t.sysId,
-                                targetComponent = t.compId,
-                                command = MavCmd.MAV_CMD_REQUEST_MESSAGE,
-                                param1 = HomePosition.ID.toFloat(),
-                            ),
-                        )
+                        for (id in if (mavTelemetry.ekfOriginSet.value) HOME_ONLY else HOME_AND_ORIGIN) {
+                            link.send(
+                                CommandLong(
+                                    targetSystem = t.sysId,
+                                    targetComponent = t.compId,
+                                    command = MavCmd.MAV_CMD_REQUEST_MESSAGE,
+                                    param1 = id.toFloat(),
+                                ),
+                            )
+                        }
                         delay(HOME_REQUEST_PERIOD_MS)
                     }
                 }
@@ -124,6 +128,8 @@ class MavlinkVehicle(
 
     private companion object {
         const val HOME_REQUEST_PERIOD_MS = 5_000L
+        val HOME_ONLY = intArrayOf(HomePosition.ID)
+        val HOME_AND_ORIGIN = intArrayOf(HomePosition.ID, GpsGlobalOrigin.ID)
     }
 }
 
