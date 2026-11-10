@@ -57,14 +57,12 @@
     <string name="hud_range_hold">HOLD</string>
     <string name="hud_range_lost">LOST</string>
     <string name="hud_range_stale">STALE</string>
-    <string name="hud_range_agl">AGL %1$s m · %2$s</string>
-    <string name="hud_range_rng">RNG</string>
     <string name="hud_range_geometry">DEP %1$s° · BRG %2$s° · %3$s m/s</string>
     <string name="hud_range_cue_ground">GND</string>
     <string name="hud_range_cue_box">BOX</string>
     <string name="hud_range_cue_lidar">LIDAR</string>
     <string name="hud_range_latency">LAT %1$s ms</string>
-    <string name="hud_range_compact">%1$s m ±%2$s · AGL %3$s %4$s</string>
+    <string name="hud_range_compact">%1$s m ±%2$s</string>
     <string name="hud_range_description">Follow range</string>
 
     <!-- Right rail. -->

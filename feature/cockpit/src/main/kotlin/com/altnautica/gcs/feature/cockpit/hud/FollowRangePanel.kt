@@ -29,7 +29,6 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.R
-import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
@@ -42,7 +41,8 @@ private const val LATENCY_WARN_MS = 250f
 
 /**
  * Following-mode range panel (L2, read-only): range and phase, the ± 2σ interval bar,
- * AGL with its source, geometry, and the range cues with latency and re-acquire mode.
+ * geometry, and the range cues with latency and re-acquire mode. No AGL: the bottom row
+ * carries the one AGL on screen.
  * Compact shows one line, medium three rows, expanded all five. A [stale] state shows
  * dashes at half opacity with the phase word STALE.
  */
@@ -53,12 +53,6 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
     val range = follow.rangeM?.takeIf { !stale }
     val sigma = follow.rangeSigmaM?.takeIf { !stale }
     val (phaseWord, phaseColor) = phaseWord(follow.phase, stale)
-    val aglSource = when (follow.aglSource) {
-        "rng" -> stringResource(R.string.hud_range_rng) to c.hudInk
-        "baro" -> specText("agl.source.baro") to c.hudWarn
-        else -> DASH to c.hudMuted
-    }
-    val agl = follow.aglM?.takeIf { !stale }?.let(HudGeometry::oneDecimal) ?: DASH
     val description = stringResource(R.string.hud_range_description)
     Surface(
         modifier = modifier.alpha(if (stale) 0.5f else 1f).semantics { contentDescription = description },
@@ -74,8 +68,6 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
                         R.string.hud_range_compact,
                         range?.let(HudGeometry::formatNumber) ?: DASH,
                         sigma?.let { HudGeometry.oneDecimal(2 * it) } ?: DASH,
-                        agl,
-                        aglSource.first,
                     ),
                     style = small,
                 )
@@ -93,10 +85,6 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
                 IntervalBar(range, sigma)
                 Spacer(Modifier.width(AdosSpacing.S2))
                 Text(if (range != null && sigma != null) HudGeometry.rangeInterval(range, sigma) else DASH, style = small)
-            }
-            Row {
-                Text(stringResource(R.string.hud_range_agl, agl, ""), style = small)
-                Text(aglSource.first, style = small, color = aglSource.second)
             }
             if (width.isWide()) {
                 Text(
