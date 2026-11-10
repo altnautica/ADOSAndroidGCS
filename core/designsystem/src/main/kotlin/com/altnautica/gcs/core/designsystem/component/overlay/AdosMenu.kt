@@ -112,13 +112,19 @@ fun AdosMenu(state: AdosMenuState, items: List<AdosMenuItem>) {
     }
 }
 
-/** Places the single child under [anchor], flipped above it when it does not fit below. */
+/**
+ * Places the single child under [anchor], flipped above it when it does not fit below,
+ * never above [LocalOverlayTopInset] (the top bar it must leave usable).
+ */
 @Composable
 private fun MenuPlacement(anchor: Rect?, content: @Composable () -> Unit) {
+    val topInset = LocalOverlayTopInset.current
     Layout(content = content, modifier = Modifier.fillMaxSize()) { measurables, constraints ->
         val margin = MenuMargin.roundToPx()
-        val below = anchor?.let { (constraints.maxHeight - it.bottom - margin).roundToInt() } ?: constraints.maxHeight
-        val above = anchor?.let { (it.top - margin).roundToInt() } ?: 0
+        val inset = topInset.roundToPx()
+        val top = inset + margin
+        val below = anchor?.let { (constraints.maxHeight - it.bottom - margin).roundToInt() } ?: (constraints.maxHeight - top - margin)
+        val above = anchor?.let { (it.top - margin - inset).roundToInt() } ?: 0
         val flip = anchor != null && below < constraints.maxHeight / 3 && above > below
         val maxHeight = (if (flip) above else below).coerceAtLeast(0)
         val placeable = measurables.single().measure(
@@ -128,8 +134,8 @@ private fun MenuPlacement(anchor: Rect?, content: @Composable () -> Unit) {
             val x = (anchor?.left?.roundToInt() ?: margin)
                 .coerceIn(margin, (constraints.maxWidth - placeable.width - margin).coerceAtLeast(margin))
             val y = when {
-                anchor == null -> margin
-                flip -> (anchor.top.roundToInt() - placeable.height).coerceAtLeast(margin)
+                anchor == null -> top
+                flip -> (anchor.top.roundToInt() - placeable.height).coerceAtLeast(top)
                 else -> anchor.bottom.roundToInt()
             }
             placeable.place(x, y)
