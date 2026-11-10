@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -44,7 +43,6 @@ import com.altnautica.gcs.feature.cockpit.flow.specText
 import androidx.compose.foundation.layout.Row
 import com.altnautica.gcs.core.skills.spec.ModeSheetSpec
 import com.altnautica.gcs.core.skills.spec.SpecConfirmKind
-import com.altnautica.gcs.feature.cockpit.R
 
 /** What the Mode sheet shows: the pilot's current settings and what the link offers. */
 data class ModeSheetUi(
@@ -121,6 +119,9 @@ fun ModeSheet(ui: ModeSheetUi, spec: ModeSheetSpec, actions: ModeSheetActions, h
                         HandoverSection(ui, spec, actions, holdsMs)
                         // The spec's VTOL transition has no section id of its own: it follows who flies, on a VTOL airframe only.
                         if (vtolShown(ui, spec)) VtolSection(holdsMs[HOLD_VTOL] ?: DEFAULT_HOLD_MS, actions)
+                    }
+                    "fc_modes" -> if (spec.fcModes.advanced) {
+                        Section(specText("flow.mode.section.fc_modes")) { FcModesSection(ui, actions) }
                     }
                 }
             }
@@ -237,13 +238,13 @@ private fun FcModesSection(ui: ModeSheetUi, actions: ModeSheetActions) {
     var open by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         AdosButton(
-            if (open) stringResource(R.string.mode_sheet_fc_modes_hide) else specText("flow.mode.fc.show_all"),
+            specText(if (open) "flow.mode.fc.hide" else "flow.mode.fc.show_all"),
             onClick = { open = !open },
             variant = AdosButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth().testTag(TAG_FC_MODES),
         )
         if (open) {
-            Text(stringResource(R.string.mode_sheet_fc_modes_note), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+            Text(specText("flow.mode.fc.note"), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
             FcModeGrid(ui.fcModes, actions::onFcMode)
         }
     }
