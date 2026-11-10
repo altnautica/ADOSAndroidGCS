@@ -12,8 +12,9 @@ fun SpecText.refusalText(code: String?, readinessLabel: ((String) -> String)? = 
         val item = readinessLabel?.invoke(id) ?: if (has("readiness.item.$id")) text("readiness.item.$id") else id
         return text("refusal.not_ready", mapOf("item" to item))
     }
+    // A code naming a template key (`unknown`, a bare `not_ready`) is unknown too: never a prefix with nothing after it.
     val key = "refusal.${code.replace(' ', '_')}"
-    if (has(key)) return text(key)
+    if (has(key) && !takesArgs(key)) return text(key)
     if (has("mav_result.$code")) return text("mav_result.$code")
     return text("refusal.unknown", mapOf("code" to code))
 }

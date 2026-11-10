@@ -125,4 +125,12 @@ class PilotFailsafeGateTest {
         assertEquals(testSpec.setupStrings.strings.getValue("refusal.landed_unknown"), text.refusalText(SkillReason.LANDED_UNKNOWN))
         assertEquals(testSpec.setupStrings.strings.getValue("refusal.nothing_paused"), text.refusalText(SkillReason.NO_PAUSED_MISSION))
     }
+
+    @Test
+    fun `failsafe modes are the shared return and landing names`() {
+        val returns = setOf("RTL", "SMART_RTL", "QRTL", "AUTO_RTL", "AUTO.RTL")
+        val lands = setOf("LAND", "QLAND", "LOITER_ALT_QLAND", "AUTO.LAND", "AUTO.PRECLAND")
+        // Plus PRECLAND, this app's name for PX4's precision landing.
+        assertEquals(returns + lands + "PRECLAND", com.altnautica.gcs.core.skills.builtin.FAILSAFE_MODES)
+    }
 }

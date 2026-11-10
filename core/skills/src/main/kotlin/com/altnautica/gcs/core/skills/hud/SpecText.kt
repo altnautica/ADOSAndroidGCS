@@ -13,6 +13,9 @@ class SpecText(private val strings: Map<String, String>) {
 
     fun has(key: String): Boolean = strings.containsKey(key)
 
+    /** True when [key]'s text has a `{placeholder}`: a template, not a sentence on its own. */
+    fun takesArgs(key: String): Boolean = strings[key]?.contains('{') == true
+
     fun text(key: String, args: Map<String, Any?> = emptyMap()): String {
         val template = strings[key] ?: return key
         return ARG.replace(template) { m ->

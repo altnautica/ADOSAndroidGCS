@@ -799,7 +799,9 @@ class CockpitViewModel @AssistedInject constructor(
 
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
 
-    private val pill = CockpitPill(viewModelScope, clock, pilot, preflight, alerts, criticalText, fcTexts.warnings, tick500, statusPill, ::airborne)
+    private val pill = CockpitPill(viewModelScope, clock, pilot, preflight, alerts, criticalText, fcTexts.warnings, tick500, statusPill) {
+        pilot.state.value?.armed ?: vehicle.value?.telemetry?.heartbeat?.value?.armed
+    }
 
     /** The status pill's items: alerts, pilot readiness, failing checks, storage, FC texts and the FC failsafe. */
     val statusItems: StateFlow<List<StatusItem>> = pill.items

@@ -33,7 +33,8 @@ internal class CockpitPill(
     warningTexts: StateFlow<List<ReceivedText>>,
     tick500: StateFlow<Long>,
     pill: StatusPill,
-    airborne: () -> Boolean,
+    /** Whether the vehicle is armed: from the pilot when it reports, else the heartbeat; null when unknown. */
+    armed: () -> Boolean?,
 ) {
     val facts: StateFlow<PillFacts> = combine(pilot.link, pilot.linked, pilot.state, preflight, tick500) { link, linked, p, pre, _ ->
         val now = clock.nowMs()
@@ -43,7 +44,7 @@ internal class CockpitPill(
             pilotAgeMs = p?.let { now - it.receivedAtMs },
             agentReachable = link == null || linked || fresh,
             controllerLost = StatusPill.controllerLost(p),
-            preflightFailing = if (airborne()) emptyList() else pre.failing.map { it.item },
+            preflightFailing = if (preflightShown(armed())) pre.failing.map { it.item } else emptyList(),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), PillFacts())
 
@@ -63,4 +64,9 @@ internal class CockpitPill(
     private fun heldTexts(critical: ReceivedText?, warnings: List<ReceivedText>, now: Long): List<ReceivedText> =
         listOfNotNull(critical?.takeIf { now - it.atMs < AlertEngine.STATUS_TEXT_HOLD_MS }) +
             warnings.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS }
+
+    companion object {
+        /** Pre-flight items show only on a vehicle known to be disarmed: unknown is not on the ground. */
+        fun preflightShown(armed: Boolean?): Boolean = armed == false
+    }
 }

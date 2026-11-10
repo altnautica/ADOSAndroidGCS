@@ -6,8 +6,16 @@ import com.altnautica.gcs.core.skills.hud.FlyHereFc
 import com.altnautica.gcs.core.skills.hud.FlyHereRoute
 import com.altnautica.gcs.core.skills.hud.flyHereOffered
 
-/** FC modes a failsafe flies; the same modes entered on an operator's command are not a failsafe. */
-internal val FAILSAFE_MODES = setOf("RTL", "SMART_RTL", "AUTO_RTL", "LAND", "QRTL", "QLAND", "AUTO.RTL", "AUTO.LAND")
+/**
+ * FC modes a failsafe flies; the same modes entered on an operator's command are not a failsafe.
+ * Returns, then landings, as every ground surface lists them.
+ */
+internal val FAILSAFE_MODES = setOf(
+    "RTL", "SMART_RTL", "QRTL", "AUTO_RTL", "AUTO.RTL",
+    "LAND", "QLAND", "LOITER_ALT_QLAND", "AUTO.LAND", "AUTO.PRECLAND",
+    // This app names PX4's precision landing PRECLAND (its RTL and LAND are already listed).
+    "PRECLAND",
+)
 
 private const val MAV_STATE_CRITICAL = 5
 private const val MAV_STATE_EMERGENCY = 6
