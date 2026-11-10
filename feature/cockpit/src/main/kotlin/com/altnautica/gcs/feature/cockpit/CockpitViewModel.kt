@@ -854,6 +854,14 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
+    /** Controller buttons held now (W3C bitfield); any press dismisses a contextual tip. */
+    val padButtons: StateFlow<Int> get() = router.buttons
+
+    /** The skill picker lists at least one skill: the skills tip's trigger. */
+    val skillsAvailable: StateFlow<Boolean> by lazy {
+        session.pickerSkills.map { it.isNotEmpty() }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
+    }
+
     /** The flight-state chip, re-evaluated on every pilot frame and on the 2 Hz tick for staleness. */
     val chip: StateFlow<FlightStateChipUi> = combine(pilot.state, tick500, band, missionCompleteSince, minimap) { p, _, b, done, map ->
         chipResolver.resolve(

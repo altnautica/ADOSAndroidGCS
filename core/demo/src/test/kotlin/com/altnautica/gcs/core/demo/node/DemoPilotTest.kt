@@ -1,19 +1,33 @@
 package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.demo.DemoFc
+import com.altnautica.gcs.core.demo.DemoScenario
+import com.altnautica.gcs.core.demo.DemoScenarioStore
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DemoPilotTest {
 
     /** A flight controller that follows commands at once and climbs straight to the take-off altitude. */
@@ -36,11 +50,20 @@ class DemoPilotTest {
 
     private var t = 1_000L
     private val fc = FakeFc()
-    private val pilot = DemoPilot(fc) { t }
+    private val scenarios = DemoScenarioStore()
+    private val pilot = DemoPilot(fc, scenarios = scenarios) { t }
 
     private fun state(): JsonObject = Json.parseToJsonElement(pilot.frame()).jsonObject["data"]!!.jsonObject
 
     private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+
+    private fun JsonObject.obj(key: String): JsonObject = this[key]!!.jsonObject
+
+    private fun JsonObject.strings(key: String): List<String> = this[key]!!.jsonArray.map { it.jsonPrimitive.content }
+
+    private fun JsonObject.readiness(id: String): JsonObject = this["readiness"]!!.jsonArray.map { it.jsonObject }.first { it.str("id") == id }
+
+    private fun arItems(ar: JsonObject): List<JsonObject> = ar.obj("cameras").obj("main")["items"]!!.jsonArray.map { it.jsonObject }
 
     private fun action(name: String, args: String = ""): JsonObject {
         val a = if (args.isEmpty()) "" else ""","args":$args"""
@@ -153,13 +176,259 @@ class DemoPilotTest {
     }
 
     @Test
-    fun `stale input while the pilot owns shows the input-stale hold`() {
+    fun `stale input while the pilot owns shows the controller-lost hold`() {
         action("takeoff")
         fly(500)
         t += 400
-        assertEquals("input-stale", state().str("hold_reason"))
+        assertEquals("controller-lost", state().str("hold_reason"))
         pilot.handle("""{"op":"release","src":"android","session":7}""")
         assertNull(state().str("input_src"))
+    }
+
+    @Test
+    fun `the live frame names the link-loss action, offers no goto and reports height above ground`() {
+        val ground = state()
+        assertEquals("rth", ground.str("link_loss_action"))
+        assertTrue(ground["link_loss_in_s"] is JsonNull)
+        assertTrue(ground.strings("surface_ops").isEmpty())
+        assertTrue(ground["statustext"]!!.jsonArray.isEmpty())
+        assertEquals(0.0, ground["agl_m"]!!.jsonPrimitive.double, 0.0)
+        assertEquals("unknown_action", action("goto", GOTO_ARGS).str("err"))
+
+        action("takeoff", """{"alt_m":1.5}""")
+        fly(1_000)
+        assertEquals(1.5, state()["agl_m"]!!.jsonPrimitive.double, 1e-9)
+        assertEquals(1.5, pilot.view().heightM, 1e-9)
+    }
+
+    @Test
+    fun `the flight controller's brake mode is named`() {
+        fc.armed = true
+        fc.altitudeM = 5.0
+        fc.mode = 17
+        assertEquals("BRAKE", state().str("fc_mode_name"))
+    }
+
+    @Test
+    fun `the readiness pin fails the position block item and refuses to arm until unpinned`() {
+        scenarios.pin(DemoScenario.ReadinessBlocked)
+        val s = state()
+        assertEquals("idle", s.str("owner"))
+        val position = s.readiness("position")
+        assertFalse(position["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("block", position.str("severity"))
+        assertEquals("not_ready:position", action("arm").str("err"))
+        assertEquals("not_ready:position", action("launch", """{"after":"hold"}""").str("err"))
+        assertFalse(fc.armed)
+
+        scenarios.pin(null)
+        assertTrue(state().readiness("position")["ok"]!!.jsonPrimitive.boolean)
+        assertTrue(action("arm")["ok"]!!.jsonPrimitive.boolean)
+    }
+
+    @Test
+    fun `mission pins report waypoint 4 of 6 active with an ETA, paused, and complete`() {
+        scenarios.pin(DemoScenario.MissionActive)
+        val active = state()
+        assertEquals("mission_fc", active.str("owner"))
+        assertEquals("AUTO", active.str("fc_mode_name"))
+        assertEquals(true, active["armed"]!!.jsonPrimitive.boolean)
+        assertEquals(false, active["landed"]!!.jsonPrimitive.boolean)
+        val mission = active.obj("mission")
+        assertEquals("active", mission.str("state"))
+        assertEquals(4, mission["seq"]!!.jsonPrimitive.int)
+        assertEquals(6, mission["total"]!!.jsonPrimitive.int)
+        assertEquals("mission_state", mission.str("source"))
+        assertEquals(42.0, pilot.view().missionEtaS!!, 1e-9)
+        t += 2_000
+        assertEquals(40.0, pilot.view().missionEtaS!!, 1e-9)
+
+        scenarios.pin(DemoScenario.MissionPaused)
+        val paused = state()
+        assertEquals("paused", paused.obj("mission").str("state"))
+        assertEquals(4, paused.obj("mission")["seq"]!!.jsonPrimitive.int)
+        assertEquals("pilot", paused.str("owner"))
+        assertNull(pilot.view().missionEtaS)
+        assertTrue(pilot.view().missionRoute)
+
+        scenarios.pin(DemoScenario.MissionComplete)
+        val complete = state().obj("mission")
+        assertEquals("complete", complete.str("state"))
+        assertEquals(6, complete["seq"]!!.jsonPrimitive.int)
+        assertEquals(6, complete["total"]!!.jsonPrimitive.int)
+        assertFalse(pilot.view().missionRoute)
+    }
+
+    @Test
+    fun `the failsafe pin holds an RTL the flight controller entered on its own`() {
+        scenarios.pin(DemoScenario.FcFailsafeRtl)
+        repeat(2) {
+            val s = state()
+            assertEquals("fc_mode", s.str("owner"))
+            assertEquals(6, s["fc_mode"]!!.jsonPrimitive.int)
+            assertEquals("RTL", s.str("fc_mode_name"))
+            assertEquals(true, s["armed"]!!.jsonPrimitive.boolean)
+            assertEquals(false, s["landed"]!!.jsonPrimitive.boolean)
+            val banner = s.obj("banner")
+            assertEquals("pilot.banner.fc_mode_change", banner.str("text_key"))
+            assertEquals("RTL", banner.obj("args").str("mode"))
+            t += 30_000
+        }
+    }
+
+    @Test
+    fun `a stalled pilot answers nothing and sends no frames while its stream stays open`() = runTest {
+        scenarios.pin(DemoScenario.PilotStalled)
+        assertNull(pilot.snapshot().frame)
+        assertNull(pilot.handle("""{"op":"action","name":"arm","src":"android"}"""))
+        assertFalse(fc.armed)
+
+        val got = mutableListOf<String>()
+        backgroundScope.launch { pilot.stream(emptyFlow()).collect { got += it } }
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(got.isEmpty())
+
+        scenarios.pin(null)
+        advanceTimeBy(300)
+        runCurrent()
+        assertTrue(got.isNotEmpty())
+        assertNotNull(pilot.snapshot().frame)
+    }
+
+    @Test
+    fun `the link-loss pin counts down to a return home`() {
+        scenarios.pin(DemoScenario.LinkLoss)
+        val s = state()
+        assertEquals(10.0, s["link_loss_in_s"]!!.jsonPrimitive.double, 1e-9)
+        assertEquals("rth", s.str("link_loss_action"))
+        t += 3_000
+        assertEquals(7.0, state()["link_loss_in_s"]!!.jsonPrimitive.double, 1e-9)
+    }
+
+    @Test
+    fun `the no-GNSS pin keeps position from the EKF origin and fails the GNSS item`() {
+        scenarios.pin(DemoScenario.NoGnss)
+        val s = state()
+        val position = s.readiness("position")
+        assertTrue(position["ok"]!!.jsonPrimitive.boolean)
+        assertTrue(position.str("msg")!!.contains("EKF origin"))
+        val gps = s.readiness("gps")
+        assertFalse(gps["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("warn", gps.str("severity"))
+    }
+
+    @Test
+    fun `the status text pin reports eight or more warnings, one long`() {
+        scenarios.pin(DemoScenario.StatusTexts)
+        val texts = state()["statustext"]!!.jsonArray.map { it.jsonObject }
+        assertTrue(texts.size >= 8)
+        assertTrue(texts.all { it["severity"]!!.jsonPrimitive.int == 4 })
+        assertTrue(texts.any { it.str("text")!!.length > 100 })
+    }
+
+    @Test
+    fun `the fly-here pin offers goto, flies an accepted point and checks its arguments and control mode`() {
+        scenarios.pin(DemoScenario.FlyHere)
+        assertEquals(listOf("goto"), state().strings("surface_ops"))
+        assertEquals("bad_args", action("goto", """{"lon":77.6,"alt_m":10}""").str("err"))
+        assertTrue(action("goto", GOTO_ARGS)["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("goto", state().str("owner"))
+
+        action("control_mode:fc_manual")
+        assertTrue(state().strings("surface_ops").isEmpty())
+        assertEquals("control_mode", action("goto", GOTO_ARGS).str("err"))
+    }
+
+    @Test
+    fun `each goto refusal pin offers goto and refuses it with its code`() {
+        val refusing = DemoScenario.entries.filter { it.gotoRefusal != null }
+        assertEquals(
+            setOf("bad_args", "not_armed", "landed", "tuning", "no_home", "launching", "control_mode", "failsafe"),
+            refusing.map { it.gotoRefusal }.toSet(),
+        )
+        for (scenario in refusing) {
+            scenarios.pin(scenario)
+            val s = state()
+            assertEquals(scenario.name, listOf("goto"), s.strings("surface_ops"))
+            assertEquals(scenario.name, scenario.gotoRefusal, action("goto", GOTO_ARGS).str("err"))
+            when (scenario.gotoRefusal) {
+                "not_armed" -> assertEquals(false, s["armed"]!!.jsonPrimitive.boolean)
+                "landed" -> assertEquals(true, s["landed"]!!.jsonPrimitive.boolean)
+                "tuning" -> assertEquals("tuning", s.str("owner"))
+                "launching" -> assertEquals("takeoff", s.obj("sequence").str("step"))
+                "control_mode" -> assertEquals("fc_manual", s.str("control_mode"))
+                "failsafe" -> assertEquals("RTL", s.str("fc_mode_name"))
+            }
+        }
+    }
+
+    @Test
+    fun `hold pins use the pilot's hold reason wire strings`() {
+        val holds = DemoScenario.entries.filter { it.holdReason != null }
+        assertEquals(
+            listOf("controller-lost", "link-loss", "obstacle-close", "lease-revoked", "lease-busy", "blocked"),
+            holds.map { it.holdReason },
+        )
+        for (scenario in holds) {
+            scenarios.pin(scenario)
+            val s = state()
+            assertEquals(scenario.name, scenario.holdReason, s.str("hold_reason"))
+            assertEquals(scenario.name, "pilot", s.str("owner"))
+        }
+    }
+
+    @Test
+    fun `demo layers show the follow, tracks and re-acquired events only while the follow skill flies`() {
+        val layers = DemoLayerFrames()
+        val feed = DemoFollowFeed()
+        val followKinds = setOf("fpath", "fgoal", "orbit")
+
+        val idle = pilot.view()
+        assertFalse(idle.followRunning)
+        assertTrue(arItems(layers.ar(t, idle)).none { it.str("t") in followKinds })
+        var last: Int? = null
+        for (now in 0L until 32_000L step 100) {
+            val detections = feed.detections(now, 0, idle.followRunning)["detections"]!!.jsonArray.map { it.jsonObject }
+            assertTrue(detections.all { it["track_id"] is JsonNull && it["lock_state"] is JsonNull })
+            assertNull(feed.event(last, now, idle.followRunning))
+            last = null
+        }
+
+        scenarios.pin(DemoScenario.Follow)
+        val following = pilot.view()
+        assertTrue(following.followRunning)
+        assertEquals("skill", state().str("owner"))
+        assertTrue(arItems(layers.ar(t, following)).map { it.str("t") }.containsAll(followKinds))
+        val tracked = feed.detections(4_100L, 0, true)["detections"]!!.jsonArray.map { it.jsonObject }
+        assertTrue(tracked.any { it.str("lock_state") == "locked" })
+        val events = mutableListOf<String>()
+        last = null
+        for (now in 0L until 32_000L step 100) {
+            feed.event(last, now, true)?.let { events += it.first }
+            last = feed.step(now)
+        }
+        assertTrue("follow.reacquired" in events)
+    }
+
+    @Test
+    fun `the demo route draws only while the pilot's mission is active or paused, with its ETA`() {
+        val layers = DemoLayerFrames()
+        val idle = pilot.view()
+        val idleAr = layers.ar(t, idle)
+        assertEquals("none", idleAr.obj("mission").str("state"))
+        assertTrue(arItems(idleAr).none { it.str("t") == "wp" || it.str("t") == "leg" })
+
+        scenarios.pin(DemoScenario.MissionActive)
+        val active = pilot.view()
+        val ar = layers.ar(t, active)
+        assertEquals("active", ar.obj("mission").str("state"))
+        val next = arItems(ar).first { it.str("t") == "wp" && it.str("role") == "next" }
+        assertEquals(4, next["seq"]!!.jsonPrimitive.int)
+        assertEquals(active.missionEtaS!!, next["eta_s"]!!.jsonPrimitive.double, 1e-9)
+
+        scenarios.pin(DemoScenario.MissionComplete)
+        assertTrue(arItems(layers.ar(t, pilot.view())).none { it.str("t") == "wp" || it.str("t") == "leg" })
     }
 
     private companion object {
@@ -170,5 +439,6 @@ class DemoPilotTest {
         const val SET_MODE = 176
         const val TAKEOFF = 22
         const val LAND = 21
+        const val GOTO_ARGS = """{"lat":12.9,"lon":77.6,"alt_m":10}"""
     }
 }

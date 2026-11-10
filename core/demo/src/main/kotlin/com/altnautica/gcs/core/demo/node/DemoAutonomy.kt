@@ -10,16 +10,15 @@ import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.nav.AutonomyControlApi
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.demo.DemoFc
+import com.altnautica.gcs.core.demo.DemoScenarioStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
@@ -32,89 +31,51 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Scripted autonomy feeds for the demo drone: a person walks across the front camera
- * while follow-me cycles through acquiring, following, coasting, searching, re-acquired
- * and lost (4 s each), the vehicle circles a 16 × 10 m room with a planar scan, and the
- * room's occupancy map is served as live tiles.
+ * Scripted autonomy feeds for the demo drone, following its onboard pilot ([DemoPilot]): a
+ * person walks across the front camera, and while the pilot reports the follow skill flying
+ * the follow feed ([DemoFollowFeed]) tracks and follows them; the vehicle circles a 16 × 10 m
+ * room at the pilot's height with a planar scan, and the room's occupancy map is served as
+ * live tiles.
  */
-internal class DemoAutonomy(fc: DemoFc) : AutonomyFeedApi, AutonomyControlApi {
-    @Volatile private var reacquireMode = "smart"
-
+internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : AutonomyFeedApi, AutonomyControlApi {
     private fun t() = SystemClock.elapsedRealtime()
 
     /** Owner and input-source changes go to logcat under [PILOT_LOG_TAG], the demo pilot's flight log. */
-    private val pilot = DemoPilot(fc, { Log.i(PILOT_LOG_TAG, it) }) { t() }
+    private val pilot = DemoPilot(fc, { Log.i(PILOT_LOG_TAG, it) }, scenarios) { t() }
 
-    /** 0 candidate, 1 tracked, 2 acquiring, 3 following, 4 coasting, 5 searching, 6 re-acquired, 7 lost. */
-    private fun step(now: Long) = ((now / STEP_MS) % STEPS).toInt()
-
-    private fun personX(now: Long) = 560f + 220f * sin(now / 3_000.0).toFloat()
+    private val follow = DemoFollowFeed()
 
     override fun detections(): Flow<String> = flow {
         var frame = 0L
         while (true) {
-            val now = t()
-            val s = step(now)
-            val x = personX(now)
-            val items = buildJsonArray {
-                // A second walker that never gets a track: always a candidate.
-                add(det(980f, 330f, 40f, 104f, 0.64f, null, null))
-                when (s) {
-                    0 -> add(det(x, 280f, 60f, 150f, 0.82f, null, null))
-                    1, 2, 3 -> add(det(x, 280f, 60f, 150f, 0.97f, 12, "locked"))
-                    6 -> add(det(x, 280f, 60f, 150f, 0.91f, 15, "locked"))
-                    else -> Unit
-                }
-            }
-            emit(
-                buildJsonObject {
-                    put("v", 2)
-                    put("camera_id", CAMERA)
-                    put("frame_id", frame++)
-                    put("ts_ms", now)
-                    put("frame_width", FRAME_W)
-                    put("frame_height", FRAME_H)
-                    put("detections", items)
-                }.toString(),
-            )
+            emit(follow.detections(t(), frame++, pilot.view().followRunning).toString())
             delay(TICK_MS)
         }
     }
 
-    private fun det(x: Float, y: Float, w: Float, h: Float, conf: Float, track: Int?, lock: String?) = buildJsonObject {
-        putJsonObject("bbox") {
-            put("x", x)
-            put("y", y)
-            put("width", w)
-            put("height", h)
-        }
-        put("class_label", "person")
-        put("confidence", conf)
-        put("track_id", track?.let { JsonPrimitive(it) } ?: JsonNull)
-        put("lock_state", lock?.let { JsonPrimitive(it) } ?: JsonNull)
-    }
-
     override fun navStream(outbound: Flow<String>): Flow<String> = flow {
-        var last = -1
+        // The follow step last seen while the follow skill flies; null while it does not.
+        var last: Int? = null
         var n = 0
         while (true) {
             val now = t()
-            val s = step(now)
-            if (s != last) {
-                if (s == 6) emit(event("follow.reacquired", buildJsonObject { put("track_id", 15); put("similarity", 0.862); put("gap_s", 1.8) }, now))
-                if (s == 7) emit(event("follow.lost", buildJsonObject { put("track_id", 15); put("reason", "lock_lost") }, now))
-                last = s
-            }
+            val snapshot = pilot.snapshot()
+            val view = snapshot.view
+            val s = follow.step(now)
+            val following = view.followRunning
+            follow.event(last, now, following)?.let { (topic, data) -> emit(event(topic, data, now)) }
+            last = if (following) s else null
+            val searching = following && follow.searching(s)
             val angle = (now % ORBIT_MS) / ORBIT_MS.toDouble() * 2 * PI
             val north = (4 * sin(angle)).toFloat()
             val east = (2.5 * cos(angle)).toFloat()
             val yaw = (angle + PI / 2).toFloat()
-            emit(frame("pose", pose(north, east, yaw, if (s == 5) "degraded" else "good"), now))
+            emit(frame("pose", pose(north, east, -view.heightM.toFloat(), yaw, if (searching) "degraded" else "good"), now))
             emit(frame("scan", scan(north, east, yaw), now))
-            emit(frame("follow", follow(s, now, yaw), now))
-            if (n++ % 5 == 0) emit(frame("nav", nav(s), now))
-            layers.frames(now) { kind, data -> frame(kind, data, now) }.forEach { emit(it) }
-            emit(pilot.frame())
+            if (following) emit(frame("follow", follow.follow(s, now, yaw, view.heightM), now))
+            if (n++ % 5 == 0) emit(frame("nav", nav(searching), now))
+            layers.frames(now, view) { kind, data -> frame(kind, data, now) }.forEach { emit(it) }
+            snapshot.frame?.let { emit(it) }
             delay(TICK_MS)
         }
     }.flowOn(Dispatchers.Default)
@@ -134,10 +95,10 @@ internal class DemoAutonomy(fc: DemoFc) : AutonomyFeedApi, AutonomyControlApi {
         put("data", data)
     }.toString()
 
-    private fun pose(n: Float, e: Float, yaw: Float, health: String) = buildJsonObject {
+    private fun pose(n: Float, e: Float, d: Float, yaw: Float, health: String) = buildJsonObject {
         putJsonObject("pose") {
             putJsonArray("R") { listOf(cos(yaw), -sin(yaw), 0f, sin(yaw), cos(yaw), 0f, 0f, 0f, 1f).forEach { add(JsonPrimitive(it)) } }
-            putJsonArray("t") { add(JsonPrimitive(n)); add(JsonPrimitive(e)); add(JsonPrimitive(-3f)) }
+            putJsonArray("t") { add(JsonPrimitive(n)); add(JsonPrimitive(e)); add(JsonPrimitive(d)) }
         }
         put("health", health)
         put("frame", "map_ned")
@@ -162,59 +123,15 @@ internal class DemoAutonomy(fc: DemoFc) : AutonomyFeedApi, AutonomyControlApi {
         }
     }
 
-    private fun nav(s: Int) = buildJsonObject {
+    private fun nav(searching: Boolean) = buildJsonObject {
         put("mode", "external_nav")
         put("active_set", 1)
-        put("extnav_health", if (s == 5) "degraded" else "good")
+        put("extnav_health", if (searching) "degraded" else "good")
         put("odom_rate_hz", 30.0)
         put("last_reset_counter", 0)
         put("obstacle_rate_hz", 10.0)
         put("min_obstacle_m", 1.8)
         put("gps_fix", 0)
-    }
-
-    private fun follow(s: Int, now: Long, yaw: Float) = buildJsonObject {
-        val phase = when (s) {
-            0, 1 -> "idle"
-            2 -> "acquiring"
-            3, 6 -> "following"
-            4 -> "coasting"
-            5 -> "searching"
-            else -> "lost"
-        }
-        put("phase", phase)
-        put("track_id", if (s >= 6) 15 else 12)
-        put("confidence", 0.97)
-        put("range_m", 10.2)
-        put("range_sigma_m", 0.3)
-        putJsonArray("range_cues") {
-            add(buildJsonObject { put("kind", "ground"); put("range_m", 10.1); put("sigma_m", 0.4) })
-            add(buildJsonObject { put("kind", "box_height"); put("range_m", 10.4); put("sigma_m", 1.5) })
-        }
-        put("target_speed_mps", 1.4)
-        put("agl_m", 4.1)
-        put("agl_source", "rng")
-        put("reacquire_mode", reacquireMode)
-        put("coast_remaining_s", if (s == 4) (STEP_MS - now % STEP_MS) / 1000.0 else 0.0)
-        put("pipeline_latency_ms", 85)
-        put("hold_reason", JsonNull)
-        put("bearing_deg", 64.0)
-        put("depression_deg", 22.0)
-        putJsonArray("target_ned") { add(JsonPrimitive(5.5)); add(JsonPrimitive(1.5)) }
-        putJsonArray("target_vel_ned") { add(JsonPrimitive(1.2 * cos(yaw))); add(JsonPrimitive(1.2 * sin(yaw))) }
-        if (s == 4) {
-            putJsonObject("predicted_bbox") {
-                put("camera_id", CAMERA)
-                put("frame_w", FRAME_W)
-                put("frame_h", FRAME_H)
-                put("x", personX(now) + 40f)
-                put("y", 280f)
-                put("w", 60f)
-                put("h", 150f)
-            }
-        } else {
-            put("predicted_bbox", JsonNull)
-        }
     }
 
     private val tiles: List<JsonObject> by lazy { buildTiles() }
@@ -275,18 +192,13 @@ internal class DemoAutonomy(fc: DemoFc) : AutonomyFeedApi, AutonomyControlApi {
         AgentResult.Ok(buildJsonObject { put("designated", true) })
 
     override suspend fun putPluginConfig(pluginId: String, key: String, value: JsonElement): AgentResult<JsonElement> {
-        if (key == "reacquire_mode") (value as? JsonPrimitive)?.content?.let { reacquireMode = it }
+        if (key == "reacquire_mode") (value as? JsonPrimitive)?.content?.let { follow.reacquireMode = it }
         return AgentResult.Ok(buildJsonObject { put("ok", true) })
     }
 
     private companion object {
         const val PILOT_LOG_TAG = "DemoPilot"
-        const val CAMERA = "main"
-        const val FRAME_W = 1280
-        const val FRAME_H = 720
         const val TICK_MS = 100L
-        const val STEP_MS = 4_000L
-        const val STEPS = 8
         const val ORBIT_MS = 40_000L
         const val ROOM_N = 8f
         const val ROOM_E = 5f

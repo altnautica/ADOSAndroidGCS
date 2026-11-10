@@ -6,6 +6,7 @@ import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.demo.DemoIds
+import com.altnautica.gcs.core.demo.DemoScenarioStore
 import com.altnautica.gcs.core.demo.DemoVehicleHub
 import com.altnautica.gcs.core.demo.video.DemoVideoFactory
 import com.altnautica.gcs.core.model.DeviceId
@@ -18,14 +19,18 @@ import kotlinx.coroutines.SupervisorJob
 
 /**
  * Serves the demo Visor's capture and sensor pages, the demo ground station's sensors, and
- * the demo drone's autonomy feeds and flight-controller setup engine.
+ * the demo drone's autonomy feeds and flight-controller setup engine. The drone's onboard
+ * pilot reports the scenario pinned in [scenarios], if any.
  */
 @Singleton
-class DemoNodeApis @Inject constructor(private val hub: DemoVehicleHub) : LocalNodeApis {
+class DemoNodeApis @Inject constructor(
+    private val hub: DemoVehicleHub,
+    private val scenarios: DemoScenarioStore = DemoScenarioStore(),
+) : LocalNodeApis {
     private val capture by lazy { DemoCaptureApi() }
     private val visorSensors by lazy { DemoVisorSensors() }
     private val groundSensors by lazy { DemoGroundSensors() }
-    private val autonomy by lazy { DemoAutonomy(hub) }
+    private val autonomy by lazy { DemoAutonomy(hub, scenarios) }
     private val fcSetup by lazy { DemoFcSetup(CoroutineScope(SupervisorJob() + Dispatchers.Default)) }
     private val gimbal by lazy { DemoGimbal() }
 

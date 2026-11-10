@@ -20,10 +20,10 @@ import kotlin.math.sin
 
 /**
  * The demo drone's overlay kinds (`ar`, `obstacles`, `depth`, `surfaces`), in the agent's
- * wire shape, animated so the cockpit layers move: a mission that cycles through its
- * states, an orbit ring, a follow path that detours, and an obstacle wall that drifts
- * across the frame. Depth and surfaces are produced only while a demand lease holds them,
- * as on a real agent.
+ * wire shape, animated so the cockpit layers move, and following the demo pilot
+ * ([DemoPilotView]): the mission route only while the pilot's mission is active or paused,
+ * the follow path, goal and orbit ring only while the follow skill flies. Depth and surfaces
+ * are produced only while a demand lease holds them, as on a real agent.
  */
 internal class DemoLayerFrames {
     private val leases = HashMap<String, Long>()
@@ -61,9 +61,9 @@ internal class DemoLayerFrames {
 
     private fun held(kind: String, now: Long) = (leases[kind] ?: 0L) > now
 
-    /** The nav-stream frames for this tick. */
-    fun frames(now: Long, envelope: (String, JsonObject) -> String): List<String> = buildList {
-        add(envelope("ar", ar(now)))
+    /** The nav-stream frames for this tick, following the pilot's [view]. */
+    fun frames(now: Long, view: DemoPilotView, envelope: (String, JsonObject) -> String): List<String> = buildList {
+        add(envelope("ar", ar(now, view)))
         add(envelope("obstacles", obstacles(now)))
         if (held("depth", now)) add(envelope("depth", depth(now)))
         if (held("surfaces", now) && (now / 1000) != lastSurfacesS) {
@@ -80,11 +80,11 @@ internal class DemoLayerFrames {
 
     private fun r3(v: Double) = (v * 1000).roundToInt() / 1000.0
 
-    fun ar(now: Long): JsonObject {
+    fun ar(now: Long, view: DemoPilotView): JsonObject {
         val phase = (now % CYCLE_MS) / CYCLE_MS.toDouble() * 2 * PI
         val sway = 0.04 * sin(phase * 3)
-        val missionState = MISSION_STATES[((now / STATE_MS) % MISSION_STATES.size).toInt()]
-        val seq = 4 + ((now / STATE_MS) % 2).toInt()
+        val seq = view.missionSeq
+        val total = view.missionTotal
         val orbitCx = 0.5 + 0.05 * cos(phase)
         val orbitCy = 0.62
         val ring = (0 until 36).map { i ->
@@ -97,52 +97,51 @@ internal class DemoLayerFrames {
             put("ts_ms", now)
             put("approx", false)
             put("reason", JsonNull)
-            putJsonObject("mission") {
-                put("state", missionState)
-                put("seq", seq)
-                put("total", 6)
-                put("item_reached", seq - 1)
-                put("id", JsonNull)
-                put("source", "mission_state")
-                put("age_ms", 120)
-                put("landing_seq", false)
-            }
+            put("mission", view.mission)
             putJsonObject("cameras") {
                 putJsonObject(CAMERA) {
                     put("frame_w", FRAME_W)
                     put("frame_h", FRAME_H)
                     put("reason", JsonNull)
                     putJsonArray("items") {
-                        add(buildJsonObject {
-                            put("t", "wp"); put("k", "wp:$seq"); put("seq", seq); put("role", "next")
-                            put("x", r3(0.52 + sway)); put("y", 0.41); put("gx", r3(0.52 + sway)); put("gy", 0.63)
-                            put("dist_m", r3(120.0 - 20 * sin(phase))); put("eta_s", r3(42.0 - 7 * sin(phase))); put("size", 0.25)
-                        })
-                        add(buildJsonObject {
-                            put("t", "wp"); put("k", "wp:${seq + 1}"); put("seq", seq + 1); put("role", "after")
-                            put("x", r3(0.68 + sway)); put("y", 0.38); put("gx", JsonNull); put("gy", JsonNull)
-                            put("dist_m", 180.0); put("eta_s", JsonNull); put("size", 0.25)
-                        })
-                        add(buildJsonObject {
-                            put("t", "wp"); put("k", "wp:${seq + 2}"); put("seq", seq + 2); put("role", "other")
-                            put("x", r3(0.8 + sway)); put("y", 0.36); put("size", 0.25)
-                        })
-                        add(buildJsonObject { put("t", "leg"); put("k", "leg:active"); put("role", "active"); put("pts", pts(0.5 to 0.9, 0.52 + sway to 0.63)) })
-                        add(buildJsonObject { put("t", "leg"); put("k", "leg:next"); put("role", "next"); put("pts", pts(0.52 + sway to 0.63, 0.68 + sway to 0.6)) })
-                        add(buildJsonObject { put("t", "leg"); put("k", "leg:future"); put("role", "future"); put("pts", pts(0.68 + sway to 0.6, 0.8 + sway to 0.58)) })
+                        if (view.missionRoute) {
+                            add(buildJsonObject {
+                                put("t", "wp"); put("k", "wp:$seq"); put("seq", seq); put("role", "next")
+                                put("x", r3(0.52 + sway)); put("y", 0.41); put("gx", r3(0.52 + sway)); put("gy", 0.63)
+                                put("dist_m", r3(120.0 - 20 * sin(phase))); put("eta_s", view.missionEtaS); put("size", 0.25)
+                            })
+                            if (seq + 1 <= total) {
+                                add(buildJsonObject {
+                                    put("t", "wp"); put("k", "wp:${seq + 1}"); put("seq", seq + 1); put("role", "after")
+                                    put("x", r3(0.68 + sway)); put("y", 0.38); put("gx", JsonNull); put("gy", JsonNull)
+                                    put("dist_m", 180.0); put("eta_s", JsonNull); put("size", 0.25)
+                                })
+                            }
+                            if (seq + 2 <= total) {
+                                add(buildJsonObject {
+                                    put("t", "wp"); put("k", "wp:${seq + 2}"); put("seq", seq + 2); put("role", "other")
+                                    put("x", r3(0.8 + sway)); put("y", 0.36); put("size", 0.25)
+                                })
+                            }
+                            add(buildJsonObject { put("t", "leg"); put("k", "leg:active"); put("role", "active"); put("pts", pts(0.5 to 0.9, 0.52 + sway to 0.63)) })
+                            add(buildJsonObject { put("t", "leg"); put("k", "leg:next"); put("role", "next"); put("pts", pts(0.52 + sway to 0.63, 0.68 + sway to 0.6)) })
+                            add(buildJsonObject { put("t", "leg"); put("k", "leg:future"); put("role", "future"); put("pts", pts(0.68 + sway to 0.6, 0.8 + sway to 0.58)) })
+                        }
                         add(buildJsonObject {
                             put("t", "home"); put("k", "home"); put("x", r3(0.1 + sway)); put("y", 0.8); put("gx", r3(0.1 + sway)); put("gy", 0.85); put("dist_m", 35.0)
                         })
                         add(buildJsonObject { put("t", "fpv"); put("k", "fpv"); put("x", r3(0.5 + sway / 2)); put("y", 0.55) })
-                        add(buildJsonObject {
-                            put("t", "fpath"); put("k", "fpath"); put("state", if (detour) "detour" else "clear")
-                            put("pts", pts(0.5 to 0.7, (if (detour) 0.42 else 0.47) to 0.64, 0.45 + sway to 0.6))
-                        })
-                        add(buildJsonObject { put("t", "fgoal"); put("k", "fgoal"); put("x", r3(0.45 + sway)); put("y", 0.6) })
-                        add(buildJsonObject {
-                            put("t", "orbit"); put("k", "orbit"); put("dir", "cw"); put("cx", r3(orbitCx)); put("cy", orbitCy)
-                            put("pts", pts(*ring.toTypedArray()))
-                        })
+                        if (view.followRunning) {
+                            add(buildJsonObject {
+                                put("t", "fpath"); put("k", "fpath"); put("state", if (detour) "detour" else "clear")
+                                put("pts", pts(0.5 to 0.7, (if (detour) 0.42 else 0.47) to 0.64, 0.45 + sway to 0.6))
+                            })
+                            add(buildJsonObject { put("t", "fgoal"); put("k", "fgoal"); put("x", r3(0.45 + sway)); put("y", 0.6) })
+                            add(buildJsonObject {
+                                put("t", "orbit"); put("k", "orbit"); put("dir", "cw"); put("cx", r3(orbitCx)); put("cy", orbitCy)
+                                put("pts", pts(*ring.toTypedArray()))
+                            })
+                        }
                         add(buildJsonObject {
                             put("t", "edge"); put("k", "edge:home"); put("of", "home"); put("seq", JsonNull)
                             put("ang", r3(2.6 + 0.3 * sin(phase))); put("dist_m", 35.0)
@@ -246,7 +245,5 @@ internal class DemoLayerFrames {
         const val COLS = 32
         const val ROWS = 18
         const val CYCLE_MS = 12_000L
-        const val STATE_MS = 6_000L
-        val MISSION_STATES = listOf("active", "active", "paused", "active", "returning", "loaded")
     }
 }
