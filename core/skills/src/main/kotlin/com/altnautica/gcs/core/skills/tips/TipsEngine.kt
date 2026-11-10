@@ -26,6 +26,8 @@ data class TipsContext(
     val shownAtMs: Long?,
     /** Tips hidden on this open without being seen: not offered again until the next open. */
     val hiddenThisOpen: Set<String> = emptySet(),
+    /** An alert banner is on screen: tips wait until it is gone. */
+    val alertBannerVisible: Boolean = false,
 )
 
 sealed interface TipDecision {
@@ -63,6 +65,7 @@ class TipsEngine(spec: TipsSpec) {
         "flight_screen" -> ctx.flightScreen
         "sheet_or_menu_open" -> ctx.sheetOrMenuOpen
         "tour_visible" -> ctx.tourVisible
+        "alert_banner_visible" -> ctx.alertBannerVisible
         else -> null
     }
 

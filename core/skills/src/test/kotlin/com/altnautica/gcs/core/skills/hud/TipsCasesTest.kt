@@ -29,6 +29,7 @@ class TipsCasesTest {
         shownTipId = o["shownTipId"].str(),
         shownAtMs = o["shownAtMs"].long(),
         hiddenThisOpen = o["hiddenThisOpen"].strings().toSet(),
+        alertBannerVisible = o["alertBannerVisible"].bool() ?: false,
     )
 
     private fun wire(d: TipDecision): Map<String, Any?> = when (d) {
