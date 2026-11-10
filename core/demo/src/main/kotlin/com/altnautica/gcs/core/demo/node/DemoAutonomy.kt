@@ -7,6 +7,8 @@ import androidx.core.graphics.set
 import android.util.Base64
 import android.util.Log
 import com.altnautica.gcs.core.agent.http.AgentResult
+import com.altnautica.gcs.core.agent.mission.MissionMirror
+import com.altnautica.gcs.core.agent.mission.MissionStatusWire
 import com.altnautica.gcs.core.agent.nav.AutonomyControlApi
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.demo.DemoFc
@@ -16,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -81,6 +84,14 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
     }.flowOn(Dispatchers.Default)
 
     override fun pilotStream(outgoing: Flow<String>): Flow<String> = pilot.stream(outgoing).flowOn(Dispatchers.Default)
+
+    /** The agent's mission mirror for the demo drone: the pilot frame's mission block, every 2 s. */
+    fun missionMirror(): Flow<MissionMirror?> = flow {
+        while (true) {
+            emit(demoMissionMirror(pilot.view()))
+            delay(MIRROR_POLL_MS)
+        }
+    }.flowOn(Dispatchers.Default)
 
     private fun frame(kind: String, data: JsonObject, now: Long) = buildJsonObject {
         put("kind", kind)
@@ -199,6 +210,7 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
     private companion object {
         const val PILOT_LOG_TAG = "DemoPilot"
         const val TICK_MS = 100L
+        const val MIRROR_POLL_MS = 2_000L
         const val ORBIT_MS = 40_000L
         const val ROOM_N = 8f
         const val ROOM_E = 5f
@@ -208,3 +220,11 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
         const val MAP_SEQ = 1L
     }
 }
+
+private val MIRROR_JSON = Json { ignoreUnknownKeys = true }
+
+/** The mirror the demo drone's agent would serve: no plan items, the pilot's mission state (`none` when idle). */
+internal fun demoMissionMirror(view: DemoPilotView): MissionMirror = MissionMirror(
+    mission = runCatching { MIRROR_JSON.decodeFromJsonElement(MissionStatusWire.serializer(), view.mission) }.getOrNull()
+        ?: MissionStatusWire(),
+)

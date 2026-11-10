@@ -27,6 +27,10 @@ class SpecText(private val strings: Map<String, String>) {
         }
     }
 
+    /** A MAV_RESULT name (`DENIED`, `TEMPORARILY_REJECTED`, …) as the spec's sentence; any other text unchanged. */
+    fun mavResultText(message: String?): String? =
+        message?.let { m -> "mav_result.$m".takeIf(::has)?.let { text(it) } ?: m }
+
     private companion object {
         val ARG = Regex("""\{([a-z_]+)\}""")
         val ARG_KEYS = mapOf("source" to "pilot.banner.source.", "action" to "pilot.link_loss_action.")

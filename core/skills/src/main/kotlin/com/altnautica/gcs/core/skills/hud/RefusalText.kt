@@ -13,7 +13,9 @@ fun SpecText.refusalText(code: String?, readinessLabel: ((String) -> String)? = 
         return text("refusal.not_ready", mapOf("item" to item))
     }
     val key = "refusal.${code.replace(' ', '_')}"
-    return if (has(key)) text(key) else text("refusal.unknown", mapOf("code" to code))
+    if (has(key)) return text(key)
+    if (has("mav_result.$code")) return text("mav_result.$code")
+    return text("refusal.unknown", mapOf("code" to code))
 }
 
 /** True when the spec names [code] (or it is a `not_ready:` code): a sentence, not a raw id. */

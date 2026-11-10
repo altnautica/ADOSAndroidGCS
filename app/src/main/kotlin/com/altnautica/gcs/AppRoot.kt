@@ -137,6 +137,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
             predictivePopTransitionSpec = transitions.predictivePopTransitionSpec,
             entryProvider = entryProvider {
                 entry<HomeKey> {
+                    val setupOffer by viewModel.setupOffer.collectAsStateWithLifecycle()
                     HomeRoute(
                         onOpenSurface = { surface, id ->
                             when {
@@ -147,6 +148,9 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onAddVehicle = { BackStackOps.push(backStack, ConnectKey()) },
                         onOpenController = { BackStackOps.push(backStack, ControllerKey) },
                         onOpenQuickMenu = { quickMenuOpen = true },
+                        setupOfferNodeId = setupOffer?.nodeId,
+                        onOpenSetupOffer = viewModel::openSetup,
+                        onSetupOfferLater = viewModel::later,
                     )
                 }
                 entry<PlanKey> { key ->

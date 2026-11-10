@@ -3,9 +3,11 @@ package com.altnautica.gcs.core.agent.node
 import com.altnautica.gcs.core.agent.capture.CaptureApi
 import com.altnautica.gcs.core.agent.fcsetup.SetupBackend
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
+import com.altnautica.gcs.core.agent.mission.MissionMirror
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.VideoSource
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Node pages served in-process instead of by an agent. Bound into a Hilt set;
@@ -33,4 +35,11 @@ interface LocalNodeApis {
 
     /** Gimbal rate control served in-process for [id]; independent of [handles], like [autonomy]. */
     fun gimbal(id: DeviceId): com.altnautica.gcs.core.agent.gimbal.GimbalApi? = null
+
+    /**
+     * The agent's mission mirror (`GET /api/v1/mission`) served in-process for [id], so a
+     * simulated vehicle reached straight over MAVLink still names its mission state.
+     * Independent of [handles], like [autonomy].
+     */
+    fun missionMirror(id: DeviceId): Flow<MissionMirror?>? = null
 }

@@ -153,6 +153,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -443,7 +444,10 @@ class CockpitViewModel @AssistedInject constructor(
 
     val loadout: StateFlow<Loadout> = bindings.loadout.stateIn(viewModelScope, SharingStarted.Eagerly, Loadout.defaults(spec.builtins))
 
+    /** Skill notices; a flight controller's MAV_RESULT name in the detail reads as the spec's sentence. */
     val notices: SharedFlow<SkillNotice> = session.notices
+        .map { it.copy(message = specText.mavResultText(it.message)) }
+        .shareIn(viewModelScope, SharingStarted.Eagerly)
 
     /** Every skill's current state by id: enabled flags for the follow rail. */
     val skillStates: StateFlow<Map<String, SkillState>> = session.states
@@ -887,11 +891,21 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
-    /** Banners, gate ring, stick session and countdowns from the pilot state. */
+    /**
+     * True while the newest pilot frame is younger than the spec's `stale_after_ms`; re-checked
+     * on the 2 Hz tick, so everything derived from a stalled pilot hides instead of freezing.
+     */
+    val pilotFresh: StateFlow<Boolean> = combine(pilot.state, tick500) { p, _ ->
+        p != null && clock.nowMs() - p.receivedAtMs <= PilotState.STALE_MS
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
+
+    /**
+     * Banners, gate ring, stick session, countdowns and the launch steps from the pilot state.
+     * A frame older than [PilotState.STALE_MS] shows none of them: a frozen countdown or
+     * handover would read as live.
+     */
     val flow: StateFlow<FlowUi> = combine(pilot.state, streamer.streaming, tick500) { p, streaming, _ ->
-        val f = FlowUi.of(p, PilotWire.SRC_ANDROID, streaming)
-        // A banner past its vehicle time is dropped by the pilot; the local cap keeps a stale frame from pinning it.
-        if (p != null && clock.nowMs() - p.receivedAtMs > PilotState.STALE_MS) f.copy(banner = null, gateProgress = null) else f
+        if (p != null && clock.nowMs() - p.receivedAtMs > PilotState.STALE_MS) FlowUi() else FlowUi.of(p, PilotWire.SRC_ANDROID, streaming)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlowUi())
 
     private val _paramNudges = MutableSharedFlow<Int>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)

@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.link.mission
 
 import com.altnautica.gcs.core.agent.AgentClientFactory
 import com.altnautica.gcs.core.agent.mission.MissionMirror
+import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Reach
@@ -22,8 +23,9 @@ import javax.inject.Singleton
 
 /**
  * The flight controller's actual plan as the vehicle's agent mirrors it
- * (`GET /api/v1/mission`). Emits null while the vehicle is reached straight over
- * MAVLink or the agent cannot be read. The planner and the cockpit maps both read it.
+ * (`GET /api/v1/mission`), or as an in-process node serves it ([LocalNodeApis.missionMirror]).
+ * Emits null while the vehicle is reached straight over MAVLink with no such source, or the
+ * agent cannot be read. The planner, the quick menu and the cockpit maps read it.
  */
 fun interface MissionMirrorSource {
     fun observe(id: DeviceId): Flow<MissionMirror?>
@@ -34,8 +36,12 @@ fun interface MissionMirrorSource {
 class AgentMissionMirrorSource @Inject constructor(
     private val nodes: NodeRepository,
     private val clients: AgentClientFactory,
+    private val local: Set<@JvmSuppressWildcards LocalNodeApis>,
 ) : MissionMirrorSource {
-    override fun observe(id: DeviceId): Flow<MissionMirror?> = nodes.node(id)
+    override fun observe(id: DeviceId): Flow<MissionMirror?> =
+        local.firstNotNullOfOrNull { it.missionMirror(id) }?.distinctUntilChanged() ?: agentMirror(id)
+
+    private fun agentMirror(id: DeviceId): Flow<MissionMirror?> = nodes.node(id)
         .map { it?.reaches?.firstOrNull() }
         .distinctUntilChanged()
         .flatMapLatest<Reach?, MissionMirror?> { reach ->

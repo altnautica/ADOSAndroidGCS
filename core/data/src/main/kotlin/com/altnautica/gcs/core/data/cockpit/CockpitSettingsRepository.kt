@@ -36,8 +36,8 @@ data class CockpitSettings(
     val maxBrightnessDefault: Boolean = false,
     val altitudeReference: AltitudeReference = AltitudeReference.Rel,
     val density: CockpitDensity = CockpitDensity.Std,
-    /** Video share of a medium/expanded split, 0.2..0.8. */
-    val splitRatio: Float = 0.6f,
+    /** Video share of a medium/expanded split, 0.3..0.7 (views.json `split.divider`). */
+    val splitRatio: Float = 0.5f,
     /** Telemetry side pane on expanded widths. */
     val telemetryPane: Boolean = true,
     /** Spoken flight-flow prompts: handover, return home, low battery and mission state changes. */
@@ -102,8 +102,8 @@ class CockpitSettingsRepository @Inject constructor(
     suspend fun setLayers(vehicleId: String, json: String) = dataStore.edit { it[layersKey(vehicleId)] = json }
 
     companion object {
-        const val MIN_SPLIT = 0.2f
-        const val MAX_SPLIT = 0.8f
+        const val MIN_SPLIT = 0.3f
+        const val MAX_SPLIT = 0.7f
         const val BATTERY_LOW_MIN = 10
         const val BATTERY_LOW_MAX = 60
         const val BATTERY_CRITICAL_MIN = 5

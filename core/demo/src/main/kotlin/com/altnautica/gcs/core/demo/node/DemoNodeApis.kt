@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.agent.capture.CaptureApi
 import com.altnautica.gcs.core.agent.fcsetup.SetupBackend
+import com.altnautica.gcs.core.agent.mission.MissionMirror
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.sensors.SensorsApi
@@ -16,6 +17,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Serves the demo Visor's capture and sensor pages, the demo ground station's sensors, and
@@ -56,4 +58,7 @@ class DemoNodeApis @Inject constructor(
 
     /** The demo drone's gimbal takes rate commands. */
     override fun gimbal(id: DeviceId): com.altnautica.gcs.core.agent.gimbal.GimbalApi? = if (id == DemoIds.DRONE) gimbal else null
+
+    /** The demo drone's mission as its agent would mirror it: the pilot's mission block, `none` when idle. */
+    override fun missionMirror(id: DeviceId): Flow<MissionMirror?>? = if (id == DemoIds.DRONE) autonomy.missionMirror() else null
 }
