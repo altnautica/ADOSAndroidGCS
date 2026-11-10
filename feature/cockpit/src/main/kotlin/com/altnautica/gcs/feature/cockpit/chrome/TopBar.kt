@@ -10,22 +10,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.Menu
@@ -67,10 +60,6 @@ import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.alerts.fcStateDetailRes
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
-import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 
 /** Top-bar items that move into the Menu when the row runs out of room (`top_bar.overflow`). */
 enum class TopBarItem(val specId: String) {
@@ -278,7 +267,7 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
 }
 
 @Composable
-private fun severityColor(s: StatusSeverity): Color {
+internal fun severityColor(s: StatusSeverity): Color {
     val c = LocalChrome.current
     return when (s) {
         StatusSeverity.Ok -> c.ok
@@ -302,44 +291,6 @@ fun statusItemTitle(item: StatusItem): String {
     item.specKey?.let { return specText(it) }
     item.check?.let { return preflightItemLabel(it, known = true) }
     return item.text.orEmpty()
-}
-
-/**
- * The alert list under the pill: every active item with its source. Opening it
- * acknowledges what it shows; a tap outside it or system Back closes it. Nothing above
- * [topInset] (the top bar) is covered, so STOP takes the first press.
- */
-@Composable
-fun StatusList(items: List<StatusItem>, onClose: () -> Unit, modifier: Modifier = Modifier, topInset: androidx.compose.ui.unit.Dp = 0.dp) {
-    val c = LocalChrome.current
-    if (LocalNavigationEventDispatcherOwner.current != null) {
-        NavigationBackHandler(
-            state = rememberNavigationEventState(NavigationEventInfo.None),
-            isBackEnabled = true,
-            onBackCompleted = onClose,
-        )
-    }
-    Box(Modifier.fillMaxSize().padding(top = topInset).clickable(interactionSource = null, indication = null, onClick = onClose)) {
-        ChromePanel(modifier.widthIn(min = 280.dp, max = 420.dp).testTag("status-list")) {
-            Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()).padding(c.pad)) {
-                Text(specText("cockpit.alerts.title"), style = c.chipText)
-                Spacer(Modifier.height(6.dp))
-                if (items.isEmpty()) {
-                    Text(specText("cockpit.alerts.empty"), style = c.topBarText.copy(color = c.textDim))
-                }
-                for (item in items) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(8.dp).background(severityColor(item.severity), CircleShape))
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(statusItemTitle(item), style = c.topBarText, maxLines = 2)
-                            Text(specText("cockpit.status.source.${item.source.key}"), style = c.labelText)
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 /**
