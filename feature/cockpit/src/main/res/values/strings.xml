@@ -53,10 +53,6 @@
 
     <!-- Skills -->
 
-    <!-- Skill reasons -->
-    <string name="cockpit_reason_already_armed">Already armed</string>
-    <string name="cockpit_reason_already_disarmed">Already disarmed</string>
-
     <!-- Confirm sheet -->
 
     <!-- Flight mode picker -->

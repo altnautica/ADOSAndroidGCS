@@ -24,6 +24,20 @@ class ReasonTextSpecTest {
     }
 
     @Test
+    fun `arm state and landed state refusals read their spec text`() {
+        assertEquals(strings.format("refusal.already_armed"), reasonTextOf(strings, SkillReason.ALREADY_ARMED))
+        assertEquals(strings.format("refusal.already_disarmed"), reasonTextOf(strings, SkillReason.ALREADY_DISARMED))
+        assertEquals(strings.format("refusal.landed_unknown"), reasonTextOf(strings, SkillReason.LANDED_UNKNOWN))
+    }
+
+    @Test
+    fun `an unsupported or failed command does not blame the flight controller`() {
+        assertEquals(strings.format("refusal.unknown_action"), reasonKeyText(strings, SkillReason.COMMAND_UNSUPPORTED))
+        assertEquals(strings.format("mav_result.FAILED"), reasonKeyText(strings, SkillReason.COMMAND_FAILED))
+        assertEquals("Failed", reasonKeyText(strings, SkillReason.COMMAND_FAILED))
+    }
+
+    @Test
     fun `extension text has no spec key`() {
         assertNull(reasonKeyText(strings, "my extension says no"))
     }

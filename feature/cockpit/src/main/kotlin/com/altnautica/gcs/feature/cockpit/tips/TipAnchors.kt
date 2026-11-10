@@ -64,8 +64,8 @@ val LocalTipAnchors = staticCompositionLocalOf<TipAnchorRegistry?> { null }
 /**
  * Marks this element as the tip anchor or never-cover zone [id] (`status_pill`,
  * `flight_state_chip`, `layer_button`, `stop`, `skill_picker_chip`, `bottom_left_card`,
- * `gimbal_pad`, `left_column`): tags it `tip-anchor-<id>` and reports its bounds in root to
- * [LocalTipAnchors] while it is laid out and [visible]. A touch going down on it is reported
+ * `gimbal_pad`, `left_column`, `top_bar`, `alert_stack`): tags it `tip-anchor-<id>` and reports
+ * its bounds in root to [LocalTipAnchors] while it is laid out and [visible]. A touch going down on it is reported
  * too, without consuming it, so the element still gets its own tap or drag.
  */
 fun Modifier.tipAnchor(id: String, visible: Boolean = true): Modifier = this.composed {

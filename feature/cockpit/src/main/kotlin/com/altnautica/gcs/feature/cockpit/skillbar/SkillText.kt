@@ -6,8 +6,6 @@ import com.altnautica.gcs.core.skills.hud.refusalText
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
-import android.content.res.Resources
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CenterFocusStrong
@@ -35,7 +33,6 @@ import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.core.skills.builtinLabelRes
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 
 /** Material Symbols Outlined for the skill icon names; extensions fall back to a generic glyph. */
@@ -100,10 +97,13 @@ private val REASON_KEYS = mapOf(
     SkillReason.NO_CHARGES to "refusal.no_charges",
     SkillReason.COMMAND_REJECTED to "refusal.command_rejected",
     SkillReason.COMMAND_TIMEOUT to "refusal.no_response",
-    SkillReason.COMMAND_UNSUPPORTED to "refusal.unsupported",
+    SkillReason.COMMAND_UNSUPPORTED to "refusal.unknown_action",
     SkillReason.COMMAND_DENIED to "refusal.not_sent",
     SkillReason.COMMAND_QUEUED to "refusal.queued",
-    SkillReason.COMMAND_FAILED to "flow.mode.fc.failed",
+    SkillReason.COMMAND_FAILED to "mav_result.FAILED",
+    SkillReason.ALREADY_ARMED to "refusal.already_armed",
+    SkillReason.ALREADY_DISARMED to "refusal.already_disarmed",
+    SkillReason.LANDED_UNKNOWN to "refusal.landed_unknown",
     SkillReason.STATE_ERROR to "refusal.state_error",
     SkillReason.FLY_HERE_TARGET to "refusal.fly_here_target",
     CockpitAutonomy.REASON_NO_TARGET to "refusal.no_target",
@@ -124,12 +124,6 @@ private val FLY_HERE_REASON_KEYS = mapOf(
     SkillReason.GOTO_FAILSAFE to "refusal.failsafe",
 )
 
-/** Reasons the spec has no text for yet; read from the module's string resources. */
-private val REASONS_WITHOUT_SPEC = mapOf(
-    SkillReason.ALREADY_ARMED to R.string.cockpit_reason_already_armed,
-    SkillReason.ALREADY_DISARMED to R.string.cockpit_reason_already_disarmed,
-)
-
 /** Built-in labels are localized; an extension's label is shown as the extension provides it. */
 @Composable
 fun skillLabel(skill: Skill): String = skill.builtinLabelRes()?.let { stringResource(it) } ?: skill.labelKey
@@ -144,16 +138,15 @@ fun reasonKeyText(strings: SetupStringsSpec, reasonKey: String): String? =
  * answer with (failsafe, not_ready:<item>, …) through the spec's refusal texts; any other
  * reason is extension text shown verbatim.
  */
-fun reasonTextOf(strings: SetupStringsSpec, resources: Resources, reasonKey: String): String {
+fun reasonTextOf(strings: SetupStringsSpec, reasonKey: String): String {
     reasonKeyText(strings, reasonKey)?.let { return it }
-    REASONS_WITHOUT_SPEC[reasonKey]?.let { return resources.getString(it) }
     val spec = SpecText(strings)
     return if (spec.knowsRefusal(reasonKey)) spec.refusalText(reasonKey) else reasonKey
 }
 
 @Composable
 fun reasonText(reasonKey: String): String =
-    reasonTextOf(LocalCockpitStrings.current, LocalResources.current, reasonKey)
+    reasonTextOf(LocalCockpitStrings.current, reasonKey)
 
 @Composable
 fun confirmTitle(key: String, fallback: String): String = CONFIRM_TITLES[key]?.let { specText(it) } ?: fallback

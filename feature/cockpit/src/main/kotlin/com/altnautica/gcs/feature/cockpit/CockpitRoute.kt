@@ -118,7 +118,7 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
                 CockpitEvent.RecordingFailed -> snackbar.showSnackbar(vm.specStrings.format("cockpit.toast.recording_failed"))
                 CockpitEvent.ChecklistOverridden -> snackbar.showSnackbar(vm.specStrings.format("cockpit.toast.checklist_overridden"))
                 is CockpitEvent.TargetRefused ->
-                    snackbar.showSnackbar(reasonTextOf(vm.specStrings, resources, event.reasonKey))
+                    snackbar.showSnackbar(reasonTextOf(vm.specStrings, event.reasonKey))
                 is CockpitEvent.Reacquired -> snackbar.showSnackbar(
                     resources.getString(
                         R.string.hud_toast_reacquired,
@@ -145,9 +145,9 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
             val specKey = SPEC_NOTICE_KEYS[notice.reasonKey]
             val reason = when {
                 specKey != null -> spec.format(specKey, notice.args)
-                else -> notice.reasonKey?.let { key -> reasonTextOf(spec, resources, key) }
+                else -> notice.reasonKey?.let { key -> reasonTextOf(spec, key) }
             }
-            val detail = notice.message?.let { m -> reasonTextOf(spec, resources, m) }
+            val detail = notice.message?.let { m -> reasonTextOf(spec, m) }
             val text = listOfNotNull(reason, detail).distinct().joinToString(" · ")
             if (text.isNotEmpty()) {
                 snackbar.showSnackbar(text)
