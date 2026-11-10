@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.platform.testTag
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
@@ -221,6 +222,7 @@ private fun LazyListScope.connections(state: SettingsUiState, vm: SettingsViewMo
                 summary = stringResource(R.string.settings_demo_stale_skill_summary),
             )
         }
+        item { DemoScenarioRow(vm) }
     }
     item { SectionHeader(stringResource(R.string.settings_endpoints)) }
     if (state.endpoints.isEmpty()) {
@@ -294,3 +296,23 @@ private fun EndpointRow(endpoint: DirectEndpoint, onRemove: () -> Unit) {
         }
     }
 }
+
+/** Pins the demo pilot to a flight state the demo cannot reach by flying alone (mission, failsafe, follow, refusals). */
+@Composable
+private fun DemoScenarioRow(vm: SettingsViewModel) {
+    val pinned by vm.demoScenario.collectAsStateWithLifecycle()
+    val live = stringResource(R.string.settings_demo_scenario_live)
+    SelectSettingRow(
+        title = stringResource(R.string.settings_demo_scenario),
+        options = listOf<com.altnautica.gcs.core.demo.DemoScenario?>(null) + com.altnautica.gcs.core.demo.DemoScenario.entries,
+        selected = pinned,
+        optionLabel = { it?.let(::demoScenarioLabel) ?: live },
+        onSelect = vm::pinDemoScenario,
+        summary = stringResource(R.string.settings_demo_scenario_summary),
+        modifier = Modifier.testTag("settings-demo-scenario"),
+    )
+}
+
+/** "MissionPaused" reads "Mission paused". */
+internal fun demoScenarioLabel(s: com.altnautica.gcs.core.demo.DemoScenario): String =
+    s.name.replace(Regex("(?<=[a-z])(?=[A-Z])"), " ").lowercase().replaceFirstChar { it.uppercase() }

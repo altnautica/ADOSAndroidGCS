@@ -207,7 +207,6 @@ internal fun CockpitScreen(
     val padButtons by vm.padButtons.collectAsStateWithLifecycle()
     LaunchedEffect(padButtons) { if (padButtons != 0) tips.dismissFromControllerButton() }
     val shownVideo = remember { ShownVideo() }
-    FrameGrabEffect(vm, shownVideo, onToast)
     CompositionLocalProvider(
         LocalCockpitStrings provides vm.specStrings,
         LocalLayoutClass provides layoutClass,
@@ -219,6 +218,8 @@ internal fun CockpitScreen(
         LocalShownVideo provides shownVideo,
     ) {
         BackdropSampler(backdrop)
+        // Inside the providers: it reads the spec words for its toasts.
+        FrameGrabEffect(vm, shownVideo, onToast)
         Box(Modifier.fillMaxSize().background(Color.Black).focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing)) {
             FlightScreen(vm, width, status, onExit, snackbar)
             if (connecting) {

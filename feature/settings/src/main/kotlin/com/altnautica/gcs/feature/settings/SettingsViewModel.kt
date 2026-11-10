@@ -3,6 +3,8 @@ package com.altnautica.gcs.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.designsystem.tokens.AdosThemeId
+import com.altnautica.gcs.core.demo.DemoScenario
+import com.altnautica.gcs.core.demo.DemoScenarioStore
 import com.altnautica.gcs.core.demo.DemoSettings
 import com.altnautica.gcs.core.link.direct.DirectEndpoint
 import com.altnautica.gcs.core.link.direct.DirectLinkSettings
@@ -39,7 +41,13 @@ class SettingsViewModel @Inject constructor(
     private val controls: ControlsRepository,
     private val tips: TipsRepository,
     private val spec: CockpitSpecRepository,
+    private val scenarios: DemoScenarioStore,
 ) : ViewModel() {
+
+    /** The demo pilot's pinned flight state; null runs the demo live. */
+    val demoScenario: StateFlow<DemoScenario?> = scenarios.pinned
+
+    fun pinDemoScenario(scenario: DemoScenario?) = scenarios.pin(scenario)
 
     val state: StateFlow<SettingsUiState> = combine(
         app.appearance,

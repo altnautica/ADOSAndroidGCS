@@ -56,6 +56,9 @@
     <string name="settings_demo">Demo drone</string>
     <string name="settings_demo_summary">Show a simulated drone in the fleet</string>
     <string name="settings_demo_stale_skill">Demo pod: stale skill state</string>
+    <string name="settings_demo_scenario">Demo flight state</string>
+    <string name="settings_demo_scenario_summary">Pins the demo drone\'s pilot to a state it cannot reach by flying alone</string>
+    <string name="settings_demo_scenario_live">Live</string>
     <string name="settings_demo_stale_skill_summary">The demo pod stops reporting its Record skill, so the slot dims and shows when it was last seen</string>
     <string name="settings_endpoints">Saved endpoints</string>
     <string name="settings_endpoints_none">No saved UDP or TCP endpoints.</string>
