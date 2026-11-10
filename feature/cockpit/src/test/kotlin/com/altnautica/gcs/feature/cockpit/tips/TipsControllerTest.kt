@@ -4,6 +4,7 @@ import com.altnautica.gcs.core.skills.tips.HideReason
 import com.altnautica.gcs.core.skills.tips.TipDecision
 import com.altnautica.gcs.core.skills.tips.TipsEngine
 import com.altnautica.gcs.core.skills.tips.TipsState
+import com.altnautica.gcs.feature.cockpit.flightTipFacts
 import com.altnautica.gcs.feature.cockpit.testSpec
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -141,6 +142,20 @@ class TipsControllerTest {
         assertNull(shownId())
         tickAt(7_000)
         assertEquals("status_pill", shownId())
+        assertTrue(markedSeen.isEmpty())
+    }
+
+    @Test
+    fun `an unknown arm state without a fresh pilot hides the tip unseen and shows none`() = runTest {
+        controller.open()
+        tickAt(2_500)
+        assertEquals("status_pill", shownId())
+        val unknown = flightTipFacts(pilot = null, pilotFresh = false, bandArmed = null)
+        val facts = ground.copy(armed = unknown.armed, airborne = unknown.airborne)
+        tickAt(3_000, facts)
+        assertNull(shownId())
+        tickAt(20_000, facts)
+        assertNull(shownId())
         assertTrue(markedSeen.isEmpty())
     }
 }

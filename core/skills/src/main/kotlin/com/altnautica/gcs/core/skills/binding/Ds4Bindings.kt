@@ -2,8 +2,10 @@ package com.altnautica.gcs.core.skills.binding
 
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillSource
+import com.altnautica.gcs.core.skills.controls.Gesture
 import com.altnautica.gcs.core.skills.spec.ControlBindingSpec
 import com.altnautica.gcs.core.skills.spec.Ds4Spec
+import com.altnautica.gcs.core.skills.spec.LayoutSpec
 import com.altnautica.gcs.core.skills.spec.LockedActionSpec
 
 /**
@@ -86,6 +88,29 @@ object Ds4Bindings {
         }
 
     const val GESTURE_TAP = "tap"
+
+    /** The `ds4.json` action of the emergency stop. */
+    const val STOP_ACTION = "kill"
+
+    /** The `layout.json` `holds_ms` key of the emergency stop's hold. */
+    const val STOP_HOLD_KEY = "stop"
+
+    private const val RUMBLE_RAMP = "ramp"
+
+    /**
+     * [row] as it runs: a row bound to the emergency stop is always a hold of at least
+     * [stopHoldMs]. A press, tap or double-tap row becomes a hold of [stopHoldMs] (with the
+     * ramp rumble unless it names one), and a shorter hold is raised to it. Every other row
+     * is returned unchanged (the same object).
+     */
+    fun stopHoldRow(row: ControlBindingSpec, stopHoldMs: Int): ControlBindingSpec {
+        if (row.action != STOP_ACTION || row.gesture == Gesture.ANALOG) return row
+        if (row.gesture == Gesture.HOLD && (row.holdMs ?: 0) >= stopHoldMs) return row
+        return row.copy(gesture = Gesture.HOLD, holdMs = stopHoldMs, rumble = row.rumble ?: RUMBLE_RAMP)
+    }
+
+    /** The emergency stop's hold from `layout.json` `holds_ms`. */
+    fun stopHoldMs(layout: LayoutSpec): Int = layout.holdsMs.getValue(STOP_HOLD_KEY)
 
     /** Bitmask (standard index) of every control any of [rows] uses, held controls included. */
     fun boundButtonMask(spec: Ds4Spec, rows: List<ControlBindingSpec>): Int {

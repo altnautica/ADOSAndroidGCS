@@ -64,18 +64,24 @@ sealed interface EditResult {
     data class Refused(val reason: EditRefusal) : EditResult
 }
 
-/** Binds [action] to [row]; [ACTION_NONE] removes the row. A locked row refuses both a new action and removal. */
-fun setRowAction(rows: List<ControlBindingSpec>, row: ControlBindingSpec, action: String): EditResult {
+/**
+ * Binds [action] to [row]; [ACTION_NONE] removes the row. A locked row refuses both a new action and removal.
+ * A row bound to the emergency stop becomes a hold of at least [stopHoldMs] ([Ds4Bindings.stopHoldRow]).
+ */
+fun setRowAction(rows: List<ControlBindingSpec>, row: ControlBindingSpec, action: String, stopHoldMs: Int): EditResult {
     val index = rows.indexOf(row)
     if (index < 0) return EditResult.Refused(EditRefusal.Missing)
     if (row.locked && action != row.action) return EditResult.Refused(EditRefusal.Locked)
     val next = rows.toMutableList()
-    if (action == ACTION_NONE) next.removeAt(index) else next[index] = row.copy(action = action)
+    if (action == ACTION_NONE) next.removeAt(index) else next[index] = Ds4Bindings.stopHoldRow(row.copy(action = action), stopHoldMs)
     return EditResult.Applied(next)
 }
 
-/** Adds a plain row binding [action] to [control] with [gesture]; [ACTION_NONE] changes nothing. */
-fun addRow(rows: List<ControlBindingSpec>, control: String, gesture: String, action: String): EditResult {
+/**
+ * Adds a plain row binding [action] to [control] with [gesture]; [ACTION_NONE] changes nothing.
+ * A row bound to the emergency stop is added as a hold of at least [stopHoldMs] ([Ds4Bindings.stopHoldRow]).
+ */
+fun addRow(rows: List<ControlBindingSpec>, control: String, gesture: String, action: String, stopHoldMs: Int): EditResult {
     if (action == ACTION_NONE) return EditResult.Applied(rows)
     val holdMs = if (gesture == Gesture.HOLD) Gesture.DEFAULT_HOLD_MS else null
     val row = ControlBindingSpec(
@@ -88,7 +94,7 @@ fun addRow(rows: List<ControlBindingSpec>, control: String, gesture: String, act
         rumble = null,
         locked = false,
     )
-    return EditResult.Applied(rows + row)
+    return EditResult.Applied(rows + Ds4Bindings.stopHoldRow(row, stopHoldMs))
 }
 
 /**
@@ -132,17 +138,21 @@ sealed interface ImportResult {
     data class Refused(val problems: List<BindingProblem>) : ImportResult
 }
 
-/** Reads [text] as an export file and validates its bindings against this map. */
-fun Ds4Spec.readExport(text: String): ImportResult {
-    val export = try {
+/**
+ * Reads [text] as an export file and validates its bindings against this map. A row bound to
+ * the emergency stop is read as a hold of at least [stopHoldMs] ([Ds4Bindings.stopHoldRow]).
+ */
+fun Ds4Spec.readExport(text: String, stopHoldMs: Int): ImportResult {
+    val file = try {
         ControlsJson.decodeFromString(ControlsExport.serializer(), text)
     } catch (_: SerializationException) {
         return ImportResult.Unreadable
     } catch (_: IllegalArgumentException) {
         return ImportResult.Unreadable
     }
-    if (export.v != ControlsExport.EXPORT_VERSION || export.kind != ControlsExport.EXPORT_KIND) return ImportResult.Unreadable
-    if (StickMode.fromWire(export.stickMode) == null) return ImportResult.Unreadable
+    if (file.v != ControlsExport.EXPORT_VERSION || file.kind != ControlsExport.EXPORT_KIND) return ImportResult.Unreadable
+    if (StickMode.fromWire(file.stickMode) == null) return ImportResult.Unreadable
+    val export = file.copy(bindings = file.bindings.map { Ds4Bindings.stopHoldRow(it, stopHoldMs) })
     val problems = check(Ds4Bindings.resolve(this, export.bindings, emptyList()))
     return if (problems.isEmpty()) ImportResult.Imported(export) else ImportResult.Refused(problems)
 }

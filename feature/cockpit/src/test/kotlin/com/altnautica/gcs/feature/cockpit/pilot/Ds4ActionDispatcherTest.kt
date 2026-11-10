@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.pilot
 
+import com.altnautica.gcs.core.skills.binding.Ds4Bindings
 import com.altnautica.gcs.core.skills.input.GamepadAxes
 import com.altnautica.gcs.core.skills.input.PadSnapshot
 import com.altnautica.gcs.feature.cockpit.testSpec
@@ -13,7 +14,8 @@ class Ds4ActionDispatcherTest {
     private val ds4 = testSpec.ds4
     private val rows = ds4.bindings
     private val bits = ds4.stream.buttonsBitfield
-    private val dispatcher = Ds4ActionDispatcher(ds4)
+    private val stopHoldMs = Ds4Bindings.stopHoldMs(testSpec.layout)
+    private val dispatcher = Ds4ActionDispatcher(ds4, stopHoldMs)
     private var now = 0L
 
     private val ground = ControllerContext(armed = false, landed = true)
@@ -93,6 +95,39 @@ class Ds4ActionDispatcherTest {
         assertFalse(early.toString(), early.any { it is CockpitControllerAction.Builtin && it.skillId == "kill" })
         val full = press("l2", "r2", "circle", ms = 3_100, ctx = air)
         assertTrue(full.toString(), full.any { it is CockpitControllerAction.Builtin && it.skillId == "kill" })
+    }
+
+    @Test
+    fun `a stop row bound as a press, tap, double tap or short hold runs as the full stop hold`() {
+        val base = rows.first { it.action == "kill" }.copy(control = "triangle", with = emptyList(), rumble = null, locked = false)
+        val shapes = listOf(
+            base.copy(gesture = "press", holdMs = null),
+            base.copy(gesture = "tap", holdMs = null),
+            base.copy(gesture = "double_tap", holdMs = null),
+            base.copy(gesture = "hold", holdMs = 1_500),
+            base.copy(gesture = "hold", holdMs = 1),
+        )
+        for (kill in shapes) {
+            val table = rows.filter { it.control != "triangle" } + kill
+            val d = Ds4ActionDispatcher(ds4, stopHoldMs)
+            var t = 0L
+            fun drive(held: Boolean, ms: Long): List<CockpitControllerAction> {
+                val out = ArrayList<CockpitControllerAction>()
+                val end = t + ms
+                while (t < end) {
+                    out += d.update(t, pad(if (held) setOf("triangle") else emptySet()), table, air)
+                    t += 20
+                }
+                return out.filter { it is CockpitControllerAction.Builtin && it.skillId == "kill" }
+            }
+            val shape = "${kill.gesture} ${kill.holdMs}"
+            // Two quick taps, released: nothing.
+            val taps = drive(true, 60) + drive(false, 100) + drive(true, 60) + drive(false, 1_000)
+            assertEquals(shape, emptyList<CockpitControllerAction>(), taps)
+            // Held: nothing before the stop hold, the kill once it completes.
+            assertEquals(shape, emptyList<CockpitControllerAction>(), drive(true, stopHoldMs - 100L))
+            assertEquals(shape, listOf(builtin("kill")), drive(true, 200))
+        }
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.pilot
 
+import android.util.Log
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.skills.binding.Ds4Bindings
@@ -44,8 +45,10 @@ sealed interface CockpitControllerAction {
  * Turns the controller's pressed buttons into [CockpitControllerAction]s through the
  * effective binding rows ([Ds4Bindings.resolve], user overrides applied). Call [update]
  * on every pad snapshot; it is pure with respect to time, so tests drive it directly.
+ * Every row bound to the emergency stop runs as a hold of at least [stopHoldMs]
+ * ([Ds4Bindings.stopHoldRow]), whatever list it came from; each raised row is logged once.
  */
-internal class Ds4ActionDispatcher(private val ds4: Ds4Spec) {
+internal class Ds4ActionDispatcher(private val ds4: Ds4Spec, private val stopHoldMs: Int) {
     private val gestures = Ds4Gestures(
         doubleTapMs = ds4.doubleTapMs.toLong(),
         centeredThreshold = ds4.centeredThreshold,
@@ -58,6 +61,9 @@ internal class Ds4ActionDispatcher(private val ds4: Ds4Spec) {
     private val builtinIds: Set<String> = ds4.actions.mapNotNull { it.builtin }.toSet()
     private var gimbalDown = 0f
     private var gimbalUp = 0f
+    private var sourceRows: List<ControlBindingSpec>? = null
+    private var runRows: List<ControlBindingSpec> = emptyList()
+    private val reportedStopRows = HashSet<ControlBindingSpec>()
 
     /** The hold in progress for the hold ring, or null. */
     val hold: ControllerHold? get() = gestures.hold
@@ -73,7 +79,7 @@ internal class Ds4ActionDispatcher(private val ds4: Ds4Spec) {
         for ((control, bit) in bits) if (pad.buttons and (1 shl bit) != 0) pressed += control
         val analog = mapOf("l2" to pad.axes.leftTrigger, "r2" to pad.axes.rightTrigger)
         val out = ArrayList<CockpitControllerAction>()
-        for (g in gestures.update(nowMs, rows, pressed, analog, pad.axes.leftX to pad.axes.leftY, context::holds)) {
+        for (g in gestures.update(nowMs, asRun(rows), pressed, analog, pad.axes.leftX to pad.axes.leftY, context::holds)) {
             when (g) {
                 is GestureOut.Fire -> map(g.row, g.held, context)?.let(out::add)
                 is GestureOut.Buzz -> out += CockpitControllerAction.Buzz(g.kind, g.level)
@@ -81,6 +87,21 @@ internal class Ds4ActionDispatcher(private val ds4: Ds4Spec) {
             }
         }
         return out
+    }
+
+    /** [rows] as they run, re-derived only when the list changes. */
+    private fun asRun(rows: List<ControlBindingSpec>): List<ControlBindingSpec> {
+        if (rows === sourceRows) return runRows
+        sourceRows = rows
+        runRows = rows.map { row ->
+            Ds4Bindings.stopHoldRow(row, stopHoldMs).also { run ->
+                if (run !== row && reportedStopRows.add(row)) {
+                    val chord = (listOf(row.control) + row.with).joinToString("+")
+                    Log.w(TAG, "emergency-stop binding $chord:${row.gesture}:${row.holdMs ?: ""} runs as a ${run.holdMs} ms hold")
+                }
+            }
+        }
+        return runRows
     }
 
     private fun gimbal(row: ControlBindingSpec, value: Float): CockpitControllerAction? {
@@ -130,6 +151,7 @@ internal class Ds4ActionDispatcher(private val ds4: Ds4Spec) {
         private const val PROFILE_PREFIX = "profile:"
         private const val GIMBAL_DOWN = "gimbal_pitch_down"
         private const val GIMBAL_UP = "gimbal_pitch_up"
+        private const val TAG = "Ds4ActionDispatcher"
 
         /** Gimbal rate at full trigger travel when a row does not set its own. */
         const val GIMBAL_FULL_DPS = 60f

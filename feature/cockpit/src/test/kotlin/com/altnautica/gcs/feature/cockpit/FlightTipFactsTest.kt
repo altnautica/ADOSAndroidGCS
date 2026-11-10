@@ -18,9 +18,9 @@ class FlightTipFactsTest {
     }
 
     @Test
-    fun `an unknown armed state reads as armed`() {
+    fun `an unknown arm state counts as possibly airborne, not as an arm`() {
         val facts = flightTipFacts(null, pilotFresh = false, bandArmed = null)
-        assertTrue(facts.armed)
+        assertFalse(facts.armed)
         assertTrue(facts.airborne)
     }
 

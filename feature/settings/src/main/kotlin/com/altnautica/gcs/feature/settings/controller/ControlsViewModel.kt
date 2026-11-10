@@ -269,10 +269,10 @@ class ControlsViewModel @Inject constructor(
     }
 
     /** Binds [action] to [row]; a locked row refuses with a message. */
-    fun setAction(row: ControlBindingSpec, action: String) = applyEdit(setRowAction(currentRows(), row, action))
+    fun setAction(row: ControlBindingSpec, action: String) = applyEdit(setRowAction(currentRows(), row, action, Ds4Bindings.stopHoldMs(spec.layout)))
 
     /** Adds a row binding [action] to [control] with [gesture]. */
-    fun addBinding(control: String, gesture: String, action: String) = applyEdit(addRow(currentRows(), control, gesture, action))
+    fun addBinding(control: String, gesture: String, action: String) = applyEdit(addRow(currentRows(), control, gesture, action, Ds4Bindings.stopHoldMs(spec.layout)))
 
     /** Moves [row] to [target] (tapping a hotspot while moving). */
     fun moveTo(row: ControlBindingSpec, target: String) {

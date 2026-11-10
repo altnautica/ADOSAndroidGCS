@@ -149,7 +149,7 @@ class ControlsRepository(
 
     /** Reads an export file and, when it validates, applies its bindings, stick mode and dead zone. */
     suspend fun importFile(text: String): ImportResult {
-        val result = ds4.readExport(text)
+        val result = ds4.readExport(text, Ds4Bindings.stopHoldMs(spec.layout))
         if (result !is ImportResult.Imported) return result
         val file = result.export
         val shipped = Ds4Bindings.resolve(ds4, null, skills.first()).rows

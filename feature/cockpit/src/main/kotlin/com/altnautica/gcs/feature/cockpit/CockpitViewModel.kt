@@ -1017,7 +1017,7 @@ class CockpitViewModel @AssistedInject constructor(
     private var inputJob: Job? = null
     private var controllerJob: Job? = null
     private var summaryJob: Job? = null
-    private val dispatcher = Ds4ActionDispatcher(spec.ds4)
+    private val dispatcher = Ds4ActionDispatcher(spec.ds4, Ds4Bindings.stopHoldMs(spec.layout))
     private var lastGimbalDps = 0f
 
     private val capture = object : InputCapture {

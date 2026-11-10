@@ -13,13 +13,14 @@ internal data class FlightTipFacts(val armed: Boolean, val airborne: Boolean, va
 
 /**
  * Armed, airborne and the fly-here offer for the tips. The pilot is trusted only while its
- * frames are fresh ([pilotFresh]); otherwise the heartbeat's [bandArmed] decides, and an
- * unknown armed state reads as armed, so no tip shows on a vehicle that may be flying.
+ * frames are fresh ([pilotFresh]); otherwise the heartbeat's [bandArmed] decides: a known arm
+ * dismisses the tip for good, and an unknown arm state counts as possibly airborne, so no tip
+ * shows and none is marked seen.
  */
 internal fun flightTipFacts(pilot: PilotState?, pilotFresh: Boolean, bandArmed: Boolean?): FlightTipFacts {
     val live = pilot?.takeIf { pilotFresh }
     return FlightTipFacts(
-        armed = live?.armed ?: (bandArmed != false),
+        armed = live?.armed ?: (bandArmed == true),
         airborne = live?.let { it.armed && !it.landed } ?: (bandArmed != false),
         gotoOffered = live != null && PilotAction.GOTO in live.surfaceOps,
     )

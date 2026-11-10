@@ -5,6 +5,13 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- Every controller binding of the emergency stop waits for the full stop hold
+  from the shared layout spec: a press, tap or double-tap row runs as a 3 s
+  hold and a shorter hold is raised to it, in the binding engine (stored lists
+  included, each raised row logged once) and in the editor, add-row and import
+  paths.
+- Tips stay hidden, and none is marked seen, while the vehicle's arm state is
+  unknown and no fresh pilot frame says otherwise.
 - Switching views no longer freezes the flight screen: a video drawn with a
   software canvas (the demo drone) renders into a texture view, whose teardown
   wakes the drawing thread instead of waiting on it.

@@ -116,7 +116,7 @@ class ControlsConfigTest {
         val first = ControlsRepository(PreferenceDataStoreFactory.create(scope = scope1) { file }, spec, flowOf(emptyList()))
         val rows = first.bindings.first()
         val square = rows.first { it.control == "square" && it.gesture == Gesture.TAP && it.with.isEmpty() }
-        val edited = (setRowAction(rows, square, "record_toggle") as EditResult.Applied).rows
+        val edited = (setRowAction(rows, square, "record_toggle", Ds4Bindings.stopHoldMs(spec.layout)) as EditResult.Applied).rows
         assertEquals(SaveResult.Saved, first.saveBindings(edited))
         // Join, not just cancel: the file stays registered as active until the first store's job completes.
         scope1.coroutineContext[Job]!!.cancelAndJoin()
@@ -151,7 +151,7 @@ class ControlsConfigTest {
     fun removingPauseIsRefused(): Unit = runBlocking {
         val pause = shipped.first { it.action == "pause" && it.locked }
         // The editor refuses to clear a locked row.
-        val edit = setRowAction(shipped, pause, "none")
+        val edit = setRowAction(shipped, pause, "none", Ds4Bindings.stopHoldMs(spec.layout))
         assertEquals(EditResult.Refused(EditRefusal.Locked), edit)
 
         // A list without it (an imported file, say) is never written.
