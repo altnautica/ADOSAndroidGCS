@@ -91,14 +91,7 @@ internal fun FlightTopBar(
         linkIcon = { LinkIcon(linkIconHealth(band.link, band.linkAgeDeciS, linkSpec), linkText) },
         linkDetail = { if (band.link != LinkHealth.None) ChromeText(linkText, dim = true) },
         navSource = { NavChipSlot(vm, width) },
-        controller = {
-            when (val s = band.stick) {
-                is StickChip.Available -> ControllerIndicator(controllerText.orEmpty(), s.on, vm::toggleStickControl)
-                is StickChip.Pilot -> ControllerIndicator(controllerText.orEmpty(), s.streaming, null)
-                is StickChip.ModeBlocked, StickChip.LinkBlocked -> ControllerIndicator(controllerText.orEmpty(), false, null)
-                StickChip.NoGamepad -> Unit
-            }
-        },
+        controller = { ControllerCell(band.stick, vm::toggleStickControl) },
         layers = { LayerLevelButton(vm.autonomy.layers, Modifier.tipAnchor("layer_button")) },
         menu = { MenuButton(onClick = { menu.expanded = true }, modifier = Modifier.adosMenuAnchor(menu)) },
         stop = { StopButton(onClick = { vm.activate(BuiltinIds.KILL) }, modifier = Modifier.tipAnchor("stop")) },
@@ -116,7 +109,7 @@ internal fun FlightTopBar(
         for (entry in menuOrder) when (entry) {
             // Only the items the top bar actually had no room for.
             "overflow" -> {
-                if (TopBarItem.Controller in moved && controllerText != null) {
+                if (TopBarItem.Controller in moved) {
                     add(AdosMenuItem(stringResource(R.string.cockpit_menu_controller, controllerText), enabled = band.stick is StickChip.Available) { vm.toggleStickControl() })
                 }
                 if (TopBarItem.NavSource in moved) nav?.let { add(AdosMenuItem(navText.navLabel(it), Icons.Outlined.SatelliteAlt, enabled = false) {}) }
@@ -165,11 +158,22 @@ private fun radioText(band: BandState): String? = when {
     else -> null
 }
 
+/** The top-bar controller cell: pad battery or why the sticks are blocked, and "No controller" before any pad is seen. */
 @Composable
-private fun controllerText(stick: StickChip): String? {
+internal fun ControllerCell(stick: StickChip, onToggle: () -> Unit) {
+    val text = controllerText(stick)
+    when (stick) {
+        is StickChip.Available -> ControllerIndicator(text, stick.on, onToggle)
+        is StickChip.Pilot -> ControllerIndicator(text, stick.streaming, null)
+        is StickChip.ModeBlocked, StickChip.LinkBlocked, StickChip.NoGamepad -> ControllerIndicator(text, false, null)
+    }
+}
+
+@Composable
+private fun controllerText(stick: StickChip): String {
     val pct = com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi.current.batteryPct
     return when (stick) {
-        StickChip.NoGamepad -> null
+        StickChip.NoGamepad -> specText("controls.no_controller")
         StickChip.LinkBlocked -> stringResource(R.string.cockpit_stick_blocked)
         is StickChip.ModeBlocked -> stringResource(R.string.cockpit_stick_mode_blocked, stick.mode.uppercase())
         is StickChip.Available, is StickChip.Pilot -> pct?.let { "$it%" } ?: "—"
