@@ -1,6 +1,5 @@
 package com.altnautica.gcs.feature.cockpit.camera
 
-import com.altnautica.gcs.feature.cockpit.digitalZoomStep
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
