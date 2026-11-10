@@ -121,6 +121,16 @@ class TipsController(
         }
     }
 
+    /**
+     * The tip [id] found no spot clear of the never-cover zones and was never drawn: hidden
+     * unseen and not offered again until the next open, as when its anchor is gone.
+     */
+    suspend fun unplaced(id: String) {
+        lock.withLock {
+            if (_shown.value?.tipId == id) hide(id, clock(), seen = false)
+        }
+    }
+
     /** Hides [id]: seen for good, or unseen and not offered again until the next open. */
     private suspend fun hide(id: String, now: Long, seen: Boolean) {
         _shown.value = null

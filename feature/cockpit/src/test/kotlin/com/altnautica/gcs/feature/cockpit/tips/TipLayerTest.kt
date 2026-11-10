@@ -53,7 +53,8 @@ class TipLayerTest {
         gimbalAvailable = false,
     )
 
-    private fun showCockpit() {
+    /** The cockpit with the status-pill tip ready; [boxedIn] fills the screen above and below the pill with zones. */
+    private fun showCockpit(boxedIn: Boolean = false) {
         // The layer ticks every 250 ms; drive the clock by hand so idling never waits on it.
         compose.mainClock.autoAdvance = false
         compose.setContent {
@@ -64,6 +65,11 @@ class TipLayerTest {
                 ) {
                     Box(Modifier.fillMaxSize()) {
                         Box(Modifier.align(Alignment.Center).size(120.dp, 40.dp).tipAnchor("status_pill"))
+                        if (boxedIn) {
+                            // Never-cover zones above and below the pill's row: no spot fits a tip.
+                            Box(Modifier.size(800.dp, 175.dp).tipAnchor("left_column"))
+                            Box(Modifier.offset(0.dp, 225.dp).size(800.dp, 175.dp).tipAnchor("alert_stack"))
+                        }
                         // STOP sits where the tip would go when centred beside the anchor.
                         Box(Modifier.offset(60.dp, 170.dp).size(80.dp).tipAnchor("stop"))
                         Box(
@@ -139,6 +145,19 @@ class TipLayerTest {
         compose.onNodeWithTag(TAG_TIP).assertDoesNotExist()
         assertEquals(listOf("status_pill"), seen())
         assertFalse(handle.dismissFromControllerButton())
+    }
+
+    @Test
+    fun `a tip with no clear spot is hidden unseen, so an anchor tap cannot mark it seen`() {
+        showCockpit(boxedIn = true)
+        advance(2_700)
+        compose.onNodeWithTag(TAG_TIP).assertDoesNotExist()
+        assertFalse("a tip that was never placed is not on screen", handle.isShowing)
+        compose.onNodeWithTag("tip-anchor-status_pill").performClick()
+        frame()
+        assertFalse(handle.dismissFromControllerButton())
+        frame()
+        assertTrue("a never-drawn tip is never seen", seen().isEmpty())
     }
 
     private fun overlaps(a: DpRect, b: DpRect): Boolean =
