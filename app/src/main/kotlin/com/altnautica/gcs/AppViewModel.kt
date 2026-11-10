@@ -97,24 +97,22 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             dataStore.edit { if (LEGACY_SETUP_OFFERED in it) it[SETUP_OFFERED] = it.takeOffered() }
         }
-        // A candidate whose link closes is dropped; it is offered again only when the vehicle connects again.
-        viewModelScope.launch {
-            var previous = emptySet<DeviceId>()
-            vehicles.openVehicles.collect { open ->
-                val closed = previous - open.keys
-                previous = open.keys
-                if (closed.isNotEmpty()) setupCandidates.update { list -> list.filterNot { it.nodeId in closed } }
-            }
-        }
     }
 
     /**
-     * The aircraft setup offer to show, or null: the first connected vehicle, still open,
-     * whose flight controller never finished the ground wizard and was never offered on
-     * this device. Ground only: null while any open vehicle is armed.
+     * The aircraft setup offer to show, or null: the selected vehicle, while its link is open,
+     * when its flight controller never finished the ground wizard and was never offered on
+     * this device. A link that closes hides the offer until it reopens. Ground only: null
+     * while any open vehicle is armed.
      */
-    val setupOffer: StateFlow<SetupOffer?> = combine(setupCandidates, offeredUids, anyArmed, vehicles.openVehicles) { candidates, offered, armed, open ->
-        if (armed) null else candidates.firstOrNull { it.uid !in offered && it.nodeId in open }
+    val setupOffer: StateFlow<SetupOffer?> = combine(
+        setupCandidates,
+        offeredUids,
+        anyArmed,
+        vehicles.openVehicles,
+        selectedVehicle.selected,
+    ) { candidates, offered, armed, open, selected ->
+        if (armed) null else candidates.firstOrNull { it.uid !in offered && it.nodeId in open && it.nodeId == selected }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val openWizard = Channel<DeviceId>(Channel.BUFFERED)

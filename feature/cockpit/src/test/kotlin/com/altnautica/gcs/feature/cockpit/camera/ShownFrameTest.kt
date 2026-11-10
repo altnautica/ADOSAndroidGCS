@@ -65,4 +65,34 @@ class ShownFrameTest {
     fun `the not-saved toast is the spec's text`() {
         assertEquals("Photo not saved", com.altnautica.gcs.feature.cockpit.testSpec.setupStrings.format(KEY_NOT_SAVED))
     }
+
+    @Test
+    fun `a texture copy is taken at the buffer's resolution and cropped there`() {
+        // A 2400x1080 slot at 4x over a half-scale buffer of the 9600x4320 view.
+        val plan = textureCopy(4_800, 2_160, 2_400, 1_080, 4f)!!
+        assertEquals(4_800 to 2_160, plan.grabWidth to plan.grabHeight)
+        assertEquals(PixelBox(1_800, 810, 3_000, 1_350), plan.copy.source)
+        assertEquals(2_400 to 1_080, plan.copy.outWidth to plan.copy.outHeight)
+    }
+
+    @Test
+    fun `a texture view is grabbed through the allocate hook at its buffer size and the grab is recycled`() = runTest {
+        val whole = mockk<android.graphics.Bitmap>(relaxed = true)
+        val view = mockk<android.view.TextureView>(relaxed = true) {
+            io.mockk.every { isAvailable } returns true
+            io.mockk.every { width } returns 9_600
+            io.mockk.every { height } returns 4_320
+            io.mockk.every { tag } returns com.altnautica.gcs.core.video.ui.VideoBufferSize(4_800, 2_160)
+        }
+        val video = ShownVideo(zoom = 4f).apply { this.view = view; bounds = Rect(0f, 0f, 2_400f, 1_080f) }
+        val asked = mutableListOf<Pair<Int, Int>>()
+        val frame = copyShownFrame(video, mockk<Window>(relaxed = true)) { w, h ->
+            asked += w to h
+            if (asked.size == 1) whole else throw OutOfMemoryError("no room for the slot copy")
+        }
+        assertNull(frame)
+        assertEquals(listOf(4_800 to 2_160, 2_400 to 1_080), asked)
+        io.mockk.verify { view.getBitmap(whole) }
+        io.mockk.verify { whole.recycle() }
+    }
 }

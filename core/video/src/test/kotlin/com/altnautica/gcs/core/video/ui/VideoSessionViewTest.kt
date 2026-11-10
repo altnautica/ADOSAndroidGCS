@@ -133,4 +133,34 @@ class VideoSessionViewTest {
     fun `a decoder keeps the SurfaceView in the main role`() {
         assertTrue(mainViewFor(1f).any { it is SurfaceView })
     }
+
+    @Test
+    fun `a session switch ends reporting the new session's view`() {
+        val reported = mutableListOf<View?>()
+        val a = mainHandle(0.5f)
+        val b = mainHandle(0.5f)
+        var current by mutableStateOf<VideoSessionHandle>(a)
+        compose.setContent { VideoSessionView(current, VideoSurfaceRole.Main, Modifier, onVideoView = { reported += it }) }
+        compose.waitForIdle()
+        val first = reported.last()
+        current = b
+        compose.waitForIdle()
+        assertTrue(reported.last() is TextureView)
+        assertTrue(reported.last() !== first)
+    }
+
+    @Test
+    fun `releasing a view that is no longer shown keeps the shown one reported`() {
+        val reported = mutableListOf<View?>()
+        val reporter = ViewReporter().apply { sink = { reported += it } }
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val old = View(context)
+        val new = View(context)
+        reporter.show(old)
+        reporter.show(new)
+        reporter.release(old)
+        assertEquals(listOf<View?>(old, new), reported)
+        reporter.release(new)
+        assertEquals(null, reported.last())
+    }
 }

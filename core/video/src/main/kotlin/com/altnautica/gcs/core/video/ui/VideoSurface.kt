@@ -94,7 +94,9 @@ internal fun VideoSessionView(
     onVideoView: ((View?) -> Unit)? = null,
 ) {
     // Only the main role reports its view; a picture-in-picture view is never sampled.
-    val report: ((View?) -> Unit)? = if (role != VideoSurfaceRole.Main) null else onVideoView
+    val reporter = remember { ViewReporter() }
+    reporter.sink = if (role != VideoSurfaceRole.Main) null else onVideoView
+    val report = reporter
     key(handle) {
         when (val out = handle.output) {
             is VideoOutput.Sinks -> when (role) {
@@ -134,7 +136,7 @@ fun rememberVideoState(source: VideoSource?): State<VideoState> {
  * constructor), so the EGL surface is ready before the first frame arrives.
  */
 @Composable
-private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier, onView: ((View?) -> Unit)?) {
+private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier, onView: ViewReporter?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -148,11 +150,11 @@ private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier, onView: 
                     override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) = Unit
                     override fun surfaceDestroyed(holder: SurfaceHolder) = out.removeSink(renderer)
                 })
-                onView?.invoke(this)
+                onView?.show(this)
             }
         },
         onRelease = { view ->
-            onView?.invoke(null)
+            onView?.release(view)
             out.removeSink(view)
             view.release()
         },
@@ -198,7 +200,7 @@ private fun SinkTextureView(out: VideoOutput.Sinks, modifier: Modifier) {
 }
 
 @Composable
-private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onView: ((View?) -> Unit)?) {
+private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onView: ViewReporter?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -214,18 +216,18 @@ private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier
                         if (w > 0 && h > 0) holder.setFixedSize(w, h)
                     }
                 }
-                onView?.invoke(this)
+                onView?.show(this)
             }
         },
-        onRelease = {
-            onView?.invoke(null)
+        onRelease = { view ->
+            onView?.release(view)
             out.setSurface(null)
         },
     )
 }
 
 @Composable
-private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onView: ((View?) -> Unit)?) {
+private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onView: ViewReporter?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -241,9 +243,15 @@ private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier
                     override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) = applyBufferScale(st, w, h)
 
                     private fun applyBufferScale(st: SurfaceTexture, w: Int, h: Int) {
-                        if (out.bufferScale >= 1f) return
+                        if (out.bufferScale >= 1f) {
+                            tag = VideoBufferSize(w, h)
+                            return
+                        }
                         val (bw, bh) = scaledBufferSize(w, h, out.bufferScale)
-                        if (bw > 0 && bh > 0) st.setDefaultBufferSize(bw, bh)
+                        if (bw > 0 && bh > 0) {
+                            st.setDefaultBufferSize(bw, bh)
+                            tag = VideoBufferSize(bw, bh)
+                        }
                     }
 
                     override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
@@ -258,14 +266,41 @@ private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier
 
                     override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
                 }
-                onView?.invoke(this)
+                onView?.show(this)
             }
         },
-        onRelease = {
-            onView?.invoke(null)
+        onRelease = { view ->
+            onView?.release(view)
             out.setSurface(null)
         },
     )
+}
+
+/** The pixel size of a main-role TextureView's buffer, kept as the view's tag. */
+data class VideoBufferSize(val width: Int, val height: Int)
+
+/** [view]'s buffer size when it is a main-role TextureView whose buffer is sized. */
+fun videoBufferSize(view: TextureView): VideoBufferSize? = view.tag as? VideoBufferSize
+
+/**
+ * Reports the shown view to [sink]. On a session switch the new view can be
+ * built before the old one is released, so a release clears the report only
+ * when the released view is still the one reported.
+ */
+internal class ViewReporter {
+    var sink: ((View?) -> Unit)? = null
+    private var shown: View? = null
+
+    fun show(view: View) {
+        shown = view
+        sink?.invoke(view)
+    }
+
+    fun release(view: View) {
+        if (shown !== view) return
+        shown = null
+        sink?.invoke(null)
+    }
 }
 
 /** The view size scaled by [scale], rounded to even pixels (some gralloc paths reject odd sizes). */

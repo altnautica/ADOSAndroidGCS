@@ -2,6 +2,9 @@ package com.altnautica.gcs.feature.cockpit
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
@@ -61,5 +64,39 @@ class ZoomBadgeTest {
     fun `no badge without digital zoom`() {
         show(zoom = 1, zoomInColumn = false)
         compose.onNodeWithTag("digital-zoom").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the badge stays clear of a gimbal pad beside a short column`() {
+        val sizes = com.altnautica.gcs.feature.cockpit.chrome.flightSizes(com.altnautica.gcs.feature.cockpit.skillbar.WidthClass.Compact)
+        // A 160 dp right span: zoom and the pad have both left the column.
+        val z = com.altnautica.gcs.feature.cockpit.chrome.flightZones(914.dp, 284.dp, sizes, gimbal = true)
+        check(!z.zoomInColumn && !z.gimbalInColumn)
+        val col = z.rightColumn
+        val pad = z.gimbalPad!!
+        compose.setContent {
+            AdosTheme {
+                CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) {
+                    Box(Modifier.fillMaxSize()) {
+                        Box(Modifier.offset(pad.x, pad.y).size(pad.width, pad.height).testTag("pad"))
+                        Box(Modifier.offset(col.x, col.y).size(col.width, col.height)) {
+                            RightColumnLayout(
+                                zoom = 4,
+                                zoomInColumn = false,
+                                gap = sizes.rightGap,
+                                top = { Box(Modifier.size(sizes.shutter)) },
+                                zoomPill = { Box(Modifier.size(sizes.rightButton, sizes.zoom)) },
+                                bottom = { Box(Modifier.size(sizes.rightButton)) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        val badge = compose.onNodeWithTag("digital-zoom").getBoundsInRoot()
+        val padBounds = compose.onNodeWithTag("pad").getBoundsInRoot()
+        val apart = badge.bottom <= padBounds.top || badge.top >= padBounds.bottom ||
+            badge.right <= padBounds.left || badge.left >= padBounds.right
+        org.junit.Assert.assertTrue("badge $badge overlaps pad $padBounds", apart)
     }
 }

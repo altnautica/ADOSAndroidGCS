@@ -206,7 +206,7 @@ class AppViewModelTest {
     }
 
     @Test
-    fun aClosedLinkDropsItsOfferWithoutSpendingIt() = runTest(dispatcher) {
+    fun aClosedLinkHidesItsOfferWithoutSpendingIt() = runTest(dispatcher) {
         setupUid = "fc-uid-1"
         val vm = viewModel()
         val navigated = observe(vm)
@@ -222,11 +222,25 @@ class AppViewModelTest {
         assertEquals(emptyList<DeviceId>(), navigated)
         assertNull(prefs.data.first()[OFFERED])
 
-        // The dropped candidate stays dropped until the vehicle connects again.
+        // A link that comes back (failover, retry) without a new connect shows the offer again.
         linkUp()
-        assertNull(vm.setupOffer.value)
-        vm.connected(node) {}
         assertEquals(SetupOffer("fc-uid-1", node), vm.setupOffer.value)
+    }
+
+    @Test
+    fun theOfferFollowsTheSelectedVehicle() = runTest(dispatcher) {
+        val other = DeviceId("drone-2")
+        val vm = viewModel()
+        observe(vm)
+        links.value = listOf(OpenLink(node, Reach.Lan), OpenLink(other, Reach.Lan))
+        open.value = mapOf(node to vehicle, other to vehicle)
+
+        setupUid = "fc-uid-1"
+        vm.connected(node) {}
+        setupUid = "fc-uid-2"
+        vm.connected(other) {}
+
+        assertEquals(SetupOffer("fc-uid-2", other), vm.setupOffer.value)
     }
 
     private companion object {

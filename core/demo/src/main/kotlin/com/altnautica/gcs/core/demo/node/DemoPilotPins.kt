@@ -23,6 +23,8 @@ import com.altnautica.gcs.core.demo.node.DemoPilotWire.round1
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -204,8 +206,15 @@ internal class DemoPilotPins(
         fun failsafe(scenario: DemoScenario?): Boolean =
             scenario == DemoScenario.FcFailsafeRtl || scenario?.gotoRefusal == "failsafe"
 
+        /** True when [scenario] stands for an armed vehicle in the air. */
+        fun airborne(scenario: DemoScenario?): Boolean {
+            if (scenario == null) return false
+            val f = DemoPilotPins("ados", "normal", gotoAccepted = false).fields(scenario, 0)
+            return (f["landed"] as? JsonPrimitive)?.booleanOrNull == false
+        }
+
         /** Height a flying pin reports, metres. */
-        private const val PIN_HEIGHT_M = 15.0
+        const val PIN_HEIGHT_M = 15.0
         private const val LINK_LOSS_MS = 10_000L
         private const val MISSION_SEQ = 4
         private const val MISSION_TOTAL = 6

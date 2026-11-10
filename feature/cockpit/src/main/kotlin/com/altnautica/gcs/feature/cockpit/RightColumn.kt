@@ -90,8 +90,8 @@ internal fun RightColumn(
 /**
  * The right column's layout: [top], the zoom pill when it fits the column ([zoomInColumn]),
  * then [bottom]. The digital zoom in use ([zoom] above 1) is named on the video side, beside
- * the pill or, when the pill dropped out of the column, at the column's middle; the badge
- * takes no room in the column.
+ * the pill or, when the pill dropped out of the column, at the column's top, clear of a gimbal
+ * pad sitting beside the column's foot; the badge takes no room in the column.
  */
 @Composable
 internal fun RightColumnLayout(
@@ -112,24 +112,24 @@ internal fun RightColumnLayout(
             if (zoomInColumn) {
                 Box {
                     zoomPill()
-                    ZoomBadge(zoom, Modifier.align(Alignment.CenterStart))
+                    ZoomBadge(zoom, Modifier.align(Alignment.CenterStart), centred = true)
                 }
             }
             bottom()
         }
-        if (!zoomInColumn) ZoomBadge(zoom, Modifier.align(Alignment.CenterStart))
+        if (!zoomInColumn) ZoomBadge(zoom, Modifier.align(Alignment.TopStart), centred = false)
     }
 }
 
-/** "Digital ×N", hung off the left of [modifier]'s anchor point; nothing at 1×. */
+/** "Digital ×N", hung off the left of [modifier]'s anchor point, [centred] on it or below it; nothing at 1×. */
 @Composable
-private fun ZoomBadge(zoom: Int, modifier: Modifier) {
+private fun ZoomBadge(zoom: Int, modifier: Modifier, centred: Boolean) {
     if (zoom <= 1) return
     ChromePanel(
         modifier
             .layout { measurable, _ ->
                 val p = measurable.measure(Constraints())
-                layout(0, 0) { p.place(-p.width - 8.dp.roundToPx(), -p.height / 2) }
+                layout(0, 0) { p.place(-p.width - 8.dp.roundToPx(), if (centred) -p.height / 2 else 0) }
             }
             .testTag("digital-zoom"),
     ) {

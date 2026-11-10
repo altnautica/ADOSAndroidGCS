@@ -284,7 +284,6 @@ class DemoPilotTest {
         assertEquals("not_landed", action("disarm").str("err"))
         assertEquals("airborne", action("takeoff").str("err"))
         assertTrue(action("rth")["ok"]!!.jsonPrimitive.boolean)
-        assertFalse(fc.armed)
 
         // A flying vehicle pinned disarmed on the ground.
         scenarios.pin(null)
@@ -469,6 +468,35 @@ class DemoPilotTest {
 
         scenarios.pin(DemoScenario.MissionComplete)
         assertTrue(arItems(layers.ar(t, pilot.view())).none { it.str("t") == "wp" || it.str("t") == "leg" })
+    }
+
+    @Test
+    fun `a flying pin takes the flight controller into the air and unpinning lands it`() {
+        scenarios.pin(DemoScenario.MissionActive)
+        state()
+        assertTrue(fc.armed)
+        assertEquals(GUIDED, fc.mode)
+        assertEquals(15.0, fc.altitudeM, 1e-9)
+        assertEquals(listOf(SET_MODE, ARM_DISARM, TAKEOFF), fc.sent)
+
+        // Another flying pin keeps it up without new commands.
+        scenarios.pin(DemoScenario.Follow)
+        state()
+        assertEquals(3, fc.sent.size)
+
+        scenarios.pin(null)
+        state()
+        assertEquals(9, fc.mode)
+    }
+
+    @Test
+    fun `a ground pin leaves the flight controller alone`() {
+        scenarios.pin(DemoScenario.ReadinessBlocked)
+        state()
+        scenarios.pin(null)
+        state()
+        assertFalse(fc.armed)
+        assertEquals(emptyList<Int>(), fc.sent)
     }
 
     private companion object {

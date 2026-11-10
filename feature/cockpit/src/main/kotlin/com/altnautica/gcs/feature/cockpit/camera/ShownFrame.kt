@@ -1,12 +1,15 @@
 package com.altnautica.gcs.feature.cockpit.camera
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
 import android.view.SurfaceView
 import android.view.TextureView
 import android.view.Window
+import com.altnautica.gcs.core.video.ui.videoBufferSize
 import kotlin.coroutines.resume
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
@@ -56,7 +59,7 @@ internal suspend fun copyShownFrame(video: ShownVideo, window: Window, allocate:
     val slotH = b.height.roundToInt().takeIf { it > 0 } ?: view?.let { (it.height / zoom).roundToInt() } ?: 0
     when {
         view is SurfaceView && view.holder.surface.isValid -> copySurface(view, slotW, slotH, zoom, allocate)
-        view is TextureView && view.isAvailable -> copyTexture(view, slotW, slotH, zoom)
+        view is TextureView && view.isAvailable -> copyTexture(view, slotW, slotH, zoom, allocate)
         else -> copyWindow(window, PixelBox(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt()), allocate)
     }
 } catch (e: CancellationException) {
@@ -75,17 +78,30 @@ private suspend fun copySurface(view: SurfaceView, slotW: Int, slotH: Int, zoom:
 }
 
 /**
- * A TextureView draws the whole zoomed view into a bitmap of the requested size, so the
- * whole view is taken at slot size, its centred 1/[zoom] cut out and scaled back to the slot.
+ * A TextureView draws the whole zoomed view into a bitmap of the requested size. It is taken at
+ * the buffer's own resolution ([bufferW]×[bufferH]), so cutting out the centred 1/[zoom] keeps
+ * every buffer pixel the slot shows; the cut is then drawn at slot size.
  */
-private fun copyTexture(view: TextureView, slotW: Int, slotH: Int, zoom: Float): Bitmap? {
-    if (slotW < 1 || slotH < 1) return null
-    val whole = view.getBitmap(slotW, slotH) ?: return null
-    val plan = shownCopy(whole.width, whole.height, slotW, slotH, zoom) ?: return null
-    val s = plan.source
-    if (s.width == whole.width && s.height == whole.height) return whole
-    val shown = Bitmap.createBitmap(whole, s.left, s.top, s.width, s.height)
-    return Bitmap.createScaledBitmap(shown, plan.outWidth, plan.outHeight, true)
+internal data class TextureCopy(val grabWidth: Int, val grabHeight: Int, val copy: ShownCopy)
+
+internal fun textureCopy(bufferW: Int, bufferH: Int, slotW: Int, slotH: Int, zoom: Float): TextureCopy? {
+    val copy = shownCopy(bufferW, bufferH, slotW, slotH, zoom) ?: return null
+    return TextureCopy(bufferW, bufferH, copy)
+}
+
+private fun copyTexture(view: TextureView, slotW: Int, slotH: Int, zoom: Float, allocate: (Int, Int) -> Bitmap): Bitmap? {
+    val buffer = videoBufferSize(view)
+    val plan = textureCopy(buffer?.width ?: view.width, buffer?.height ?: view.height, slotW, slotH, zoom) ?: return null
+    val whole = allocate(plan.grabWidth, plan.grabHeight)
+    try {
+        view.getBitmap(whole)
+        val s = plan.copy.source
+        val shown = allocate(plan.copy.outWidth, plan.copy.outHeight)
+        Canvas(shown).drawBitmap(whole, s.toRect(), android.graphics.Rect(0, 0, shown.width, shown.height), Paint(Paint.FILTER_BITMAP_FLAG))
+        return shown
+    } finally {
+        whole.recycle()
+    }
 }
 
 private suspend fun copyWindow(window: Window, slot: PixelBox, allocate: (Int, Int) -> Bitmap): Bitmap? {

@@ -294,8 +294,30 @@ internal class DemoPilot(
             pinnedScenario = s
             pinnedAtMs = t
             gotoAtMs = null
+            followPin(s)
         }
         return s
+    }
+
+    /** True while the flight controller is in the air because a flying pin put it there. */
+    private var pinLifted = false
+
+    /**
+     * The flight controller follows a flying pin into the air, so its own telemetry agrees with
+     * the pilot frame; it lands again when the pin is lifted for one that is not flying.
+     */
+    private fun followPin(scenario: DemoScenario?) {
+        if (DemoPilotPins.airborne(scenario)) {
+            if (fc.armed && !landed()) return
+            launch = null
+            setMode(GUIDED)
+            fc.command(MavCmd.MAV_CMD_COMPONENT_ARM_DISARM, 1f)
+            fc.command(MavCmd.MAV_CMD_NAV_TAKEOFF, p7 = DemoPilotPins.PIN_HEIGHT_M.toFloat())
+            pinLifted = true
+        } else if (pinLifted) {
+            pinLifted = false
+            if (fc.armed) fc.command(MavCmd.MAV_CMD_NAV_LAND)
+        }
     }
 
     private fun pins() = DemoPilotPins(controlMode, profile, gotoAccepted = gotoAtMs != null)
