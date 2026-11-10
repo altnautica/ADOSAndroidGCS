@@ -1,8 +1,11 @@
 package com.altnautica.gcs.core.demo.node
 
-import com.altnautica.gcs.core.demo.DemoFc
 import com.altnautica.gcs.core.demo.DemoScenario
 import com.altnautica.gcs.core.demo.DemoScenarioStore
+import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.ARM_DISARM
+import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.GUIDED
+import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.SET_MODE
+import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.TAKEOFF
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
@@ -29,27 +32,8 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DemoPilotTest {
-
-    /** A flight controller that follows commands at once and climbs straight to the take-off altitude. */
-    private class FakeFc : DemoFc {
-        override var armed = false
-        override var altitudeM = 0.0
-        override var mode = STABILIZE
-        val sent = mutableListOf<Int>()
-
-        override fun command(command: Int, p1: Float, p2: Float, p7: Float) {
-            sent += command
-            when (command) {
-                ARM_DISARM -> if (p1 == 1f && mode in setOf(STABILIZE, GUIDED, LOITER)) armed = true else if (p1 == 0f) armed = false
-                SET_MODE -> mode = p2.toInt()
-                TAKEOFF -> if (armed && mode == GUIDED) altitudeM = p7.toDouble()
-                LAND -> mode = 9
-            }
-        }
-    }
-
     private var t = 1_000L
-    private val fc = FakeFc()
+    private val fc = FakeDemoFc()
     private val scenarios = DemoScenarioStore()
     private val pilot = DemoPilot(fc, scenarios = scenarios) { t }
 
@@ -470,43 +454,7 @@ class DemoPilotTest {
         assertTrue(arItems(layers.ar(t, pilot.view())).none { it.str("t") == "wp" || it.str("t") == "leg" })
     }
 
-    @Test
-    fun `a flying pin takes the flight controller into the air and unpinning lands it`() {
-        scenarios.pin(DemoScenario.MissionActive)
-        state()
-        assertTrue(fc.armed)
-        assertEquals(GUIDED, fc.mode)
-        assertEquals(15.0, fc.altitudeM, 1e-9)
-        assertEquals(listOf(SET_MODE, ARM_DISARM, TAKEOFF), fc.sent)
-
-        // Another flying pin keeps it up without new commands.
-        scenarios.pin(DemoScenario.Follow)
-        state()
-        assertEquals(3, fc.sent.size)
-
-        scenarios.pin(null)
-        state()
-        assertEquals(9, fc.mode)
-    }
-
-    @Test
-    fun `a ground pin leaves the flight controller alone`() {
-        scenarios.pin(DemoScenario.ReadinessBlocked)
-        state()
-        scenarios.pin(null)
-        state()
-        assertFalse(fc.armed)
-        assertEquals(emptyList<Int>(), fc.sent)
-    }
-
     private companion object {
-        const val STABILIZE = 0
-        const val GUIDED = 4
-        const val LOITER = 5
-        const val ARM_DISARM = 400
-        const val SET_MODE = 176
-        const val TAKEOFF = 22
-        const val LAND = 21
         const val GOTO_ARGS = """{"lat":12.9,"lon":77.6,"alt_m":10}"""
     }
 }
