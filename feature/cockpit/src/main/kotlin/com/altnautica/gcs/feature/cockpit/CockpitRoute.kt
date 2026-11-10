@@ -5,9 +5,8 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
@@ -43,16 +42,15 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
-import com.altnautica.gcs.core.designsystem.component.AdosButton
-import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.EmptyStateAction
 import com.altnautica.gcs.core.designsystem.component.console.GlyphSet
 import com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi
 import com.altnautica.gcs.core.designsystem.component.console.LocalLeaveGuard
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
+import com.altnautica.gcs.core.designsystem.component.overlay.ProvideOverlayTopBar
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberOverlayTopBar
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
-import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.skills.SkillReason
@@ -160,53 +158,43 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
     val windowWidthPx = LocalWindowInfo.current.containerSize.width
     val width = widthClassFor(with(LocalDensity.current) { windowWidthPx.toDp().value })
 
-    // The cockpit chrome stays clear of the cutout and of system bars swiped in over the cockpit.
-    Box(modifier.fillMaxSize().background(AdosTheme.colors.mediaLetterbox).windowInsetsPadding(WindowInsets.safeDrawing)) {
-        when (status) {
-            CockpitStatus.UnknownNode -> EmptyState(
-                icon = Icons.Outlined.LinkOff,
-                title = stringResource(R.string.cockpit_unknown_node_title),
-                message = stringResource(R.string.cockpit_unknown_node_message),
-                action = EmptyStateAction(stringResource(R.string.cockpit_exit), onExit),
-            )
-            CockpitStatus.NoCarriedDrone -> EmptyState(
-                icon = Icons.Outlined.FlightTakeoff,
-                title = stringResource(R.string.cockpit_no_carried_title),
-                message = stringResource(R.string.cockpit_no_carried_message),
-                action = EmptyStateAction(stringResource(R.string.cockpit_exit), onExit),
-            )
-            CockpitStatus.Connecting, CockpitStatus.Ready -> CockpitScreen(
-                vm = vm,
-                width = width,
-                connecting = status == CockpitStatus.Connecting,
-                onExit = ::requestExit,
-                snackbar = { SnackbarHost(snackbar) },
-                onToast = { text -> toastScope.launch { snackbar.showSnackbar(text) } },
-            )
-        }
+    // The top bar's measured bottom, in window coordinates: every overlay here, the leave sheet too, starts below it.
+    val topBar = rememberOverlayTopBar()
+    ProvideOverlayTopBar(topBar) {
+        // The cockpit chrome stays clear of the cutout and of system bars swiped in over the cockpit.
+        Box(modifier.fillMaxSize().background(AdosTheme.colors.mediaLetterbox).windowInsetsPadding(WindowInsets.safeDrawing)) {
+            when (status) {
+                CockpitStatus.UnknownNode -> EmptyState(
+                    icon = Icons.Outlined.LinkOff,
+                    title = stringResource(R.string.cockpit_unknown_node_title),
+                    message = stringResource(R.string.cockpit_unknown_node_message),
+                    action = EmptyStateAction(stringResource(R.string.cockpit_exit), onExit),
+                )
+                CockpitStatus.NoCarriedDrone -> EmptyState(
+                    icon = Icons.Outlined.FlightTakeoff,
+                    title = stringResource(R.string.cockpit_no_carried_title),
+                    message = stringResource(R.string.cockpit_no_carried_message),
+                    action = EmptyStateAction(stringResource(R.string.cockpit_exit), onExit),
+                )
+                CockpitStatus.Connecting, CockpitStatus.Ready -> CockpitScreen(
+                    vm = vm,
+                    width = width,
+                    connecting = status == CockpitStatus.Connecting,
+                    topBar = topBar,
+                    onExit = ::requestExit,
+                    snackbar = { SnackbarHost(snackbar) },
+                    onToast = { text -> toastScope.launch { snackbar.showSnackbar(text) } },
+                )
+            }
 
-        pendingLeave?.let { leave ->
-            AdosConfirmSheet(
-                title = stringResource(R.string.cockpit_leave_armed_title),
-                message = stringResource(R.string.cockpit_leave_armed_message),
-                onDismiss = { pendingLeave = null },
-                danger = true,
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-                    AdosButton(
-                        stringResource(R.string.cockpit_stay),
-                        onClick = { pendingLeave = null },
-                        modifier = Modifier.weight(1f),
-                        variant = AdosButtonVariant.Secondary,
-                    )
-                    AdosButton(
-                        stringResource(R.string.cockpit_leave),
-                        onClick = {
+            pendingLeave?.let { leave ->
+                CompositionLocalProvider(LocalCockpitStrings provides vm.specStrings) {
+                    LeaveArmedSheet(
+                        onStay = { pendingLeave = null },
+                        onLeave = {
                             pendingLeave = null
                             leave()
                         },
-                        modifier = Modifier.weight(1f),
-                        variant = AdosButtonVariant.Danger,
                     )
                 }
             }
