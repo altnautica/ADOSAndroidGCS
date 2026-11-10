@@ -100,7 +100,8 @@ class TopBarOverflow {
  * When the row is too narrow, items move into the Menu ([overflow]) in the spec's
  * [overflowOrder] (controller, navigation source, link text, link icon, layer button);
  * then the pill truncates, and last the chip ellipsizes. The chip, pill, battery, Menu and
- * STOP never move, and the two groups never overlap.
+ * STOP never move, and the two groups never overlap. The chip never takes more than
+ * [chipMaxFrac] of the bar's width (`top_bar.chip.max_frac`); past that it ellipsizes.
  */
 @Composable
 fun TopBar(
@@ -117,6 +118,7 @@ fun TopBar(
     menu: @Composable () -> Unit,
     stop: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    chipMaxFrac: Float = DEFAULT_CHIP_MAX_FRAC,
 ) {
     val c = LocalChrome.current
     ChromePanel(modifier.fillMaxSize().testTag("top-bar")) {
@@ -129,7 +131,10 @@ fun TopBar(
             // Every item but the chip and the pill at its natural width; those two by their intrinsic
             // widths, measured once at the end, since either may have to give up width.
             val placeables = measurables.mapIndexed { i, slot -> if (i == CHIP || i == PILL) null else slot.firstOrNull()?.measure(loose) }.toMutableList()
-            val chipNatural = measurables[CHIP].firstOrNull()?.maxIntrinsicWidth(constraints.maxHeight) ?: 0
+            val chipNatural = minOf(
+                measurables[CHIP].firstOrNull()?.maxIntrinsicWidth(constraints.maxHeight) ?: 0,
+                chipCapPx(constraints.maxWidth, chipMaxFrac),
+            )
             val pillNatural = measurables[PILL].firstOrNull()?.maxIntrinsicWidth(constraints.maxHeight) ?: 0
             val width = { i: Int ->
                 when (i) {
@@ -196,6 +201,32 @@ fun TopBar(
     }
 }
 
+/** Link age for the link cell: one decimal under 10 s ("0.4"), whole seconds above ("12"). */
+internal fun linkAgeSeconds(deciS: Int): String =
+    if (deciS < 100) String.format(java.util.Locale.ROOT, "%.1f", deciS / 10f) else (deciS / 10).toString()
+
+/**
+ * The link icon's colour band from the newest frame's age (`top_bar.link.icon_color`): ok
+ * below the first bound, warning below the second, else critical. No age keeps [health].
+ */
+internal fun linkIconHealth(health: LinkHealth, ageDeciS: Int?, spec: com.altnautica.gcs.core.skills.spec.ZoneLinkSpec?): LinkHealth {
+    if (health == LinkHealth.None || ageDeciS == null) return health
+    val ageMs = ageDeciS * 100L
+    val ok = spec?.iconColor?.okBelowMs ?: 3_000L
+    val warn = spec?.iconColor?.warningBelowMs ?: 10_000L
+    return when {
+        ageMs < ok -> LinkHealth.Ok
+        ageMs < warn -> LinkHealth.Stale
+        else -> LinkHealth.Lost
+    }
+}
+
+/** The chip's width cap in pixels: [frac] of the bar's [barWidth]. */
+internal fun chipCapPx(barWidth: Int, frac: Float): Int = (barWidth * frac.coerceIn(0f, 1f)).toInt()
+
+/** The chip's share of the top bar when the spec names none (`top_bar.chip.max_frac`). */
+const val DEFAULT_CHIP_MAX_FRAC = 0.4f
+
 private const val CHIP = 0
 private const val PILL = 1
 private const val LINK_ICON = 3
@@ -253,7 +284,8 @@ private fun severityColor(s: StatusSeverity): Color {
     return when (s) {
         StatusSeverity.Ok -> c.ok
         StatusSeverity.Warning -> c.warning
-        StatusSeverity.Critical -> c.critical
+        // Text and small marks on a panel: the lighter critical red that keeps contrast over video.
+        StatusSeverity.Critical -> c.textCritical
     }
 }
 
@@ -332,16 +364,22 @@ fun batteryUi(pct: Int?, reserve: BatteryReserve?, flightControllerTimeS: Int?, 
 }
 
 @Composable
-fun BatteryGauge(ui: BatteryUi, modifier: Modifier = Modifier) {
+fun BatteryGauge(
+    ui: BatteryUi,
+    modifier: Modifier = Modifier,
+    /** Spec keys for the time to the RTL reserve, in full and short (`top_bar.battery.time_to_reserve`). */
+    reserveTextKey: String = "battery.to_reserve",
+    reserveShortKey: String = "battery.to_reserve_short",
+) {
     val c = LocalChrome.current
     val tint = if (ui.pct == null) c.textDim else severityColor(ui.severity)
     val reserveLabel = specText("cockpit.battery.reserve")
     val clock = ui.timeLeftS?.let(::formatClock)
     val timeLeft = clock?.let {
-        stringResource(if (ui.toReserve) R.string.cockpit_battery_to_reserve else R.string.cockpit_battery_to_empty, it)
+        if (ui.toReserve) specText(reserveTextKey, "t" to it) else stringResource(R.string.cockpit_battery_to_empty, it)
     }
     val shown = clock?.let {
-        stringResource(if (ui.toReserve) R.string.cockpit_battery_to_reserve_short else R.string.cockpit_battery_to_empty_short, it)
+        if (ui.toReserve) specText(reserveShortKey, "t" to it) else stringResource(R.string.cockpit_battery_to_empty_short, it)
     }
     val described = listOfNotNull(ui.pct?.let { "$it%" } ?: "—", timeLeft, ui.reservePct?.let { "$reserveLabel $it%" }).joinToString(", ")
     Row(

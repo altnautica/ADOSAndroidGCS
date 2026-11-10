@@ -56,6 +56,15 @@ class TipsControllerTest {
     }
 
     @Test
+    fun `no tip shows while an alert banner is up, and the first shows once it clears`() = runTest {
+        controller.open()
+        tickAt(2_500, ground.copy(alertBannerVisible = true))
+        assertNull(shownId())
+        tickAt(3_000)
+        assertEquals("status_pill", shownId())
+    }
+
+    @Test
     fun `the screen open is counted once per controller`() = runTest {
         controller.open()
         controller.open()

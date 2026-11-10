@@ -70,6 +70,8 @@ data class Chrome(
     val ok: Color,
     val warning: Color,
     val critical: Color,
+    /** Critical text on a panel: lighter than [critical] so it reads over bright video. */
+    val textCritical: Color,
     val stopBg: Color,
     val stopText: Color,
     val topBarText: TextStyle,
@@ -100,6 +102,7 @@ data class Chrome(
                 ok = color(spec.severityOk, 0xFF00C853),
                 warning = color(spec.severityWarning, 0xFFF59E0B),
                 critical = color(spec.severityCritical, 0xFFEF4444),
+                textCritical = color(spec.textCritical, 0xFFFF8A80),
                 stopBg = color(spec.stopBg, 0xFFEF4444),
                 stopText = color(spec.stopText, 0xFFFFFFFF),
                 topBarText = AdosTypography.numeric.medium.copy(

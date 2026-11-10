@@ -27,7 +27,7 @@ fun ChipTone.color(): Color {
         ChipTone.Neutral -> c.textDim
         ChipTone.Good -> c.ok
         ChipTone.Warn -> c.warning
-        ChipTone.Crit -> c.critical
+        ChipTone.Crit -> c.textCritical
         ChipTone.Accent -> c.text
     }
 }

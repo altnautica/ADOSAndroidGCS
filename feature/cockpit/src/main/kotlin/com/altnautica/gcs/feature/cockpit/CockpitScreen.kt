@@ -50,7 +50,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.requiredSize
+import com.altnautica.gcs.core.skills.spec.ZoneLinkSpec
 import com.altnautica.gcs.feature.cockpit.camera.CameraSettingsSheet
+import com.altnautica.gcs.feature.cockpit.chrome.linkAgeSeconds
+import com.altnautica.gcs.feature.cockpit.chrome.linkIconHealth
 import com.altnautica.gcs.feature.cockpit.camera.CameraSheetUi
 import com.altnautica.gcs.feature.cockpit.camera.FrameGrabEffect
 import com.altnautica.gcs.feature.cockpit.camera.LocalShownVideo
@@ -330,11 +333,14 @@ private fun FlightTopBar(
     val video by vm.video.collectAsStateWithLifecycle()
     val menu = rememberAdosMenuState()
     LaunchedEffect(menu.expanded) { onMenuOpen(menu.expanded) }
-    val linkText = linkText(band)
+    val topBarZone = remember(vm) { vm.cockpitSpec.layout.zones.firstOrNull { it.id == "top_bar" } }
+    val linkSpec = topBarZone?.link
+    val linkText = linkText(band, linkSpec)
     val controllerText = controllerText(band.stick)
     TopBar(
         overflow = overflow,
-        overflowOrder = remember(vm) { TopBarItem.order(vm.cockpitSpec.layout.zones.firstOrNull { it.id == "top_bar" }?.overflow?.toMenuOrder.orEmpty()) },
+        overflowOrder = remember(vm) { TopBarItem.order(topBarZone?.overflow?.toMenuOrder.orEmpty()) },
+        chipMaxFrac = topBarZone?.chip?.maxFrac ?: com.altnautica.gcs.feature.cockpit.chrome.DEFAULT_CHIP_MAX_FRAC,
         chip = { Box(Modifier.tipAnchor("flight_state_chip")) { FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton) } },
         pill = pill,
         battery = {
@@ -349,9 +355,11 @@ private fun FlightTopBar(
                         else -> StatusSeverity.Ok
                     },
                 ),
+                reserveTextKey = topBarZone?.battery?.timeToReserve?.text ?: "battery.to_reserve",
+                reserveShortKey = topBarZone?.battery?.timeToReserve?.short ?: "battery.to_reserve_short",
             )
         },
-        linkIcon = { LinkIcon(band.link, linkText) },
+        linkIcon = { LinkIcon(linkIconHealth(band.link, band.linkAgeDeciS, linkSpec), linkText) },
         linkDetail = { if (band.link != LinkHealth.None) ChromeText(linkText, dim = true) },
         navSource = { NavChipSlot(vm, width) },
         controller = {
@@ -384,7 +392,7 @@ private fun FlightTopBar(
                 }
                 if (TopBarItem.NavSource in moved) nav?.let { add(AdosMenuItem(navText.navLabel(it), Icons.Outlined.SatelliteAlt, enabled = false) {}) }
                 if ((TopBarItem.LinkDetail in moved || TopBarItem.LinkIcon in moved) && band.link != LinkHealth.None) {
-                    add(AdosMenuItem(stringResource(R.string.cockpit_menu_link, linkText), enabled = false) {})
+                    add(AdosMenuItem(stringResource(R.string.cockpit_menu_link, listOfNotNull(linkText, radioText(band)).joinToString(" · ")), enabled = false) {})
                 }
                 if (TopBarItem.Layers in moved) {
                     add(AdosMenuItem(com.altnautica.gcs.feature.cockpit.hud.layers.layerButtonText(layerFlags.level)) { vm.autonomy.layers.cycleLevel(1) })
@@ -410,13 +418,22 @@ private fun FlightTopBar(
     AdosMenu(menu, items)
 }
 
+/** The link cell: the newest vehicle frame's age (`cockpit.link.age`), or the spec's no-link word. */
 @Composable
-private fun linkText(band: BandState): String = when {
-    band.link == LinkHealth.None -> stringResource(R.string.cockpit_link_none)
+private fun linkText(band: BandState, spec: ZoneLinkSpec?): String {
+    val age = band.linkAgeDeciS
+    return when {
+        band.link == LinkHealth.None -> specText(spec?.never ?: "cockpit.link.never")
+        age != null -> specText(spec?.text ?: "cockpit.link.age", "s" to linkAgeSeconds(age))
+        else -> "—"
+    }
+}
+
+/** Radio figures for the Menu's link row, beside the age: RSSI and link quality when the radio reports them. */
+private fun radioText(band: BandState): String? = when {
     band.rssiDbm != null -> "${band.rssiDbm} dBm" + (band.lqPct?.let { " · $it%" } ?: "")
     band.lqPct != null -> "LQ ${band.lqPct}%"
-    band.linkAgeDeciS != null -> "%.1f s".format(band.linkAgeDeciS / 10f)
-    else -> "—"
+    else -> null
 }
 
 @Composable
@@ -572,7 +589,8 @@ private fun Centre(vm: CockpitViewModel, width: WidthClass, zones: FlightZones, 
             Box(Modifier.align(Alignment.BottomCenter).testTag("cockpit-toasts")) { snackbar() }
         }
         InZone(rect, Z.ALERTS) {
-            Column(Modifier.align(Alignment.TopCenter).padding(top = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // The alert stack: tips never cover it (`never_cover_zones`) and wait while it shows.
+            Column(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).tipAnchor("alert_stack"), horizontalAlignment = Alignment.CenterHorizontally) {
                 val alerts by vm.alerts.collectAsStateWithLifecycle()
                 // Warnings live in the status pill; only a critical alert takes the centre.
                 AlertStack(alerts.filter { it.level == AlertLevel.Critical }, maxVisible = 1)
@@ -700,6 +718,14 @@ private fun FlowBanners(vm: CockpitViewModel, modifier: Modifier) {
     }
 }
 
+/** The spec's `video.state.*` word for a video that is not live. */
+internal fun videoStateKey(state: VideoState): String = when (state) {
+    VideoState.Connecting -> "video.state.connecting"
+    is VideoState.Frozen -> "video.state.frozen"
+    is VideoState.Failed -> "video.state.failed"
+    is VideoState.Live, VideoState.Idle, VideoState.NoSource -> "video.state.no_source"
+}
+
 /** The centre-sticks gate ring and the controller hold ring. */
 @Composable
 private fun CentreRings(vm: CockpitViewModel, modifier: Modifier) {
@@ -774,13 +800,8 @@ private fun VideoStage(
             )
         }
         if (videoState !is VideoState.Live) {
-            val text = when (videoState) {
-                VideoState.Connecting -> stringResource(R.string.cockpit_video_connecting_long)
-                is VideoState.Frozen -> stringResource(R.string.cockpit_video_frozen_long)
-                // Never the raw transport error: it can carry a host address and means nothing to a pilot.
-                is VideoState.Failed -> stringResource(R.string.cockpit_video_failed)
-                else -> stringResource(R.string.cockpit_video_none_long)
-            }
+            // The shared video-state words; never the raw transport error, which can carry a host address.
+            val text = specText(videoStateKey(videoState))
             // Below the reticle and horizon marks, so no centre mark strikes through the words.
             Text(
                 text,
@@ -1030,6 +1051,8 @@ private fun tipFacts(vm: CockpitViewModel, status: StatusListState): TipFacts {
     val tourStep by vm.tourStep.collectAsStateWithLifecycle()
     val gimbal by vm.gimbal.available.collectAsStateWithLifecycle()
     val skills by vm.skillsAvailable.collectAsStateWithLifecycle()
+    val alerts by vm.alerts.collectAsStateWithLifecycle()
+    val flow by vm.flow.collectAsStateWithLifecycle()
     val sheets = openSheets(vm, status)
     val p = pilot
     return TipFacts(
@@ -1040,5 +1063,7 @@ private fun tipFacts(vm: CockpitViewModel, status: StatusListState): TipFacts {
         skillsAvailable = skills,
         gotoOffered = p != null && PilotAction.GOTO in p.surfaceOps,
         gimbalAvailable = gimbal,
+        alertBannerVisible = alerts.any { it.level == AlertLevel.Critical } ||
+            flow.launch != null || flow.banner != null || flow.sticksWith != null || flow.linkLossInS != null || flow.rthCountdownS != null,
     )
 }

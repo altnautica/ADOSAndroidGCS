@@ -21,6 +21,8 @@ data class TipFacts(
     val skillsAvailable: Boolean,
     val gotoOffered: Boolean,
     val gimbalAvailable: Boolean,
+    /** A critical alert or a flow banner (countdown, handover, launch) shows at the centre's top. */
+    val alertBannerVisible: Boolean = false,
 )
 
 /**
@@ -78,6 +80,7 @@ class TipsController(
             skillsAvailable = facts.skillsAvailable,
             gotoOffered = facts.gotoOffered,
             gimbalAvailable = facts.gimbalAvailable,
+            alertBannerVisible = facts.alertBannerVisible,
             anchorsVisible = anchorsVisible,
             screenOpenedAtMs = screenOpenedAtMs,
             lastDismissedAtMs = lastDismissedAtMs,
