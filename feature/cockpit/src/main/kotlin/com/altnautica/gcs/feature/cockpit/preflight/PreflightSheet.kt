@@ -43,7 +43,8 @@ fun preflightItemLabel(item: PreflightItem, known: Boolean): String {
         PreflightItem.Link -> specText("flow.preflight.link")
         PreflightItem.NoPrearm -> specText("flow.preflight.fc_prearm")
         PreflightItem.NavSource -> specText("flow.preflight.nav_source")
-        PreflightItem.Controller -> specText("flow.preflight.controller")
+        // A pad, the on-screen sticks or skills alone can fly.
+        PreflightItem.Controller -> specText("flow.preflight.controller_optional")
         PreflightItem.Storage -> specText("flow.preflight.storage")
     }
     return if (known) base else stringResource(R.string.cockpit_preflight_not_reported, base)

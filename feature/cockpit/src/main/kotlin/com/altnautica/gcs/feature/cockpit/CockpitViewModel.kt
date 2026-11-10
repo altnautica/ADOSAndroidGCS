@@ -75,7 +75,7 @@ import com.altnautica.gcs.feature.cockpit.camera.FrameGrab
 import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.CockpitAlertsController
 import com.altnautica.gcs.feature.cockpit.alerts.ControllerFeedback
-import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
+import com.altnautica.gcs.feature.cockpit.alerts.FcTexts
 import com.altnautica.gcs.feature.cockpit.band.CockpitHudFlows
 import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.chip.ChipButton
@@ -106,7 +106,6 @@ import com.altnautica.gcs.feature.cockpit.pilot.ControllerContext
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerHold
 import com.altnautica.gcs.feature.cockpit.pilot.Ds4ActionDispatcher
 import com.altnautica.gcs.feature.cockpit.pilot.OnScreenSticks
-import com.altnautica.gcs.feature.cockpit.pilot.PillFacts
 import com.altnautica.gcs.feature.cockpit.pilot.PilotStickStreamer
 import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
 import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
@@ -117,7 +116,9 @@ import com.altnautica.gcs.feature.cockpit.preflight.FirstArmGate
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightContext
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightResult
 import com.altnautica.gcs.feature.cockpit.preflight.cockpitPreflight
+import com.altnautica.gcs.feature.cockpit.preflight.sticksAvailable
 import com.altnautica.gcs.feature.cockpit.skillbar.CockpitTargetActions
+import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.skillbar.PickerChip
 import com.altnautica.gcs.feature.cockpit.skillbar.PickerTab
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerActions
@@ -132,7 +133,6 @@ import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
 import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 import com.altnautica.gcs.core.skills.hud.SpecText
-import com.altnautica.gcs.core.skills.hud.StatusPill
 import com.altnautica.gcs.core.skills.hud.pilotFresh as isPilotFresh
 import com.altnautica.gcs.core.skills.hud.aglMark
 import dagger.assisted.Assisted
@@ -168,12 +168,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.map.MapOverlays
-
-/** Severity at or below which a STATUSTEXT raises a critical alert (MAV_SEVERITY_CRITICAL). */
-private const val SEVERITY_CRITICAL = 2
-
-/** A text seen again on the other path within this window is the same message. */
-private const val DUPLICATE_TEXT_MS = 5_000L
 
 /** How long UI-only flows keep running after their last collector leaves. */
 internal const val UI_STOP_MS = 5_000L
@@ -229,7 +223,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** Spec strings with the shared interpolation rules (refusals, link loss, AGL marks). */
     private val specText by lazy { SpecText(spec.setupStrings) }
-    private val statusPill by lazy { StatusPill(specText, spec.layout.statusPill!!.storageWarnPct!!, spec.layout.statusPill!!.storageCritPct!!) }
+    private val statusPill by lazy { StatusModel.statusPill(specText, spec.layout) }
     internal val cockpitSpec: CockpitSpecRepository get() = spec
 
     // ---- Node and vehicle -------------------------------------------------------------
@@ -292,44 +286,15 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- STATUSTEXT tracking ----------------------------------------------------------
 
-    private val criticalText = MutableStateFlow<ReceivedText?>(null)
-    private val prearmText = MutableStateFlow<ReceivedText?>(null)
-
-    /** Recent FC status text at WARNING or ERROR severity, newest last, for the status pill. */
-    private val warningTexts = MutableStateFlow<List<ReceivedText>>(emptyList())
+    private val fcTexts = FcTexts()
+    private val criticalText = fcTexts.critical
+    private val prearmText = fcTexts.prearm
 
     init {
         viewModelScope.launch {
-            telemetry.flatMapLatest { it?.statusText ?: emptyFlow() }.collect { st -> onStatusText(st.severity, st.text, clock.nowMs(), relayed = false) }
+            telemetry.flatMapLatest { it?.statusText ?: emptyFlow() }.collect { st -> fcTexts.onStatusText(st.severity, st.text, clock.nowMs(), relayed = false) }
         }
     }
-
-    /**
-     * One FC status text, from the MAVLink link or [relayed] by the onboard pilot, classified
-     * once: a prearm reason, a critical or failsafe alert, or a pill warning. The pilot relays
-     * its recent texts on every frame, so a relayed text is placed by the time it was produced:
-     * a copy of a text already held (same text within [DUPLICATE_TEXT_MS]) changes nothing, and
-     * an older text never replaces a newer held one. Re-feeding a relay is therefore a no-op.
-     */
-    private fun onStatusText(severity: Int, text: String, atMs: Long, relayed: Boolean) {
-        when {
-            AlertEngine.isPrearm(text) -> {
-                val body = AlertEngine.prearmBody(text)
-                if (!relayed || replacesHeld(prearmText.value, body, atMs)) prearmText.value = ReceivedText(body, atMs)
-            }
-            severity <= SEVERITY_CRITICAL || AlertEngine.isFailsafeAnnouncement(severity, text) ->
-                if (!relayed || replacesHeld(criticalText.value, text, atMs)) criticalText.value = ReceivedText(text, atMs)
-            severity <= StatusModel.MAV_SEVERITY_WARNING -> warningTexts.update { list ->
-                val held = list.firstOrNull { it.text == text }
-                if (relayed && held != null && atMs - held.atMs <= DUPLICATE_TEXT_MS) list
-                else (list.filter { it.text != text } + ReceivedText(text, atMs)).sortedBy { it.atMs }.takeLast(StatusModel.WARNING_TEXT_MAX)
-            }
-        }
-    }
-
-    /** True when a relayed [text] produced at [atMs] replaces [held]: it is newer, and not a copy of the held text. */
-    private fun replacesHeld(held: ReceivedText?, text: String, atMs: Long): Boolean =
-        held == null || (atMs > held.atMs && !(held.text == text && atMs - held.atMs <= DUPLICATE_TEXT_MS))
 
     // ---- Video ------------------------------------------------------------------------
 
@@ -374,11 +339,17 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
 
+    /** The settings with the battery bands the cockpit flies by: the spec's fallback, raised to the engine's reserve. */
+    private val flightSettings: StateFlow<CockpitSettings> = combine(settings, batteryReserve) { s, r ->
+        val bands = AlertEngine.flightBands(s.batteryBands, spec.layout.battery?.lowFallbackPct, r?.reservePct)
+        if (bands == s.batteryBands) s else s.copy(batteryBands = bands)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, settings.value)
+
     init {
         // The pilot's relayed FC texts go through the same classification as the link's.
         viewModelScope.launch {
             pilot.state.collect { ps ->
-                ps?.statusTexts?.forEach { onStatusText(it.severity, it.text, ps.receivedAtMs - (it.ageMs ?: 0L), relayed = true) }
+                ps?.statusTexts?.forEach { fcTexts.onStatusText(it.severity, it.text, ps.receivedAtMs - (it.ageMs ?: 0L), relayed = true) }
             }
         }
     }
@@ -388,7 +359,7 @@ class CockpitViewModel @AssistedInject constructor(
     private val preflightContext = MutableStateFlow(PreflightContext(null, false, null))
 
     val preflight: StateFlow<PreflightResult> =
-        cockpitPreflight(viewModelScope, clock, telemetry, settings, prearmText, preflightContext, tick500, spec.layout.statusPill!!.storageWarnPct!!)
+        cockpitPreflight(viewModelScope, clock, telemetry, flightSettings, prearmText, preflightContext, tick500, spec.layout.statusPill!!.storageWarnPct!!)
 
     private val armGate = FirstArmGate()
     private val _armGateOpen = MutableStateFlow(false)
@@ -785,11 +756,20 @@ class CockpitViewModel @AssistedInject constructor(
         extensions, perception, localApis, settingsRepo, _events, ::activate,
     )
 
+    private val widthClass = MutableStateFlow<WidthClass?>(null)
+
+    /** The screen's width class, which decides whether the on-screen sticks show. */
+    fun setWidthClass(width: WidthClass) {
+        widthClass.value = width
+    }
+
     init {
         viewModelScope.launch { autonomy.feed.pilot.collect { navPilot.value = it } }
         viewModelScope.launch {
-            combine(pilot.state, router.gamepadConnected, autonomy.navChip) { p, pad, nav -> PreflightContext(p, pad, nav) }
-                .collect { preflightContext.value = it }
+            // On-screen sticks shown at this width fly as well as a pad.
+            combine(pilot.state, router.gamepadConnected, onScreenSticksEnabled, widthClass, autonomy.navChip) { p, pad, on, w, nav ->
+                PreflightContext(p, sticksAvailable(pad, on, w, spec.layout.onScreenSticks.classes), nav)
+            }.collect { preflightContext.value = it }
         }
     }
 
@@ -808,38 +788,21 @@ class CockpitViewModel @AssistedInject constructor(
     // ---- Band, alerts, strip ----------------------------------------------------------
 
     private val hud = CockpitHudFlows(
-        viewModelScope, clock, telemetry, node, vehicle, settings, videoState, sticks.stick, preflight, videoCtl.recording, tick500,
+        viewModelScope, clock, telemetry, node, vehicle, flightSettings, videoState, sticks.stick, preflight, videoCtl.recording, tick500,
     )
 
     val band: StateFlow<BandState> = hud.band
 
     private val alertsCtl = CockpitAlertsController(
-        viewModelScope, clock, telemetry, videoState, criticalText, prearmText, settings, tick500, announcer, sticks.raised, sticks.batteryLow,
+        viewModelScope, clock, telemetry, videoState, criticalText, prearmText, flightSettings, tick500, announcer, sticks.raised, sticks.batteryLow,
     )
 
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
 
-    /**
-     * The status pill's spec inputs beyond alerts and readiness (`status_pill` pilot,
-     * agent, controller and pre-flight rules), re-checked on the 2 Hz tick.
-     */
-    val pillFacts: StateFlow<PillFacts> = combine(pilot.link, pilot.linked, pilot.state, preflight, tick500) { link, linked, p, pre, _ ->
-        val now = clock.nowMs()
-        val fresh = isPilotFresh(p?.receivedAtMs, now)
-        PillFacts(
-            pilotRule = link != null,
-            pilotAgeMs = p?.let { now - it.receivedAtMs },
-            agentReachable = link == null || linked || fresh,
-            controllerLost = StatusPill.controllerLost(p),
-            preflightFailing = if (airborne()) emptyList() else pre.failing.map { it.item },
-        )
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), PillFacts())
+    private val pill = CockpitPill(viewModelScope, clock, pilot, preflight, alerts, criticalText, fcTexts.warnings, tick500, statusPill, ::airborne)
 
-    /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings (from the link and the agent's pilot). */
-    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, pillFacts, tick500) { a, p, w, facts, _ ->
-        val now = clock.nowMs()
-        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS }, facts, statusPill)
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
+    /** The status pill's items: alerts, pilot readiness, failing checks, storage, FC texts and the FC failsafe. */
+    val statusItems: StateFlow<List<StatusItem>> = pill.items
 
     /**
      * The bottom row. AGL comes from the follow feed while it is fresh, else from the agent's

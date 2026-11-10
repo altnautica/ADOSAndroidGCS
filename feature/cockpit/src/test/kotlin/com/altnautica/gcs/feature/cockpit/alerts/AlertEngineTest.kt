@@ -8,6 +8,10 @@ import com.altnautica.gcs.core.model.GpsState
 import com.altnautica.gcs.core.model.SystemHealth
 import com.altnautica.gcs.core.model.VibrationState
 import com.altnautica.gcs.core.data.cockpit.BatteryBands
+import com.altnautica.gcs.core.skills.spec.BatteryLayoutSpec
+import com.altnautica.gcs.feature.cockpit.preflight.PreflightChecklist
+import com.altnautica.gcs.feature.cockpit.preflight.PreflightInputs
+import com.altnautica.gcs.feature.cockpit.preflight.PreflightItem
 import com.altnautica.gcs.feature.cockpit.testSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -47,13 +51,33 @@ class AlertEngineTest {
     }
 
     @Test
-    fun `without an operator choice a 20 percent pack warns and is not critical, as the web`() {
+    fun `without an operator choice a pack at the spec's fallback warns and is not critical, as the web`() {
+        val bands = AlertEngine.flightBands(BatteryBands.DEFAULT, testSpec.layout.battery!!.lowFallbackPct, null)
         val fallback = testSpec.layout.battery!!.lowFallbackPct!!
-        assertEquals(BatteryBands(lowPct = fallback, criticalPct = 10), BatteryBands.DEFAULT)
-        assertEquals(AlertLevel.Warning, AlertEngine.batteryLevel(20, BatteryBands.DEFAULT))
-        assertEquals(AlertLevel.Critical, AlertEngine.batteryLevel(10, BatteryBands.DEFAULT))
-        assertEquals(null, AlertEngine.batteryLevel(21, BatteryBands.DEFAULT))
+        assertEquals(AlertLevel.Warning, AlertEngine.batteryLevel(fallback, bands))
+        assertEquals(AlertLevel.Critical, AlertEngine.batteryLevel(10, bands))
+        assertEquals(null, AlertEngine.batteryLevel(fallback + 1, bands))
     }
+
+    @Test
+    fun `the low band follows the spec's fallback at runtime and rises to the engine's reserve`() {
+        val layout = testSpec.layout.copy(battery = BatteryLayoutSpec(lowFallbackPct = 25))
+        val fallback = layout.battery?.lowFallbackPct
+        val bands = AlertEngine.flightBands(BatteryBands.DEFAULT, fallback, null)
+        assertEquals(BatteryBands(25, 10), bands)
+        assertEquals(AlertLevel.Warning, AlertEngine.batteryLevel(24, bands))
+        assertEquals("the pre-flight battery check fails with it", listOf(PreflightItem.Battery), preflightFailing(24, bands))
+        assertEquals(BatteryBands(32, 10), AlertEngine.flightBands(BatteryBands.DEFAULT, fallback, 32))
+        assertEquals("a lower reserve leaves the fallback", BatteryBands(25, 10), AlertEngine.flightBands(BatteryBands.DEFAULT, fallback, 15))
+        // An operator's own bands stand, raised only by a higher reserve.
+        assertEquals(BatteryBands(35, 15), AlertEngine.flightBands(BatteryBands(35, 15), fallback, 30))
+        assertEquals(BatteryBands(40, 15), AlertEngine.flightBands(BatteryBands(35, 15), fallback, 40))
+    }
+
+    private fun preflightFailing(pct: Int, bands: BatteryBands) = PreflightChecklist.evaluate(
+        PreflightInputs(gps = null, batteryPct = pct, bands = bands, ekf = null, home = null, linkFresh = true, lastPrearmMs = null, storageWarnPct = 90),
+        now,
+    ).failing.map { it.item }.filter { it == PreflightItem.Battery }
 
     @Test
     fun `link stale warns and a long loss while armed is critical`() {

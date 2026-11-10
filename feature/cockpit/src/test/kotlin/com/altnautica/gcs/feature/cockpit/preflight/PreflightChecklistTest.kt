@@ -14,6 +14,8 @@ import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.feature.cockpit.autonomy.NavChip
 import com.altnautica.gcs.feature.cockpit.autonomy.NavLabel
 import com.altnautica.gcs.feature.cockpit.autonomy.NavTone
+import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
+import com.altnautica.gcs.feature.cockpit.testSpec
 
 class PreflightChecklistTest {
     private val now = 50_000L
@@ -31,6 +33,22 @@ class PreflightChecklistTest {
     )
 
     private fun failing(i: PreflightInputs) = PreflightChecklist.evaluate(i, now).failing.map { it.item }
+
+    @Test
+    fun `on-screen sticks shown at this width satisfy the controller check, hidden ones do not`() {
+        val classes = testSpec.layout.onScreenSticks.classes
+        val shown = WidthClass.entries.first { it.id in classes }
+        val hidden = WidthClass.entries.first { it.id !in classes }
+        fun ready(pad: Boolean, onScreen: Boolean, width: WidthClass?) = PreflightChecklist.evaluate(
+            good.copy(controlMode = ControlMode.Ados, controllerConnected = sticksAvailable(pad, onScreen, width, classes)),
+            now,
+        ).ready
+        assertTrue("sticks shown at this width", ready(pad = false, onScreen = true, width = shown))
+        assertFalse("sticks enabled but hidden at this width", ready(pad = false, onScreen = true, width = hidden))
+        assertFalse("sticks off", ready(pad = false, onScreen = false, width = shown))
+        assertFalse("width not reported yet", ready(pad = false, onScreen = true, width = null))
+        assertTrue("a pad", ready(pad = true, onScreen = false, width = hidden))
+    }
 
     @Test
     fun `all checks pass when every input is healthy`() {

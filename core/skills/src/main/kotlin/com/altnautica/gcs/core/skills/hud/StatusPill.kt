@@ -13,6 +13,16 @@ data class PillAlertInput(val id: String, val level: PillAlertLevel, val title: 
 /** One FC status text at WARNING or worse: MAVLink [severity] (0 emergency … 7 debug). */
 data class PillFcStatus(val severity: Int, val text: String)
 
+/** The FC flying a failsafe RTL or land of its own (`fc_failsafe`), and why (`failsafe_cause`). */
+data class PillFailsafe(val active: Boolean, val cause: String?) {
+    companion object {
+        val None = PillFailsafe(false, null)
+
+        /** The pill's failsafe inputs from a pilot state (`pilotFailsafe`). */
+        fun of(p: PilotState?): PillFailsafe = PillFailsafe(p?.fcFailsafe == true, p?.failsafeCause)
+    }
+}
+
 enum class PillSource(val wire: String) {
     PilotReadiness("pilot_readiness"),
     FcPrearm("fc_prearm"),
@@ -43,12 +53,12 @@ data class PillSummary(
 /**
  * The top bar's status pill (`layout.json` `status_pill`), a port of the shared web module
  * `hud/status-pill.ts` held to the same golden cases: every active alert, worst first, then in
- * source order, and the pill's face.
+ * source order, and the pill's face. [storageCritPct] null keeps the storage item a warning.
  */
 class StatusPill(
     private val text: SpecText,
     private val storageWarnPct: Int,
-    private val storageCritPct: Int,
+    private val storageCritPct: Int?,
     private val staleAfterMs: Long = PilotState.STALE_MS,
 ) {
 
@@ -61,6 +71,10 @@ class StatusPill(
      * readiness, FC status-text and controller items that came from that stale frame.
      * [agentReachable] false is a critical link item; [controllerLost] (see [controllerLost])
      * a warning; each [preflightFailing] item (`id` to its label, passed only on the ground) a warning.
+     * An active [failsafe] from a fresh pilot state is one critical `failsafe` item.
+     *
+     * [linkFcStatus] are FC texts the surface hears on its own vehicle link rather than from the
+     * pilot: graded like [fcStatus] but kept while the pilot state is stale.
      */
     fun alerts(
         alerts: List<PillAlertInput>,
@@ -73,6 +87,8 @@ class StatusPill(
         agentReachable: Boolean = true,
         controllerLost: Boolean = false,
         preflightFailing: List<Pair<String, String>> = emptyList(),
+        failsafe: PillFailsafe = PillFailsafe.None,
+        linkFcStatus: List<PillFcStatus> = emptyList(),
     ): List<PillAlert> {
         val out = mutableListOf<PillAlert>()
         for (a in alerts) {
@@ -89,6 +105,8 @@ class StatusPill(
         val pilotStale = pilotRule && (pilotAgeMs == null || pilotAgeMs >= staleAfterMs)
         if (pilotStale) {
             out += PillAlert("pilot_not_answering", PillSource.Pilot, PillSeverity.Warning, text.text("alert.pilot_not_answering"))
+        } else if (failsafe.active) {
+            out += PillAlert("failsafe", PillSource.Pilot, PillSeverity.Critical, failsafeText(failsafe.cause))
         }
         for (r in if (pilotStale) emptyList() else readiness) {
             if (r.ok) continue
@@ -108,7 +126,7 @@ class StatusPill(
         }
         // The FC repeats a warning while its condition lasts: one alert per text, at its worst severity.
         val fcAt = HashMap<String, Int>()
-        for (s in if (pilotStale) emptyList() else fcStatus) {
+        for (s in if (pilotStale) linkFcStatus else fcStatus + linkFcStatus) {
             if (PREARM.containsMatchIn(s.text)) continue
             val sev = if (s.severity <= 2) PillSeverity.Critical else PillSeverity.Warning
             val at = fcAt[s.text]
@@ -123,11 +141,18 @@ class StatusPill(
             out += PillAlert(
                 "storage",
                 PillSource.Storage,
-                if (storagePct >= storageCritPct) PillSeverity.Critical else PillSeverity.Warning,
+                if (storageCritPct != null && storagePct >= storageCritPct) PillSeverity.Critical else PillSeverity.Warning,
                 text.text("cockpit.status.storage_used", mapOf("pct" to jsRound(storagePct))),
             )
         }
         return out.sortedBy { if (it.severity == PillSeverity.Critical) 0 else 1 }
+    }
+
+    /** `Failsafe: <cause>`, the cause worded by `pilot.banner.cause.*`; an unknown cause reads as itself. */
+    fun failsafeText(cause: String?): String {
+        val c = cause?.ifEmpty { null } ?: "fc"
+        val key = "pilot.banner.cause.$c"
+        return text.text("alert.failsafe", mapOf("cause" to if (text.has(key)) text.text(key) else c))
     }
 
     /** The pill's face for the active [alerts] and the acknowledged ids. */

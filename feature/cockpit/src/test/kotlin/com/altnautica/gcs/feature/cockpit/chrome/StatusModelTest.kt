@@ -4,9 +4,11 @@ import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.skills.hud.PillFailsafe
 import com.altnautica.gcs.core.skills.hud.ReadoutFormat
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.StatusPill
+import com.altnautica.gcs.feature.cockpit.alerts.FcStateDetail
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
 import com.altnautica.gcs.feature.cockpit.pilot.PillFacts
@@ -19,12 +21,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The production pill path: cockpit alerts and facts through the shared status pill. */
-fun specStatusPill(): StatusPill = StatusPill(
-    SpecText(testSpec.setupStrings),
-    testSpec.layout.statusPill!!.storageWarnPct!!,
-    testSpec.layout.statusPill!!.storageCritPct!!,
-)
+/** The production pill path: cockpit alerts and facts through the flight screen's status pill. */
+fun specStatusPill(): StatusPill = StatusModel.statusPill(SpecText(testSpec.setupStrings), testSpec.layout)
 
 class StatusModelTest {
     private val none = PreflightResult(emptyList())
@@ -35,7 +33,8 @@ class StatusModelTest {
         preflight: PreflightResult = none,
         texts: List<ReceivedText> = emptyList(),
         facts: PillFacts = PillFacts(),
-    ) = StatusModel.items(alerts, preflight, texts, facts, rules)
+        failsafe: PillFailsafe = PillFailsafe.None,
+    ) = StatusModel.items(alerts, preflight, texts, facts, rules, failsafe)
 
     @Test
     fun `nothing active reads all systems OK and never flashes`() {
@@ -58,36 +57,81 @@ class StatusModelTest {
         )
         val got = items(alerts, preflight, listOf(ReceivedText("EKF variance", 5)))
         assertEquals(
-            listOf("alert:link_lost", "storage", "alert:batt_low", "pilot:agl", "fc:Compass not calibrated", "fcst:EKF variance"),
+            listOf("alert:link_lost", "alert:batt_low", "pilot:agl", "fc:Compass not calibrated", "fcst:EKF variance", "storage"),
             got.map { it.key },
         )
         assertEquals(
-            listOf(StatusSource.Link, StatusSource.Storage, StatusSource.Battery, StatusSource.PilotReadiness, StatusSource.FcPrearm, StatusSource.FcStatusText),
+            listOf(StatusSource.Link, StatusSource.Battery, StatusSource.PilotReadiness, StatusSource.FcPrearm, StatusSource.FcStatusText, StatusSource.Storage),
             got.map { it.source },
         )
-        assertEquals("98 % used", got[1].text)
-        assertEquals(StatusSeverity.Critical, got[1].severity)
-        assertEquals("Flight controller: Compass not calibrated", got[4].text)
+        assertEquals("98 % used", got[5].text)
+        assertEquals(StatusSeverity.Warning, got[5].severity)
+        assertEquals("Flight controller: Compass not calibrated", got[3].text)
     }
 
     @Test
-    fun `storage warns at the spec's percent used, not at a free-space floor`() {
+    fun `phone storage warns at the spec's percent used and never turns critical`() {
         fun storage(pct: Double?) = items(emptyList(), PreflightResult(emptyList(), storageUsedPct = pct)).singleOrNull()?.severity
         assertEquals(null, storage(null))
         assertEquals(null, storage(89.4))
         assertEquals(StatusSeverity.Warning, storage(90.0))
-        assertEquals(StatusSeverity.Critical, storage(98.0))
+        assertEquals(StatusSeverity.Warning, storage(98.0))
+        assertEquals(StatusSeverity.Warning, storage(100.0))
     }
 
     @Test
     fun `a critical FC text is a critical status-text item, and a warning text stays a warning`() {
         val got = items(
+            // The critical text alert's text is among the held texts: it counts once.
             listOf(CockpitAlert(AlertId.STATUS_TEXT, AlertLevel.Critical, "statusText", "Crash: Disarming", 1)),
-            texts = listOf(ReceivedText("EKF3 lane switch 1", 2, severity = 4), ReceivedText("Crash: Disarming", 3, severity = 4)),
+            texts = listOf(
+                ReceivedText("Crash: Disarming", 1, severity = 2),
+                ReceivedText("EKF3 lane switch 1", 2, severity = 4),
+                ReceivedText("Crash: Disarming", 3, severity = 4),
+            ),
         )
         assertEquals(listOf("fcst:Crash: Disarming", "fcst:EKF3 lane switch 1"), got.map { it.key })
         assertEquals(listOf(StatusSeverity.Critical, StatusSeverity.Warning), got.map { it.severity })
         assertEquals(StatusSource.FcStatusText, got.first().source)
+    }
+
+    @Test
+    fun `FC texts heard on the vehicle link stay in the pill while the pilot is stale, relayed ones drop`() {
+        val stale = PillFacts(pilotRule = true, pilotAgeMs = 5_000)
+        val got = items(
+            emptyList(),
+            texts = listOf(
+                ReceivedText("GCS Failsafe", 1, severity = 2),
+                ReceivedText("EKF3 lane switch 1", 2, severity = 4),
+                ReceivedText("Thrust loss", 3, severity = 2, relayed = true),
+            ),
+            facts = stale,
+        )
+        assertEquals(listOf("fcst:GCS Failsafe", "pilot_not_answering", "fcst:EKF3 lane switch 1"), got.map { it.key })
+        assertEquals(StatusSeverity.Critical, StatusModel.pill(got, emptySet()).severity)
+        val fresh = items(emptyList(), texts = listOf(ReceivedText("Thrust loss", 3, severity = 2, relayed = true)), facts = stale.copy(pilotAgeMs = 100))
+        assertEquals(listOf("fcst:Thrust loss"), fresh.map { it.key })
+    }
+
+    @Test
+    fun `FC state and fence alerts list under FC status texts, and a worse FC state flashes again`() {
+        fun fcState(detail: String) = CockpitAlert(AlertId.FC_STATE, AlertLevel.Critical, "fcState", detail, 1)
+        val critical = items(listOf(fcState(FcStateDetail.CRITICAL), CockpitAlert(AlertId.FENCE_BREACH, AlertLevel.Critical, "fenceBreach", null, 2)))
+        assertEquals(listOf("alert:fcState:${FcStateDetail.CRITICAL}", "alert:fenceBreach"), critical.map { it.key })
+        assertEquals(listOf(StatusSource.FcStatusText, StatusSource.FcStatusText), critical.map { it.source })
+        val acked = critical.mapTo(HashSet()) { it.key }
+        assertFalse(StatusModel.pill(critical, acked).flashing)
+        val emergency = items(listOf(fcState(FcStateDetail.EMERGENCY)))
+        assertTrue(StatusModel.pill(emergency, acked).flashing)
+    }
+
+    @Test
+    fun `a fresh pilot's FC failsafe is one critical item worded with its cause`() {
+        val got = items(emptyList(), facts = PillFacts(pilotRule = true, pilotAgeMs = 100), failsafe = PillFailsafe(true, "rc_or_failsafe"))
+        assertEquals(listOf("failsafe"), got.map { it.key })
+        assertEquals(StatusSeverity.Critical, got.single().severity)
+        assertEquals(StatusSource.Pilot, got.single().source)
+        assertEquals("Failsafe: RC switch or failsafe", got.single().text)
     }
 
     @Test

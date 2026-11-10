@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.skills.hud
 
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.skills.adosPilot
 import com.altnautica.gcs.core.skills.testSpec
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -10,6 +11,7 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The Kotlin status pill reads every shared pill case as the web module does. */
@@ -55,6 +57,7 @@ class PillCasesTest {
                     agentReachable = i["agent_reachable"].bool() ?: true,
                     controllerLost = i["controller_lost"].bool() ?: false,
                     preflightFailing = preflight,
+                    failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str()),
                 ),
                 emptySet(),
             )
@@ -70,5 +73,39 @@ class PillCasesTest {
     fun `the pill rule is off for a surface that does not read the pilot kind`() {
         val alerts = pill.alerts(emptyList(), emptyList(), null, null, pilotAgeMs = null)
         assertEquals(emptyList<PillAlert>(), alerts)
+    }
+
+    @Test
+    fun `the failsafe cases are in the shared file and an unknown cause reads as itself`() {
+        val names = goldenCases("pill-cases.json").map { it.name }
+        assertTrue(names.toString(), names.count { it.startsWith("fc_failsafe_") } >= 5)
+        assertEquals("Failsafe: battery", pill.failsafeText("battery"))
+        assertEquals("Failsafe: flight controller", pill.failsafeText(null))
+    }
+
+    @Test
+    fun `the failsafe item comes from a fresh pilot state only`() {
+        val on = PillFailsafe.of(adosPilot().copy(fcFailsafe = true, failsafeCause = "rc_or_failsafe"))
+        assertEquals(PillFailsafe.None, PillFailsafe.of(adosPilot()))
+        assertEquals(PillFailsafe(true, "rc_or_failsafe"), on)
+        val fresh = pill.alerts(emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 100, failsafe = on)
+        assertEquals(listOf("failsafe"), fresh.map { it.id })
+        assertEquals(PillSeverity.Critical, fresh.single().severity)
+        val stale = pill.alerts(emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 5_000, failsafe = on)
+        assertEquals(listOf("pilot_not_answering"), stale.map { it.id })
+    }
+
+    @Test
+    fun `texts heard on the vehicle link stay while the pilot state is stale`() {
+        val link = listOf(PillFcStatus(2, "GCS Failsafe"))
+        val stale = pill.alerts(emptyList(), emptyList(), null, null, listOf(PillFcStatus(4, "EKF variance")), pilotRule = true, pilotAgeMs = 5_000, linkFcStatus = link)
+        assertEquals(listOf("fcst:GCS Failsafe", "pilot_not_answering"), stale.map { it.id })
+        assertEquals(PillSeverity.Critical, stale.first().severity)
+    }
+
+    @Test
+    fun `without a critical percent the storage item only warns`() {
+        val phone = StatusPill(SpecText(testSpec.setupStrings), testSpec.layout.statusPill!!.storageWarnPct!!, storageCritPct = null)
+        assertEquals(PillSeverity.Warning, phone.alerts(emptyList(), emptyList(), null, 99.0).single().severity)
     }
 }

@@ -13,6 +13,8 @@ import com.altnautica.gcs.core.skills.MonotonicClock
 import com.altnautica.gcs.core.skills.isLinkFresh
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
 import com.altnautica.gcs.feature.cockpit.autonomy.NavChip
+import com.altnautica.gcs.feature.cockpit.sticksShown
+import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +31,17 @@ internal data class PreflightContext(
     val navChip: NavChip?,
 )
 
-/** Percent of the app's data volume used, where recordings land; null when the volume cannot be read. */
+/**
+ * Whether something can fly the sticks for the pre-flight controller check: a pad, or the
+ * on-screen sticks when enabled and shown at this [width] (`on_screen_sticks.classes`).
+ */
+internal fun sticksAvailable(pad: Boolean, onScreen: Boolean, width: WidthClass?, classes: List<String>): Boolean =
+    pad || (width != null && sticksShown(onScreen, width, classes))
+
+/**
+ * Percent of the app's data volume used, where recordings land; null when the volume cannot be
+ * read. It is the phone's own volume, not the vehicle's disk, so the pill only warns on it.
+ */
 internal fun dataVolumeUsedPct(): Double? = runCatching {
     val fs = StatFs(Environment.getDataDirectory().path)
     usedPct(fs.totalBytes, fs.availableBytes)

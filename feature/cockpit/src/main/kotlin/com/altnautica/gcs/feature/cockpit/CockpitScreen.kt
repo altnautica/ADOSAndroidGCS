@@ -162,6 +162,8 @@ internal fun CockpitScreen(
     val tipsEngine = remember(vm) { TipsEngine(vm.cockpitSpec.tips) }
     val padButtons by vm.padButtons.collectAsStateWithLifecycle()
     LaunchedEffect(padButtons) { if (padButtons != 0) tips.dismissFromControllerButton() }
+    // The pre-flight controller check counts the on-screen sticks shown at this width.
+    LaunchedEffect(width) { vm.setWidthClass(width) }
     val shownVideo = remember { ShownVideo() }
     CompositionLocalProvider(
         LocalCockpitStrings provides vm.specStrings,

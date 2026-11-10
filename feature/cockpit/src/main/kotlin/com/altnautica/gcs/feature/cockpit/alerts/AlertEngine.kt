@@ -12,8 +12,16 @@ import com.altnautica.gcs.core.skills.heartbeatAgeMs
 import com.altnautica.gcs.core.data.cockpit.BatteryBands
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 
-/** A STATUSTEXT line kept with its receive time and MAVLink [severity] (0 emergency … 7 debug). */
-data class ReceivedText(val text: String, val atMs: Long, val severity: Int = StatusModel.MAV_SEVERITY_WARNING)
+/**
+ * A STATUSTEXT line kept with its receive time and MAVLink [severity] (0 emergency … 7 debug);
+ * [relayed] when it came only from the onboard pilot's relay, not the vehicle link.
+ */
+data class ReceivedText(
+    val text: String,
+    val atMs: Long,
+    val severity: Int = StatusModel.MAV_SEVERITY_WARNING,
+    val relayed: Boolean = false,
+)
 
 /** A one-off cockpit event shown as an alert for [AlertEngine.RAISED_HOLD_MS] from [atMs]. */
 data class RaisedAlert(val id: String, val level: AlertLevel, val detail: String?, val atMs: Long)
@@ -128,6 +136,18 @@ class AlertEngine {
             pct <= bands.criticalPct -> AlertLevel.Critical
             pct <= bands.lowPct -> AlertLevel.Warning
             else -> null
+        }
+
+        /**
+         * The bands the cockpit flies by. Until the operator picks bands ([operator] is
+         * [BatteryBands.DEFAULT]) the low band is the spec's `battery.low_fallback_pct`
+         * ([lowFallbackPct]); the battery engine's [reservePct] raises it when higher, as the
+         * web's `batteryLowPct` does.
+         */
+        fun flightBands(operator: BatteryBands, lowFallbackPct: Int?, reservePct: Int?): BatteryBands {
+            val base = if (operator == BatteryBands.DEFAULT) lowFallbackPct ?: operator.lowPct else operator.lowPct
+            val low = maxOf(base, reservePct ?: 0, operator.criticalPct)
+            return if (low == operator.lowPct) operator else operator.copy(lowPct = low)
         }
 
         private fun fresh(tMs: Long?, nowMs: Long) = tMs != null && nowMs - tMs < SAMPLE_FRESH_MS

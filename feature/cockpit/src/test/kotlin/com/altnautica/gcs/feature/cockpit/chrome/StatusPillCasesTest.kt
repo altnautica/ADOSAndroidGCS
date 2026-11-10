@@ -4,6 +4,9 @@ import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.skills.hud.PillFailsafe
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.StatusPill
 import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
@@ -31,10 +34,16 @@ import java.io.File
 /**
  * The shared pill cases (`pill-cases.json`, the web module's golden file) read through the
  * pill the flight screen shows: cockpit alerts, pre-flight result, FC texts and pill facts
- * into [StatusModel.items], the way the view model feeds it.
+ * into [StatusModel.items], the way the view model feeds it. The cases grade the vehicle's
+ * disk, so they run with the shared storage rule; the phone's own storage only warns
+ * (see [StatusModelTest]).
  */
 class StatusPillCasesTest {
-    private val rules = specStatusPill()
+    private val rules = StatusPill(
+        SpecText(testSpec.setupStrings),
+        testSpec.layout.statusPill!!.storageWarnPct!!,
+        testSpec.layout.statusPill!!.storageCritPct!!,
+    )
     private val strings = testSpec.setupStrings.strings
 
     private fun JsonElement?.str(): String? = (this as? JsonPrimitive)?.takeUnless { it is JsonNull }?.contentOrNull
@@ -50,7 +59,7 @@ class StatusPillCasesTest {
     @Test
     fun `every shared pill case reads the same through the flight screen's pill`() {
         val cases = Json.parseToJsonElement(File(FIXTURE).readText()).jsonArray.map { it.jsonObject }
-        var ran = 0
+        val skipped = ArrayList<String>()
         var preflightRan = 0
         for (c in cases) {
             val name = c["name"].str()!!
@@ -58,7 +67,10 @@ class StatusPillCasesTest {
             val e = c["expected"]!!.jsonObject
             // Android's checklist names its own items; a case naming another surface's item cannot be fed.
             val preflight = i["preflight_failing"].array().map { p -> PreflightItem.entries.firstOrNull { it.id == p["id"].str() } }
-            if (null in preflight) continue
+            if (null in preflight) {
+                skipped += name
+                continue
+            }
             val alerts = ArrayList<CockpitAlert>()
             for (a in i["alerts"].array()) {
                 val level = AlertLevel.valueOf(a["level"].str()!!.replaceFirstChar(Char::uppercase))
@@ -68,14 +80,8 @@ class StatusPillCasesTest {
             (i["prearm"] as? JsonArray)?.lastOrNull()?.str()?.let {
                 alerts += CockpitAlert(AlertId.PREARM, AlertLevel.Advisory, "alert.prearm", AlertEngine.prearmBody(it), 0)
             }
-            // It raises an FC text at CRITICAL or worse as the critical-text alert, and keeps the rest as warnings.
-            val texts = ArrayList<ReceivedText>()
-            for (s in i["fc_status"].array()) {
-                val sev = s["severity"].long()!!.toInt()
-                val text = s["text"].str()!!
-                if (sev <= AlertEngine.MAV_SEVERITY_CRITICAL) alerts += CockpitAlert(AlertId.STATUS_TEXT, AlertLevel.Critical, "alert.statusText", text, 0)
-                else texts += ReceivedText(text, 0, sev)
-            }
+            // The cases' FC texts are the ones the pilot relays.
+            val texts = i["fc_status"].array().map { ReceivedText(it["text"].str()!!, 0, it["severity"].long()!!.toInt(), relayed = true) }
             val readiness = i["readiness"].array().map {
                 ReadinessItem(it["id"].str()!!, it["ok"].bool()!!, if (it["severity"].str() == "block") ReadinessSeverity.Block else ReadinessSeverity.Warn, it["msg"].str().orEmpty())
             }
@@ -86,18 +92,19 @@ class StatusPillCasesTest {
                 controllerLost = i["controller_lost"].bool() ?: false,
                 preflightFailing = preflight.filterNotNull(),
             )
+            val failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str())
             val storage = (i["storage_pct"] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.doubleOrNull
-            val items = StatusModel.items(alerts, PreflightResult(emptyList(), readiness, storage), texts, facts, rules)
+            val items = StatusModel.items(alerts, PreflightResult(emptyList(), readiness, storage), texts, facts, rules, failsafe)
             val pill = StatusModel.pill(items, emptySet())
 
             assertEquals(name, e["severity"].str(), pill.severity.name.lowercase())
             assertEquals(name, e["count"].long()!!.toInt(), pill.count)
             assertEquals(name, (e["ids"] as JsonArray).map { it.str() }, items.map { it.key })
             assertEquals(name, e["text"].str(), face(items, i))
-            ran++
             if (preflight.isNotEmpty()) preflightRan++
         }
-        assertTrue("cases ran: $ran", ran >= cases.size - 1)
+        assertEquals("cases Android cannot feed", listOf("preflight_failing_each_item"), skipped)
+        assertEquals("the failsafe cases ran", 5, cases.count { it["name"].str()!!.startsWith("fc_failsafe_") && it["name"].str() !in skipped })
         assertTrue("a pre-flight case ran", preflightRan >= 1)
     }
 

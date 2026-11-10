@@ -21,8 +21,8 @@ enum class CockpitDensity { Min, Std, Full }
 
 /**
  * Operator battery bands: at or below [lowPct] warns, at or below [criticalPct] is critical.
- * Until the operator picks bands they are the shared fallback: low from the cockpit spec's
- * `layout.json` `battery.low_fallback_pct`, critical 10 (the cockpit tests hold them equal).
+ * [DEFAULT] stands for "not picked yet": the cockpit then takes the low band from its spec's
+ * `layout.json` `battery.low_fallback_pct`, raised to the battery engine's reserve.
  */
 data class BatteryBands(val lowPct: Int, val criticalPct: Int) {
     companion object {
