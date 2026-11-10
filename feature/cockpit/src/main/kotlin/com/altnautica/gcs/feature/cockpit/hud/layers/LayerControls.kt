@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,7 +55,7 @@ internal fun layerLabel(id: String): String = when (id) {
     else -> id
 }
 
-/** The layer button's text: "Layers · <level>". */
+/** The layer level as a menu entry, where no icon is drawn: "Layers · <level>". */
 @Composable
 internal fun layerButtonText(level: LayerLevel): String = specText("cockpit.menu.layers") + " · " + levelLabel(level)
 
@@ -83,7 +84,10 @@ fun LayerLevelButton(controller: LayerController, modifier: Modifier = Modifier)
                 .testTag("layer-level"),
             contentAlignment = Alignment.Center,
         ) {
-            Text(layerButtonText(flags.level), color = AdosTheme.colors.mediaOn)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Layers, contentDescription = null, tint = AdosTheme.colors.mediaOn, modifier = Modifier.testTag("layer-level-icon"))
+                Text(label, color = AdosTheme.colors.mediaOn)
+            }
         }
         Box(
             Modifier

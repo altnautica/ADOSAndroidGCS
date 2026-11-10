@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
@@ -96,7 +98,10 @@ class LayerFlagsMenuTest {
             }
         }
         val before = c.flags.value.level
-        compose.onNodeWithText("Layers · " + specLevel(before)).assertIsDisplayed()
+        // The layers icon and the level name; the word "Layers" lives only in the description.
+        compose.onNodeWithText(specLevel(before)).assertIsDisplayed()
+        compose.onNodeWithTag("layer-level-icon", useUnmergedTree = true).assertIsDisplayed()
+        compose.onAllNodesWithText("Layers · ", substring = true).assertCountEquals(0)
         compose.onNodeWithTag("layer-level", useUnmergedTree = true).performClick()
         compose.waitForIdle()
         assertEquals(before.cycle(1), c.flags.value.level)
