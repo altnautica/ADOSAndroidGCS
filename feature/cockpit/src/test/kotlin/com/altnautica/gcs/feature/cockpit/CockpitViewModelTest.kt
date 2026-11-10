@@ -325,8 +325,8 @@ class CockpitViewModelTest {
     }
 
     /** Long-presses a map point in the air with pilot state [data], holds the confirm, and returns the goto sent to the pilot. */
-    private fun TestScope.mapGoto(data: String, vehicle: FakeVehicle): kotlinx.serialization.json.JsonObject? {
-        vehicle.beat(armed = true, now = testScheduler.currentTime)
+    private fun TestScope.mapGoto(data: String, vehicle: FakeVehicle, mode: String = "STABILIZE"): kotlinx.serialization.json.JsonObject? {
+        vehicle.beat(armed = true, now = testScheduler.currentTime, mode = mode)
         vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime)
         val sent = mutableListOf<String>()
         val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data, sent = sent))
@@ -414,14 +414,14 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `a map point under FC manual or ELRS control, or with no pilot goto, takes the FC route after the hold`() = runTest(dispatcher) {
+    fun `a map point in GUIDED under FC manual or ELRS control, or with no pilot goto, takes the FC route after the hold`() = runTest(dispatcher) {
         for (data in listOf(
             """{"owner":"pilot","control_mode":"fc_manual","armed":true,"landed":false,"surface_ops":["goto"]}""",
             """{"owner":"pilot","control_mode":"elrs","armed":true,"landed":false,"surface_ops":["goto"]}""",
             """{"owner":"pilot","control_mode":"ados","armed":true,"landed":false,"surface_ops":[]}""",
         )) {
             val vehicle = FakeVehicle()
-            assertNull(data, mapGoto(data, vehicle))
+            assertNull(data, mapGoto(data, vehicle, mode = "GUIDED"))
             assertEquals(data, listOf<VehicleCommand>(VehicleCommand.FlyTo(47.001, 8.002, 12f)), vehicle.control.sent)
         }
     }
