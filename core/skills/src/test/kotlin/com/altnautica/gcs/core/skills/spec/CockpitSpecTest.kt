@@ -44,6 +44,13 @@ class CockpitSpecTest {
         val split = testSpec.views.views.first { it.id == "split" }.divider!!
         assertEquals(0.3f, split.min)
         assertEquals("bottom_left_card", testSpec.views.views.first { it.id == "map" }.videoSlot)
+        val top = layout.zones.first { it.id == "top_bar" }
+        assertEquals(0.4f, top.chip!!.maxFrac)
+        assertEquals(3000L, top.link!!.iconColor.okBelowMs)
+        assertEquals(10000L, top.link!!.iconColor.warningBelowMs)
+        assertEquals("cockpit.link.age", top.link!!.text)
+        assertEquals("battery.to_reserve_short", top.battery!!.timeToReserve!!.short)
+        assertEquals("#FF8A80", testSpec.tokens.chrome.textCritical)
     }
 
     @Test

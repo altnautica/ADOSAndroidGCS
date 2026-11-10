@@ -270,6 +270,10 @@ data class ZoneSpec(
     val overflow: ZoneOverflowSpec? = null,
     /** Items that leave the zone first when it is too short (right column). */
     @SerialName("drop_order") val dropOrder: List<String> = emptyList(),
+    /** Top bar: the flight-state chip's width cap. */
+    val chip: ZoneChipSpec? = null,
+    /** Top bar: the link cell's text and icon colour bands. */
+    val link: ZoneLinkSpec? = null,
 )
 
 @Serializable
@@ -279,7 +283,34 @@ data class ZoneOverflowSpec(
 )
 
 @Serializable
-data class ZoneBatterySpec(val show: List<String>)
+data class ZoneBatterySpec(
+    val show: List<String>,
+    @SerialName("time_to_reserve") val timeToReserve: TimeToReserveSpec? = null,
+)
+
+/** Battery time to the RTL reserve: [text] in full, [short] when the bar is short of room (string keys). */
+@Serializable
+data class TimeToReserveSpec(val text: String, val short: String)
+
+/** The chip never takes more than [maxFrac] of the top bar's width; the rest ellipsizes. */
+@Serializable
+data class ZoneChipSpec(@SerialName("max_frac") val maxFrac: Float)
+
+/** The link cell: the newest vehicle frame's age as [text], [never] before any frame (string keys). */
+@Serializable
+data class ZoneLinkSpec(
+    val metric: String,
+    val text: String,
+    val never: String,
+    @SerialName("icon_color") val iconColor: LinkIconColorSpec,
+)
+
+/** Below [okBelowMs] the link icon is ok, below [warningBelowMs] warning, else critical. */
+@Serializable
+data class LinkIconColorSpec(
+    @SerialName("ok_below_ms") val okBelowMs: Long,
+    @SerialName("warning_below_ms") val warningBelowMs: Long,
+)
 
 @Serializable
 data class LayoutClassSpec(
@@ -660,6 +691,7 @@ data class ChromeTokensSpec(
     @SerialName("severity_critical") val severityCritical: String = "#EF4444",
     @SerialName("stop_bg") val stopBg: String = "#EF4444",
     @SerialName("stop_text") val stopText: String = "#FFFFFF",
+    @SerialName("text_critical") val textCritical: String = "#FF8A80",
     val type: ChromeTypeSpec = ChromeTypeSpec(),
     @SerialName("icon_px") val iconPx: Float = 18f,
     @SerialName("gap_px") val gapPx: Float = 8f,
