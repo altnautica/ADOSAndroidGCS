@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.altnautica.gcs.core.designsystem.theme.AdosFonts
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.skills.spec.ChromeTokensSpec
 import com.altnautica.gcs.core.skills.spec.SpecColor
@@ -107,19 +108,23 @@ data class Chrome(
                 textCritical = color(spec.textCritical, 0xFFFF8A80),
                 stopBg = color(spec.stopBg, 0xFFEF4444),
                 stopText = color(spec.stopText, 0xFFFFFFFF),
+                // Chrome text is the design-token sans with tabular figures, so changing numbers do not jitter.
                 topBarText = AdosTypography.numeric.medium.copy(
+                    fontFamily = AdosFonts.Inter,
                     color = text,
                     fontSize = type.topBarPx.sp,
                     lineHeight = type.topBarLinePx.sp,
                     fontWeight = FontWeight.Medium,
                 ),
                 valueText = AdosTypography.numeric.medium.copy(
+                    fontFamily = AdosFonts.Inter,
                     color = text,
                     fontSize = type.valuePx.sp,
                     lineHeight = (type.valuePx + 4).sp,
                     fontWeight = FontWeight.SemiBold,
                 ),
                 labelText = AdosTypography.numeric.small.copy(
+                    fontFamily = AdosFonts.Inter,
                     color = dim,
                     fontSize = type.labelPx.sp,
                     lineHeight = (type.labelPx + 3).sp,
@@ -127,6 +132,7 @@ data class Chrome(
                     letterSpacing = 0.6.sp,
                 ),
                 chipText = AdosTypography.numeric.medium.copy(
+                    fontFamily = AdosFonts.Inter,
                     color = text,
                     fontSize = type.chipPx.sp,
                     lineHeight = (type.chipPx + 3).sp,

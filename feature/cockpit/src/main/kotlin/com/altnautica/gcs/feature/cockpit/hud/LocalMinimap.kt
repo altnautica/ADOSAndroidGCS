@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
+import com.altnautica.gcs.core.designsystem.theme.AdosFonts
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
@@ -111,7 +112,7 @@ internal fun LocalMinimap(
         pan = Offset.Zero
     }
     val measurer = rememberTextMeasurer()
-    val small = AdosTypography.numeric.small.copy(fontSize = 10.sp, color = c.hudInk)
+    val small = AdosTypography.numeric.small.copy(fontFamily = AdosFonts.Inter, fontSize = 10.sp, color = c.hudInk)
     val originLabel = specText("minimap.origin").uppercase()
     val description = specText("minimap.description")
     val poseFresh = inputs.pose?.takeIf { inputs.nowMs - it.receivedAtMs <= LocalFrame.POSE_STALE_MS }
@@ -204,7 +205,7 @@ internal fun LocalMinimap(
 @Composable
 private fun PinToggle(pin: String, onPin: (String) -> Unit) {
     val c = AdosTheme.colors
-    val style = AdosTypography.numeric.small.copy(fontSize = 10.sp)
+    val style = AdosTypography.numeric.small.copy(fontFamily = AdosFonts.Inter, fontSize = 10.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         for ((value, label) in listOf(
             CockpitSettingsRepository.MINIMAP_AUTO to specText("minimap.pin.auto"),
