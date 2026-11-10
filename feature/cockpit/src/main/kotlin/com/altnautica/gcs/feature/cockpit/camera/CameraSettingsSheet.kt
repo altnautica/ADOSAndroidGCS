@@ -65,20 +65,28 @@ internal fun CameraSettingsSheet(
             )
         }
         if (ui.pipAvailable) SwitchSettingRow(stringResource(R.string.cockpit_qs_pip), ui.pipOn, { onTogglePip() })
-        if (ui.digitalZoom > 1) {
+        if (ui.hasVideo) {
+            // The zoom in use: the camera's own, or the digital zoom of the shown video.
+            val zoom = if (ui.digitalZoom > 1) specText("camera.digital_zoom", "n" to ui.digitalZoom.toString()) else "1×"
             Text(
-                specText("camera.digital_zoom", "n" to ui.digitalZoom.toString()),
+                specText("cockpit.zoom") + " · " + zoom,
                 color = AdosTheme.colors.fgPrimary,
                 modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2).testTag("camera-sheet-zoom"),
             )
-        }
-        if (ui.hasVideo && ui.canRecord) {
             AdosButton(
                 label = specText(if (ui.recording) "cockpit.camera.stop_recording" else "cockpit.camera.start_recording"),
                 onClick = onToggleRecording,
                 variant = if (ui.recording) AdosButtonVariant.Danger else AdosButtonVariant.Secondary,
+                enabled = ui.canRecord,
                 modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2).testTag("camera-sheet-record"),
             )
+            if (!ui.canRecord) {
+                Text(
+                    specText("cockpit.camera.no_extension"),
+                    color = AdosTheme.colors.fgSecondary,
+                    modifier = Modifier.padding(horizontal = AdosSpacing.S4).testTag("camera-sheet-record-unavailable"),
+                )
+            }
         }
     }
 }

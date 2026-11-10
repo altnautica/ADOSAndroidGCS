@@ -60,6 +60,7 @@ import com.altnautica.gcs.feature.cockpit.camera.LocalShownVideo
 import com.altnautica.gcs.feature.cockpit.camera.ShownVideo
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -515,17 +516,32 @@ private fun RightColumn(
             height = sizes.modeSwitch,
         )
         if (zoomInColumn) {
-            ZoomPill(
-                inLabel = stringResource(R.string.grid_zoom_in),
-                outLabel = stringResource(R.string.grid_zoom_out),
-                onIn = vm::zoomIn,
-                onOut = vm::zoomOut,
-                onLongPress = null,
-                width = sizes.rightButton,
-                height = sizes.zoom,
-            )
             val zoom by vm.digitalZoom.collectAsStateWithLifecycle()
-            if (zoom > 1) ChromeText(specText("camera.digital_zoom", "n" to zoom.toString()), modifier = Modifier.testTag("digital-zoom"))
+            Box {
+                ZoomPill(
+                    inLabel = specText("cockpit.zoom.in"),
+                    outLabel = specText("cockpit.zoom.out"),
+                    onIn = vm::zoomIn,
+                    onOut = vm::zoomOut,
+                    onLongPress = null,
+                    width = sizes.rightButton,
+                    height = sizes.zoom,
+                )
+                // The digital zoom in use, beside the pill on the video side; it takes no room in the column.
+                if (zoom > 1) {
+                    com.altnautica.gcs.feature.cockpit.chrome.ChromePanel(
+                        Modifier
+                            .align(Alignment.CenterStart)
+                            .layout { measurable, _ ->
+                                val p = measurable.measure(androidx.compose.ui.unit.Constraints())
+                                layout(0, 0) { p.place(-p.width - 8.dp.roundToPx(), -p.height / 2) }
+                            }
+                            .testTag("digital-zoom"),
+                    ) {
+                        ChromeText(specText("camera.digital_zoom", "n" to zoom.toString()), modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    }
+                }
+            }
         }
         if (gimbalInColumn) Pad(vm, sizes.gimbalPad)
         RoundButton(Icons.Outlined.Tune, specText("cockpit.camera.settings"), sizes.rightButton, "grid-camera-settings", onCameraSettings)
@@ -785,14 +801,16 @@ private fun VideoStage(
         }
         val sampler = backdrop?.takeIf { sampleBackdrop }
         // Digital zoom: the video is laid out [zoom] times larger around its centre and clipped to its slot.
-        BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().zIndex(Z.VIDEO), contentAlignment = Alignment.Center) {
+        BoxWithConstraints(
+            Modifier.fillMaxSize().clipToBounds().zIndex(Z.VIDEO).onGloballyPositioned { shown?.bounds = it.boundsInRoot() },
+            contentAlignment = Alignment.Center,
+        ) {
             VideoSurface(
                 video.main,
                 Modifier
                     .requiredSize(maxWidth * zoom, maxHeight * zoom)
                     .onGloballyPositioned { coords ->
                         sampler?.videoBounds = coords.boundsInRoot()
-                        shown?.bounds = coords.boundsInRoot()
                     },
                 onSurfaceView = { view ->
                     sampler?.surfaceView = view

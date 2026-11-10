@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.cockpit.camera
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -84,7 +85,15 @@ class CameraSettingsSheetTest {
     @Test
     fun digitalZoomInUseIsNamed() {
         show(ui(zoom = 2))
-        compose.onNodeWithText("Digital ×2").assertIsDisplayed()
+        compose.onNodeWithText("Zoom · Digital ×2").assertIsDisplayed()
+    }
+
+    @Test
+    fun recordingWithoutARecorderIsOfferedDisabledWithItsReason() {
+        show(ui().copy(canRecord = false))
+        compose.onNodeWithText("Start recording").assertIsNotEnabled()
+        compose.onNodeWithText("No camera extension offers this").assertIsDisplayed()
+        compose.onNodeWithText("Zoom · 1×").assertIsDisplayed()
     }
 
     @Test
