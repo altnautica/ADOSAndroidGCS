@@ -310,6 +310,38 @@ class AdosInputRouterTest {
     }
 
     @Test
+    fun `in a cockpit sheet a kill chord's Circle does not go back`() = runTest {
+        val r = router(capture(uiNavigation = true))
+        val ui = collectUi(r)
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_L2, repeat = 0, gamepad = true))
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_R2, repeat = 0, gamepad = true))
+        ui.clear()
+        press(r, KeyEvent.KEYCODE_BUTTON_B, holdMs = 1_500)
+        assertFalse("Circle in a chord must not close the sheet", UiInput.Back in ui)
+    }
+
+    @Test
+    fun `in a cockpit sheet an Options and Circle chord neither goes back nor opens the menu`() = runTest {
+        val r = router(capture(uiNavigation = true))
+        val ui = collectUi(r)
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_START, repeat = 0, gamepad = true))
+        press(r, KeyEvent.KEYCODE_BUTTON_B, holdMs = 1_500)
+        r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_START, repeat = 0, gamepad = true))
+        assertTrue(ui.isEmpty())
+    }
+
+    @Test
+    fun `in a cockpit sheet a lone Circle still goes back after a chord ends`() = runTest {
+        val r = router(capture(uiNavigation = true))
+        val ui = collectUi(r)
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_START, repeat = 0, gamepad = true))
+        press(r, KeyEvent.KEYCODE_BUTTON_B)
+        r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_START, repeat = 0, gamepad = true))
+        press(r, KeyEvent.KEYCODE_BUTTON_B)
+        assertEquals(listOf<UiInput>(UiInput.Back), ui)
+    }
+
+    @Test
     fun `a capture overlay navigates with buttons while the sticks keep flying`() = runTest {
         val r = router(capture(uiNavigation = true))
         val ui = collectUi(r)

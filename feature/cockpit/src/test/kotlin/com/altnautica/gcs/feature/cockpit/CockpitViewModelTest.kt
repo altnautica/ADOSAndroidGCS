@@ -288,12 +288,12 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `the pilot's AGL and relayed status texts reach the bottom row and the pill`() = runTest(dispatcher) {
+    fun `the pilot's AGL, relayed status texts and FC failsafe reach the bottom row and the pill`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         vehicle.beat(armed = true, now = testScheduler.currentTime)
         vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 412f, 12f, 0f, 0f, 0f, testScheduler.currentTime)
         val sent = mutableListOf<String>()
-        val data = """{"owner":"pilot","armed":true,"landed":false,"surface_ops":["goto"],"agl_m":4.2,"agl_source":"rangefinder",""" +
+        val data = """{"owner":"pilot","armed":true,"landed":false,"surface_ops":["goto"],"agl_m":4.2,"agl_source":"rangefinder","fc_failsafe":true,""" +
             """"statustext":[{"severity":4,"text":"EKF variance high","age_ms":200}]}"""
         val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent(data, sent = sent))
         backgroundScope.launch { vm.flightValues.collect {} }
@@ -303,6 +303,7 @@ class CockpitViewModelTest {
 
         assertEquals(4.2f, vm.flightValues.value.aglM!!, 1e-6f)
         assertTrue(vm.statusItems.value.toString(), vm.statusItems.value.any { "EKF variance high" in it.toString() })
+        assertEquals("Failsafe: flight controller", vm.statusItems.value.first().text)
 
         vm.viewModelScope.cancel()
     }
@@ -713,6 +714,27 @@ class CockpitViewModelTest {
         vm.back()
         runCurrent()
         assertTrue(CockpitEvent.ExitRequested in emitted)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a completed kill hold sends the kill with a sheet open and leaves the sheet up`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        advanceTimeBy(5_000)
+        vehicle.beat(armed = true, now = testScheduler.currentTime, mode = "GUIDED")
+        val vm = vm(listOf(node("drone-1")), vehicle)
+        vm.attachInput()
+        runCurrent()
+        vm.setQuickSettings(true)
+        hold("l2", "r2", "circle")
+        advanceTimeBy(2_900)
+        runCurrent()
+        assertTrue(vehicle.control.sent.none { it == VehicleCommand.Kill })
+        advanceTimeBy(300)
+        runCurrent()
+        assertTrue(VehicleCommand.Kill in vehicle.control.sent)
+        assertTrue(vm.quickSettingsOpen.value)
+        hold()
         vm.viewModelScope.cancel()
     }
 

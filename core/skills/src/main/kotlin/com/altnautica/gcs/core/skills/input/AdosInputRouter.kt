@@ -90,6 +90,9 @@ class AdosInputRouter @Inject constructor(
     private val stickNav = StickNavigator()
     private var navDirection: NavDirection? = null
     private var enterHeld = false
+
+    /** Buttons pressed as part of a cockpit chord; they produce no UI input until released. */
+    private var chordMask = 0
     private var raw = GamepadAxes.Neutral
     private var touches: List<PadTouch> = emptyList()
     private var vendorId = 0
@@ -382,12 +385,21 @@ class AdosInputRouter @Inject constructor(
         }
         // The window swallows the first down of a navigation key (Enter, D-pad) when it
         // leaves touch mode, so a repeated down that finds the key up starts the press.
+        val othersHeld = _buttons.value and (1 shl button).inv() != 0 ||
+            _axes.value.leftTrigger > CHORD_TRIGGER || _axes.value.rightTrigger > CHORD_TRIGGER
         val held = setButton(button, down)
         if (held == null) publish()
         if (held != null && !(down && event.repeatCount > 0)) {
+            // In the cockpit a press while another button is held is a chord (L2+R2+Circle kill,
+            // Options+Circle return home): none of its buttons also moves a sheet, so Circle never closes it.
+            if (down && othersHeld && capture != null) chordMask = _buttons.value
+            val bit = 1 shl button
+            val inChord = chordMask and bit != 0
+            if (!down) chordMask = chordMask and bit.inv()
             // With the cockpit open, PS is its brake/RTH button even while one of its sheets navigates.
             val inputs = when {
                 button == GamepadButton.HOME && capture != null -> emptyList()
+                inChord -> emptyList()
                 ui -> uiInputsForButton(button, down, held)
                 else -> captureUiInputsForButton(button, down, held)
             }
@@ -432,5 +444,9 @@ class AdosInputRouter @Inject constructor(
         // A held confirm press must not stay down in the UI once its pad is gone.
         if (_buttons.value and (1 shl GamepadButton.A) != 0 && uiMode()) _uiInput.tryEmit(UiInput.Activate(false))
         for (b in 0..GamepadButton.LAST) setButton(b, false)
+        chordMask = 0
     }
 }
+
+/** An analog trigger past this counts as held for a cockpit chord. */
+private const val CHORD_TRIGGER = 0.5f
