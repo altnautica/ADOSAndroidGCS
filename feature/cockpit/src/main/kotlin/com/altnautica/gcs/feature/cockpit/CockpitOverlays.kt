@@ -14,6 +14,9 @@ internal class CockpitOverlays(private val confirm: ConfirmController) {
     /** The camera-settings sheet (camera and stream, picture-in-picture, recording). */
     val camera = MutableStateFlow(false)
 
+    /** The status pill's alert list. */
+    val statusList = MutableStateFlow(false)
+
     /** The controller tour card on screen (0-based), or null. It opens only on the ground. */
     val tour = MutableStateFlow<Int?>(null)
 
@@ -30,24 +33,37 @@ internal class CockpitOverlays(private val confirm: ConfirmController) {
     val uiNavigation: Boolean
         get() = !confirm.isOpen && (quickSettings.value || camera.value || preflight.value || modePicker.value || launch.value || tour.value != null)
 
-    /** Closes the top overlay: confirm sheet, Mode sheet, launch, skill picker, preflight, quick settings, camera settings, tour. False when none was open. */
+    private fun flag(sheet: CockpitSheet): MutableStateFlow<Boolean>? = when (sheet) {
+        CockpitSheet.Status -> statusList
+        CockpitSheet.Quick -> quickSettings
+        CockpitSheet.Picker -> picker
+        CockpitSheet.Mode -> modePicker
+        CockpitSheet.Launch -> launch
+        CockpitSheet.Camera -> camera
+        CockpitSheet.Preflight -> preflight
+        CockpitSheet.Confirm -> null
+    }
+
+    /** The sheets open now; [SheetStack.visible] picks the one drawn. */
+    fun open(): Set<CockpitSheet> = CockpitSheet.entries.filterTo(LinkedHashSet()) { sheet ->
+        if (sheet == CockpitSheet.Confirm) confirm.isOpen else flag(sheet)?.value == true
+    }
+
+    /**
+     * Closes the overlay drawn on top ([SheetStack.visible]: a confirm, then the pre-flight
+     * gate, then the open peer sheet), else the tour. False when none was open.
+     */
     fun closeTop(): Boolean {
-        val top = listOf(modePicker, launch, picker, preflight, quickSettings, camera).firstOrNull { it.value }
-        return when {
-            confirm.isOpen -> {
-                confirm.cancel()
-                true
-            }
-            top != null -> {
-                top.value = false
-                true
-            }
+        val top = SheetStack.visible(open())
+        when {
+            top == CockpitSheet.Confirm -> confirm.cancel()
+            top != null -> flag(top)?.value = false
             tour.value != null -> {
                 tour.value = null
                 onTourClosed()
-                true
             }
-            else -> false
+            else -> return false
         }
+        return true
     }
 }
