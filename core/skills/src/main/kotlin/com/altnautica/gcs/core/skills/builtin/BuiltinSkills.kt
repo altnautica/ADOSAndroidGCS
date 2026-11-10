@@ -550,7 +550,8 @@ object SetModeSkill : BuiltinSkill(
  */
 internal fun SkillContext.flyHereToPilot(): Boolean {
     val p = pilot ?: return false
-    return routesToPilot() && PilotAction.GOTO in p.surfaceOps
+    // A stale pilot would only answer "no answer": the FC route flies the point instead.
+    return routesToPilot() && PilotAction.GOTO in p.surfaceOps && pilotLink?.stateFresh == true
 }
 
 /** The pilot's goto refusal codes, each with its own operator sentence; any other code is shown verbatim. */

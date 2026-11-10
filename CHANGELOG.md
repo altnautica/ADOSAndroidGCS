@@ -14,6 +14,13 @@ app's `versionName`.
   or landing no operator commanded here.
 - Disarm waits until the drone is known to be on the ground, from the pilot or
   the flight controller's own height and vertical speed.
+- The cockpit spec gains contextual tips, refusal, alert and tip texts and the
+  shared layout values (confirm holds, launch range, Menu order, storage
+  thresholds, split divider); hold-reason labels follow the pilot's wire strings.
+- Spec text, refusal text, link-loss line, status pill and the tips queue are
+  shared ports held to the same golden cases as the web cockpit.
+- Fly Here sends a map point to the flight controller when the pilot's state
+  is stale, instead of waiting on a pilot that cannot answer.
 
 ## [0.4.0] - 2026-11-10
 

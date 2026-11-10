@@ -35,6 +35,7 @@ class CockpitSpecRepository @Inject constructor(private val source: CockpitSpecS
         CockpitSpecParser.hotspots(source.read(CockpitSpecFile.GenericHotspots))
     }
     val setupStrings: SetupStringsSpec by lazy { CockpitSpecParser.setupStrings(source.read(CockpitSpecFile.SetupStrings)) }
+    val tips: TipsSpec by lazy { CockpitSpecParser.tips(source.read(CockpitSpecFile.Tips)) }
 }
 
 @Module

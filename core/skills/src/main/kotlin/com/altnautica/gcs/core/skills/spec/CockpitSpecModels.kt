@@ -209,7 +209,35 @@ data class LayoutSpec(
     @SerialName("orientation_lock") val orientationLock: Map<String, String> = emptyMap(),
     /** `none`: the flight screen draws no status band, telemetry strip, navigation rail or hint bar. */
     @SerialName("legacy_chrome") val legacyChrome: String = "none",
+    @SerialName("status_pill") val statusPill: StatusPillLayoutSpec? = null,
+    val battery: BatteryLayoutSpec? = null,
+    /** Confirm-hold durations by action (`take_control`, `hand_to_fc`, `vtol_transition`, `fly_here`, `stop`). */
+    @SerialName("holds_ms") val holdsMs: Map<String, Int> = emptyMap(),
+    @SerialName("map_long_press_ms") val mapLongPressMs: Int? = null,
+    val launch: LaunchLayoutSpec? = null,
+    val menu: MenuLayoutSpec? = null,
+    /** Pointer to the contextual tips file. */
+    val tips: String? = null,
 )
+
+@Serializable
+data class StatusPillLayoutSpec(
+    @SerialName("storage_warn_pct") val storageWarnPct: Int? = null,
+    @SerialName("storage_crit_pct") val storageCritPct: Int? = null,
+)
+
+@Serializable
+data class BatteryLayoutSpec(@SerialName("low_fallback_pct") val lowFallbackPct: Int? = null)
+
+@Serializable
+data class LaunchLayoutSpec(
+    @SerialName("alt_min_m") val altMinM: Float,
+    @SerialName("alt_max_m") val altMaxM: Float,
+    @SerialName("alt_default_m") val altDefaultM: Float,
+)
+
+@Serializable
+data class MenuLayoutSpec(val order: List<String> = emptyList())
 
 @Serializable
 data class BreakpointsSpec(
@@ -239,6 +267,15 @@ data class ZoneSpec(
     val cards: List<String> = emptyList(),
     val switch: List<String> = emptyList(),
     val battery: ZoneBatterySpec? = null,
+    val overflow: ZoneOverflowSpec? = null,
+    /** Items that leave the zone first when it is too short (right column). */
+    @SerialName("drop_order") val dropOrder: List<String> = emptyList(),
+)
+
+@Serializable
+data class ZoneOverflowSpec(
+    @SerialName("to_menu_order") val toMenuOrder: List<String> = emptyList(),
+    @SerialName("never_move") val neverMove: List<String> = emptyList(),
 )
 
 @Serializable
@@ -437,9 +474,22 @@ data class ViewSpec(
     val main: String,
     val secondary: String? = null,
     @SerialName("side_panel") val sidePanel: List<String>? = null,
-    val divider: Boolean = false,
+    /** The split view's draggable divider; null for views without one. */
+    val divider: DividerSpec? = null,
+    /** Where the video goes when the map is the main view (`bottom_left_card`). */
+    @SerialName("video_slot") val videoSlot: String? = null,
     @SerialName("forced_layers") val forcedLayers: List<String> = emptyList(),
     @SerialName("forced_while") val forcedWhile: String? = null,
+)
+
+/** A draggable divider: fraction of the width given to the main pane, [default] within [min]..[max]. */
+@Serializable
+data class DividerSpec(
+    val draggable: Boolean = false,
+    val default: Float = 0.5f,
+    val min: Float = 0f,
+    val max: Float = 1f,
+    val remember: String? = null,
 )
 
 @Serializable
@@ -724,3 +774,32 @@ data class SetupStringsSpec(
 }
 
 private val SETUP_BODY_VARIANT = Regex("""^(setup\.[^.]+\.body)\.[^.]+$""")
+
+// ---- tips.json -----------------------------------------------------------------------
+
+/** Contextual tips on the flight screen: one at a time, ground only. */
+@Serializable
+data class TipsSpec(
+    val v: Int,
+    val rules: TipsRulesSpec,
+    val tips: List<TipSpec>,
+)
+
+@Serializable
+data class TipsRulesSpec(
+    @SerialName("max_visible") val maxVisible: Int = 1,
+    /** Facts that must each equal their value for any tip to show (`armed`, `airborne`, `flight_screen`, ...). */
+    @SerialName("show_only_when") val showOnlyWhen: Map<String, Boolean>,
+    @SerialName("first_delay_ms") val firstDelayMs: Long,
+    @SerialName("gap_between_ms") val gapBetweenMs: Long,
+    @SerialName("auto_dismiss_ms") val autoDismissMs: Long,
+    @SerialName("dismiss_on") val dismissOn: List<String> = emptyList(),
+    @SerialName("never_cover_zones") val neverCoverZones: List<String> = emptyList(),
+    val kiosk: String? = null,
+    val persist: String? = null,
+    @SerialName("reset_setting_key") val resetSettingKey: String? = null,
+)
+
+/** One tip: shown beside [anchor] once [trigger] fired; text key `tips.<id>`. */
+@Serializable
+data class TipSpec(val id: String, val anchor: String, val trigger: String, val order: Int)

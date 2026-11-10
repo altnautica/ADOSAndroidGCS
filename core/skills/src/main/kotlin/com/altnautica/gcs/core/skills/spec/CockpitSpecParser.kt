@@ -21,6 +21,7 @@ enum class CockpitSpecFile(val fileName: String) {
     GenericArt("gamepad-generic-art.json"),
     GenericHotspots("gamepad-generic-hotspots.json"),
     SetupStrings("setup-strings.json"),
+    Tips("tips.json"),
 }
 
 /** Reads the raw text of one spec file. */
@@ -55,6 +56,7 @@ object CockpitSpecParser {
     fun art(text: String): ControllerArtSpec = decode(ControllerArtSpec.serializer(), text) { it.v }
     fun hotspots(text: String): ControllerHotspotsSpec = decode(ControllerHotspotsSpec.serializer(), text) { it.v }
     fun setupStrings(text: String): SetupStringsSpec = decode(SetupStringsSpec.serializer(), text) { it.v }
+    fun tips(text: String): TipsSpec = decode(TipsSpec.serializer(), text) { it.v }
 
     /** Parses [file]'s [text] into its model. */
     fun parse(file: CockpitSpecFile, text: String): Any = when (file) {
@@ -68,6 +70,7 @@ object CockpitSpecParser {
         CockpitSpecFile.Ds4Art, CockpitSpecFile.GenericArt -> art(text)
         CockpitSpecFile.Ds4Hotspots, CockpitSpecFile.GenericHotspots -> hotspots(text)
         CockpitSpecFile.SetupStrings -> setupStrings(text)
+        CockpitSpecFile.Tips -> tips(text)
     }
 
     private inline fun <T> decode(strategy: DeserializationStrategy<T>, text: String, version: (T) -> Int): T {
