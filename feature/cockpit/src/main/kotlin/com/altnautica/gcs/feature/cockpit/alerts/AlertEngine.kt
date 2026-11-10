@@ -10,9 +10,10 @@ import com.altnautica.gcs.core.model.SystemHealth
 import com.altnautica.gcs.core.model.VibrationState
 import com.altnautica.gcs.core.skills.heartbeatAgeMs
 import com.altnautica.gcs.core.data.cockpit.BatteryBands
+import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 
-/** A STATUSTEXT line kept with its receive time. */
-data class ReceivedText(val text: String, val atMs: Long)
+/** A STATUSTEXT line kept with its receive time and MAVLink [severity] (0 emergency … 7 debug). */
+data class ReceivedText(val text: String, val atMs: Long, val severity: Int = StatusModel.MAV_SEVERITY_WARNING)
 
 /** A one-off cockpit event shown as an alert for [AlertEngine.RAISED_HOLD_MS] from [atMs]. */
 data class RaisedAlert(val id: String, val level: AlertLevel, val detail: String?, val atMs: Long)
@@ -121,11 +122,11 @@ class AlertEngine {
 
         fun prearmBody(text: String) = text.replace(PREARM, "")
 
-        /** Battery band for [pct]; null when unknown. */
+        /** Battery band for [pct], at or below each band as the web; null when unknown. */
         fun batteryLevel(pct: Int?, bands: BatteryBands): AlertLevel? = when {
             pct == null || pct < 0 -> null
-            pct < bands.criticalPct -> AlertLevel.Critical
-            pct < bands.lowPct -> AlertLevel.Warning
+            pct <= bands.criticalPct -> AlertLevel.Critical
+            pct <= bands.lowPct -> AlertLevel.Warning
             else -> null
         }
 

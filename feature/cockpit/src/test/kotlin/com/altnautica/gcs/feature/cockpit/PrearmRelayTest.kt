@@ -54,7 +54,8 @@ class PrearmRelayTest {
         val items = vm.statusItems.value
         val item = items.singleOrNull { it.source == StatusSource.FcPrearm }
         assertNotNull("the pill lists the pre-arm reason: $items", item)
-        assertEquals("Throttle below failsafe", item!!.alert?.detail)
+        assertEquals("fc:Throttle below failsafe", item!!.key)
+        assertEquals("Flight controller: Throttle below failsafe", item.text)
         assertTrue("a new pre-arm reason flashes the pill", StatusModel.pill(items, emptySet()).flashing)
         vm.viewModelScope.cancel()
     }

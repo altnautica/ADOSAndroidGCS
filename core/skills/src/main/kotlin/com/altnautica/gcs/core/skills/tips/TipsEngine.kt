@@ -123,13 +123,35 @@ class TipsEngine(spec: TipsSpec) {
 
         private fun intersects(a: TipRect, b: TipRect) = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
+        private fun contains(outer: TipRect, inner: TipRect) =
+            inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h
+
+        /**
+         * Spots along one axis for a tip of length [len] in [lo]..[hi]: the centred spot first,
+         * then each spot just clear of an avoided span in [edges], nearest the centre first.
+         */
+        private fun slideSpots(centre: Float, lo: Float, hi: Float, len: Float, edges: List<Pair<Float, Float>>): List<Float> {
+            val spots = mutableListOf(centre, lo, hi)
+            for ((a, b) in edges) spots += listOf(a - TIP_GAP - len, b + TIP_GAP)
+            // min(hi, max(lo, s)) as the web module: no throw when hi < lo.
+            return spots.map { minOf(hi, maxOf(lo, it)) }.sortedBy { kotlin.math.abs(it - centre) }
+        }
+
         /**
          * Where a tip of [tipW]×[tipH] goes beside [anchor]: on the side with the most free space
-         * inside [viewport], slid along that side so it covers none of [avoid]. Null when no side fits.
+         * inside [viewport], slid along that side so it covers none of [avoid] (the never-cover
+         * zones, the top bar among them). An avoided rect that contains the anchor (the top bar,
+         * for an anchor in the bar) is excepted for that anchor, with every avoided rect inside
+         * it, and the tip goes below it, pushed further down past any avoided rect under it (the
+         * alert stack). Null when nothing fits.
          */
         fun placeTip(anchor: TipRect, tipW: Float, tipH: Float, viewport: TipRect, avoid: List<TipRect>): TipPlacement? {
             val right = viewport.x + viewport.w
             val bottom = viewport.y + viewport.h
+            val container = avoid
+                .filter { contains(it, anchor) && (it.w > anchor.w || it.h > anchor.h) }
+                .maxByOrNull { it.w * it.h }
+            if (container != null) return placeBelow(anchor, tipW, tipH, viewport, container, avoid.filter { !contains(container, it) })
             val sides = listOf(
                 TipSide.Top to anchor.y - viewport.y,
                 TipSide.Bottom to bottom - (anchor.y + anchor.h),
@@ -149,16 +171,26 @@ class TipsEngine(spec: TipsSpec) {
                 val hi = if (vertical) right - tipW else bottom - tipH
                 if (hi < lo) continue
                 val centre = if (vertical) anchor.x + anchor.w / 2 - tipW / 2 else anchor.y + anchor.h / 2 - tipH / 2
-                // The centred spot first, then each spot just clear of an avoided rect, nearest the anchor first.
-                val spots = mutableListOf(centre, lo, hi)
-                for (r in avoid) {
-                    if (vertical) spots += listOf(r.x - TIP_GAP - tipW, r.x + r.w + TIP_GAP)
-                    else spots += listOf(r.y - TIP_GAP - tipH, r.y + r.h + TIP_GAP)
-                }
-                val ordered = spots.map { it.coerceIn(lo, hi) }.sortedBy { kotlin.math.abs(it - centre) }
-                for (s in ordered) {
+                val edges = avoid.map { if (vertical) it.x to it.x + it.w else it.y to it.y + it.h }
+                for (s in slideSpots(centre, lo, hi, if (vertical) tipW else tipH, edges)) {
                     val rect = if (vertical) TipRect(s, fixed, tipW, tipH) else TipRect(fixed, s, tipW, tipH)
                     if (avoid.none { intersects(rect, it) }) return TipPlacement(rect.x, rect.y, side)
+                }
+            }
+            return null
+        }
+
+        /** Below [container] (it holds the anchor) or below an avoided rect under it: the first clear spot from the top. */
+        private fun placeBelow(anchor: TipRect, tipW: Float, tipH: Float, viewport: TipRect, container: TipRect, avoid: List<TipRect>): TipPlacement? {
+            val bottom = viewport.y + viewport.h
+            val centre = anchor.x + anchor.w / 2 - tipW / 2
+            val xs = slideSpots(centre, viewport.x, viewport.x + viewport.w - tipW, tipW, avoid.map { it.x to it.x + it.w })
+            val below = container.y + container.h + TIP_GAP
+            val ys = (listOf(below) + avoid.map { it.y + it.h + TIP_GAP }).filter { it >= below && it + tipH <= bottom }.sorted()
+            for (y in ys) {
+                for (x in xs) {
+                    val rect = TipRect(x, y, tipW, tipH)
+                    if (avoid.none { intersects(rect, it) }) return TipPlacement(x, y, TipSide.Bottom)
                 }
             }
             return null

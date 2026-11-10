@@ -29,10 +29,20 @@ internal data class PreflightContext(
     val navChip: NavChip?,
 )
 
-/** Free bytes on the app's data volume, where recordings land; null when the volume cannot be read. */
-internal fun dataVolumeFreeBytes(): Long? = runCatching { StatFs(Environment.getDataDirectory().path).availableBytes }.getOrNull()
+/** Percent of the app's data volume used, where recordings land; null when the volume cannot be read. */
+internal fun dataVolumeUsedPct(): Double? = runCatching {
+    val fs = StatFs(Environment.getDataDirectory().path)
+    usedPct(fs.totalBytes, fs.availableBytes)
+}.getOrNull()
 
-/** The preflight checklist for the flown vehicle, re-evaluated on every input change and tick. */
+/** Percent of [totalBytes] not [availableBytes]; null for an empty volume. */
+internal fun usedPct(totalBytes: Long, availableBytes: Long): Double? =
+    if (totalBytes <= 0L) null else (totalBytes - availableBytes).coerceAtLeast(0L) * 100.0 / totalBytes
+
+/**
+ * The preflight checklist for the flown vehicle, re-evaluated on every input change and tick.
+ * [storageWarnPct] is the spec's `status_pill.storage_warn_pct`.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun cockpitPreflight(
     scope: CoroutineScope,
@@ -42,11 +52,12 @@ internal fun cockpitPreflight(
     prearmText: StateFlow<ReceivedText?>,
     context: StateFlow<PreflightContext>,
     tick500: StateFlow<Long>,
-    storageFreeBytes: () -> Long? = ::dataVolumeFreeBytes,
+    storageWarnPct: Int,
+    storageUsedPct: () -> Double? = ::dataVolumeUsedPct,
 ): StateFlow<PreflightResult> = telemetry.flatMapLatest { t ->
     if (t == null) {
         combine(settings, context, tick500) { s, c, _ ->
-            PreflightChecklist.evaluate(inputs(null, null, null, null, false, null, s, c, storageFreeBytes()), clock.nowMs())
+            PreflightChecklist.evaluate(inputs(null, null, null, null, false, null, s, c, storageUsedPct(), storageWarnPct), clock.nowMs())
         }
     } else {
         combine(
@@ -66,7 +77,8 @@ internal fun cockpitPreflight(
                     lastPrearmMs = prearm?.atMs,
                     settings = s,
                     context = c,
-                    storage = storageFreeBytes(),
+                    storage = storageUsedPct(),
+                    storageWarnPct = storageWarnPct,
                 ),
                 now,
             )
@@ -83,7 +95,8 @@ private fun inputs(
     lastPrearmMs: Long?,
     settings: CockpitSettings,
     context: PreflightContext,
-    storage: Long?,
+    storage: Double?,
+    storageWarnPct: Int,
 ) = PreflightInputs(
     gps = gps,
     batteryPct = battery?.remainingPct,
@@ -96,5 +109,6 @@ private fun inputs(
     controlMode = context.pilot?.controlMode,
     controllerConnected = context.controllerConnected,
     navChip = context.navChip,
-    storageFreeBytes = storage,
+    storageUsedPct = storage,
+    storageWarnPct = storageWarnPct,
 )

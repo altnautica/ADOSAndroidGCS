@@ -107,10 +107,10 @@ fun rememberTipsHandle(): TipsHandle = remember { TipsHandle() }
  * The contextual tips of the flight screen: one small chrome panel at a time beside its
  * anchor, from the cockpit spec's `tips.json` through [engine]. It fills its parent, reads
  * the anchors and never-cover zones from [LocalTipAnchors] and places the tip beside its
- * anchor clear of every never-cover zone; when no spot fits it draws nothing. The layer
- * itself takes no input, so touches outside the tip reach the cockpit below. A tap on the
- * tip, its button or its anchor dismisses it for good; [handle] lets the flight screen do
- * the same for a controller button.
+ * anchor clear of every never-cover zone; a tip with no clear spot is hidden unseen, as
+ * when its anchor is gone. The layer itself takes no input, so touches outside the tip
+ * reach the cockpit below. A tap on the tip, its button or its anchor dismisses it for
+ * good; [handle] lets the flight screen do the same for a controller button.
  *
  * One composition is one flight-screen open: it counts the open on the device once.
  */
@@ -175,7 +175,12 @@ fun TipLayer(
                 tipH = panel.height.toFloat(),
                 viewport = TipRect(viewport.left, viewport.top, viewport.width, viewport.height),
                 avoid = avoid,
-            ) ?: return@layout
+            )
+            if (at == null) {
+                // Never drawn, so never on screen: hidden unseen, as when its anchor is gone.
+                scope.launch { controller.unplaced(shown.tipId) }
+                return@layout
+            }
             panel.place((at.x - viewport.left).roundToInt(), (at.y - viewport.top).roundToInt())
         }
     }

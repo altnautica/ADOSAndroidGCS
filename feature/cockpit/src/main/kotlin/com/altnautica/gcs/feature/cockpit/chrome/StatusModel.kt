@@ -3,8 +3,14 @@ package com.altnautica.gcs.feature.cockpit.chrome
 import androidx.compose.runtime.Immutable
 import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
-import com.altnautica.gcs.core.model.ReadinessSeverity
-import com.altnautica.gcs.core.skills.hud.pilotFresh as isPilotFresh
+import com.altnautica.gcs.core.skills.hud.PillAlert
+import com.altnautica.gcs.core.skills.hud.PillAlertInput
+import com.altnautica.gcs.core.skills.hud.PillAlertLevel
+import com.altnautica.gcs.core.skills.hud.PillFcStatus
+import com.altnautica.gcs.core.skills.hud.PillSeverity
+import com.altnautica.gcs.core.skills.hud.PillSource
+import com.altnautica.gcs.core.skills.hud.StatusPill
+import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
 import com.altnautica.gcs.feature.cockpit.pilot.PillFacts
@@ -29,11 +35,9 @@ enum class StatusSource(val key: String) {
 }
 
 /**
- * One active warning. [alert] carries a cockpit alert (its title is a string resource);
- * otherwise [text] is the item's own text (a readiness message or an FC status text).
- * [check] is a failing pre-flight check, named by the check's own label. [specKey] names a
- * cockpit-spec string for items the spec words itself (pilot not answering, agent unreachable,
- * controller lost, a failing pre-flight item as `alert.preflight_failing`).
+ * One active warning. [alert] carries a cockpit alert (its title is a string resource) and
+ * [check] a failing pre-flight item worded as [specKey] `alert.preflight_failing` with the
+ * check's own label; every other item reads [text], already worded by the shared pill.
  */
 @Immutable
 data class StatusItem(
@@ -52,67 +56,59 @@ data class StatusPillUi(val severity: StatusSeverity, val count: Int, val flashi
 
 object StatusModel {
     /**
-     * The active items from every source, worst first, then newest first. Cockpit alerts
-     * cover the link, battery, FC pre-arm and critical FC text; the pilot's readiness items,
-     * the navigation-source and storage checks, and FC status text at WARNING severity add to them.
-     *
-     * [facts] adds the spec's pilot, agent, controller and pre-flight rules: a pilot state that
-     * is missing or stale raises one "Pilot not answering" item and drops the readiness, FC
-     * status-text and controller items that came from it, so the pill never reads OK without
-     * a fresh pilot state. FC status texts stay: on Android they also arrive over the
-     * direct FC link, which the pilot's age says nothing about.
+     * The active items, built by the shared status pill [pill] (`hud/status-pill.ts`): worst
+     * first, then in source order. The cockpit's alerts feed it, except the FC's pre-arm reason
+     * (its `prearm` source) and a critical FC text (an FC status text at CRITICAL); the WARNING
+     * texts, the pilot's readiness, the storage use and [facts] (pilot, agent, controller and
+     * pre-flight rules) feed the rest.
      */
     fun items(
         alerts: List<CockpitAlert>,
         preflight: PreflightResult,
         warningTexts: List<ReceivedText>,
-        facts: PillFacts = PillFacts(),
+        facts: PillFacts,
+        pill: StatusPill,
     ): List<StatusItem> {
-        val out = ArrayList<StatusItem>()
-        val pilotStale = facts.pilotRule && (facts.pilotAgeMs == null || !isPilotFresh(0L, facts.pilotAgeMs))
-        if (!facts.agentReachable) {
-            out += StatusItem("agent_unreachable", StatusSource.Link, StatusSeverity.Critical, specKey = "alert.agent_unreachable")
-        }
-        if (pilotStale) {
-            out += StatusItem("pilot_not_answering", StatusSource.Pilot, StatusSeverity.Warning, specKey = "alert.pilot_not_answering")
-        }
-        if (facts.controllerLost && !pilotStale) {
-            out += StatusItem("controller_lost", StatusSource.Controller, StatusSeverity.Warning, specKey = "alert.controller_lost")
-        }
+        val bySpecId = HashMap<String, CockpitAlert>()
+        val inputs = ArrayList<PillAlertInput>()
+        val fcStatus = ArrayList<PillFcStatus>()
+        var prearm: List<String>? = null
         for (a in alerts) {
-            val severity = when (a.level) {
-                AlertLevel.Critical -> StatusSeverity.Critical
-                AlertLevel.Warning -> StatusSeverity.Warning
-                // FC pre-arm text is an advisory alert, but it is why arming fails: the pill shows it.
-                AlertLevel.Advisory -> if (a.id == AlertId.PREARM) StatusSeverity.Warning else continue
+            when (a.id) {
+                AlertId.PREARM -> prearm = listOfNotNull(a.detail)
+                AlertId.STATUS_TEXT -> a.detail?.let { fcStatus += PillFcStatus(AlertEngine.MAV_SEVERITY_CRITICAL, it) }
+                else -> {
+                    val id = specAlertId(a.id)
+                    bySpecId[id] = a
+                    inputs += PillAlertInput(id, pillLevel(a.level), "")
+                }
             }
-            out += StatusItem("alert:${a.id}:${a.detail.orEmpty()}", sourceOf(a.id), severity, alert = a)
         }
-        for (r in if (pilotStale) emptyList() else preflight.readiness) {
-            if (r.ok) continue
-            val severity = if (r.severity == ReadinessSeverity.Block) StatusSeverity.Critical else StatusSeverity.Warning
-            out += StatusItem("ready:${r.id}", StatusSource.PilotReadiness, severity, text = r.msg)
-        }
-        for (c in preflight.checks) {
-            if (c.passed || !c.known) continue
-            val source = when (c.item) {
-                PreflightItem.NavSource -> StatusSource.NavSource
-                PreflightItem.Storage -> StatusSource.Storage
-                else -> continue
-            }
-            out += StatusItem("check:${c.item.name}", source, StatusSeverity.Warning, check = c.item)
-        }
-        for (item in facts.preflightFailing) {
-            // Navigation source and storage already have their own items above.
-            if (item == PreflightItem.NavSource || item == PreflightItem.Storage) continue
-            out += StatusItem("preflight:${item.name}", StatusSource.Preflight, StatusSeverity.Warning, check = item, specKey = PREFLIGHT_FAILING_KEY)
-        }
-        // Status texts also arrive over the direct FC link, so a stale pilot does not drop them.
-        for (t in warningTexts) {
-            out += StatusItem("text:${t.text}", StatusSource.FcStatusText, StatusSeverity.Warning, text = t.text)
-        }
-        out.sortWith(compareByDescending<StatusItem> { it.severity.ordinal }.thenByDescending { it.alert?.sinceMs ?: 0L })
-        return out
+        for (t in warningTexts) fcStatus += PillFcStatus(t.severity, t.text)
+        val checks = facts.preflightFailing.associateBy { it.id }
+        val active = pill.alerts(
+            inputs,
+            preflight.readiness,
+            prearm,
+            preflight.storageUsedPct,
+            fcStatus,
+            pilotRule = facts.pilotRule,
+            pilotAgeMs = facts.pilotAgeMs,
+            agentReachable = facts.agentReachable,
+            controllerLost = facts.controllerLost,
+            // The list words each item with its check's own label (see [StatusItem]).
+            preflightFailing = facts.preflightFailing.map { it.id to it.id },
+        )
+        return active.map { p -> item(p, bySpecId, checks) }
+    }
+
+    private fun item(p: PillAlert, alerts: Map<String, CockpitAlert>, checks: Map<String, PreflightItem>): StatusItem {
+        val severity = if (p.severity == PillSeverity.Critical) StatusSeverity.Critical else StatusSeverity.Warning
+        val alert = p.id.takeIf { it.startsWith(ALERT_PREFIX) }?.let { alerts[it.removePrefix(ALERT_PREFIX)] }
+        if (alert != null) return StatusItem(p.id, alertSource(alert.id, p.source), severity, alert = alert)
+        val check = p.id.takeIf { it.startsWith(PREFLIGHT_PREFIX) }?.let { checks[it.removePrefix(PREFLIGHT_PREFIX)] }
+        if (check != null) return StatusItem(p.id, StatusSource.Preflight, severity, check = check, specKey = PREFLIGHT_FAILING_KEY)
+        return StatusItem(p.id, statusSource(p.source), severity, text = p.text)
     }
 
     /** The pill for [items]; it flashes while any item's key is missing from [acknowledged]. */
@@ -123,13 +119,46 @@ object StatusModel {
         top = items.firstOrNull(),
     )
 
-    private fun sourceOf(alertId: String): StatusSource = when (alertId) {
-        AlertId.LINK_LOST, AlertId.LINK_STALE, AlertId.RC_FAILSAFE, AlertId.VIDEO_FROZEN -> StatusSource.Link
-        AlertId.BATT_CRIT, AlertId.BATT_LOW, AlertId.CONTROLLER_BATTERY -> StatusSource.Battery
-        AlertId.PREARM -> StatusSource.FcPrearm
-        AlertId.GPS_NO_3D, AlertId.EKF_FAILSAFE -> StatusSource.NavSource
-        else -> StatusSource.FcStatusText
+    /** The shared alert id (`link_lost`, `batt_low`, ...) of a cockpit alert; Android's own alerts keep theirs. */
+    fun specAlertId(alertId: String): String = when (alertId) {
+        AlertId.LINK_LOST -> "link_lost"
+        AlertId.LINK_STALE -> "link_stale"
+        AlertId.BATT_CRIT -> "batt_crit"
+        AlertId.BATT_LOW -> "batt_low"
+        AlertId.GPS_NO_3D -> "gps_no_3d"
+        AlertId.VIDEO_FROZEN -> "video_frozen"
+        else -> alertId
     }
+
+    private fun pillLevel(level: AlertLevel): PillAlertLevel = when (level) {
+        AlertLevel.Critical -> PillAlertLevel.Critical
+        AlertLevel.Warning -> PillAlertLevel.Warning
+        AlertLevel.Advisory -> PillAlertLevel.Advisory
+    }
+
+    /** The source of an alert: the shared rule, and Android's own alerts where they have a better one. */
+    private fun alertSource(alertId: String, shared: PillSource): StatusSource = when (alertId) {
+        AlertId.EKF_FAILSAFE -> StatusSource.NavSource
+        AlertId.CONTROLLER_BATTERY -> StatusSource.Battery
+        else -> statusSource(shared)
+    }
+
+    private fun statusSource(s: PillSource): StatusSource = when (s) {
+        PillSource.PilotReadiness -> StatusSource.PilotReadiness
+        PillSource.FcPrearm -> StatusSource.FcPrearm
+        PillSource.FcStatusText -> StatusSource.FcStatusText
+        PillSource.Battery -> StatusSource.Battery
+        // The spec's `status_pill.sources` has no video label: frozen video lists under the link.
+        PillSource.Link, PillSource.Video -> StatusSource.Link
+        PillSource.NavSource -> StatusSource.NavSource
+        PillSource.Storage -> StatusSource.Storage
+        PillSource.Pilot -> StatusSource.Pilot
+        PillSource.Controller -> StatusSource.Controller
+        PillSource.Preflight -> StatusSource.Preflight
+    }
+
+    private const val ALERT_PREFIX = "alert:"
+    private const val PREFLIGHT_PREFIX = "preflight:"
 
     /** The spec text of a failing pre-flight item in the pill (`Pre-flight: {item}`). */
     const val PREFLIGHT_FAILING_KEY = "alert.preflight_failing"
