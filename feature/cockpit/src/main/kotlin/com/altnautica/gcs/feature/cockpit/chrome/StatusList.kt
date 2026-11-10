@@ -10,21 +10,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -60,11 +53,10 @@ fun StatusList(items: List<StatusItem>, onClose: () -> Unit, modifier: Modifier 
                 }
                 for (item in items) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
-                        Icon(
-                            severityIcon(item.severity),
-                            contentDescription = null,
-                            tint = severityColor(item.severity),
-                            modifier = Modifier.size(c.icon).testTag("status-icon-${item.severity.name.lowercase()}"),
+                        Text(
+                            severityGlyph(c, item.severity),
+                            style = c.topBarText.copy(color = severityColor(item.severity)),
+                            modifier = Modifier.width(c.icon).testTag("status-icon-${item.severity.name.lowercase()}"),
                         )
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
@@ -78,9 +70,9 @@ fun StatusList(items: List<StatusItem>, onClose: () -> Unit, modifier: Modifier 
     }
 }
 
-/** The list's severity icon: ✕ for critical, ⚠ for a warning, ℹ for information. */
-internal fun severityIcon(s: StatusSeverity): ImageVector = when (s) {
-    StatusSeverity.Critical -> Icons.Outlined.Close
-    StatusSeverity.Warning -> Icons.Outlined.WarningAmber
-    StatusSeverity.Ok -> Icons.Outlined.Info
+/** The list's severity glyph from the chrome tokens: ✕ critical, ⚠ warning, ℹ anything else. */
+internal fun severityGlyph(c: Chrome, s: StatusSeverity): String = when (s) {
+    StatusSeverity.Critical -> c.severityGlyph["critical"] ?: "✕"
+    StatusSeverity.Warning -> c.severityGlyph["warning"] ?: "⚠"
+    StatusSeverity.Ok -> c.severityGlyph["info"] ?: "ℹ"
 }

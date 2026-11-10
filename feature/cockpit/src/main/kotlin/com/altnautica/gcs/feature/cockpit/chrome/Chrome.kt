@@ -77,6 +77,8 @@ data class Chrome(
     val textCritical: Color,
     val stopBg: Color,
     val stopText: Color,
+    /** The alert list glyph by severity key: `critical`, `warning`, `info`. */
+    val severityGlyph: Map<String, String>,
     val topBarText: TextStyle,
     val valueText: TextStyle,
     val labelText: TextStyle,
@@ -108,6 +110,7 @@ data class Chrome(
                 textCritical = color(spec.textCritical, 0xFFFF8A80),
                 stopBg = color(spec.stopBg, 0xFFEF4444),
                 stopText = color(spec.stopText, 0xFFFFFFFF),
+                severityGlyph = spec.severityIcon,
                 // Chrome text is the design-token sans with tabular figures, so changing numbers do not jitter.
                 topBarText = AdosTypography.numeric.medium.copy(
                     fontFamily = AdosFonts.Inter,

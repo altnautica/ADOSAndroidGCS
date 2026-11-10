@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.chrome
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -9,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.testSpec
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -31,10 +33,16 @@ class StatusListItemTest {
             StatusItem("text:GPS glitch", StatusSource.FcStatusText, StatusSeverity.Warning, text = "GPS glitch"),
             StatusItem("text:Logging", StatusSource.FcStatusText, StatusSeverity.Ok, text = "Logging"),
         )
+        val chrome = Chrome.from(testSpec.tokens.chrome)
         compose.setContent {
             AdosTheme {
-                CompositionLocalProvider(LocalCockpitStrings provides strings) { StatusList(items, onClose = {}) }
+                CompositionLocalProvider(LocalCockpitStrings provides strings, LocalChrome provides chrome) { StatusList(items, onClose = {}) }
             }
+        }
+        assertEquals(mapOf("critical" to "✕", "warning" to "⚠", "info" to "ℹ"), testSpec.tokens.chrome.severityIcon)
+        for (sev in listOf("critical", "warning", "ok")) {
+            val glyph = chrome.severityGlyph[if (sev == "ok") "info" else sev]!!
+            compose.onNodeWithTag("status-icon-$sev", useUnmergedTree = true).assertTextEquals(glyph)
         }
         compose.onNodeWithText(strings.format("cockpit.alerts.title")).assertExists()
         compose.onNodeWithTag("status-icon-critical", useUnmergedTree = true).assertExists()

@@ -703,6 +703,8 @@ data class ChromeTokensSpec(
     @SerialName("severity_ok") val severityOk: String = "#00C853",
     @SerialName("severity_warning") val severityWarning: String = "#F59E0B",
     @SerialName("severity_critical") val severityCritical: String = "#EF4444",
+    /** The glyph beside each alert list item, by severity (`critical`, `warning`, `info`). */
+    @SerialName("severity_icon") val severityIcon: Map<String, String> = mapOf("critical" to "✕", "warning" to "⚠", "info" to "ℹ"),
     @SerialName("stop_bg") val stopBg: String = "#EF4444",
     @SerialName("stop_text") val stopText: String = "#FFFFFF",
     @SerialName("text_critical") val textCritical: String = "#FF8A80",
