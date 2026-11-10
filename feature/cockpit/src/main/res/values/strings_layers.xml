@@ -1,23 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="layers_button">Layers · %1$s</string>
-    <string name="layers_button_description">Video layers, level %1$s. Tap to change the level, long-press for each layer.</string>
-    <string name="layers_menu_on">On</string>
-    <string name="layers_menu_off">Off</string>
-    <string name="layers_level_instruments">Instruments</string>
-    <string name="layers_level_full">Full</string>
-    <string name="layers_level_route">Route</string>
-    <string name="layers_level_off">Off</string>
     <string name="layer_targets">Targets</string>
     <string name="layer_ar_route">Route</string>
     <string name="layer_ar_motion">Motion</string>
     <string name="layer_obstacles">Obstacles</string>
     <string name="layer_depth">Depth</string>
     <string name="layer_surfaces">Surfaces</string>
-    <string name="layer_ar">AR</string>
-    <string name="layer_unavailable">%1$s unavailable</string>
-    <string name="layer_depth_unscaled">Depth unscaled</string>
-    <string name="layer_ar_approx">AR ≈</string>
     <string name="layer_reduced_rate">Reduced update rate (radio)</string>
     <string name="vision_panel_title">Vision</string>
     <string name="vision_detections">Detections</string>

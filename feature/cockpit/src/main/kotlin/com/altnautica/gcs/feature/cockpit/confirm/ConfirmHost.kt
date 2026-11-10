@@ -42,6 +42,7 @@ import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.builtin.TakeoffAltitude
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
 import com.altnautica.gcs.feature.cockpit.skillbar.confirmMessage
 import com.altnautica.gcs.feature.cockpit.skillbar.confirmTitle
@@ -169,7 +170,7 @@ private fun HoldRing(label: String, progress: Float, enabled: Boolean, danger: B
 @Composable
 private fun AltitudeStepper(altitude: Float, onChange: (Float) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.cockpit_confirm_altitude), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+        Text(specText("flow.launch.alt_m"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
         IconButton(onClick = { onChange(altitude - TakeoffAltitude.STEP_M) }, enabled = altitude > TakeoffAltitude.MIN_M) {
             Icon(Icons.Outlined.Remove, contentDescription = stringResource(R.string.cockpit_confirm_altitude_down))
         }

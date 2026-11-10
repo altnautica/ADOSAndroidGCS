@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
-import com.altnautica.gcs.feature.cockpit.alerts.alertTitleRes
+import com.altnautica.gcs.feature.cockpit.alerts.alertTitle
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.alerts.fcStateDetailRes
@@ -261,7 +261,7 @@ private fun severityColor(s: StatusSeverity): Color {
 @Composable
 fun statusItemTitle(item: StatusItem): String {
     item.alert?.let { a ->
-        val title = stringResource(alertTitleRes(a.id))
+        val title = alertTitle(a.id)
         val detail = a.detail?.let { d -> fcStateDetailRes(d)?.let { stringResource(it) } ?: d }
         return if (detail != null) "$title · $detail" else title
     }

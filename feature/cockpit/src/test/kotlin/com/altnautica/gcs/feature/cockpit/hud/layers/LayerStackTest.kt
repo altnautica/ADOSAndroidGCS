@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.hud.layers
 
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -10,6 +11,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
+import com.altnautica.gcs.feature.cockpit.testSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,7 +86,7 @@ class LayerStackTest {
         scope.launch { c.outbound.collect { outbound += it } }
         // The layer loop runs every display frame while items move; drive the clock by hand.
         compose.mainClock.autoAdvance = false
-        compose.setContent { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp)) }
+        compose.setContent { CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp)) } }
         compose.mainClock.advanceTimeBy(100)
         val before = LayerStackDebug.compositions.get()
         val drawsBefore = LayerStackDebug.drawCount()
@@ -122,7 +125,7 @@ class LayerStackTest {
         val c = controller()
         val t = FakeTargets(receivedAt = clock)
         compose.mainClock.autoAdvance = false
-        compose.setContent { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp), targets = t) }
+        compose.setContent { CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp), targets = t) } }
         compose.mainClock.advanceTimeBy(100)
         compose.onRoot().captureToImage()
         assertEquals(1f, t.alphas.last())
@@ -144,7 +147,7 @@ class LayerStackTest {
         val c = controller()
         val t = FakeTargets(receivedAt = clock, moving = true)
         compose.mainClock.autoAdvance = false
-        compose.setContent { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp), targets = t) }
+        compose.setContent { CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp), targets = t) } }
         compose.mainClock.advanceTimeBy(100)
         val compositions = LayerStackDebug.compositions.get()
         val ticks = LayerStackDebug.ticks.get()
@@ -162,7 +165,7 @@ class LayerStackTest {
         val c = controller()
         val t = FakeTargets(receivedAt = clock, moving = true)
         compose.mainClock.autoAdvance = false
-        compose.setContent { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp), targets = t, presentation = presentation) }
+        compose.setContent { CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) { LayerStack(c, "main", 1280f, 720f, Modifier.size(640.dp, 360.dp), targets = t, presentation = presentation) } }
         compose.mainClock.advanceTimeBy(200)
         val start = LayerStackDebug.ticks.get()
         repeat(60) {

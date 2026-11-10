@@ -59,7 +59,6 @@
     <string name="hud_range_stale">STALE</string>
     <string name="hud_range_agl">AGL %1$s m · %2$s</string>
     <string name="hud_range_rng">RNG</string>
-    <string name="hud_range_baro">BARO</string>
     <string name="hud_range_geometry">DEP %1$s° · BRG %2$s° · %3$s m/s</string>
     <string name="hud_range_cue_ground">GND</string>
     <string name="hud_range_cue_box">BOX</string>
@@ -104,7 +103,6 @@
     <string name="hud_nav_q_no_flow">NO FLOW</string>
     <string name="hud_nav_q_drift">DRIFT</string>
     <string name="hud_nav_auto_switch">Vision-nav switches sets automatically; a manual switch may be overridden.</string>
-    <string name="hud_nav_title">Navigation source</string>
     <string name="hud_nav_set">Set %1$d</string>
     <string name="hud_nav_active">ACTIVE</string>
     <string name="hud_nav_posxy">Position</string>
@@ -147,8 +145,6 @@
     <string name="hud_map_pin_local">LOCAL</string>
     <string name="hud_map_pin_map">MAP</string>
     <string name="hud_map_scale">%1$d m</string>
-    <string name="hud_map_zoom_in">Zoom in</string>
-    <string name="hud_map_zoom_out">Zoom out</string>
     <string name="hud_map_description">Local map</string>
 
     <!-- EKF source-set switch. -->

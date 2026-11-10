@@ -24,8 +24,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import com.altnautica.gcs.core.designsystem.component.AdosButton
-import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
 import com.altnautica.gcs.core.designsystem.component.SwitchSettingRow
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommand
@@ -97,10 +95,6 @@ fun QuickSettingsPanel(
     settings: CockpitSettings,
     maxBrightness: Boolean,
     showTelemetryPaneToggle: Boolean,
-    canRecord: Boolean,
-    recording: Boolean,
-    pipAvailable: Boolean,
-    pipOn: Boolean,
     /** Stick control in every mode for the flown vehicle; null hides the row (no vehicle). */
     stickAllModes: Boolean?,
     onDismiss: () -> Unit,
@@ -108,8 +102,6 @@ fun QuickSettingsPanel(
     onDensity: (CockpitDensity) -> Unit,
     onMaxBrightness: (Boolean) -> Unit,
     onTelemetryPane: (Boolean) -> Unit,
-    onToggleRecording: () -> Unit,
-    onTogglePip: () -> Unit,
     onStickAllModes: (Boolean) -> Unit,
     panels: @Composable () -> Unit,
 ) {
@@ -145,18 +137,7 @@ fun QuickSettingsPanel(
         if (showTelemetryPaneToggle) {
             SwitchSettingRow(stringResource(R.string.cockpit_qs_telemetry_pane), settings.telemetryPane, onTelemetryPane)
         }
-        if (pipAvailable) {
-            SwitchSettingRow(stringResource(R.string.cockpit_qs_pip), pipOn, { onTogglePip() })
-        }
         if (stickAllModes != null) StickAllModesSetting(stickAllModes, onStickAllModes)
-        if (canRecord) {
-            AdosButton(
-                label = stringResource(if (recording) R.string.cockpit_qs_stop_recording else R.string.cockpit_qs_start_recording),
-                onClick = onToggleRecording,
-                variant = if (recording) AdosButtonVariant.Danger else AdosButtonVariant.Secondary,
-                modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
-            )
-        }
         panels()
     }
 }

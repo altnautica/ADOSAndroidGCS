@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit
 
+import com.altnautica.gcs.feature.cockpit.CockpitSheet.Camera
 import com.altnautica.gcs.feature.cockpit.CockpitSheet.Confirm
 import com.altnautica.gcs.feature.cockpit.CockpitSheet.Launch
 import com.altnautica.gcs.feature.cockpit.CockpitSheet.Mode
@@ -30,5 +31,13 @@ class SheetStackTest {
         assertEquals(Preflight, SheetStack.visible(setOf(Launch, Preflight)))
         assertEquals(Launch, SheetStack.visible(setOf(Launch)))
         assertEquals(null, SheetStack.visible(emptySet()))
+    }
+
+    @Test
+    fun `camera settings is a peer sheet, opening it closes the others and opening another closes it`() {
+        assertEquals(setOf(Quick), SheetStack.toClose(setOf(Quick), setOf(Quick, Camera)))
+        assertEquals(setOf(Camera), SheetStack.toClose(setOf(Camera), setOf(Camera, Picker)))
+        assertEquals(Camera, SheetStack.visible(setOf(Camera)))
+        assertEquals(Confirm, SheetStack.visible(setOf(Camera, Confirm)))
     }
 }

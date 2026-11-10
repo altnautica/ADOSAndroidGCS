@@ -11,6 +11,9 @@ internal class CockpitOverlays(private val confirm: ConfirmController) {
     val modePicker = MutableStateFlow(false)
     val launch = MutableStateFlow(false)
 
+    /** The camera-settings sheet (camera and stream, picture-in-picture, recording). */
+    val camera = MutableStateFlow(false)
+
     /** The controller tour card on screen (0-based), or null. It opens only on the ground. */
     val tour = MutableStateFlow<Int?>(null)
 
@@ -19,17 +22,17 @@ internal class CockpitOverlays(private val confirm: ConfirmController) {
 
     /**
      * True while an overlay that navigates like the rest of the app is open (Mode sheet,
-     * launch, preflight, quick settings, the controller tour) and no confirm sheet is:
+     * launch, preflight, quick settings, camera settings, the controller tour) and no confirm sheet is:
      * controller buttons then move focus and activate controls instead of firing cockpit
      * actions. The skill picker is driven by the controller bindings (D-pad focus, Cross
      * GO, Circle Stop), so it is not one of them.
      */
     val uiNavigation: Boolean
-        get() = !confirm.isOpen && (quickSettings.value || preflight.value || modePicker.value || launch.value || tour.value != null)
+        get() = !confirm.isOpen && (quickSettings.value || camera.value || preflight.value || modePicker.value || launch.value || tour.value != null)
 
-    /** Closes the top overlay: confirm sheet, Mode sheet, launch, skill picker, preflight, quick settings, tour. False when none was open. */
+    /** Closes the top overlay: confirm sheet, Mode sheet, launch, skill picker, preflight, quick settings, camera settings, tour. False when none was open. */
     fun closeTop(): Boolean {
-        val top = listOf(modePicker, launch, picker, preflight, quickSettings).firstOrNull { it.value }
+        val top = listOf(modePicker, launch, picker, preflight, quickSettings, camera).firstOrNull { it.value }
         return when {
             confirm.isOpen -> {
                 confirm.cancel()

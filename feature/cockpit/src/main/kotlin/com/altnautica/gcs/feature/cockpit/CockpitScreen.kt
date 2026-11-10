@@ -48,6 +48,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.layout.requiredSize
+import com.altnautica.gcs.feature.cockpit.camera.CameraSettingsSheet
+import com.altnautica.gcs.feature.cockpit.camera.CameraSheetUi
+import com.altnautica.gcs.feature.cockpit.camera.FrameGrabEffect
+import com.altnautica.gcs.feature.cockpit.camera.LocalShownVideo
+import com.altnautica.gcs.feature.cockpit.camera.ShownVideo
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -183,6 +190,7 @@ internal fun CockpitScreen(
     connecting: Boolean,
     onExit: () -> Unit,
     snackbar: @Composable () -> Unit,
+    onToast: (String) -> Unit = {},
 ) {
     // The flight screen is locked to landscape, so it always takes the width's landscape class.
     val layoutClass = vm.cockpitSpec.layout.classes[layoutClassId(width, landscape = true)]
@@ -195,6 +203,8 @@ internal fun CockpitScreen(
     val tipsEngine = remember(vm) { TipsEngine(vm.cockpitSpec.tips) }
     val padButtons by vm.padButtons.collectAsStateWithLifecycle()
     LaunchedEffect(padButtons) { if (padButtons != 0) tips.dismissFromControllerButton() }
+    val shownVideo = remember { ShownVideo() }
+    FrameGrabEffect(vm, shownVideo, onToast)
     CompositionLocalProvider(
         LocalCockpitStrings provides vm.specStrings,
         LocalLayoutClass provides layoutClass,
@@ -203,6 +213,7 @@ internal fun CockpitScreen(
         // Sheets, dialogs and menus start below the top bar, so STOP takes the first press with any of them open.
         LocalOverlayTopInset provides sizes.edge + sizes.topBar,
         LocalTipAnchors provides anchors,
+        LocalShownVideo provides shownVideo,
     ) {
         BackdropSampler(backdrop)
         Box(Modifier.fillMaxSize().background(Color.Black).focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing)) {
@@ -267,7 +278,7 @@ private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, status: Status
                 )
             },
             leftColumn = { Box(Modifier.fillMaxSize().tipAnchor("left_column")) { LeftColumn(vm, sizes.leftButton, sizes.leftGap) } },
-            rightColumn = { z -> RightColumn(vm, sizes, z.gimbalInColumn, z.zoomInColumn) },
+            rightColumn = { z -> RightColumn(vm, sizes, z.gimbalInColumn, z.zoomInColumn, onCameraSettings = { vm.setCameraSettings(true) }) },
             gimbalPad = { Pad(vm, sizes.gimbalPad) },
             card = { Box(Modifier.fillMaxSize().tipAnchor("bottom_left_card")) { if (view == CockpitView.Map) VideoCard(vm) else Card(vm) } },
             bottomRow = {
@@ -376,7 +387,7 @@ private fun FlightTopBar(
                     add(AdosMenuItem(stringResource(R.string.cockpit_menu_link, linkText), enabled = false) {})
                 }
                 if (TopBarItem.Layers in moved) {
-                    add(AdosMenuItem(stringResource(R.string.layers_button, com.altnautica.gcs.feature.cockpit.hud.layers.levelLabel(layerFlags.level))) { vm.autonomy.layers.cycleLevel(1) })
+                    add(AdosMenuItem(com.altnautica.gcs.feature.cockpit.hud.layers.layerButtonText(layerFlags.level)) { vm.autonomy.layers.cycleLevel(1) })
                 }
             }
             "view" -> add(AdosMenuItem(strings.format("cockpit.menu.view"), Icons.Outlined.GridView) { vm.nextView() })
@@ -438,20 +449,28 @@ private fun LeftColumn(vm: CockpitViewModel, size: Dp, gap: Dp) {
     val band by vm.band.collectAsStateWithLifecycle()
     val airborne = pilot?.let { it.armed && !it.landed } ?: (band.armed == true)
     val labels = vm.cockpitSpec.builtins.builtins.associate { it.id to it.label }
+    // Icon and a short word under it (`builtin.short.<id>`), so no action is icon-only.
+    @Composable fun short(id: String) = specText("builtin.short.$id")
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically)) {
         if (airborne) {
-            RoundButton(Icons.Outlined.FlightLand, labels[BuiltinIds.LAND].orEmpty(), size, "grid-land", { vm.activate(BuiltinIds.LAND) })
+            RoundButton(Icons.Outlined.FlightLand, labels[BuiltinIds.LAND].orEmpty(), size, "grid-land", { vm.activate(BuiltinIds.LAND) }, shortLabel = short(BuiltinIds.LAND))
         } else {
-            RoundButton(Icons.Outlined.FlightTakeoff, labels[BuiltinIds.TAKEOFF].orEmpty(), size, "grid-takeoff", { vm.openLaunch(true) })
+            RoundButton(Icons.Outlined.FlightTakeoff, labels[BuiltinIds.TAKEOFF].orEmpty(), size, "grid-takeoff", { vm.openLaunch(true) }, shortLabel = short(BuiltinIds.TAKEOFF))
         }
-        RoundButton(Icons.Outlined.Home, labels[BuiltinIds.RTH].orEmpty(), size, "grid-rth", { vm.activate(BuiltinIds.RTH) })
-        RoundButton(Icons.Outlined.PauseCircle, labels[BuiltinIds.PAUSE].orEmpty(), size, "grid-pause", { vm.activate(BuiltinIds.PAUSE) })
+        RoundButton(Icons.Outlined.Home, labels[BuiltinIds.RTH].orEmpty(), size, "grid-rth", { vm.activate(BuiltinIds.RTH) }, shortLabel = short(BuiltinIds.RTH))
+        RoundButton(Icons.Outlined.PauseCircle, labels[BuiltinIds.PAUSE].orEmpty(), size, "grid-pause", { vm.activate(BuiltinIds.PAUSE) }, shortLabel = short(BuiltinIds.PAUSE))
     }
 }
 
-/** Shutter, photo/video switch, zoom, the gimbal pad when it fits here, camera settings. */
+/** Shutter, photo/video switch, zoom (with the digital zoom in use under it), the gimbal pad when it fits here, camera settings. */
 @Composable
-private fun RightColumn(vm: CockpitViewModel, sizes: com.altnautica.gcs.feature.cockpit.chrome.FlightSizes, gimbalInColumn: Boolean, zoomInColumn: Boolean) {
+private fun RightColumn(
+    vm: CockpitViewModel,
+    sizes: com.altnautica.gcs.feature.cockpit.chrome.FlightSizes,
+    gimbalInColumn: Boolean,
+    zoomInColumn: Boolean,
+    onCameraSettings: () -> Unit,
+) {
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
     var videoMode by rememberSaveable { mutableStateOf(false) }
@@ -487,9 +506,11 @@ private fun RightColumn(vm: CockpitViewModel, sizes: com.altnautica.gcs.feature.
                 width = sizes.rightButton,
                 height = sizes.zoom,
             )
+            val zoom by vm.digitalZoom.collectAsStateWithLifecycle()
+            if (zoom > 1) ChromeText(specText("camera.digital_zoom", "n" to zoom.toString()), modifier = Modifier.testTag("digital-zoom"))
         }
         if (gimbalInColumn) Pad(vm, sizes.gimbalPad)
-        RoundButton(Icons.Outlined.Tune, stringResource(R.string.grid_camera_settings), sizes.rightButton, "grid-camera-settings", { vm.setQuickSettings(true) })
+        RoundButton(Icons.Outlined.Tune, specText("cockpit.camera.settings"), sizes.rightButton, "grid-camera-settings", onCameraSettings)
     }
 }
 
@@ -727,21 +748,31 @@ private fun VideoStage(
     val extNode by vm.extensionNodeId.collectAsStateWithLifecycle()
     val swapped by vm.minimapSwapped.collectAsStateWithLifecycle()
     val flags by vm.autonomy.layers.flags.collectAsStateWithLifecycle()
+    val zoom by vm.digitalZoom.collectAsStateWithLifecycle()
     val backdrop = LocalChromeBackdrop.current
+    val shown = LocalShownVideo.current
     Box(modifier.background(AdosTheme.colors.mediaLetterbox)) {
         if (swapped && showHud) {
             Minimap(vm, Modifier.fillMaxSize())
             return@Box
         }
         val sampler = backdrop?.takeIf { sampleBackdrop }
-        VideoSurface(
-            video.main,
-            Modifier
-                .fillMaxSize()
-                .zIndex(Z.VIDEO)
-                .let { m -> if (sampler != null) m.onGloballyPositioned { sampler.videoBounds = it.boundsInRoot() } else m },
-            onSurfaceView = sampler?.let { b -> { view -> b.surfaceView = view } },
-        )
+        // Digital zoom: the video is laid out [zoom] times larger around its centre and clipped to its slot.
+        BoxWithConstraints(Modifier.fillMaxSize().clipToBounds().zIndex(Z.VIDEO), contentAlignment = Alignment.Center) {
+            VideoSurface(
+                video.main,
+                Modifier
+                    .requiredSize(maxWidth * zoom, maxHeight * zoom)
+                    .onGloballyPositioned { coords ->
+                        sampler?.videoBounds = coords.boundsInRoot()
+                        shown?.bounds = coords.boundsInRoot()
+                    },
+                onSurfaceView = { view ->
+                    sampler?.surfaceView = view
+                    shown?.surfaceView = view
+                },
+            )
+        }
         if (videoState !is VideoState.Live) {
             val text = when (videoState) {
                 VideoState.Connecting -> stringResource(R.string.cockpit_video_connecting_long)
@@ -878,6 +909,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusList
                 CockpitSheet.Picker -> vm.setPicker(false)
                 CockpitSheet.Mode -> vm.modeSheetActions.onDismiss()
                 CockpitSheet.Launch -> vm.openLaunch(false)
+                CockpitSheet.Camera -> vm.setCameraSettings(false)
                 CockpitSheet.Preflight, CockpitSheet.Confirm -> Unit
             }
         }
@@ -902,18 +934,12 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusList
             settings = settings,
             maxBrightness = maxBrightness,
             showTelemetryPaneToggle = wide,
-            canRecord = canRecord,
-            recording = recording,
-            pipAvailable = video.streams.count { it.live && it.switchKind == StreamSwitchKind.Concurrent } > 1,
-            pipOn = video.pip != null,
             stickAllModes = stickAllModes,
             onDismiss = { vm.setQuickSettings(false) },
             onAltitudeReference = { vm.setAltitudeReference(it) },
             onDensity = { vm.setDensity(it) },
             onMaxBrightness = vm::setMaxBrightness,
             onTelemetryPane = { vm.setTelemetryPane(it) },
-            onToggleRecording = vm::toggleRecording,
-            onTogglePip = vm::togglePip,
             onStickAllModes = vm::setStickAllModes,
             panels = { extNode?.let { ExtensionSlotHost(it, "cockpit.panel", Modifier.fillMaxWidth()) } },
         )
@@ -944,6 +970,26 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusList
             }
         }
         CockpitSheet.Confirm -> Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) { ConfirmHost(confirm, vm.confirm) }
+        CockpitSheet.Camera -> Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
+            val videoState by vm.videoState.collectAsStateWithLifecycle()
+            val zoom by vm.digitalZoom.collectAsStateWithLifecycle()
+            CameraSettingsSheet(
+                CameraSheetUi(
+                    streams = video.streams,
+                    selectedStreamId = video.selectedStreamId,
+                    hasVideo = video.main != null && videoState is VideoState.Live,
+                    digitalZoom = zoom,
+                    canRecord = canRecord,
+                    recording = recording,
+                    pipAvailable = video.streams.count { it.live && it.switchKind == StreamSwitchKind.Concurrent } > 1,
+                    pipOn = video.pip != null,
+                ),
+                onDismiss = { vm.setCameraSettings(false) },
+                onSelectStream = vm::selectStream,
+                onTogglePip = vm::togglePip,
+                onToggleRecording = vm::toggleRecording,
+            )
+        }
         CockpitSheet.Status, CockpitSheet.Quick, null -> Unit
     }
     tourStep?.let { step ->
@@ -958,6 +1004,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusList
 @Composable
 private fun openSheets(vm: CockpitViewModel, status: StatusListState): Set<CockpitSheet> {
     val quickOpen by vm.quickSettingsOpen.collectAsStateWithLifecycle()
+    val cameraOpen by vm.cameraSettingsOpen.collectAsStateWithLifecycle()
     val preflightOpen by vm.preflightOpen.collectAsStateWithLifecycle()
     val confirm by vm.confirm.state.collectAsStateWithLifecycle()
     val picker by vm.picker.collectAsStateWithLifecycle()
@@ -965,6 +1012,7 @@ private fun openSheets(vm: CockpitViewModel, status: StatusListState): Set<Cockp
     val launch by vm.launch.collectAsStateWithLifecycle()
     return buildSet {
         if (status.open) add(CockpitSheet.Status)
+        if (cameraOpen) add(CockpitSheet.Camera)
         if (quickOpen) add(CockpitSheet.Quick)
         if (picker != null) add(CockpitSheet.Picker)
         if (modeSheet != null) add(CockpitSheet.Mode)

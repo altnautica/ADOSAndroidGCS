@@ -986,6 +986,12 @@ class CockpitViewModel @AssistedInject constructor(
         overlays.quickSettings.value = open
     }
 
+    val cameraSettingsOpen: StateFlow<Boolean> = overlays.camera.asStateFlow()
+
+    fun setCameraSettings(open: Boolean) {
+        overlays.camera.value = open
+    }
+
     fun setPreflight(open: Boolean) {
         overlays.preflight.value = open
         if (!open) {

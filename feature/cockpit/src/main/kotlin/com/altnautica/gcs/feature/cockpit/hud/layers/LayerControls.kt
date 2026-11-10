@@ -2,35 +2,46 @@ package com.altnautica.gcs.feature.cockpit.hud.layers
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
-import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
-import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
+import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 
 @Composable
-internal fun levelLabel(level: LayerLevel): String = stringResource(
+internal fun levelLabel(level: LayerLevel): String = specText(
     when (level) {
-        LayerLevel.Instruments -> R.string.layers_level_instruments
-        LayerLevel.Full -> R.string.layers_level_full
-        LayerLevel.Route -> R.string.layers_level_route
-        LayerLevel.Off -> R.string.layers_level_off
+        LayerLevel.Instruments -> "cockpit.level.instruments"
+        LayerLevel.Full -> "cockpit.level.full"
+        LayerLevel.Route -> "cockpit.level.route"
+        LayerLevel.Off -> "cockpit.level.off"
     },
 )
 
@@ -45,9 +56,14 @@ internal fun layerLabel(id: String): String = when (id) {
     else -> id
 }
 
+/** The layer button's text: "Layers · <level>". */
+@Composable
+internal fun layerButtonText(level: LayerLevel): String = specText("cockpit.menu.layers") + " · " + levelLabel(level)
+
 /**
- * The top-bar layer button: tap cycles the level (Full → Route → Off), long-press opens
- * a toggle for each layer. Both persist per vehicle.
+ * The top-bar layer button: tap cycles the level (Instruments → Full → Route → Off), and
+ * the ▾ beside it (or a long-press on the button) opens a checkbox for each layer. Both
+ * persist per vehicle.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -55,26 +71,46 @@ fun LayerLevelButton(controller: LayerController, modifier: Modifier = Modifier)
     val flags by controller.flags.collectAsStateWithLifecycle()
     val menu = rememberAdosMenuState()
     val label = levelLabel(flags.level)
-    val description = stringResource(R.string.layers_button_description, label)
-    Box(modifier) {
+    val description = specText("cockpit.layers.next", "level" to label)
+    val flagsLabel = specText("cockpit.layers.flags")
+    val shape = RoundedCornerShape(8.dp)
+    Row(modifier.adosMenuAnchor(menu), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
                 .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                .background(AdosTheme.colors.mediaScrim, RoundedCornerShape(8.dp))
-                .adosMenuAnchor(menu)
+                .background(AdosTheme.colors.mediaScrim, shape)
                 .combinedClickable(onClick = { controller.cycleLevel(1) }, onLongClick = { menu.expanded = true })
                 .semantics { contentDescription = description }
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = 12.dp)
+                .testTag("layer-level"),
             contentAlignment = Alignment.Center,
         ) {
-            Text(stringResource(R.string.layers_button, label), color = AdosTheme.colors.mediaOn)
+            Text(layerButtonText(flags.level), color = AdosTheme.colors.mediaOn)
         }
-        // An in-window menu: the activity input router and the D-pad focus trap reach it, unlike a popup window.
-        val on = stringResource(R.string.layers_menu_on)
-        val off = stringResource(R.string.layers_menu_off)
-        val items = controller.spec.canvasOrder.map { id ->
-            AdosMenuItem(label = "${layerLabel(id)} · ${if (flags.isOn(id)) on else off}", onClick = { controller.toggle(id) })
+        Box(
+            Modifier
+                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                .background(AdosTheme.colors.mediaScrim, shape)
+                .clickable(role = Role.DropdownList, onClickLabel = flagsLabel) { menu.expanded = true }
+                .semantics { contentDescription = flagsLabel }
+                .testTag("layer-flags"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, tint = AdosTheme.colors.mediaOn)
         }
-        AdosMenu(menu, items)
     }
+    // An in-window menu: the activity input router and the D-pad focus trap reach it, unlike a popup window.
+    AdosMenu(menu, layerFlagItems(controller, flags) { controller.spec.label(it) ?: layerLabel(it) })
 }
+
+/** One checkbox row per layer the canvas draws, in canvas order; a tap toggles it. */
+@Composable
+internal fun layerFlagItems(controller: LayerController, flags: LayerFlags, label: @Composable (String) -> String): List<AdosMenuItem> =
+    controller.spec.canvasOrder.map { id ->
+        val on = flags.isOn(id)
+        AdosMenuItem(
+            label = label(id),
+            icon = if (on) Icons.Outlined.CheckBox else Icons.Outlined.CheckBoxOutlineBlank,
+            onClick = { controller.toggle(id) },
+        )
+    }

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +78,7 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
     // The leave waiting on the armed confirm: back out of the cockpit, or an app-level move.
     var pendingLeave by remember { mutableStateOf<(() -> Unit)?>(null) }
     val snackbar = remember { SnackbarHostState() }
+    val toastScope = androidx.compose.runtime.rememberCoroutineScope()
     val resources = LocalResources.current
 
     fun guardLeave(proceed: () -> Unit) {
@@ -179,6 +181,7 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
                 connecting = status == CockpitStatus.Connecting,
                 onExit = ::requestExit,
                 snackbar = { SnackbarHost(snackbar) },
+                onToast = { text -> toastScope.launch { snackbar.showSnackbar(text) } },
             )
         }
 

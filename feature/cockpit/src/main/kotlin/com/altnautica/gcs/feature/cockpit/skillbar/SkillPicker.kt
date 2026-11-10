@@ -266,7 +266,7 @@ private fun stateText(state: SkillState?): String? = when {
     state.stopQueued -> stringResource(SkillsR.string.skill_notice_stop_queued)
     state.stale -> specText("skill.active_stale")
     state.lastSeenS != null -> specText("skill.last_seen", "n" to state.lastSeenS.toString())
-    state.active -> stringResource(R.string.picker_active)
+    state.active -> specText("skill.active")
     !state.enabled -> state.reasonKey?.let { reasonText(it) }
     else -> null
 }

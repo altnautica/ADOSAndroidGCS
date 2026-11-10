@@ -30,6 +30,7 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.NavChip
 import com.altnautica.gcs.feature.cockpit.autonomy.NavInputs
@@ -73,7 +74,7 @@ private fun NavSourceSheet(chip: NavChip, inputs: NavInputs?, text: TargetText, 
     val c = AdosTheme.colors
     val params = inputs?.params.orEmpty()
     val mono = AdosTypography.numeric.small
-    AdosSheet(onDismiss, title = stringResource(R.string.hud_nav_title)) {
+    AdosSheet(onDismiss, title = specText("cockpit.status.source.nav_source")) {
         Column(Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S6), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             Text(text.navLabel(chip) + (chip.quality?.let { " · " + text.quality(it) } ?: ""), style = MaterialTheme.typography.titleSmall)
             Row {

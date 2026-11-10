@@ -692,6 +692,25 @@ class CockpitViewModelTest {
     }
 
     @Test
+    fun `the camera-settings sheet takes controller navigation and back closes it before leaving`() = runTest(dispatcher) {
+        val vm = vm(listOf(node("drone-1")), FakeVehicle())
+        runCurrent()
+        val emitted = mutableListOf<CockpitEvent>()
+        backgroundScope.launch { vm.events.collect { emitted += it } }
+        runCurrent()
+        vm.setCameraSettings(true)
+        assertTrue(vm.cameraSettingsOpen.value)
+        vm.back()
+        runCurrent()
+        assertFalse(vm.cameraSettingsOpen.value)
+        assertFalse(CockpitEvent.ExitRequested in emitted)
+        vm.back()
+        runCurrent()
+        assertTrue(CockpitEvent.ExitRequested in emitted)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
     fun `triangle tap cycles the view, options opens quick settings and back closes then leaves`() = runTest(dispatcher) {
         val vm = vm(listOf(node("drone-1")), FakeVehicle())
         vm.attachInput()

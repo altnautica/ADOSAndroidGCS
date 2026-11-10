@@ -13,6 +13,7 @@
     <string name="cockpit_stay">Stay</string>
     <string name="cockpit_stream_switch_failed">Could not switch to that camera</string>
     <string name="cockpit_recording_failed">Recording command failed</string>
+    <string name="cockpit_photo_not_saved">Photo not saved</string>
     <string name="cockpit_checklist_overridden">Preflight checklist overridden</string>
     <string name="cockpit_swap_video_map">Swap video and map</string>
     <string name="cockpit_split_divider">Resize video and map</string>
@@ -146,7 +147,6 @@
     <string name="cockpit_confirm_guard">Guard armed: hold within %1$.1f s</string>
     <string name="cockpit_confirm_guard_holding">Keep holding: %1$.1f s</string>
     <string name="cockpit_confirm_input_hint">Gamepad: hold the same button. Keyboard: hold Enter.</string>
-    <string name="cockpit_confirm_altitude">Takeoff altitude</string>
     <string name="cockpit_confirm_altitude_down">Lower altitude</string>
     <string name="cockpit_confirm_altitude_up">Raise altitude</string>
     <string name="cockpit_altitude_m">%1$d m</string>
@@ -170,8 +170,6 @@
     <string name="cockpit_qs_max_brightness">Maximum brightness</string>
     <string name="cockpit_qs_telemetry_pane">Telemetry pane</string>
     <string name="cockpit_qs_pip">Picture-in-picture</string>
-    <string name="cockpit_qs_start_recording">Start recording</string>
-    <string name="cockpit_qs_stop_recording">Stop recording</string>
     <string name="grid_card_page_map">Map</string>
     <string name="grid_card_attitude">Attitude</string>
     <string name="grid_card_obstacles">Obstacles</string>
@@ -195,9 +193,6 @@
     <string name="cockpit_all_modes_title">Allow stick control in all modes?</string>
     <string name="cockpit_all_modes_warning">The DualShock 4 throttle stick springs back to centre. In modes without altitude hold, centre throttle is not a hover. Only enable this if you fly manual modes with this controller.</string>
     <string name="cockpit_all_modes_confirm">Hold to allow</string>
-    <string name="cockpit_tour_next">Next</string>
-    <string name="cockpit_tour_done">Done</string>
-    <string name="cockpit_tour_close">Close</string>
     <string name="cockpit_battery_to_reserve">%1$s to the return reserve</string>
     <string name="cockpit_battery_to_empty">%1$s to empty</string>
     <string name="cockpit_battery_to_reserve_short">%1$s</string>

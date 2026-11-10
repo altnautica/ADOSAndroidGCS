@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -386,15 +387,17 @@ internal class LayerLabels(
 @Composable
 private fun rememberLayerLabels(): LayerLabels {
     val r = LocalContext.current.resources
-    return remember(r) {
+    val spec = LocalCockpitStrings.current
+    return remember(r, spec) {
+        fun unavailable(layer: String) = spec.format("layer.unavailable", mapOf("layer" to layer))
         LayerLabels(
-            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_ar)),
-            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_obstacles)),
-            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_depth)),
-            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_surfaces)),
-            r.getString(R.string.layer_unavailable, r.getString(R.string.layer_targets)),
-            r.getString(R.string.layer_depth_unscaled),
-            r.getString(R.string.layer_ar_approx),
+            unavailable(spec.format("layer.name.ar")),
+            unavailable(r.getString(R.string.layer_obstacles)),
+            unavailable(r.getString(R.string.layer_depth)),
+            unavailable(r.getString(R.string.layer_surfaces)),
+            unavailable(r.getString(R.string.layer_targets)),
+            spec.format("layer.depth_unscaled"),
+            spec.format("layer.ar_approx"),
             r.getString(R.string.layer_reduced_rate),
         )
     }

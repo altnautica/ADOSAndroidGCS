@@ -29,6 +29,7 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
@@ -54,7 +55,7 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
     val (phaseWord, phaseColor) = phaseWord(follow.phase, stale)
     val aglSource = when (follow.aglSource) {
         "rng" -> stringResource(R.string.hud_range_rng) to c.hudInk
-        "baro" -> stringResource(R.string.hud_range_baro) to c.hudWarn
+        "baro" -> specText("agl.source.baro") to c.hudWarn
         else -> DASH to c.hudMuted
     }
     val agl = follow.aglM?.takeIf { !stale }?.let(HudGeometry::oneDecimal) ?: DASH

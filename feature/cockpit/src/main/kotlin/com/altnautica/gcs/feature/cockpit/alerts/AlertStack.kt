@@ -39,6 +39,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.delay
 
 /** Critical borders flash at 4 Hz for 3 s, then hold steady. */
@@ -90,7 +91,7 @@ private fun AlertRow(alert: CockpitAlert) {
         AlertLevel.Warning -> Icons.Outlined.WarningAmber to stringResource(R.string.cockpit_alert_level_warning)
         AlertLevel.Advisory -> Icons.Outlined.Info to stringResource(R.string.cockpit_alert_level_advisory)
     }
-    val title = stringResource(alertTitleRes(alert.id))
+    val title = alertTitle(alert.id)
     val detail = alert.detail?.let { d -> fcStateDetailRes(d)?.let { stringResource(it) } ?: d }
     Surface(
         modifier = Modifier
@@ -112,3 +113,17 @@ private fun AlertRow(alert: CockpitAlert) {
         }
     }
 }
+
+/** Spec keys of the alerts the shared cockpit spec names; the rest keep their Android title. */
+private val SPEC_ALERT_TITLES = mapOf(
+    AlertId.LINK_LOST to "alert.link_lost",
+    AlertId.LINK_STALE to "alert.link_stale",
+    AlertId.BATT_CRIT to "alert.batt_crit",
+    AlertId.BATT_LOW to "alert.batt_low",
+    AlertId.GPS_NO_3D to "alert.gps_no_3d",
+    AlertId.VIDEO_FROZEN to "alert.video_frozen",
+)
+
+/** An alert's on-screen title: the spec wording where the spec names the alert. */
+@Composable
+fun alertTitle(id: String): String = SPEC_ALERT_TITLES[id]?.let { specText(it) } ?: stringResource(alertTitleRes(id))

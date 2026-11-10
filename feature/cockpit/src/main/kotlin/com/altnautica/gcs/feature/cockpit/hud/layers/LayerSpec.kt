@@ -12,7 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** One data layer of the cockpit spec: its id, default, data source and whether it needs a compute lease. */
 @Immutable
-data class LayerDef(val id: String, val defaultOn: Boolean, val source: String, val lease: Boolean, val z: Int = 0)
+data class LayerDef(val id: String, val defaultOn: Boolean, val source: String, val lease: Boolean, val z: Int = 0, val label: String? = null)
 
 /**
  * The data layers, clutter levels and views of the shared cockpit spec
@@ -40,6 +40,9 @@ data class LayerSpec(
     fun forced(view: String): Set<String> = views[view].orEmpty()
 
     /** The canvas layers (everything but the centre marks and instruments, drawn by the HUD) in ascending z; built once, read every draw. */
+    /** The layer's name from `layers.json`; null when the spec gives none. */
+    fun label(id: String): String? = layers.firstOrNull { it.id == id }?.label
+
     val canvasOrder: List<String> by lazy(LazyThreadSafetyMode.PUBLICATION) { layers.filter { it.id != CENTRE_MARKS && it.id != INSTRUMENTS }.map { it.id } }
 
     fun def(id: String): LayerDef? = layers.firstOrNull { it.id == id } ?: if (id.startsWith(PLUGIN_PREFIX)) LayerDef(id, true, "plugin", false) else null
@@ -75,6 +78,7 @@ data class LayerSpec(
                     source = o["source"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                     lease = o["lease"]?.jsonPrimitive?.booleanOrNull == true,
                     z = o["z"]?.jsonPrimitive?.intOrNull ?: 0,
+                    label = o["label"]?.jsonPrimitive?.contentOrNull,
                 )
             }.sortedBy { it.z }
             val levels = l["levels"]!!.jsonObject
@@ -101,14 +105,14 @@ data class LayerSpec(
         /** The built-in copy of the cockpit spec's `layers.json` and `views.json`. */
         val DEFAULT = LayerSpec(
             layers = listOf(
-                LayerDef(DEPTH, false, "depth", true, 10),
-                LayerDef(SURFACES, false, "surfaces", true, 20),
-                LayerDef(OBSTACLES, true, "obstacles", false, 30),
-                LayerDef(TARGETS, true, "vision detections", false, 40),
-                LayerDef(AR_ROUTE, true, "ar", false, 50),
-                LayerDef(AR_MOTION, true, "ar", false, 60),
-                LayerDef(CENTRE_MARKS, true, "telemetry", false, 100),
-                LayerDef(INSTRUMENTS, true, "telemetry", false, 101),
+                LayerDef(DEPTH, false, "depth", true, 10, "Depth"),
+                LayerDef(SURFACES, false, "surfaces", true, 20, "Surfaces"),
+                LayerDef(OBSTACLES, true, "obstacles", false, 30, "Obstacles"),
+                LayerDef(TARGETS, true, "vision detections", false, 40, "Targets"),
+                LayerDef(AR_ROUTE, true, "ar", false, 50, "Route"),
+                LayerDef(AR_MOTION, true, "ar", false, 60, "Motion"),
+                LayerDef(CENTRE_MARKS, true, "telemetry", false, 100, "Centre marks"),
+                LayerDef(INSTRUMENTS, true, "telemetry", false, 101, "Instruments"),
             ),
             routeLevel = setOf(CENTRE_MARKS, TARGETS, AR_ROUTE, AR_MOTION, OBSTACLES),
             offLevel = setOf(CENTRE_MARKS),

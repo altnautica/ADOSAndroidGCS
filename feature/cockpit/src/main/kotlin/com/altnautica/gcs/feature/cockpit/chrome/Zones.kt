@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.model.Attitude
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -78,6 +79,8 @@ fun RoundButton(
     modifier: Modifier = Modifier,
     active: Color? = null,
     onLongClick: (() -> Unit)? = null,
+    /** A short word drawn under the icon (the left column's actions); null draws the icon alone. */
+    shortLabel: String? = null,
 ) {
     val c = LocalChrome.current
     ChromePanel(modifier.size(size), shape = CircleShape, tint = active) {
@@ -89,7 +92,19 @@ fun RoundButton(
                 .testTag(tag),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = c.text, modifier = Modifier.size(size * 0.42f))
+            if (shortLabel == null) {
+                Icon(icon, contentDescription = null, tint = c.text, modifier = Modifier.size(size * 0.42f))
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(icon, contentDescription = null, tint = c.text, modifier = Modifier.size(size * 0.36f))
+                    Text(
+                        shortLabel,
+                        style = c.labelText.copy(color = c.text, fontSize = c.labelText.fontSize * 0.85f),
+                        maxLines = 1,
+                        modifier = Modifier.testTag("$tag-label"),
+                    )
+                }
+            }
         }
     }
 }
@@ -238,11 +253,11 @@ fun GimbalPad(label: String, hint: String, size: Dp, onRate: (Float, Float) -> U
 fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
     val c = LocalChrome.current
     val cells = listOf(
-        Triple("D", values.distanceM, "m"),
-        Triple("H", values.heightM, "m"),
-        Triple("H.S", values.hSpeedMs, "m/s"),
-        Triple("V.S", values.vSpeedMs, "m/s"),
-        Triple("AGL", values.aglM, "m"),
+        Cell("D", "cockpit.readout.distance", values.distanceM, "m"),
+        Cell("H", "cockpit.readout.height", values.heightM, "m"),
+        Cell("H.S", "cockpit.readout.hspeed", values.hSpeedMs, "m/s"),
+        Cell("V.S", "cockpit.readout.vspeed", values.vSpeedMs, "m/s"),
+        Cell("AGL", "cockpit.readout.agl", values.aglM, "m"),
     )
     ChromePanel(modifier.fillMaxSize().testTag("bottom-row")) {
         Row(
@@ -250,9 +265,10 @@ fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            for ((label, value, unit) in cells) {
-                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.semantics(mergeDescendants = true) {}.testTag("value-$label")) {
-                    val shown = if (label == "AGL" && values.aglTag != null) "AGL ${values.aglTag}" else label
+            for ((tag, key, value, unit) in cells) {
+                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.semantics(mergeDescendants = true) {}.testTag("value-$tag")) {
+                    val label = specText(key)
+                    val shown = if (tag == "AGL" && values.aglTag != null) "$label ${values.aglTag}" else label
                     Text(shown, style = c.labelText, modifier = Modifier.padding(end = 4.dp, bottom = 2.dp), maxLines = 1)
                     Text(formatValue(value), style = c.valueText, maxLines = 1, overflow = TextOverflow.Clip)
                     Text(unit, style = c.labelText, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp), maxLines = 1)
@@ -261,6 +277,9 @@ fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** One bottom-row readout: its test tag, spec label key, value and unit. */
+private data class Cell(val tag: String, val key: String, val value: Float?, val unit: String)
 
 /**
  * The bottom-left card: one page at a time (map, attitude, obstacles), switched by a

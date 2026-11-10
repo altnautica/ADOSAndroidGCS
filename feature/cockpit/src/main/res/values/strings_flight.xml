@@ -15,7 +15,6 @@
 
     <!-- Skill picker -->
     <string name="picker_open">Open skills</string>
-    <string name="picker_active">ACTIVE</string>
 
     <!-- Pre-flight gate -->
     <string name="preflight_gate_continue">Continue</string>
@@ -31,7 +30,6 @@
     <string name="grid_zoom_in">Zoom in</string>
     <string name="grid_zoom_out">Zoom out</string>
     <string name="grid_gimbal_recenter">Recentre gimbal</string>
-    <string name="grid_camera_settings">Camera settings</string>
     <string name="grid_card_map">Show map</string>
     <string name="grid_card_radar">Show obstacle radar</string>
     <string name="on_screen_stick_left">Left stick: climb, descend and turn</string>

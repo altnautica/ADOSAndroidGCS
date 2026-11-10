@@ -56,6 +56,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.model.LocalPosition
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
 import com.altnautica.gcs.core.designsystem.tokens.AdosHudTarget
 import androidx.compose.ui.platform.LocalDensity
@@ -193,10 +194,10 @@ internal fun LocalMinimap(
         }
         Row(Modifier.align(Alignment.BottomEnd)) {
             IconButton(onClick = { pxPerM = (pxPerM / 1.5f).coerceAtLeast(MIN_PX_PER_M) }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Outlined.Remove, contentDescription = stringResource(R.string.hud_map_zoom_out), tint = c.hudInk)
+                Icon(Icons.Outlined.Remove, contentDescription = specText("cockpit.zoom.out"), tint = c.hudInk)
             }
             IconButton(onClick = { pxPerM = (pxPerM * 1.5f).coerceAtMost(MAX_PX_PER_M) }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.hud_map_zoom_in), tint = c.hudInk)
+                Icon(Icons.Outlined.Add, contentDescription = specText("cockpit.zoom.in"), tint = c.hudInk)
             }
         }
     }

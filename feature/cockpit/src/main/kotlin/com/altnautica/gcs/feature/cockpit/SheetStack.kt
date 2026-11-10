@@ -9,6 +9,9 @@ enum class CockpitSheet {
     Mode,
     Launch,
 
+    /** Camera settings: camera and stream, picture-in-picture, recording. */
+    Camera,
+
     /** The pre-flight checklist; as the launch gate it stands over the Launch sheet. */
     Preflight,
 
@@ -18,12 +21,12 @@ enum class CockpitSheet {
 
 /**
  * One sheet at a time on the flight screen. Opening a peer sheet (alert list, quick
- * settings, skills, flight modes, launch) closes every other peer. The pre-flight gate
+ * settings, skills, flight modes, launch, camera settings) closes every other peer. The pre-flight gate
  * and a confirm stand over the sheet that opened them: only the topmost draws, and
  * closing it (Back, a tap outside, its own close) shows the one under it again.
  */
 object SheetStack {
-    private val PEERS = listOf(CockpitSheet.Status, CockpitSheet.Quick, CockpitSheet.Picker, CockpitSheet.Mode, CockpitSheet.Launch)
+    private val PEERS = listOf(CockpitSheet.Status, CockpitSheet.Quick, CockpitSheet.Picker, CockpitSheet.Mode, CockpitSheet.Launch, CockpitSheet.Camera)
 
     /** The peers to close now that [now] is open, given what was open [before]. */
     fun toClose(before: Set<CockpitSheet>, now: Set<CockpitSheet>): Set<CockpitSheet> {

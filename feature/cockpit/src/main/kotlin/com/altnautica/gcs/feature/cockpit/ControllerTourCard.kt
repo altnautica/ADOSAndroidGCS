@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
@@ -41,11 +40,11 @@ internal fun ControllerTourCard(step: Int, onNext: () -> Unit, onClose: () -> Un
             Text(specText("controls.tour.$key.body"), style = c.labelText.copy(color = c.text))
             Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                 AdosButton(
-                    stringResource(if (step >= TOUR_KEYS.lastIndex) R.string.cockpit_tour_done else R.string.cockpit_tour_next),
+                    specText(if (step >= TOUR_KEYS.lastIndex) "controls.tour.done" else "controls.tour.next"),
                     onClick = onNext,
                     modifier = Modifier.focusRequester(focus),
                 )
-                AdosButton(stringResource(R.string.cockpit_tour_close), onClick = onClose, variant = AdosButtonVariant.Secondary)
+                AdosButton(specText("cockpit.close"), onClick = onClose, variant = AdosButtonVariant.Secondary)
             }
         }
     }
