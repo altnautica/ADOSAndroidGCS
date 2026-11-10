@@ -95,7 +95,8 @@ jobs:
           fi
           certs="$("$ANDROID_HOME/build-tools/${BUILD_TOOLS}/apksigner" verify --print-certs "$apk")"
           echo "$certs"
-          actual="$(printf '%s\n' "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
+          # apksigner names the signer by scheme ("V2 Signer: …") when the APK carries no v1 signature, and "Signer #1 …" otherwise.
+          actual="$(printf '%s\n' "$certs" | sed -n -E 's/^(Signer #1|V[0-9]+ Signer):? certificate SHA-256 digest: //p' | head -n 1 | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
           expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')"
           if [ "$actual" != "$expected" ]; then
             echo "::error::Signing certificate SHA-256 is '$actual', expected '$expected'"
