@@ -6,24 +6,15 @@
     <string name="flight_chip_set_up_aircraft">Set up aircraft</string>
     <string name="flight_chip_take_control">Take control</string>
 
-    <!-- Mode sheet -->
-    <string name="mode_sheet_title">Flight mode</string>
-    <string name="mode_sheet_profile">Profile</string>
-    <string name="mode_sheet_control_mode">Control mode</string>
-    <string name="mode_sheet_avoidance">Obstacle avoidance</string>
+    <!-- Mode sheet (titles, sections and the no-pilot note come from the cockpit spec) -->
     <string name="mode_sheet_avoid_off_warning">With avoidance off the drone does not brake for obstacles.</string>
     <string name="mode_sheet_hold_avoid_off">Hold to turn avoidance off</string>
     <string name="mode_sheet_hold_switch">Hold to switch to %1$s</string>
-    <string name="mode_sheet_hand_to_fc">Hand to flight controller</string>
-    <string name="mode_sheet_take_control_title">Take control</string>
-    <string name="mode_sheet_fc_modes_show">Show flight controller modes</string>
     <string name="mode_sheet_fc_modes_hide">Hide flight controller modes</string>
     <string name="mode_sheet_fc_modes_note">Selecting a flight controller mode hands control to the flight controller.</string>
-    <string name="mode_sheet_no_pilot">This vehicle has no onboard pilot connected.</string>
 
     <!-- Skill picker -->
     <string name="picker_open">Open skills</string>
-    <string name="picker_empty">No skills installed on this vehicle.</string>
     <string name="picker_active">ACTIVE</string>
 
     <!-- Pre-flight gate -->

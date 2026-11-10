@@ -35,7 +35,7 @@ import kotlin.math.cos
 const val LAUNCH_HOLD_MS = 1_500
 
 /** Take-off altitude range of the launch sheet, metres. */
-val LAUNCH_ALT_RANGE = 1f..30f
+val LAUNCH_ALT_RANGE = 1f..120f
 
 /** Default copter take-off altitude, metres. */
 const val DEFAULT_LAUNCH_ALT_M = 3f
@@ -112,7 +112,13 @@ data class LaunchUi(
  * as a step strip.
  */
 @Composable
-fun LaunchSheet(ui: LaunchUi, onDraft: (LaunchDraft) -> Unit, onLaunch: () -> Unit, onDismiss: () -> Unit) {
+fun LaunchSheet(
+    ui: LaunchUi,
+    onDraft: (LaunchDraft) -> Unit,
+    onLaunch: () -> Unit,
+    onDismiss: () -> Unit,
+    altRange: ClosedFloatingPointRange<Float> = LAUNCH_ALT_RANGE,
+) {
     AdosSheet(onDismiss = onDismiss, title = specText("flow.launch.title")) {
         Column(
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
@@ -123,9 +129,9 @@ fun LaunchSheet(ui: LaunchUi, onDraft: (LaunchDraft) -> Unit, onLaunch: () -> Un
             Text(specText("flow.launch.alt_m") + " · " + "%.0f m".format(d.altM), style = MaterialTheme.typography.labelLarge)
             Slider(
                 value = d.altM,
-                onValueChange = { onDraft(d.copy(altM = it.coerceIn(LAUNCH_ALT_RANGE))) },
-                valueRange = LAUNCH_ALT_RANGE,
-                steps = (LAUNCH_ALT_RANGE.endInclusive - LAUNCH_ALT_RANGE.start).toInt() - 1,
+                // Whole metres, so the wide spec range (`layout.json` `launch`) stays a single smooth slider.
+                onValueChange = { onDraft(d.copy(altM = kotlin.math.round(it).coerceIn(altRange))) },
+                valueRange = altRange,
                 modifier = Modifier.testTag("launch-alt"),
             )
             Text(specText("flow.launch.after"), style = MaterialTheme.typography.labelLarge)
@@ -212,6 +218,9 @@ fun StepStrip(sequence: LaunchSequence, modifier: Modifier = Modifier) {
                 )
             }
         }
-        sequence.error?.let { Text(specText("flow.launch.refused", "reason" to it), color = colors.statusError) }
+        sequence.error?.let { code ->
+            val reason = com.altnautica.gcs.feature.cockpit.skillbar.reasonText(code)
+            Text(specText("flow.launch.refused", "reason" to reason), color = colors.statusError)
+        }
     }
 }

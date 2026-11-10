@@ -94,7 +94,8 @@ private fun SheetFrame(
     }
     val requester = remember { FocusRequester() }
     OverlayBackHandler(onDismiss)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val topInset = LocalOverlayTopInset.current
+    BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset)) {
         OverlayScrim(colors.mediaScrim, onDismiss)
         val panelModifier = if (landscape) {
             Modifier
@@ -120,10 +121,11 @@ private fun SheetFrame(
                 color = colors.bgSurface,
                 contentColor = colors.fgPrimary,
             ) {
-                val insets = if (landscape) {
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.End + WindowInsetsSides.Vertical)
-                } else {
-                    WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
+                val insets = when {
+                    !landscape -> WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
+                    // Below a screen's own top bar the status-bar inset is already behind it.
+                    topInset > 0.dp -> WindowInsets.safeDrawing.only(WindowInsetsSides.End + WindowInsetsSides.Bottom)
+                    else -> WindowInsets.safeDrawing.only(WindowInsetsSides.End + WindowInsetsSides.Vertical)
                 }
                 Column(Modifier.windowInsetsPadding(insets)) {
                     if (title != null) {

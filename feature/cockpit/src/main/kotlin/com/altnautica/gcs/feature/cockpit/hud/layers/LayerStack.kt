@@ -256,6 +256,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
         chipX = max(view.left, inset.calculateLeftPadding(layoutDirection).toPx()) + CHIP_INSET_DP * density
         chipY = min(view.bottom, size.height - inset.calculateBottomPadding().toPx()) - (CHIP_INSET_DP + CHIP_STEP_DP) * density
         painter.etaInLabels = !presentation.distanceOnly
+        painter.topClearPx = inset.calculateTopPadding().toPx()
         if (presentation.reducedRate) chip(labels.reducedRate)
         val order = controller.spec.canvasOrder
         for (i in order.indices) {

@@ -81,7 +81,7 @@ fun AdosMenu(state: AdosMenuState, items: List<AdosMenuItem>) {
         val close = { state.expanded = false }
         OverlayBackHandler(close)
         Box(Modifier.fillMaxSize()) {
-            OverlayScrim(Color.Transparent, close)
+            Box(Modifier.fillMaxSize().padding(top = LocalOverlayTopInset.current)) { OverlayScrim(Color.Transparent, close) }
             MenuPlacement(anchor = state.anchor) {
                 Surface(
                     modifier = Modifier.widthIn(min = MenuMinWidth, max = MenuMaxWidth).overlayFocusTrap(requester),

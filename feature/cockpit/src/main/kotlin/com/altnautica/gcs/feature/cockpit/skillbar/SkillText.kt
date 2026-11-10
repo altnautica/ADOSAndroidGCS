@@ -1,5 +1,9 @@
 package com.altnautica.gcs.feature.cockpit.skillbar
 
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.knowsRefusal
+import com.altnautica.gcs.core.skills.hud.refusalText
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CenterFocusStrong
@@ -121,9 +125,17 @@ fun skillLabel(skill: Skill): String = skill.builtinLabelRes()?.let { stringReso
 /** String resource of a known reason key, or null for extension text. */
 fun reasonRes(reasonKey: String): Int? = REASONS[reasonKey]
 
-/** A known reason key is localized; any other reason is extension text shown verbatim. */
+/**
+ * A known reason key is localized; a refusal code the pilot or the gates answer with
+ * (failsafe, not_ready:<item>, …) reads through the spec's refusal texts; any other reason
+ * is extension text shown verbatim.
+ */
 @Composable
-fun reasonText(reasonKey: String): String = REASONS[reasonKey]?.let { stringResource(it) } ?: reasonKey
+fun reasonText(reasonKey: String): String {
+    REASONS[reasonKey]?.let { return stringResource(it) }
+    val spec = SpecText(LocalCockpitStrings.current)
+    return if (spec.knowsRefusal(reasonKey)) spec.refusalText(reasonKey) else reasonKey
+}
 
 @Composable
 fun confirmTitle(key: String, fallback: String): String = CONFIRM_TITLES[key]?.let { stringResource(it) } ?: fallback

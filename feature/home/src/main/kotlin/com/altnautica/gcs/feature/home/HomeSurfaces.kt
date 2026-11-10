@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.home
 
 import androidx.annotation.StringRes
+import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
@@ -42,6 +43,32 @@ private fun flyReason(card: FleetCard?): Int = when {
     card.node.profile == NodeProfile.GroundStation && card.node.carriedDroneId == null -> R.string.home_reason_no_carried
     card.node.profile == NodeProfile.Unknown && Reach.DirectFc !in card.node.reaches -> R.string.home_reason_no_fc
     else -> R.string.home_reason_no_link
+}
+
+/** What the hero's readiness line says for the selected vehicle. */
+sealed interface HeroReadiness {
+    /** Fly is open and battery, mode and GPS are all known. */
+    data object Ready : HeroReadiness
+
+    /** Fly is open but battery, mode or GPS has not arrived yet. */
+    data object Connecting : HeroReadiness
+
+    /** Fly is unavailable for [reason]. */
+    data class Blocked(@param:StringRes val reason: Int) : HeroReadiness
+}
+
+/** True once battery, flight mode and GPS have all been reported. */
+fun vitalsKnown(vitals: NodeVitals): Boolean =
+    vitals.batteryPct != null && vitals.modeName != null && vitals.gpsFix != null
+
+/**
+ * The readiness line for [fly] with [vitals]: a disabled Fly card shows its reason;
+ * an open one reads as ready only once the vitals are known, and as connecting before.
+ */
+fun heroReadiness(fly: SurfaceCard, vitals: NodeVitals): HeroReadiness = when {
+    !fly.enabled -> fly.reason?.let { HeroReadiness.Blocked(it) } ?: HeroReadiness.Connecting
+    !vitalsKnown(vitals) -> HeroReadiness.Connecting
+    else -> HeroReadiness.Ready
 }
 
 /**

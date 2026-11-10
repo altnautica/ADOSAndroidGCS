@@ -58,7 +58,7 @@ fun AdosDialog(
         val trap = remember { FocusRequester() }
         val confirmFocus = remember { FocusRequester() }
         OverlayBackHandler(onDismiss)
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().padding(top = LocalOverlayTopInset.current)) {
             OverlayScrim(colors.mediaScrim, onDismiss)
             Surface(
                 modifier = Modifier

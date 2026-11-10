@@ -140,7 +140,7 @@ fun SkillPickerSheet(ui: SkillPickerUi, actions: SkillPickerActions, tweak: @Com
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
         ) {
             if (ui.groups.isEmpty()) {
-                Text(stringResource(R.string.picker_empty), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
+                Text(specText("skill.picker.empty"), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
             }
             ui.groups.forEach { group ->
                 Text(group.pluginName, style = MaterialTheme.typography.titleSmall, color = colors.fgSecondary, modifier = Modifier.testTag("$PICKER_GROUP_TAG:${group.pluginId}"))
@@ -153,6 +153,7 @@ fun SkillPickerSheet(ui: SkillPickerUi, actions: SkillPickerActions, tweak: @Com
     }
 }
 
+/** A tab; a tab with no skills is drawn dimmed and takes no tap or focus, so a press never seems to do nothing. */
 @Composable
 private fun TabButton(tab: PickerTab, selected: Boolean, populated: Boolean, onClick: () -> Unit) {
     val colors = AdosTheme.colors
@@ -161,7 +162,7 @@ private fun TabButton(tab: PickerTab, selected: Boolean, populated: Boolean, onC
             .defaultMinSize(minHeight = AdosTheme.touchMin, minWidth = 88.dp)
             .testTag("$PICKER_TAB_TAG:${tab.name}")
             .semantics { this.selected = selected }
-            .clickable(role = Role.Tab, onClick = onClick),
+            .clickable(enabled = populated || selected, role = Role.Tab, onClick = onClick),
         shape = RoundedCornerShape(AdosRadius.Lg),
         color = if (selected) colors.accentPrimary.copy(alpha = 0.16f) else colors.bgRaised,
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) colors.accentPrimary else colors.borderDefault),

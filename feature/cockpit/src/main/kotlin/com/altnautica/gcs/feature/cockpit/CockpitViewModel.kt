@@ -640,6 +640,7 @@ class CockpitViewModel @AssistedInject constructor(
             overlays.modePicker.value = false
             activate(SetModeSkill.id, mapOf(SkillArgs.TARGET_MODE to name))
         }
+        override fun onVtol(toFixedWing: Boolean) = pilotAction(PilotAction.vtol(toFixedWing))
         override fun onDismiss() = closeModeSheet()
     }
 

@@ -73,6 +73,9 @@ class LayerPainter(private val measurer: TextMeasurer) {
     /** False on the layout classes that show distances only (`labels: distance_only`): no waypoint ETA. */
     var etaInLabels: Boolean = true
 
+    /** Canvas y (px) above which no label draws: the top bar's bottom edge when the video runs under it. */
+    var topClearPx: Float = 0f
+
     /** A grid's decoded cells, kept until another grid needs the buffer. */
     private class DecodedGrid {
         var key: CameraGrid? = null
@@ -117,7 +120,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
         return measurer.measure(text, labelStyle).also { labels[text] = it }
     }
 
-    fun DrawScope.chip(text: String, at: Offset, ink: Color = Color.White, alpha: Float = 1f) {
+    fun DrawScope.chip(text: String, at0: Offset, ink: Color = Color.White, alpha: Float = 1f) {
+        val at = com.altnautica.gcs.feature.cockpit.hud.clearOfTopBar(at0, topClearPx)
         val l = label(text)
         val pad = px(4f)
         drawRoundRect(LayerColors.ChipFill, at, Size(l.size.width + 2 * pad, l.size.height + pad), androidx.compose.ui.geometry.CornerRadius(pad), alpha = alpha)

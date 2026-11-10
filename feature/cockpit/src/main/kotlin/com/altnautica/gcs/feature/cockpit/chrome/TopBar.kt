@@ -68,12 +68,25 @@ import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.alerts.fcStateDetailRes
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 
 /** Top-bar items that move into the Menu when the row runs out of room (`top_bar.overflow`). */
-enum class TopBarItem { Controller, NavSource, LinkDetail, Layers }
+enum class TopBarItem(val specId: String) {
+    Controller("controller"),
+    NavSource("nav_source"),
+    LinkDetail("link_text"),
+    LinkIcon("link_icon"),
+    Layers("layer_button"),
+    ;
 
-/** Lowest priority first: the order items leave the row (`to_menu_order`). */
-val TopBarOverflowOrder = listOf(TopBarItem.Controller, TopBarItem.NavSource, TopBarItem.LinkDetail)
+    companion object {
+        /** The spec's `to_menu_order` as items, lowest priority first; unknown ids are skipped. */
+        fun order(specIds: List<String>): List<TopBarItem> = specIds.mapNotNull { id -> entries.firstOrNull { it.specId == id } }
+    }
+}
 
 /** Holds which items are in the Menu after the last layout; read when the Menu opens. */
 class TopBarOverflow {
@@ -84,14 +97,15 @@ class TopBarOverflow {
 /**
  * The top bar: one row that never scrolls. Left: the flight-state chip, the status pill,
  * battery, link, navigation source and controller. Right: the layer button, Menu and STOP.
- * When the row is too narrow the controller, then the navigation source, then the link's
- * text move into the Menu ([overflow]); then the chip gives up width, then the layer
- * button moves into the Menu, and last the pill truncates. Battery, Menu and STOP never
- * move, and the two groups never overlap.
+ * When the row is too narrow, items move into the Menu ([overflow]) in the spec's
+ * [overflowOrder] (controller, navigation source, link text, link icon, layer button);
+ * then the pill truncates, and last the chip ellipsizes. The chip, pill, battery, Menu and
+ * STOP never move, and the two groups never overlap.
  */
 @Composable
 fun TopBar(
     overflow: TopBarOverflow,
+    overflowOrder: List<TopBarItem>,
     chip: @Composable () -> Unit,
     pill: @Composable () -> Unit,
     battery: @Composable () -> Unit,
@@ -132,30 +146,25 @@ fun TopBar(
                 return sum + gap * (n - 1).coerceAtLeast(0) + gap // one extra gap between the groups
             }
             val moved = HashSet<TopBarItem>()
-            for (item in TopBarOverflowOrder) {
+            for (item in overflowOrder) {
                 if (total() <= constraints.maxWidth) break
                 val index = when (item) {
                     TopBarItem.Controller -> CONTROLLER
                     TopBarItem.NavSource -> NAV
                     TopBarItem.LinkDetail -> LINK_DETAIL
+                    TopBarItem.LinkIcon -> LINK_ICON
                     TopBarItem.Layers -> LAYERS
                 }
                 if (shown[index]) { shown[index] = false; moved += item }
             }
-            // Last resorts on a very narrow window: the chip gives up width (it ellipsizes), then
-            // the layer button moves into the Menu, then the pill ellipsizes. STOP never shrinks.
+            // Last resorts on a very narrow window: the pill truncates, then the chip ellipsizes. STOP never shrinks.
             val over = (total() - constraints.maxWidth).coerceAtLeast(0)
-            placeables[CHIP] = measurables[CHIP].firstOrNull()?.measure(
-                Constraints(maxWidth = (chipNatural - over).coerceAtLeast(0), maxHeight = constraints.maxHeight),
-            )
-            var rest = over - chipNatural
-            if (rest > 0 && shown[LAYERS]) {
-                shown[LAYERS] = false
-                moved += TopBarItem.Layers
-                rest -= width(LAYERS) + gap
-            }
-            val pillMax = if (rest > 0 && shown[PILL]) (pillNatural - rest).coerceAtLeast(0) else Constraints.Infinity
+            val pillMax = if (over > 0) (pillNatural - over).coerceAtLeast(MIN_PILL_PX.coerceAtMost(pillNatural)) else Constraints.Infinity
             placeables[PILL] = measurables[PILL].firstOrNull()?.measure(Constraints(maxWidth = pillMax, maxHeight = constraints.maxHeight))
+            val rest = (over - (pillNatural - (placeables[PILL]?.width ?: 0))).coerceAtLeast(0)
+            placeables[CHIP] = measurables[CHIP].firstOrNull()?.measure(
+                Constraints(maxWidth = (chipNatural - rest).coerceAtLeast(0), maxHeight = constraints.maxHeight),
+            )
             overflow.moved = moved
             layout(constraints.maxWidth, constraints.maxHeight) {
                 var x = 0
@@ -165,14 +174,22 @@ fun TopBar(
                     p.place(x, (constraints.maxHeight - p.height) / 2)
                     x += p.width + gap
                 }
+                // The right group is laid out from the right edge, then placed left to right, so
+                // keyboard and D-pad focus follow the drawn order: layers, Menu, STOP.
+                val rightX = IntArray(placeables.size)
                 var r = constraints.maxWidth
                 for (i in placeables.indices.reversed()) {
                     if (i < LAYERS) break
                     val p = placeables[i] ?: continue
                     if (!shown[i]) continue
                     r -= p.width
-                    p.place(r, (constraints.maxHeight - p.height) / 2)
+                    rightX[i] = r
                     r -= gap
+                }
+                for (i in LAYERS until placeables.size) {
+                    val p = placeables[i] ?: continue
+                    if (!shown[i]) continue
+                    p.place(rightX[i], (constraints.maxHeight - p.height) / 2)
                 }
             }
         }
@@ -181,10 +198,14 @@ fun TopBar(
 
 private const val CHIP = 0
 private const val PILL = 1
+private const val LINK_ICON = 3
 private const val LINK_DETAIL = 4
 private const val NAV = 5
 private const val CONTROLLER = 6
 private const val LAYERS = 7
+
+/** Narrowest the pill truncates to (px): its dot and a few letters stay readable. */
+private const val MIN_PILL_PX = 96
 
 /**
  * The status pill: "All systems OK", the one alert's text, or "n warnings"; flashes while
@@ -250,12 +271,20 @@ fun statusItemTitle(item: StatusItem): String {
 
 /**
  * The alert list under the pill: every active item with its source. Opening it
- * acknowledges what it shows; a tap outside closes it.
+ * acknowledges what it shows; a tap outside it or system Back closes it. Nothing above
+ * [topInset] (the top bar) is covered, so STOP takes the first press.
  */
 @Composable
-fun StatusList(items: List<StatusItem>, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun StatusList(items: List<StatusItem>, onClose: () -> Unit, modifier: Modifier = Modifier, topInset: androidx.compose.ui.unit.Dp = 0.dp) {
     val c = LocalChrome.current
-    Box(Modifier.fillMaxSize().clickable(interactionSource = null, indication = null, onClick = onClose)) {
+    if (LocalNavigationEventDispatcherOwner.current != null) {
+        NavigationBackHandler(
+            state = rememberNavigationEventState(NavigationEventInfo.None),
+            isBackEnabled = true,
+            onBackCompleted = onClose,
+        )
+    }
+    Box(Modifier.fillMaxSize().padding(top = topInset).clickable(interactionSource = null, indication = null, onClick = onClose)) {
         ChromePanel(modifier.widthIn(min = 280.dp, max = 420.dp).testTag("status-list")) {
             Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState()).padding(c.pad)) {
                 Text(specText("cockpit.alerts.title"), style = c.chipText)

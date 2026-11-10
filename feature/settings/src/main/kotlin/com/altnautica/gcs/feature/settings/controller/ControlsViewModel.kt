@@ -126,11 +126,16 @@ data class ControlsUiState(
     val keyConflicts: List<KeyConflictUi> = emptyList(),
     val onScreenSticks: Boolean = false,
     val allModesVehicles: List<AllModesVehicle> = emptyList(),
+    /** True once a gamepad or joystick was attached at some point in this process. */
+    val padSeen: Boolean = false,
 ) {
     /** Every control of every conflicting row: the hotspots outlined red. */
     val conflictControls: Set<String> get() = conflicts.flatMapTo(HashSet()) { it.controls }
 
     val canSave: Boolean get() = dirty && conflicts.isEmpty() && missingLocked.isEmpty()
+
+    /** The prompt shown while no controller drives input. */
+    val padPrompt: PadPrompt get() = padPromptFor(controller != null, padSeen)
 }
 
 /** Settings › Controls: the controller drawing and its bindings, calibration, hardware checks and preferences. */
@@ -142,6 +147,7 @@ class ControlsViewModel @Inject constructor(
     val spec: CockpitSpecRepository,
     private val router: AdosInputRouter,
     private val connections: PadConnectionProbe,
+    padMemory: PadSeenMemory,
     registry: SkillRegistry,
     nodeRepository: NodeRepository,
     bindings: BindingStore,
@@ -179,7 +185,8 @@ class ControlsViewModel @Inject constructor(
         combine(manager.active, saved, draft, installed, bindings.keyConflicts) { active, s, d, skills, keys -> Inputs(active, s, d, skills, keys) },
         ui,
         preferences,
-    ) { inputs, t, (prefs, vehicles) -> build(inputs, t, prefs, vehicles) }
+        padMemory.seen,
+    ) { inputs, t, (prefs, vehicles), seen -> build(inputs, t, prefs, vehicles, seen) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ControlsUiState())
 
     private data class Inputs(
@@ -204,7 +211,7 @@ class ControlsViewModel @Inject constructor(
         viewModelScope.launch { registry.skills.collect { installed.value = it } }
     }
 
-    private fun build(inputs: Inputs, t: Transient, prefs: ControllerSettings, vehicles: List<AllModesVehicle>): ControlsUiState {
+    private fun build(inputs: Inputs, t: Transient, prefs: ControllerSettings, vehicles: List<AllModesVehicle>, padSeen: Boolean): ControlsUiState {
         val saved = inputs.saved ?: return ControlsUiState()
         val ds4 = spec.ds4
         val active = inputs.active
@@ -247,6 +254,7 @@ class ControlsViewModel @Inject constructor(
             onScreenSticks = saved.onScreenSticks,
             keyConflicts = keyConflictsUi(inputs.keyConflicts, inputs.skills),
             allModesVehicles = vehicles,
+            padSeen = padSeen,
         )
     }
 

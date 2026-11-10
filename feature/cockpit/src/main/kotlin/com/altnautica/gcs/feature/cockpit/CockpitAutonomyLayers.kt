@@ -80,9 +80,12 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
         val surfaceW = constraints.maxWidth.toFloat()
         val surfaceH = constraints.maxHeight.toFloat()
         val drawer = rememberTargetDrawer(a, motion, compact)
+        val chipInset = LocalLayerChipInset.current
+        val topClearPx = with(androidx.compose.ui.platform.LocalDensity.current) { chipInset.calculateTopPadding().toPx() }
         SideEffect {
             layer.autonomy = a
             layer.drawer = drawer
+            drawer.topClearPx = topClearPx
             layer.videoLost = videoLost
             layer.motion = motion
             layer.vehicleYawDeg = { telemetry?.attitude?.value?.yawRad?.let { Math.toDegrees(it.toDouble()).toFloat() } }
@@ -90,7 +93,7 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
         LayerStack(
             a.layers, cameraId, layer.frameW, layer.frameH, Modifier.fillMaxSize(),
             targets = layer,
-            presentation = layoutClass.layerPresentation().copy(reducedRate = reducedRate, chipInset = LocalLayerChipInset.current),
+            presentation = layoutClass.layerPresentation().copy(reducedRate = reducedRate, chipInset = chipInset),
         )
         TargetSemantics(layer, a, onSelect = { item ->
             item.rect?.let { r ->

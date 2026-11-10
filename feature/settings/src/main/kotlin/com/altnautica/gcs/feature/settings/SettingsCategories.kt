@@ -49,8 +49,12 @@ internal fun LazyListScope.categoryContent(
     when (category) {
         SettingsCategory.Appearance -> appearance(state, vm)
         SettingsCategory.Cockpit -> cockpit(state, vm)
-        SettingsCategory.Controller -> item {
-            LinkRow(stringResource(R.string.settings_bindings), stringResource(R.string.settings_bindings_summary), links.onOpenController)
+        SettingsCategory.Controller -> {
+            item {
+                LinkRow(stringResource(R.string.settings_bindings), stringResource(R.string.settings_bindings_summary), links.onOpenController)
+            }
+            item { AdosListItem(headline = vm.specText("controls.tour.replay"), onClick = vm::replayControllerTour) }
+            item { AdosListItem(headline = vm.specText("tips.reset"), onClick = vm::resetTips) }
         }
         SettingsCategory.Maps -> item {
             LinkRow(stringResource(R.string.settings_offline_maps), stringResource(R.string.settings_offline_maps_summary), links.onOpenOfflineMaps)

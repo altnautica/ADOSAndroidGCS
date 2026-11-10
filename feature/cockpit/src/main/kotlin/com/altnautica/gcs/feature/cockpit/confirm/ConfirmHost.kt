@@ -68,6 +68,12 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
     val policy = state.request.policy
     val skill = state.request.skill
     val targetMode = state.request.args[SkillArgs.TARGET_MODE] as? String
+    // The emergency stop names itself the same way on every surface (`stop.hold_label`).
+    val holdLabel = if (skill.id == com.altnautica.gcs.core.skills.builtin.BuiltinIds.KILL) {
+        com.altnautica.gcs.feature.cockpit.flow.specText("stop.hold_label")
+    } else {
+        stringResource(R.string.cockpit_confirm_hold, policy.holdMs / 1000f)
+    }
     AdosConfirmSheet(
         title = confirmTitle(policy.titleKey, skillLabel(skill)),
         message = targetMode?.let { stringResource(R.string.cockpit_confirm_mode_to, it) } ?: confirmMessage(policy.messageKey),
@@ -115,10 +121,10 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
                     style = AdosTypography.numeric.medium,
                     color = AdosTheme.colors.statusError,
                 )
-                HoldRing(stringResource(R.string.cockpit_confirm_hold, policy.holdMs / 1000f), state.progress, state.gestureEnabled, true, actions::onTouchHold)
+                HoldRing(holdLabel, state.progress, state.gestureEnabled, true, actions::onTouchHold)
             }
             ConfirmGesture.Hold, ConfirmGesture.Tap -> {
-                HoldRing(stringResource(R.string.cockpit_confirm_hold, policy.holdMs / 1000f), state.progress, state.gestureEnabled, policy.danger, actions::onTouchHold)
+                HoldRing(holdLabel, state.progress, state.gestureEnabled, policy.danger, actions::onTouchHold)
             }
         }
         Text(stringResource(R.string.cockpit_confirm_input_hint), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgTertiary)

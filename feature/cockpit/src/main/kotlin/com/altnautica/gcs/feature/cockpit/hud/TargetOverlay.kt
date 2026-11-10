@@ -77,12 +77,15 @@ internal class TargetDrawer(
     private val placed = ArrayList<Rect>()
     private val layerPaint = androidx.compose.ui.graphics.Paint()
 
+    /** Canvas y (px) above which no tag draws: the top bar's bottom edge when the video runs under it. */
+    var topClearPx: Float = 0f
+
     fun DrawScope.draw(state: TargetLayerState, alpha: Float) {
         val items = state.items
         if (items.isEmpty()) return
         val (left, top, scale) = state.fit(size.width, size.height)
         val view = Rect(left, top, left + state.frameW * scale, top + state.frameH * scale)
-        val painter = TargetPainter(this, colors, measurer, style, text, motion, view, scale, state.nowMs, autonomy)
+        val painter = TargetPainter(this, colors, measurer, style, text, motion, view, scale, state.nowMs, autonomy, topClearPx)
         placed.clear()
         if (alpha < 1f) {
             layerPaint.alpha = alpha
@@ -165,6 +168,7 @@ private class TargetPainter(
     private val scale: Float,
     private val now: Long,
     private val autonomy: CockpitAutonomy,
+    private val topClear: Float,
 ) {
     private val d = scope.density
     private val stroke = AdosHudTarget.Stroke.value * d
@@ -358,7 +362,8 @@ private class TargetPainter(
     private fun clampInto(o: Offset, w: Float, h: Float) =
         Offset(o.x.coerceIn(view.left, max(view.left, view.right - w)), o.y.coerceIn(view.top, max(view.top, view.bottom - h)))
 
-    private fun DrawScope.plate(label: String, at: Offset, fill: Color, ink: Color) {
+    private fun DrawScope.plate(label: String, at0: Offset, fill: Color, ink: Color) {
+        val at = clearOfTopBar(at0, topClear)
         val m = measurer.measure(label, style.copy(color = ink))
         val w = m.size.width + 2 * pad()
         val h = m.size.height + pad()
@@ -370,3 +375,6 @@ private class TargetPainter(
         const val SWEEP_MS = 1_200L
     }
 }
+
+/** A tag's top-left moved down below [topClear] (the top bar's bottom edge, canvas px) when it would draw under it. */
+internal fun clearOfTopBar(at: Offset, topClear: Float): Offset = if (at.y < topClear) Offset(at.x, topClear) else at

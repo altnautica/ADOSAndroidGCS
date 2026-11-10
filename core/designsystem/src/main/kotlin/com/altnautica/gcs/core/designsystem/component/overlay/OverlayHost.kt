@@ -3,6 +3,7 @@ package com.altnautica.gcs.core.designsystem.component.overlay
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.CompositionLocalContext
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -69,6 +70,14 @@ class OverlayHost {
 
 /** The window's overlay host; null outside [ProvideOverlayHost] (previews, tests). */
 val LocalOverlayHost = staticCompositionLocalOf<OverlayHost?> { null }
+
+/**
+ * Height at the top of the window that overlays leave uncovered: a screen whose top bar
+ * must stay usable under any sheet (the flight screen's STOP) provides its top bar's
+ * bottom edge. Sheet, dialog and menu scrims start below it, so a press there reaches
+ * the screen first.
+ */
+val LocalOverlayTopInset = staticCompositionLocalOf { 0.dp }
 
 /**
  * Hosts in-window overlays for [content]. Wrap the app root once, inside the

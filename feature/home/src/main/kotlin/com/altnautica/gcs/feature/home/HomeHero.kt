@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BatteryStd
 import androidx.compose.material.icons.outlined.BatteryUnknown
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.NearMe
@@ -149,7 +150,7 @@ internal fun HeroInfo(card: FleetCard, fly: SurfaceCard?, modifier: Modifier = M
         node.carriedDroneId?.let {
             Text(stringResource(R.string.home_carries, it.value), style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
         }
-        if (fly != null) Readiness(fly)
+        if (fly != null) Readiness(heroReadiness(fly, card.vitals))
     }
 }
 
@@ -209,16 +210,26 @@ private fun GpsChip(fix: GpsFix?, satellites: Int?) {
 }
 
 @Composable
-private fun Readiness(fly: SurfaceCard) {
+private fun Readiness(readiness: HeroReadiness) {
     val colors = AdosTheme.colors
-    val ready = fly.enabled
-    val reason = fly.reason
-    val label = if (ready || reason == null) stringResource(R.string.home_ready) else stringResource(reason)
+    val label = when (readiness) {
+        HeroReadiness.Ready -> stringResource(R.string.home_ready)
+        HeroReadiness.Connecting -> stringResource(R.string.home_connecting)
+        is HeroReadiness.Blocked -> stringResource(readiness.reason)
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         Icon(
-            if (ready) Icons.Outlined.CheckCircle else Icons.Outlined.WarningAmber,
+            when (readiness) {
+                HeroReadiness.Ready -> Icons.Outlined.CheckCircle
+                HeroReadiness.Connecting -> Icons.Outlined.HourglassEmpty
+                is HeroReadiness.Blocked -> Icons.Outlined.WarningAmber
+            },
             contentDescription = null,
-            tint = if (ready) colors.statusSuccess else colors.statusWarning,
+            tint = when (readiness) {
+                HeroReadiness.Ready -> colors.statusSuccess
+                HeroReadiness.Connecting -> colors.fgSecondary
+                is HeroReadiness.Blocked -> colors.statusWarning
+            },
         )
         Text(label, style = MaterialTheme.typography.titleSmall, color = colors.fgPrimary)
     }

@@ -10,6 +10,9 @@ import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
+import com.altnautica.gcs.core.skills.controls.ControlsRepository
+import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
+import com.altnautica.gcs.core.skills.tips.TipsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,6 +36,9 @@ class SettingsViewModel @Inject constructor(
     private val cockpit: CockpitSettingsRepository,
     private val direct: DirectLinkSettings,
     private val demo: DemoSettings,
+    private val controls: ControlsRepository,
+    private val tips: TipsRepository,
+    private val spec: CockpitSpecRepository,
 ) : ViewModel() {
 
     val state: StateFlow<SettingsUiState> = combine(
@@ -77,6 +83,15 @@ class SettingsViewModel @Inject constructor(
     fun setDemoStaleSkill(on: Boolean) = launch { demo.setStaleSkill(on) }
 
     fun removeEndpoint(endpoint: DirectEndpoint) = launch { direct.removeEndpoint(endpoint) }
+
+    /** Clears the controller tour's seen flag: the tour shows again on the next flight screen opened on the ground. */
+    fun replayControllerTour() = launch { controls.setTourSeen(false) }
+
+    /** Forgets every seen tip, so the flight screen tips start over. */
+    fun resetTips() = launch { tips.reset() }
+
+    /** The cockpit spec's shared string for [key]. */
+    fun specText(key: String): String = spec.setupStrings.format(key)
 
     private fun launch(block: suspend () -> Unit) {
         viewModelScope.launch { block() }

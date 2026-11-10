@@ -36,7 +36,16 @@ class ModeSheetConfirmTest {
         override fun onHandToFc(mode: String) { sent += "hand:$mode" }
         override fun onTakeControl() { sent += "take" }
         override fun onFcMode(name: String) { sent += "fc:$name" }
+        override fun onVtol(toFixedWing: Boolean) { sent += if (toFixedWing) "vtol:fw" else "vtol:mc" }
         override fun onDismiss() = Unit
+    }
+
+    private fun show(ui: ModeSheetUi) = compose.setContent {
+        AdosTheme {
+            androidx.compose.runtime.CompositionLocalProvider(com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings provides testSpec.setupStrings) {
+                ModeSheet(ui, spec, actions, testSpec.layout.holdsMs)
+            }
+        }
     }
     private val ui = ModeSheetUi(
         profile = null,
@@ -72,7 +81,7 @@ class ModeSheetConfirmTest {
 
     @Test
     fun `a control-mode pick needs the full hold`() {
-        compose.setContent { AdosTheme { ModeSheet(ui, spec, actions) } }
+        show(ui)
         compose.onNodeWithTag("$TAG_CONTROL:fc_manual").performScrollTo().performClick()
         compose.waitForIdle()
         assertTrue("picking alone sends nothing", sent.isEmpty())
@@ -84,7 +93,7 @@ class ModeSheetConfirmTest {
 
     @Test
     fun `avoidance off needs the full hold, other avoidance picks go at once`() {
-        compose.setContent { AdosTheme { ModeSheet(ui, spec, actions) } }
+        show(ui)
         compose.onNodeWithTag("$TAG_AVOID:bypass").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(listOf("avoid:bypass"), sent)
@@ -93,5 +102,18 @@ class ModeSheetConfirmTest {
         assertEquals(1, sent.size)
         hold(TAG_AVOID_HOLD, spec.avoidance.confirmOff.ms + 200L)
         assertEquals(listOf("avoid:bypass", "avoid:off"), sent)
+    }
+
+    @Test
+    fun `a VTOL airframe gets the transition behind its hold`() {
+        show(ui.copy(vehicleClass = com.altnautica.gcs.core.model.PilotVehicleClass.Vtol))
+        hold("$TAG_VTOL:fw", testSpec.layout.holdsMs.getValue(HOLD_VTOL) + 200L)
+        assertEquals(listOf("vtol:fw"), sent)
+    }
+
+    @Test
+    fun `a multirotor shows no VTOL section`() {
+        show(ui.copy(vehicleClass = com.altnautica.gcs.core.model.PilotVehicleClass.Multirotor))
+        compose.onNodeWithTag("$TAG_VTOL:fw").assertDoesNotExist()
     }
 }

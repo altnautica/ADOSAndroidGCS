@@ -111,8 +111,8 @@ fun ControlsScreen(
         verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
     ) {
         Header(state, ::t, actions)
-        if (state.controller == null) {
-            Text(t("controls.press_any_button"), color = AdosTheme.colors.fgSecondary, modifier = Modifier.testTag("controls-press-any"))
+        padPromptKey(state.padPrompt)?.let { key ->
+            Text(t(key), color = AdosTheme.colors.fgSecondary, modifier = Modifier.testTag("controls-pad-prompt"))
         }
         if (state.press != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
@@ -169,7 +169,7 @@ fun ControlsScreen(
     state.editing?.let { control ->
         BindingSheet(control, state, ::t, actions, actionLabel, spec)
     }
-    state.tourStep?.let { step -> TourSheet(step, state.controller != null, ::t, actions) }
+    state.tourStep?.let { step -> TourSheet(step, padPromptKey(state.padPrompt), ::t, actions) }
 }
 
 @Composable
@@ -293,15 +293,22 @@ private fun BindingSheet(
 }
 
 @Composable
-private fun TourSheet(step: Int, padReporting: Boolean, t: (String) -> String, actions: ControlsActions) {
+private fun TourSheet(step: Int, prompt: String?, t: (String) -> String, actions: ControlsActions) {
     val key = TOUR_KEYS[step.coerceIn(0, TOUR_KEYS.lastIndex)]
     AdosSheet(onDismiss = actions::finishTour, title = t("controls.tour.$key.title")) {
         Column(Modifier.testTag("controls-tour"), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
             Text(t("controls.tour.$key.body"))
-            if (!padReporting) Text(t("controls.press_any_button"), color = AdosTheme.colors.fgSecondary)
+            if (prompt != null) Text(t(prompt), color = AdosTheme.colors.fgSecondary)
             AdosButton(stringResource(if (step >= TOUR_KEYS.lastIndex) R.string.controls_tour_done else R.string.controls_tour_next), onClick = actions::nextTourStep, modifier = Modifier.fillMaxWidth())
         }
     }
 }
 
 private val TOUR_KEYS = listOf("sticks", "safety", "skills")
+
+/** The spec string key for [prompt], or null when no prompt shows. */
+private fun padPromptKey(prompt: PadPrompt): String? = when (prompt) {
+    PadPrompt.None -> null
+    PadPrompt.PressAnyButton -> "controls.press_any_button"
+    PadPrompt.NoPad -> "controls.pad.none"
+}

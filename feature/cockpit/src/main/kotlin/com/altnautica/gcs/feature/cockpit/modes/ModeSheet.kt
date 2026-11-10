@@ -40,6 +40,8 @@ import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotVehicleClass
+import com.altnautica.gcs.feature.cockpit.flow.specText
+import androidx.compose.foundation.layout.Row
 import com.altnautica.gcs.core.skills.spec.ModeSheetSpec
 import com.altnautica.gcs.core.skills.spec.SpecConfirmKind
 import com.altnautica.gcs.feature.cockpit.R
@@ -67,6 +69,9 @@ interface ModeSheetActions {
     fun onHandToFc(mode: String)
     fun onTakeControl()
     fun onFcMode(name: String)
+
+    /** A VTOL transition: to forward flight, or back to hover. */
+    fun onVtol(toFixedWing: Boolean)
     fun onDismiss()
 }
 
@@ -81,35 +86,42 @@ fun handToFcModes(spec: ModeSheetSpec, vehicleClass: PilotVehicleClass?): List<S
 /**
  * The Mode sheet opened from the flight-state chip: profiles, control mode (hold to switch,
  * with a line on what each mode means), avoidance (Off needs a hold), Hand to FC or Take
- * control, and every FC mode under Advanced. Place it in a full-size box.
+ * control, the VTOL transition on a VTOL airframe, and every FC mode under Advanced.
+ * Place it in a full-size box.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ModeSheet(ui: ModeSheetUi, spec: ModeSheetSpec, actions: ModeSheetActions) {
+fun ModeSheet(ui: ModeSheetUi, spec: ModeSheetSpec, actions: ModeSheetActions, holdsMs: Map<String, Int> = emptyMap()) {
     val colors = AdosTheme.colors
-    AdosSheet(actions::onDismiss, title = stringResource(R.string.mode_sheet_title)) {
+    AdosSheet(actions::onDismiss, title = specText("flow.mode.title")) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S4),
         ) {
             if (!ui.pilotLinked) {
-                Text(stringResource(R.string.mode_sheet_no_pilot), style = MaterialTheme.typography.bodyMedium, color = colors.statusWarning)
+                Text(specText("flow.mode.no_pilot"), style = MaterialTheme.typography.bodyMedium, color = colors.statusWarning)
             }
             for (section in spec.sections) {
                 when (section) {
-                    "profile" -> Section(stringResource(R.string.mode_sheet_profile)) {
+                    "profile" -> Section(specText("flow.mode.section.profile")) {
                         Segments(spec.profile.values, spec.profile.labels, ui.profile?.wire, ui.pilotLinked, TAG_PROFILE) { v ->
                             PilotProfile.of(v)?.let(actions::onProfile)
                         }
                     }
-                    "control_mode" -> Section(stringResource(R.string.mode_sheet_control_mode)) {
+                    "control_mode" -> Section(specText("flow.mode.section.control_mode")) {
                         ControlModeSection(ui, spec, actions)
                     }
-                    "avoidance" -> Section(stringResource(R.string.mode_sheet_avoidance)) {
+                    "avoidance" -> Section(specText("flow.mode.section.avoidance")) {
                         AvoidanceSection(ui, spec, actions)
+                        if (ui.vehicleClass == PilotVehicleClass.FixedWing) {
+                            Text(specText("pilot.avoid.fixedwing_note"), style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
+                        }
                     }
-                    "hand_to_fc" -> HandoverSection(ui, spec, actions)
-                    "fc_modes" -> if (spec.fcModes.advanced) FcModesSection(ui, actions)
+                    "hand_to_fc" -> {
+                        HandoverSection(ui, spec, actions, holdsMs)
+                        // The spec's VTOL transition has no section id of its own: it follows who flies, on a VTOL airframe only.
+                        if (vtolShown(ui, spec)) VtolSection(holdsMs[HOLD_VTOL] ?: DEFAULT_HOLD_MS, actions)
+                    }
                 }
             }
         }
@@ -169,28 +181,29 @@ private fun AvoidanceSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: Mode
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HandoverSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: ModeSheetActions) {
+private fun HandoverSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: ModeSheetActions, holdsMs: Map<String, Int>) {
     if (!ui.pilotLinked) return
     val fcFlies = ui.owner == PilotOwner.FcMode || ui.owner == PilotOwner.MissionFc
     if (fcFlies) {
-        Section(stringResource(R.string.mode_sheet_take_control_title)) {
-            AdosButton(
-                stringResource(R.string.flight_chip_take_control),
-                onClick = actions::onTakeControl,
+        Section(specText("flow.mode.section.who_flies")) {
+            HoldToConfirmButton(
+                specText("flow.mode.take_control"),
+                holdsMs[HOLD_TAKE_CONTROL] ?: DEFAULT_HOLD_MS,
+                actions::onTakeControl,
                 modifier = Modifier.fillMaxWidth().testTag(TAG_TAKE_CONTROL),
             )
         }
         return
     }
-    Section(stringResource(R.string.mode_sheet_hand_to_fc)) {
+    Section(specText("flow.mode.section.who_flies")) {
         val values = handToFcModes(spec, ui.vehicleClass)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             values.forEach { v ->
                 val label = spec.handToFc.labels.getOrNull(spec.handToFc.values.indexOf(v)) ?: v
-                AdosButton(
-                    label,
-                    onClick = { actions.onHandToFc(v) },
-                    variant = if (v == spec.handToFc.default) AdosButtonVariant.Primary else AdosButtonVariant.Secondary,
+                HoldToConfirmButton(
+                    specText("flow.mode.hand_to_fc_button", "mode" to label),
+                    holdsMs[HOLD_HAND_TO_FC] ?: DEFAULT_HOLD_MS,
+                    { actions.onHandToFc(v) },
                     modifier = Modifier.testTag("$TAG_HAND_TO_FC:$v"),
                 )
             }
@@ -198,12 +211,33 @@ private fun HandoverSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: ModeS
     }
 }
 
+/** Whether the VTOL transition shows: a VTOL airframe with the pilot reporting (`vtol_transition.shown_when`). */
+fun vtolShown(ui: ModeSheetUi, spec: ModeSheetSpec): Boolean =
+    spec.vtolTransition != null && ui.pilotLinked && ui.vehicleClass == PilotVehicleClass.Vtol
+
+/** To forward flight or to hover, each behind the spec's VTOL hold. */
+@Composable
+private fun VtolSection(holdMs: Int, actions: ModeSheetActions) {
+    Section(specText("flow.mode.section.vtol")) {
+        Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+            HoldToConfirmButton(specText("flow.mode.vtol.to_fw"), holdMs, { actions.onVtol(true) }, modifier = Modifier.weight(1f).testTag("$TAG_VTOL:fw"))
+            HoldToConfirmButton(specText("flow.mode.vtol.to_mc"), holdMs, { actions.onVtol(false) }, modifier = Modifier.weight(1f).testTag("$TAG_VTOL:mc"))
+        }
+    }
+}
+
+/** `layout.json` `holds_ms` key of the VTOL transition, and the hold every confirm defaults to. */
+const val HOLD_VTOL = "vtol_transition"
+const val HOLD_TAKE_CONTROL = "take_control"
+const val HOLD_HAND_TO_FC = "hand_to_fc"
+const val DEFAULT_HOLD_MS = 1_500
+
 @Composable
 private fun FcModesSection(ui: ModeSheetUi, actions: ModeSheetActions) {
     var open by rememberSaveable { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         AdosButton(
-            stringResource(if (open) R.string.mode_sheet_fc_modes_hide else R.string.mode_sheet_fc_modes_show),
+            if (open) stringResource(R.string.mode_sheet_fc_modes_hide) else specText("flow.mode.fc.show_all"),
             onClick = { open = !open },
             variant = AdosButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth().testTag(TAG_FC_MODES),
@@ -259,3 +293,4 @@ const val TAG_AVOID_HOLD = "mode_sheet_avoid_hold"
 const val TAG_TAKE_CONTROL = "mode_sheet_take_control"
 const val TAG_HAND_TO_FC = "mode_sheet_hand_to_fc"
 const val TAG_FC_MODES = "mode_sheet_fc_modes"
+const val TAG_VTOL = "mode_sheet_vtol"

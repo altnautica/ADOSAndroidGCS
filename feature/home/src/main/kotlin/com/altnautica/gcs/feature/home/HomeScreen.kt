@@ -47,13 +47,20 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.coroutines.flow.Flow
 
-/** Console Home: the app root. Picks a vehicle and launches the surfaces that act on it. */
+/**
+ * Console Home: the app root. Picks a vehicle and launches the surfaces that act on it.
+ * With [setupOfferNodeId] set, an inline banner offers aircraft setup for that node:
+ * Open calls [onOpenSetupOffer], Later calls [onSetupOfferLater].
+ */
 @Composable
 fun HomeRoute(
     onOpenSurface: (surface: HomeSurface, nodeId: DeviceId?) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenController: () -> Unit,
     onOpenQuickMenu: () -> Unit,
+    setupOfferNodeId: DeviceId? = null,
+    onOpenSetupOffer: () -> Unit = {},
+    onSetupOfferLater: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -68,6 +75,9 @@ fun HomeRoute(
         onAddVehicle = onAddVehicle,
         onOpenController = onOpenController,
         onOpenQuickMenu = onOpenQuickMenu,
+        setupOfferNodeId = setupOfferNodeId,
+        onOpenSetupOffer = onOpenSetupOffer,
+        onSetupOfferLater = onSetupOfferLater,
     )
 }
 
@@ -84,6 +94,9 @@ internal fun HomeScreen(
     onOpenController: () -> Unit,
     onOpenQuickMenu: () -> Unit,
     modifier: Modifier = Modifier,
+    setupOfferNodeId: DeviceId? = null,
+    onOpenSetupOffer: () -> Unit = {},
+    onSetupOfferLater: () -> Unit = {},
 ) {
     val selected = state.selected
     val selectedId = selected?.node?.id
@@ -129,12 +142,14 @@ internal fun HomeScreen(
     val vehicleRow: @Composable () -> Unit = {
         VehicleRow(state.vehicles, selectedId, onSelect, onAddVehicle)
     }
+    val setupOffer: @Composable () -> Unit = { HomeSetupOffer(setupOfferNodeId, onOpenSetupOffer, onSetupOfferLater) }
 
     if (isLandscape()) {
         Box(modifier.fillMaxSize()) {
             HeroBackground(selected, thumbnails)
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 topStrip()
+                setupOffer()
                 // With no vehicles the hero carries both add actions; the row would only repeat one.
                 if (state.vehicles.isNotEmpty()) vehicleRow()
                 hero(Modifier.weight(1f))
@@ -145,6 +160,7 @@ internal fun HomeScreen(
     } else {
         Column(modifier.fillMaxSize().background(AdosTheme.colors.bgCanvas).windowInsetsPadding(WindowInsets.safeDrawing)) {
             topStrip()
+            setupOffer()
             vehicleRow()
             Box(Modifier.fillMaxWidth().weight(0.4f)) {
                 HeroBackground(selected, thumbnails)

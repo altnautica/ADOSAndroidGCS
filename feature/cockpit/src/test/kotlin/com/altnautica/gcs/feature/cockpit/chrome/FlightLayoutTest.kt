@@ -116,7 +116,8 @@ class FlightLayoutTest {
         val cases = listOf(
             1100.dp to emptySet(),
             800.dp to setOf(TopBarItem.Controller, TopBarItem.NavSource),
-            560.dp to setOf(TopBarItem.Controller, TopBarItem.NavSource, TopBarItem.LinkDetail),
+            // The spec moves every item, link icon and layer button included, before the pill truncates.
+            560.dp to TopBarItem.entries.toSet(),
         )
         val overflow = TopBarOverflow()
         var barWidth by mutableStateOf(cases.first().first)
@@ -124,6 +125,7 @@ class FlightLayoutTest {
             Box(Modifier.size(barWidth, 44.dp)) {
                 TopBar(
                     overflow = overflow,
+                    overflowOrder = SPEC_ORDER,
                     chip = { Item("chip", 150.dp) },
                     pill = { Item("pill", 150.dp) },
                     battery = { Item("battery", 120.dp) },
@@ -159,6 +161,7 @@ class FlightLayoutTest {
             Box(Modifier.size(barWidth, 44.dp)) {
                 TopBar(
                     overflow = overflow,
+                    overflowOrder = SPEC_ORDER,
                     chip = { Item("chip", 150.dp) },
                     pill = { Item("pill", 260.dp) },
                     battery = { Item("battery", 114.dp) },
@@ -212,3 +215,7 @@ private fun Item(tag: String, w: Dp) {
 }
 
 private fun DpRect.overlaps(o: DpRect): Boolean = left < o.right && o.left < right && top < o.bottom && o.top < bottom
+
+/** The spec's top-bar overflow order (`top_bar.overflow.to_menu_order`). */
+internal val SPEC_ORDER: List<TopBarItem> =
+    TopBarItem.order(com.altnautica.gcs.feature.cockpit.testSpec.layout.zones.first { it.id == "top_bar" }.overflow?.toMenuOrder.orEmpty())

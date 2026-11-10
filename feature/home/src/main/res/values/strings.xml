@@ -17,6 +17,10 @@
     <string name="home_saved_nodes_unreadable">The keys of your paired nodes could not be read from this phone\'s credential store just now, so some nodes may be missing. Nothing was deleted.</string>
     <string name="home_retry">Try again</string>
     <string name="home_ready">Ready to fly</string>
+    <string name="home_connecting">Connecting…</string>
+    <string name="home_setup_offer_title">Set up this aircraft</string>
+    <string name="home_setup_offer_open">Open</string>
+    <string name="home_setup_offer_later">Later</string>
     <string name="home_vehicle_tile">%1$s, %2$s</string>
     <string name="home_vehicle_tile_selected">%1$s, %2$s, selected</string>
     <string name="home_controller_battery">Controller battery %1$d%%</string>

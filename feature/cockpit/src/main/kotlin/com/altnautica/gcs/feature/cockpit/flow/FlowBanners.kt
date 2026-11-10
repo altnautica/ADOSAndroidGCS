@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.SwapHoriz
+import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -40,6 +41,9 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.InputSession
 import com.altnautica.gcs.core.model.PilotBanner
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.LaunchSequence
+import com.altnautica.gcs.core.model.LaunchStep
+import com.altnautica.gcs.feature.cockpit.launch.StepStrip
 
 /** Hold that takes the stick session over from another surface. */
 const val TAKE_OVER_HOLD_MS = 1_500
@@ -56,6 +60,8 @@ data class FlowUi(
     val sticksWith: InputSession? = null,
     val linkLossInS: Float? = null,
     val rthCountdownS: Float? = null,
+    /** A launch sequence running (or refused): its steps and Abort stay on screen until it is done. */
+    val launch: LaunchSequence? = null,
 ) {
     companion object {
         /**
@@ -71,6 +77,7 @@ data class FlowUi(
                 sticksWith = session?.takeIf { it.src != ownSrc },
                 linkLossInS = pilot.linkLossInS,
                 rthCountdownS = pilot.rthCountdownS,
+                launch = pilot.sequence?.takeIf { it.step != LaunchStep.Done },
             )
         }
     }
@@ -157,7 +164,7 @@ fun LinkLossBanner(inS: Float, action: String, modifier: Modifier = Modifier) {
     Box(modifier) {
         BannerShell(Icons.Outlined.LinkOff, AdosTheme.colors.statusError, "flow-link-loss") {
             Text(
-                specText("flow.link_loss.countdown", "action" to action, "in_s" to inS.toInt().coerceAtLeast(0).toString()),
+                specText("flow.link_loss.countdown", "action" to action, "in_s" to countdownSeconds(inS).toString()),
                 color = AdosTheme.colors.fgPrimary,
                 style = MaterialTheme.typography.titleSmall,
             )
@@ -172,13 +179,33 @@ fun LowBatteryBanner(inS: Float, onCancel: () -> Unit, modifier: Modifier = Modi
         BannerShell(Icons.Outlined.BatteryAlert, AdosTheme.colors.statusError, "flow-low-battery") {
             Column(Modifier.weight(1f)) {
                 Text(
-                    specText("flow.low_battery.title", "in_s" to inS.toInt().coerceAtLeast(0).toString()),
+                    specText("flow.low_battery.title", "in_s" to countdownSeconds(inS).toString()),
                     color = AdosTheme.colors.fgPrimary,
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(specText("flow.low_battery.cancel_warning"), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
             }
             AdosButton(specText("flow.low_battery.cancel"), onClick = onCancel, modifier = Modifier.testTag("flow-low-battery-cancel"))
+        }
+    }
+}
+
+/** Whole seconds a countdown shows: rounded up, so it reads 0 only when the action fires (as on every surface). */
+fun countdownSeconds(inS: Float): Int = kotlin.math.ceil(inS.toDouble()).toInt().coerceAtLeast(0)
+
+/**
+ * The launch sequence while it runs: its steps, the current one marked, and Abort, which
+ * pauses the pilot (a hold in the air, a disarm on the ground). Shown in the top-centre
+ * stack, so the steps and Abort stay after the Launch sheet and its gate close.
+ */
+@Composable
+fun LaunchProgressBanner(sequence: LaunchSequence, onAbort: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        BannerShell(Icons.Outlined.FlightTakeoff, AdosTheme.colors.accentPrimary, "flow-launch") {
+            StepStrip(sequence, Modifier.weight(1f))
+            if (sequence.error == null) {
+                AdosButton(specText("flow.launch.abort"), onClick = onAbort, modifier = Modifier.testTag("flow-launch-abort"))
+            }
         }
     }
 }

@@ -36,7 +36,7 @@
     <string name="cockpit_video_none">NO VIDEO</string>
     <string name="cockpit_video_connecting_long">Connecting to video…</string>
     <string name="cockpit_video_frozen_long">Picture frozen</string>
-    <string name="cockpit_video_failed">Video failed: %1$s</string>
+    <string name="cockpit_video_failed">Video failed. Retrying…</string>
     <string name="cockpit_video_none_long">No video</string>
     <string name="cockpit_stick_blocked">STICKS N/A</string>
     <!-- Stick chip: on/off with the controller battery, and the mode that blocks stick control -->
