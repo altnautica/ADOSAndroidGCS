@@ -41,7 +41,7 @@ class FlyHereFcRouteTest {
 
     private fun ctx(mode: String) = SkillContext(
         vehicle, armed = true, mode = com.altnautica.gcs.core.model.FlightMode(0, mode), linkFresh = true,
-        checklistReady = true, autonomousNav = true,
+        checklistReady = true, autonomousNav = true, fcLanded = false,
     )
 
     @Test

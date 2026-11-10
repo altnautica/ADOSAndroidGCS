@@ -63,14 +63,19 @@ object SkillReason {
     const val FLY_HERE_TARGET = "flyHereTarget"
     const val EKF_SOURCE_SET = "ekfSourceSet"
     const val PILOT_UNAVAILABLE = "pilotUnavailable"
-    const val NO_PAUSED_MISSION = "noPausedMission"
-    const val NOT_LANDED = "notLanded"
+
+    /** Spec refusal codes: they read through the spec's `refusal.*` texts. */
+    const val NO_PAUSED_MISSION = "nothing_paused"
+    const val NOT_LANDED = "not_landed"
 
     /** The FC flies a failsafe return or landing; pause would cancel it. Same code as the pilot's refusal. */
     const val FAILSAFE = "failsafe"
 
     /** Fly Here by the FC route needs the FC in GUIDED; same code as the pilot's refusal. */
     const val FLY_HERE_NOT_GUIDED = "control_mode"
+
+    /** Fly Here on the ground, or with landing unknown; same code as the pilot's refusal. */
+    const val FLY_HERE_LANDED = "landed"
     const val NO_RESPONSE = "noResponse"
     const val PLUGIN_STOPPED = "pluginStopped"
     const val STOP_QUEUED = "stopQueued"

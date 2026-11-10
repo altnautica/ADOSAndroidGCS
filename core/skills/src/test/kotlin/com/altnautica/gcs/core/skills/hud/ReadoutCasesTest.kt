@@ -18,7 +18,7 @@ class ReadoutCasesTest {
 
     @Test
     fun `every readout case formats as the shared module`() {
-        assertEquals(17, cases.size)
+        assertEquals(19, cases.size)
         for (c in cases) {
             val name = c["name"].str()!!
             val input = c["input"]!!.jsonObject
