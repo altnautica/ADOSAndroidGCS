@@ -21,7 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -32,7 +31,6 @@ import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
 import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
 import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 @Composable
@@ -47,10 +45,10 @@ internal fun levelLabel(level: LayerLevel): String = specText(
 
 @Composable
 internal fun layerLabel(id: String): String = when (id) {
-    LayerSpec.TARGETS -> stringResource(R.string.layer_targets)
-    LayerSpec.AR_ROUTE -> stringResource(R.string.layer_ar_route)
-    LayerSpec.AR_MOTION -> stringResource(R.string.layer_ar_motion)
-    LayerSpec.OBSTACLES -> stringResource(R.string.layer_obstacles)
+    LayerSpec.TARGETS -> specText("layer.name.targets")
+    LayerSpec.AR_ROUTE -> specText("layer.name.ar_route")
+    LayerSpec.AR_MOTION -> specText("layer.name.ar_motion")
+    LayerSpec.OBSTACLES -> specText("layer.name.obstacles")
     LayerSpec.DEPTH -> specText("vision.depth")
     LayerSpec.SURFACES -> specText("vision.surfaces")
     else -> id

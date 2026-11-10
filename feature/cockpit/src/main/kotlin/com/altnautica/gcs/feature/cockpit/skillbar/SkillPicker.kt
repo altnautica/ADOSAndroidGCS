@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -47,9 +46,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillCategory
 import com.altnautica.gcs.core.model.SkillState
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.SlotUi
-import com.altnautica.gcs.core.skills.R as SkillsR
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** The picker's actions on a skill id. */
@@ -87,7 +84,7 @@ fun SkillPickerChip(chip: PickerChip, onOpen: () -> Unit, modifier: Modifier = M
         is PickerChip.ActiveStale -> colors.hudWarn
         else -> colors.hudHair
     }
-    val openLabel = stringResource(R.string.picker_open)
+    val openLabel = specText("skill.picker.open")
     Surface(
         modifier = modifier
             .testTag(PICKER_CHIP_TAG)
@@ -263,7 +260,7 @@ private fun GoStop(skill: Skill, state: SkillState?, actions: SkillPickerActions
 @Composable
 private fun stateText(state: SkillState?): String? = when {
     state == null -> null
-    state.stopQueued -> stringResource(SkillsR.string.skill_notice_stop_queued)
+    state.stopQueued -> specText("skill.stop_queued")
     state.stale -> specText("skill.active_stale")
     state.lastSeenS != null -> specText("skill.last_seen", "n" to state.lastSeenS.toString())
     state.active -> specText("skill.active")

@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -28,7 +27,6 @@ import androidx.compose.ui.unit.sp
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
@@ -65,10 +63,10 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
         Column(Modifier.padding(horizontal = AdosSpacing.S3, vertical = AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (width == WidthClass.Compact) {
                 Text(
-                    stringResource(
-                        R.string.hud_range_compact,
-                        range?.let(HudGeometry::formatNumber) ?: DASH,
-                        sigma?.let { HudGeometry.oneDecimal(2 * it) } ?: DASH,
+                    specText(
+                        "follow.range_compact",
+                        "m" to (range?.let(HudGeometry::formatNumber) ?: DASH),
+                        "sigma" to (sigma?.let { HudGeometry.oneDecimal(2 * it) } ?: DASH),
                     ),
                     style = small,
                 )

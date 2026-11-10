@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.hud
 
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import android.os.SystemClock
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,11 +15,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.model.VehicleTelemetry
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import kotlinx.coroutines.delay
@@ -74,7 +73,7 @@ fun HudCanvas(
     val small = AdosTypography.numeric.small
     val medium = AdosTypography.numeric.medium
     val painter = remember(measurer, colors, small, medium) { HudPainter(measurer, colors, small, medium) }
-    val summary = stringResource(R.string.cockpit_hud_description)
+    val summary = specText("cockpit.hud.aria")
     Spacer(
         modifier
             .fillMaxSize()

@@ -1,94 +1,108 @@
 package com.altnautica.gcs.feature.cockpit.autonomy
 
-import android.content.res.Resources
-import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
 
-/** Formats HUD v2 tags and nav-chip words from the cockpit's string resources. */
-internal class TargetText(private val res: Resources) {
-    private fun s(id: Int, vararg args: Any): String = res.getString(id, *args)
+/**
+ * Formats HUD v2 tags and nav-chip words from the cockpit spec's strings. The spec is
+ * sentence case; the HUD draws its tags and nav words in capitals.
+ */
+internal class TargetText(private val strings: SetupStringsSpec) {
+    private fun s(key: String, vararg args: Pair<String, Any>): String =
+        strings.format(key, args.associate { (k, v) -> k to v.toString() })
 
-    private fun q(text: String, uncertain: Boolean) = if (uncertain) s(R.string.hud_target_uncertain, text) else text
-
-    fun tag(tag: TargetTag): String = when (tag) {
-        is TargetTag.Candidate -> s(R.string.hud_target_candidate, tag.cls, tag.pct)
-        is TargetTag.Tracked -> q(s(R.string.hud_target_tracked, tag.cls, tag.id), tag.uncertain)
-        is TargetTag.Lock -> q(s(R.string.hud_target_lock, tag.id, tag.pct), tag.uncertain)
-        is TargetTag.Acquiring -> q(s(R.string.hud_target_acquiring, tag.id), tag.uncertain)
-        is TargetTag.Track -> q(s(R.string.hud_target_track, tag.pct), tag.uncertain)
-        is TargetTag.Hold -> tag.reason?.let { s(R.string.hud_target_hold, it) } ?: s(R.string.hud_target_hold_bare)
-        is TargetTag.Coast -> s(R.string.hud_target_coast, HudGeometry.oneDecimal(tag.seconds))
-        TargetTag.Searching -> s(R.string.hud_target_searching)
-        is TargetTag.SearchingBearing -> s(R.string.hud_target_searching_bearing, HudGeometry.bearing3(tag.deg.toFloat()))
-        TargetTag.Lost -> s(R.string.hud_target_lost)
-        TargetTag.FollowStale -> s(R.string.hud_target_follow_stale)
-        is TargetTag.Range -> s(R.string.hud_target_range, HudGeometry.formatNumber(tag.m))
-        is TargetTag.Sigma -> s(R.string.hud_target_sigma, HudGeometry.oneDecimal(tag.twoSigmaM))
-        is TargetTag.Estimate -> s(R.string.hud_target_est, HudGeometry.formatNumber(tag.m))
+    /** The spec text drawn in capitals; placeholders and unit words (s, m, Hz) keep their case. */
+    private fun up(key: String, vararg args: Pair<String, Any>): String {
+        val template = strings.strings[key] ?: return key
+        var text = WORD.replace(template) { m -> if (m.value in UNITS || m.value.startsWith('{')) m.value else m.value.uppercase() }
+        for ((name, value) in args) text = text.replace("{$name}", value.toString())
+        return text
     }
 
-    /** TalkBack text, e.g. "Person 12, tracking, 10.2 metres". */
+    private fun q(text: String, uncertain: Boolean) = if (uncertain) up("hud.target.uncertain", "v" to text) else text
+
+    fun tag(tag: TargetTag): String = when (tag) {
+        is TargetTag.Candidate -> up("hud.target.candidate", "label" to tag.cls, "pct" to tag.pct)
+        is TargetTag.Tracked -> q(up("hud.target.tracked", "label" to tag.cls, "id" to tag.id), tag.uncertain)
+        is TargetTag.Lock -> q(up("hud.target.lock", "id" to tag.id, "pct" to tag.pct), tag.uncertain)
+        is TargetTag.Acquiring -> q(up("hud.target.acquiring", "id" to tag.id), tag.uncertain)
+        is TargetTag.Track -> q(up("hud.target.track", "pct" to tag.pct), tag.uncertain)
+        is TargetTag.Hold -> tag.reason?.let { up("hud.target.hold", "label" to it) } ?: up("follow.phase.holding")
+        is TargetTag.Coast -> up("hud.target.coast", "s" to HudGeometry.oneDecimal(tag.seconds))
+        TargetTag.Searching -> up("follow.phase.searching")
+        is TargetTag.SearchingBearing -> up("hud.target.searching_bearing", "deg" to HudGeometry.bearing3(tag.deg.toFloat()))
+        TargetTag.Lost -> up("follow.phase.lost")
+        TargetTag.FollowStale -> up("hud.target.follow_stale")
+        is TargetTag.Range -> s("hud.target.range", "m" to HudGeometry.formatNumber(tag.m))
+        is TargetTag.Sigma -> s("hud.target.sigma", "m" to HudGeometry.oneDecimal(tag.twoSigmaM))
+        is TargetTag.Estimate -> up("hud.target.est", "m" to HudGeometry.formatNumber(tag.m))
+    }
+
+    /** TalkBack text, e.g. "Person tracking, 12, 10.2 metres". */
     fun spoken(item: DrawItem, classLabel: String?, rangeM: Float?): String {
         val state = s(
             when (item.kind) {
-                TargetKind.Candidate -> R.string.hud_a11y_candidate
-                TargetKind.Tracked -> R.string.hud_a11y_tracked
-                TargetKind.Locked -> R.string.hud_a11y_locked
-                TargetKind.Acquiring -> R.string.hud_a11y_acquiring
-                TargetKind.Following -> R.string.hud_a11y_following
-                TargetKind.Holding -> R.string.hud_a11y_holding
-                TargetKind.Coasting -> R.string.hud_a11y_coasting
-                TargetKind.Searching, TargetKind.SearchingOffFrame -> R.string.hud_a11y_searching
-                TargetKind.Lost -> R.string.hud_a11y_lost
+                TargetKind.Candidate -> "target.candidate"
+                TargetKind.Tracked -> "hud.target.state.tracked"
+                TargetKind.Locked -> "hud.target.state.locked"
+                TargetKind.Acquiring -> "follow.phase.acquiring"
+                TargetKind.Following -> "hud.target.state.tracking"
+                TargetKind.Holding -> "hud.target.state.holding"
+                TargetKind.Coasting -> "follow.phase.coasting"
+                TargetKind.Searching, TargetKind.SearchingOffFrame -> "follow.phase.searching"
+                TargetKind.Lost -> "follow.phase.lost"
             },
-        )
+        ).lowercase()
         val who = classLabel.orEmpty().replaceFirstChar { it.uppercase() }
-        val base = s(R.string.hud_a11y_target, who, item.trackId?.toString().orEmpty(), state).trim()
-        return rangeM?.let { s(R.string.hud_a11y_target_range, base, HudGeometry.formatNumber(it)) } ?: base
+        val base = s("hud.target.aria", "label" to who, "state" to state, "track" to item.trackId?.toString().orEmpty())
+            .trim().removeSuffix(",").trim()
+        return rangeM?.let { s("hud.target.aria_range", "target" to base, "m" to HudGeometry.formatNumber(it)) } ?: base
     }
 
     fun navLabel(chip: NavChip): String = when (chip.label) {
-        NavLabel.DeadReckoning -> s(R.string.hud_nav_dr)
-        NavLabel.ExtNav -> s(R.string.hud_nav_ext)
-        NavLabel.Flow -> s(R.string.hud_nav_flow)
-        NavLabel.Stale -> s(R.string.hud_nav_stale)
-        NavLabel.Gps -> s(R.string.hud_nav_gps, fixWord(chip.gpsFixType), chip.sats?.toString() ?: "—")
+        NavLabel.DeadReckoning -> up("nav_source.dr")
+        NavLabel.ExtNav -> up("nav_source.ext_nav")
+        NavLabel.Flow -> up("nav_source.flow")
+        NavLabel.Stale -> up("nav_source.stale")
+        NavLabel.Gps -> up("nav_source.chip_gps", "fix" to fixWord(chip.gpsFixType), "sats" to (chip.sats?.toString() ?: "—"))
     }
 
-    fun fixWord(fix: Int?): String = s(
+    fun fixWord(fix: Int?): String = up(
         when (fix) {
-            3 -> R.string.hud_nav_fix_3d
-            4 -> R.string.hud_nav_fix_dgps
-            5 -> R.string.hud_nav_fix_rtk_float
-            6 -> R.string.hud_nav_fix_rtk_fixed
-            else -> R.string.hud_nav_fix_none
+            3 -> "nav_source.fix.3d"
+            4 -> "nav_source.fix.dgps"
+            5 -> "nav_source.fix.rtk_float"
+            6 -> "nav_source.fix.rtk_fixed"
+            else -> "nav_source.q.no_fix"
         },
     )
 
-    fun quality(q: NavQuality): String = s(
+    fun quality(q: NavQuality): String = up(
         when (q) {
-            NavQuality.Good -> R.string.hud_nav_q_good
-            NavQuality.Fair -> R.string.hud_nav_q_fair
-            NavQuality.Poor -> R.string.hud_nav_q_poor
-            NavQuality.Degraded -> R.string.hud_nav_q_degraded
-            NavQuality.Lost -> R.string.hud_nav_q_lost
-            NavQuality.NoFix -> R.string.hud_nav_q_no_fix
-            NavQuality.Glitch -> R.string.hud_nav_q_glitch
-            NavQuality.HoldOk -> R.string.hud_nav_q_hold_ok
-            NavQuality.NoFlow -> R.string.hud_nav_q_no_flow
-            NavQuality.Drift -> R.string.hud_nav_q_drift
+            NavQuality.Good -> "nav_source.q.good"
+            NavQuality.Fair -> "nav_source.q.fair"
+            NavQuality.Poor -> "nav_source.q.poor"
+            NavQuality.Degraded -> "nav_source.q.degraded"
+            NavQuality.Lost -> "nav_source.q.lost"
+            NavQuality.NoFix -> "nav_source.q.no_fix"
+            NavQuality.Glitch -> "nav_source.q.glitch"
+            NavQuality.HoldOk -> "nav_source.q.hold_ok"
+            NavQuality.NoFlow -> "nav_source.q.no_flow"
+            NavQuality.Drift -> "nav_source.q.drift"
         },
     )
 
-    fun source(w: SourceWord): String = s(
-        when (w) {
-            SourceWord.None -> R.string.hud_nav_src_none
-            SourceWord.Gps -> R.string.hud_nav_src_gps
-            SourceWord.Beacon -> R.string.hud_nav_src_beacon
-            SourceWord.OpticalFlow -> R.string.hud_nav_src_flow
-            SourceWord.ExternalNav -> R.string.hud_nav_src_extnav
-            SourceWord.WheelEncoder -> R.string.hud_nav_src_wheel
-            SourceWord.Other -> R.string.hud_nav_src_other
-            SourceWord.Unknown -> R.string.hud_nav_src_unknown
-        },
-    )
+    fun source(w: SourceWord): String = when (w) {
+        SourceWord.None -> s("controls.action.none")
+        SourceWord.Gps -> s("nav_source.gps")
+        SourceWord.Beacon -> s("nav_source.src.beacon")
+        SourceWord.OpticalFlow -> s("nav_source.src.flow")
+        SourceWord.ExternalNav -> s("nav_source.src.extnav")
+        SourceWord.WheelEncoder -> s("nav_source.src.wheel")
+        SourceWord.Other -> s("nav_source.src.other")
+        SourceWord.Unknown -> "—"
+    }
 }
+
+private val WORD = Regex("""\{[^}]*\}|[^{\s]+""")
+
+private val UNITS = setOf("s", "m", "Hz", "fps", "%")

@@ -1,17 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Flight-state chip -->
-    <string name="flight_chip_open_mode_sheet">Open the mode sheet</string>
-    <string name="flight_chip_resume">Resume</string>
-    <string name="flight_chip_set_up_aircraft">Set up aircraft</string>
-    <string name="flight_chip_take_control">Take control</string>
 
     <!-- Mode sheet (titles, sections and the no-pilot note come from the cockpit spec) -->
     <string name="mode_sheet_fc_modes_hide">Hide flight controller modes</string>
     <string name="mode_sheet_fc_modes_note">Selecting a flight controller mode hands control to the flight controller.</string>
 
     <!-- Skill picker -->
-    <string name="picker_open">Open skills</string>
 
     <!-- Pre-flight gate -->
     <string name="preflight_gate_continue">Continue</string>
@@ -29,7 +24,6 @@
     <string name="grid_card_radar">Show obstacle radar</string>
     <string name="on_screen_stick_left">Left stick: climb, descend and turn</string>
     <string name="on_screen_stick_right">Right stick: forward, back and sideways</string>
-    <string name="launch_pick_point_hint">To go to a map point, close this sheet and long-press the map.</string>
 
     <!-- Pilot channel -->
     <string name="cockpit_pilot_unavailable">The onboard pilot is not reachable.</string>

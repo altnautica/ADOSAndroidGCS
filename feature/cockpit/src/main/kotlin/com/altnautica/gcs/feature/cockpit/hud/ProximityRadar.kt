@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.hud
 
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import android.os.SystemClock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -23,7 +24,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -36,7 +36,6 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.model.ObstacleSectors
 import com.altnautica.gcs.core.model.VehicleTelemetry
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.LocalFrame
 import com.altnautica.gcs.feature.cockpit.autonomy.NavState
@@ -96,17 +95,17 @@ fun ProximityRadar(
     val measurer = rememberTextMeasurer()
     val style = AdosTypography.numeric.small.copy(color = colors.hudInk)
     val ringStyle = AdosTypography.numeric.small.copy(color = colors.hudMuted, fontSize = 9.sp)
-    val description = stringResource(R.string.cockpit_radar_description)
-    val cycleLabel = stringResource(R.string.hud_radar_cycle)
+    val description = specText("cockpit.radar.aria")
+    val cycleLabel = specText("radar.cycle")
     val words = mapOf(
-        ProximityWord.Clear to stringResource(R.string.hud_radar_clear),
-        ProximityWord.Caution to stringResource(R.string.hud_radar_caution),
-        ProximityWord.Danger to stringResource(R.string.hud_radar_danger),
+        ProximityWord.Clear to specText("skill.avoid.clear").uppercase(),
+        ProximityWord.Caution to specText("radar.caution").uppercase(),
+        ProximityWord.Danger to specText("radar.danger").uppercase(),
     )
-    val scanNone = stringResource(R.string.hud_radar_scan_none)
+    val scanNone = specText("radar.scan_none").uppercase()
     val navNow by navFlow.collectAsState()
     val rate = navNow?.value?.obstacleRateHz
-    val headerText = rate?.let { stringResource(R.string.hud_radar_header, Math.round(it).toString()) } ?: scanNone
+    val headerText = rate?.let { specText("radar.header", "hz" to Math.round(it).toString()).upperFirstWord() } ?: scanNone
     var stale by remember { mutableStateOf(false) }
     var displayM by remember { mutableFloatStateOf(6f) }
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.alpha(if (stale) 0.5f else 1f)) {
@@ -169,9 +168,9 @@ fun ProximityRadar(
                 },
         )
         val scaleLabel = if (scale.rangeM == null) {
-            stringResource(R.string.hud_radar_scale_auto, displayM.toInt())
+            specText("radar.scale_auto", "m" to displayM.toInt().toString()).upperFirstWord()
         } else {
-            stringResource(R.string.hud_radar_scale, displayM.toInt())
+            specText("radar.scale", "m" to displayM.toInt().toString())
         }
         Text(scaleLabel, style = ringStyle)
     }

@@ -40,7 +40,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
@@ -55,7 +54,6 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.model.LocalPosition
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
 import com.altnautica.gcs.core.designsystem.tokens.AdosHudTarget
@@ -114,8 +112,8 @@ internal fun LocalMinimap(
     }
     val measurer = rememberTextMeasurer()
     val small = AdosTypography.numeric.small.copy(fontSize = 10.sp, color = c.hudInk)
-    val originLabel = stringResource(R.string.hud_map_origin)
-    val description = stringResource(R.string.hud_map_description)
+    val originLabel = specText("minimap.origin").uppercase()
+    val description = specText("minimap.description")
     val poseFresh = inputs.pose?.takeIf { inputs.nowMs - it.receivedAtMs <= LocalFrame.POSE_STALE_MS }
     val fcPos = poseFresh == null
     val droneN = poseFresh?.northM ?: inputs.fcPosition?.northM ?: 0f
@@ -179,8 +177,8 @@ internal fun LocalMinimap(
         }
         Column(Modifier.padding(AdosSpacing.S1)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
-                Text(stringResource(R.string.hud_map_local), style = small)
-                if (fcPos) Text(stringResource(R.string.hud_map_fc_pos), style = small, color = c.hudWarn)
+                Text(specText("minimap.local_ne").upperFirstWord(), style = small)
+                if (fcPos) Text(specText("minimap.fc_pos").uppercase(), style = small, color = c.hudWarn)
             }
             PinToggle(pin, onPin)
         }
@@ -190,7 +188,7 @@ internal fun LocalMinimap(
                 drawLine(c.hudInk, Offset(0f, 0f), Offset(0f, size.height), 1.dp.toPx())
                 drawLine(c.hudInk, Offset(size.width, 0f), Offset(size.width, size.height), 1.dp.toPx())
             }
-            Text(" " + stringResource(R.string.hud_map_scale, scaleM), style = small)
+            Text(" " + specText("minimap.scale", "m" to scaleM.toString()), style = small)
         }
         Row(Modifier.align(Alignment.BottomEnd)) {
             IconButton(onClick = { pxPerM = (pxPerM / 1.5f).coerceAtLeast(MIN_PX_PER_M) }, modifier = Modifier.size(36.dp)) {

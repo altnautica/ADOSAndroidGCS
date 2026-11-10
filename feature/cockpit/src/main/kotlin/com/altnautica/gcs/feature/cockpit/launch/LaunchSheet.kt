@@ -14,8 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
@@ -152,7 +150,7 @@ fun LaunchSheet(
                 Text(specText("flow.launch.mission_needs_loaded"), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
             }
             if (ui.gotoPoint == null) {
-                Text(stringResource(R.string.launch_pick_point_hint), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
+                Text(specText("flow.launch.pick_point_hint"), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
             }
             if (d.after == LaunchAfter.Skill) {
                 Segments(

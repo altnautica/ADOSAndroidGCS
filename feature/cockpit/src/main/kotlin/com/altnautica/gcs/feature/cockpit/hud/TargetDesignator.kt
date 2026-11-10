@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.hud
 
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -23,7 +24,6 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
@@ -31,7 +31,6 @@ import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
 import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.extensions.skills.ExtensionTargetActionSkill
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.SlotUi
 import com.altnautica.gcs.feature.cockpit.autonomy.DrawItem
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
@@ -166,7 +165,7 @@ internal fun TargetDesignator(
                     .size(1.dp)
                     .adosMenuAnchor(menu),
             )
-            val lockLabel = stringResource(R.string.hud_menu_lock)
+            val lockLabel = specText("target.lock")
             val tapped = state.item
             val lock = tapped?.let { item ->
                 AdosMenuItem(label = lockLabel, icon = Icons.Outlined.CenterFocusStrong, onClick = { onLock(item) })

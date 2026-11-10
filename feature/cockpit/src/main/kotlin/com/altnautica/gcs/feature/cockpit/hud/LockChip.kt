@@ -18,7 +18,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -26,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.autonomy.Detection
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowEvent
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
@@ -56,23 +54,23 @@ internal fun LockChip(
     modifier: Modifier = Modifier,
 ) {
     val c = AdosTheme.colors
-    val who = stringResource(R.string.hud_lock_who, TargetState.classWord(detection?.classLabel ?: "").ifBlank { "—" }, trackId ?: 0)
+    val who = specText("lock.who", "label" to TargetState.classWord(detection?.classLabel ?: "").ifBlank { "—" }, "id" to (trackId ?: 0).toString())
     val word = when {
         !feedFresh -> specText("target.waiting_for_feed")
         follow != null && followFresh && follow.phase != FollowPhase.Idle -> when (follow.phase) {
-            FollowPhase.Following -> stringResource(R.string.hud_lock_following)
-            FollowPhase.Acquiring -> stringResource(R.string.hud_lock_acquiring)
-            FollowPhase.Coasting -> stringResource(R.string.hud_lock_coasting, HudGeometry.oneDecimal(follow.coastRemainingS ?: 0f))
-            FollowPhase.Searching -> stringResource(R.string.hud_lock_searching)
-            FollowPhase.Holding -> stringResource(R.string.hud_lock_holding, TargetState.holdReason(follow.holdReason) ?: "")
-            else -> stringResource(R.string.hud_lock_lost)
+            FollowPhase.Following -> specText("follow.phase.following").lowercase().replaceFirstChar(Char::uppercase)
+            FollowPhase.Acquiring -> specText("follow.phase.acquiring").lowercase().replaceFirstChar(Char::uppercase)
+            FollowPhase.Coasting -> specText("lock.coasting", "s" to HudGeometry.oneDecimal(follow.coastRemainingS ?: 0f))
+            FollowPhase.Searching -> specText("follow.phase.searching").lowercase().replaceFirstChar(Char::uppercase)
+            FollowPhase.Holding -> specText("lock.holding", "label" to (TargetState.holdReason(follow.holdReason) ?: ""))
+            else -> specText("follow.phase.lost").lowercase().replaceFirstChar(Char::uppercase)
         }
         lastReacquired != null && nowMs - lastReacquired.atMs <= REACQUIRED_WORD_MS ->
-            stringResource(R.string.hud_lock_reacquired, String.format(java.util.Locale.ROOT, "%.2f", lastReacquired.similarity))
-        detection == null -> stringResource(R.string.hud_lock_not_in_view)
-        detection.lockState == LockState.Uncertain -> stringResource(R.string.hud_lock_uncertain)
-        detection.lockState == LockState.Lost -> stringResource(R.string.hud_lock_lost)
-        else -> stringResource(R.string.hud_lock_locked)
+            specText("lock.reacquired", "sim" to String.format(java.util.Locale.ROOT, "%.2f", lastReacquired.similarity))
+        detection == null -> specText("lock.not_in_view")
+        detection.lockState == LockState.Uncertain -> specText("lock.uncertain")
+        detection.lockState == LockState.Lost -> specText("follow.phase.lost").lowercase().replaceFirstChar(Char::uppercase)
+        else -> specText("lock.locked")
     }
     Surface(
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },

@@ -21,15 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalResources
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.NavChip
@@ -49,7 +47,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.ChromeChip
 @Composable
 internal fun NavSourceChip(chip: NavChip?, inputs: NavInputs?, compact: Boolean, onUseSet: (Int) -> Unit) {
     val chipValue = chip ?: NavChip(NavLabel.Stale, null, NavTone.Muted)
-    val text = TargetText(LocalResources.current)
+    val text = TargetText(LocalCockpitStrings.current)
     var open by remember { mutableStateOf(false) }
     val icon = when (chipValue.label) {
         NavLabel.DeadReckoning -> Icons.Outlined.Explore
@@ -79,15 +77,15 @@ private fun NavSourceSheet(chip: NavChip, inputs: NavInputs?, text: TargetText, 
             Text(text.navLabel(chip) + (chip.quality?.let { " · " + text.quality(it) } ?: ""), style = MaterialTheme.typography.titleSmall)
             Row {
                 Text("", Modifier.width(96.dp))
-                for (field in listOf(R.string.hud_nav_posxy, R.string.hud_nav_velxy, R.string.hud_nav_yaw)) {
-                    Text(stringResource(field), Modifier.width(112.dp), style = mono, color = c.hudMuted)
+                for (field in listOf("nav_source.posxy", "nav_source.velxy", "nav_source.yaw")) {
+                    Text(specText(field), Modifier.width(112.dp), style = mono, color = c.hudMuted)
                 }
             }
             for (set in 1..3) {
                 Row {
                     val active = set == chip.activeSet
                     Text(
-                        stringResource(R.string.hud_nav_set, set) + if (active) " · " + specText("nav_source.active") else "",
+                        specText("nav_source.set_n", "n" to set.toString()) + if (active) " · " + specText("nav_source.active") else "",
                         Modifier.width(96.dp),
                         style = mono,
                         color = if (active) c.hudGood else c.hudInk,
@@ -99,20 +97,20 @@ private fun NavSourceSheet(chip: NavChip, inputs: NavInputs?, text: TargetText, 
             }
             inputs?.nav?.takeIf { inputs.navFresh }?.let { nav ->
                 Text(
-                    stringResource(
-                        R.string.hud_nav_extnav_readout,
-                        nav.extnavHealth?.name?.uppercase() ?: "—",
-                        nav.odomRateHz?.let(HudGeometry::oneDecimal) ?: "—",
+                    specText(
+                        "nav_source.extnav_readout",
+                        "health" to (nav.extnavHealth?.name?.uppercase() ?: "—"),
+                        "hz" to (nav.odomRateHz?.let(HudGeometry::oneDecimal) ?: "—"),
                     ),
                     style = mono,
                 )
             }
             Text(
-                stringResource(
-                    R.string.hud_nav_gps_readout,
-                    text.fixWord(inputs?.gpsFixType),
-                    inputs?.sats?.toString() ?: "—",
-                    inputs?.hdop?.let(HudGeometry::oneDecimal) ?: "—",
+                specText(
+                    "nav_source.gps_readout",
+                    "fix" to text.fixWord(inputs?.gpsFixType),
+                    "sats" to (inputs?.sats?.toString() ?: "—"),
+                    "hdop" to (inputs?.hdop?.let(HudGeometry::oneDecimal) ?: "—"),
                 ),
                 style = mono,
             )
@@ -136,11 +134,11 @@ private fun NavSourceSheet(chip: NavChip, inputs: NavInputs?, text: TargetText, 
 private fun flagWords(flags: Int?): String {
     if (flags == null) return "—"
     val words = listOf(
-        NavSource.VEL_H to R.string.hud_nav_flag_vel_h,
-        NavSource.POS_H_REL to R.string.hud_nav_flag_pos_rel,
-        NavSource.POS_H_ABS to R.string.hud_nav_flag_pos_abs,
-        NavSource.CONST_POS to R.string.hud_nav_flag_const_pos,
-        NavSource.GPS_GLITCH to R.string.hud_nav_flag_glitch,
-    ).filter { flags and it.first != 0 }.map { stringResource(it.second) }
+        NavSource.VEL_H to "nav_source.flag.vel_h",
+        NavSource.POS_H_REL to "nav_source.flag.pos_rel",
+        NavSource.POS_H_ABS to "nav_source.flag.pos_abs",
+        NavSource.CONST_POS to "nav_source.flag.const_pos",
+        NavSource.GPS_GLITCH to "nav_source.flag.glitch",
+    ).filter { flags and it.first != 0 }.map { specText(it.second).uppercase() }
     return if (words.isEmpty()) "—" else words.joinToString(" · ")
 }

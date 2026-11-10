@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.panels
 
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,7 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -33,7 +33,6 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamDescriptor
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
@@ -111,31 +110,31 @@ fun QuickSettingsPanel(
         if (command == ConsoleCommand.Menu) onDismiss()
         command == ConsoleCommand.Menu
     }
-    AdosSheet(onDismiss = onDismiss, title = stringResource(R.string.cockpit_quick_settings)) {
-        val rel = stringResource(R.string.cockpit_alt_rel)
-        val msl = stringResource(R.string.cockpit_alt_msl)
+    AdosSheet(onDismiss = onDismiss, title = specText("cockpit.quick_settings")) {
+        val rel = specText("cockpit.qs.alt_rel")
+        val msl = specText("cockpit.qs.alt_msl")
         SelectSettingRow(
-            title = stringResource(R.string.cockpit_qs_altitude_reference),
+            title = specText("cockpit.qs.alt_ref"),
             options = AltitudeReference.entries,
             selected = settings.altitudeReference,
             optionLabel = { if (it == AltitudeReference.Rel) rel else msl },
             onSelect = onAltitudeReference,
         )
         val densityLabels = mapOf(
-            CockpitDensity.Min to stringResource(R.string.cockpit_density_min),
-            CockpitDensity.Std to stringResource(R.string.cockpit_density_std),
-            CockpitDensity.Full to stringResource(R.string.cockpit_density_full),
+            CockpitDensity.Min to specText("cockpit.qs.density.min"),
+            CockpitDensity.Std to specText("cockpit.qs.density.std"),
+            CockpitDensity.Full to specText("cockpit.level.full"),
         )
         SelectSettingRow(
-            title = stringResource(R.string.cockpit_qs_density),
+            title = specText("cockpit.qs.density"),
             options = CockpitDensity.entries,
             selected = settings.density,
             optionLabel = { densityLabels.getValue(it) },
             onSelect = onDensity,
         )
-        SwitchSettingRow(stringResource(R.string.cockpit_qs_max_brightness), maxBrightness, onMaxBrightness)
+        SwitchSettingRow(specText("cockpit.qs.max_brightness"), maxBrightness, onMaxBrightness)
         if (showTelemetryPaneToggle) {
-            SwitchSettingRow(stringResource(R.string.cockpit_qs_telemetry_pane), settings.telemetryPane, onTelemetryPane)
+            SwitchSettingRow(specText("cockpit.qs.telemetry_pane"), settings.telemetryPane, onTelemetryPane)
         }
         if (stickAllModes != null) StickAllModesSetting(stickAllModes, onStickAllModes)
         panels()

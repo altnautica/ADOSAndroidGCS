@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.cockpit.autonomy
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
+import com.altnautica.gcs.feature.cockpit.testSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +14,7 @@ import org.robolectric.annotation.Config
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class TargetStateTest {
-    private val text = TargetText(ApplicationProvider.getApplicationContext<Context>().resources)
+    private val text = TargetText(testSpec.setupStrings)
     private val now = 10_000L
     private val box12 = Box(600f, 280f, 60f, 150f)
 

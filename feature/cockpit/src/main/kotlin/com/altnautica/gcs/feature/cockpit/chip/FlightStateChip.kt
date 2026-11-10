@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -49,7 +48,6 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** A spec colour (0xAARRGGBB) as a Compose colour. */
@@ -86,7 +84,7 @@ fun FlightStateChip(
 ) {
     val colors = AdosTheme.colors
     val tint = specColor(ui.primary.color)
-    val openLabel = stringResource(R.string.flight_chip_open_mode_sheet)
+    val openLabel = specText("flow.chip.open_mode_sheet")
     Surface(
         modifier = modifier
             .testTag(FLIGHT_CHIP_TAG)
@@ -136,9 +134,9 @@ fun FlightStateChip(
 @Composable
 private fun ChipActionButton(button: ChipButton, tint: Color, onClick: () -> Unit) {
     val label = when (button) {
-        ChipButton.SetUpAircraft -> stringResource(R.string.flight_chip_set_up_aircraft)
-        ChipButton.Resume -> stringResource(R.string.flight_chip_resume)
-        ChipButton.TakeControl -> stringResource(R.string.flight_chip_take_control)
+        ChipButton.SetUpAircraft -> specText("setup.wizard.entry.set_up_aircraft")
+        ChipButton.Resume -> specText("flow.resume")
+        ChipButton.TakeControl -> specText("flow.take_control")
         ChipButton.Abort -> specText("flow.launch.abort")
     }
     Surface(
