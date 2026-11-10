@@ -86,7 +86,11 @@ class SettingsViewModel @Inject constructor(
         cockpit.setBatteryBands(bands.lowPct, pct)
     }
 
-    fun setDemoEnabled(on: Boolean) = launch { demo.setEnabled(on) }
+    /** Switching demo mode off also unpins the demo flight state, so the next demo session starts live. */
+    fun setDemoEnabled(on: Boolean) {
+        if (!on) scenarios.pin(null)
+        launch { demo.setEnabled(on) }
+    }
 
     fun setDemoStaleSkill(on: Boolean) = launch { demo.setStaleSkill(on) }
 
