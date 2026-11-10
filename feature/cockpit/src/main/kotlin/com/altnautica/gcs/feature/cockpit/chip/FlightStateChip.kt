@@ -8,24 +8,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.FlightLand
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Hub
-import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material.icons.outlined.NearMe
-import androidx.compose.material.icons.outlined.Route
-import androidx.compose.material.icons.outlined.SettingsRemote
-import androidx.compose.material.icons.outlined.SportsEsports
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -46,29 +29,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
-import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** A spec colour (0xAARRGGBB) as a Compose colour. */
 fun specColor(argb: Long): Color = Color(argb.toInt())
-
-/** The icon paired with each chip rule, so the state never rests on colour alone. */
-fun chipIcon(ruleId: String): ImageVector = when (ruleId) {
-    "link_stale" -> Icons.Outlined.LinkOff
-    "idle_ready" -> Icons.Outlined.CheckCircle
-    "idle_not_ready" -> Icons.Outlined.ErrorOutline
-    "pilot" -> Icons.Outlined.SportsEsports
-    "skill" -> Icons.Outlined.AutoAwesome
-    "goto" -> Icons.Outlined.NearMe
-    "swarm" -> Icons.Outlined.Hub
-    "tuning" -> Icons.Outlined.Tune
-    "mission_paused", "mission_active", "mission_complete", "mission_fc" -> Icons.Outlined.Route
-    "vtol_transition" -> Icons.Outlined.Sync
-    "fc_rth" -> Icons.Outlined.Home
-    "fc_land" -> Icons.Outlined.FlightLand
-    else -> Icons.Outlined.SettingsRemote
-}
 
 /**
  * The flight-state chip: owner and mode in its state colour, the secondary line below, and
@@ -105,7 +70,6 @@ fun FlightStateChip(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
         ) {
-            Icon(chipIcon(ui.ruleId), contentDescription = null, tint = tint, modifier = Modifier.size(AdosSize.IconMd))
             Column {
                 Text(
                     ui.primary.text,
