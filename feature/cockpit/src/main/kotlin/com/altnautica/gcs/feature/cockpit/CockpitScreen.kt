@@ -260,7 +260,6 @@ private fun FlightScreen(
     }
 }
 
-/** The HUD's inset: the centre zone's sides and top, so no column or the top bar ever sits on a tape or the heading scale. */
 /** The video's corner left free by the chrome: the layer chips stack up from the centre zone's bottom-left. */
 private fun layerChipInset(zones: FlightZones): PaddingValues {
     val windowHeight = zones.card.bottom + zones.topBar.y
@@ -268,13 +267,14 @@ private fun layerChipInset(zones: FlightZones): PaddingValues {
 }
 
 /**
- * The HUD's inset: the centre zone's sides and top, so no column or the top bar ever sits on
- * a tape or the heading scale. With on-screen sticks shown ([stickPad] wide) the tapes move
+ * The HUD's inset: the centre zone, so no column, the top bar or the bottom-left card ever sits
+ * on a tape or the heading scale. With on-screen sticks shown ([stickPad] wide) the tapes move
  * inward past the pads, which sit in the centre's bottom corners.
  */
 internal fun centreInset(zones: FlightZones, stickPad: Dp = 0.dp): PaddingValues {
     val windowWidth = zones.topBar.right + zones.topBar.x
-    return PaddingValues(start = zones.centre.x + stickPad, top = zones.centre.y, end = windowWidth - zones.centre.right + stickPad)
+    val windowHeight = zones.card.bottom + zones.topBar.y
+    return PaddingValues(zones.centre.x + stickPad, zones.centre.y, windowWidth - zones.centre.right + stickPad, windowHeight - zones.centre.bottom)
 }
 
 /** Whether the on-screen sticks show at this class (`on_screen_sticks.classes`) once the setting is on. */
@@ -388,7 +388,7 @@ private fun InZone(rect: ZoneRect, z: Float, content: @Composable androidx.compo
 @Composable
 private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float, zones: FlightZones, stickPad: Dp, modifier: Modifier) {
     val hudInset = centreInset(zones, stickPad)
-    val startOnly = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr), top = hudInset.calculateTopPadding())
+    val startOnly = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr), top = hudInset.calculateTopPadding(), bottom = hudInset.calculateBottomPadding())
     when (view) {
         CockpitView.Pilot -> VideoStage(vm, modifier, hudInset = hudInset, sampleBackdrop = true)
         CockpitView.Map -> Minimap(vm, modifier)
@@ -396,7 +396,7 @@ private fun MainView(vm: CockpitViewModel, view: CockpitView, savedRatio: Float,
         CockpitView.Vision -> Box(modifier) {
             val panel = visionPanelRect(zones, stickPad)
             val windowWidth = zones.topBar.right + zones.topBar.x
-            val inset = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr), top = hudInset.calculateTopPadding(), end = windowWidth - panel.x + zones.centre.y - zones.topBar.bottom)
+            val inset = PaddingValues(start = hudInset.calculateStartPadding(LayoutDirection.Ltr), top = hudInset.calculateTopPadding(), end = windowWidth - panel.x + zones.centre.y - zones.topBar.bottom, bottom = hudInset.calculateBottomPadding())
             VideoStage(vm, Modifier.fillMaxSize(), hudInset = inset, sampleBackdrop = true)
             val video by vm.video.collectAsStateWithLifecycle()
             VisionSidePanel(vm, vm.autonomy.mainCamera(video), Modifier.absoluteOffset(panel.x, panel.y).size(panel.width, panel.height).testTag("vision-panel"))

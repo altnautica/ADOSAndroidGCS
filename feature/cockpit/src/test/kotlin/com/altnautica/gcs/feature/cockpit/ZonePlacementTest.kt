@@ -1,13 +1,14 @@
 package com.altnautica.gcs.feature.cockpit
 
-import androidx.compose.ui.unit.Dp
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.feature.cockpit.chrome.ZoneRect
 import com.altnautica.gcs.feature.cockpit.chrome.flightSizes
 import com.altnautica.gcs.feature.cockpit.chrome.flightZones
+import com.altnautica.gcs.feature.cockpit.hud.TapeGeometry
 import com.altnautica.gcs.feature.cockpit.pilot.ON_SCREEN_PAD
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import org.junit.Assert.assertFalse
@@ -48,6 +49,31 @@ class ZonePlacementTest {
             val windowW = z.topBar.right + z.topBar.x
             assertTrue(start >= z.centre.x + ON_SCREEN_PAD)
             assertTrue(windowW - end <= z.centre.right - ON_SCREEN_PAD)
+        }
+    }
+
+    @Test
+    fun `the speed and altitude tapes sit clear of the columns, the card and the bottom row`() {
+        for ((w, h, cls) in windows) {
+            val z = flightZones(w, h, flightSizes(cls), gimbal = true)
+            for (pad in listOf(0.dp, ON_SCREEN_PAD)) {
+                val inset = centreInset(z, pad)
+                val left = inset.calculateStartPadding(LayoutDirection.Ltr)
+                val top = inset.calculateTopPadding()
+                val hudW = (w - left - inset.calculateEndPadding(LayoutDirection.Ltr)).value
+                val hudH = (h - top - inset.calculateBottomPadding()).value
+                val tapeTop = top + TapeGeometry.top(hudH).dp
+                val tapeH = TapeGeometry.height(hudH).dp
+                val tapeW = TapeGeometry.width(1f).dp
+                val tapes = listOf(
+                    "speed" to ZoneRect(left + TapeGeometry.speedLeft(1f).dp, tapeTop, tapeW, tapeH),
+                    "altitude" to ZoneRect(left + TapeGeometry.altitudeLeft(hudW, 1f).dp, tapeTop, tapeW, tapeH),
+                )
+                for ((tape, rect) in tapes) for ((name, zone) in z.named()) {
+                    if (name == "centre") continue
+                    assertFalse("$tape tape over $name at $w x $h, pad $pad", overlaps(rect, zone))
+                }
+            }
         }
     }
 

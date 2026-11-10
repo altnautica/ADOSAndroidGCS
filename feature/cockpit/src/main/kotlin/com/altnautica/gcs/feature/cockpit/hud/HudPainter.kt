@@ -144,17 +144,18 @@ internal class HudPainter(
         val useAir = fixedWing && vfr != null && vfr.airspeedMs > 0f
         val speed = vfr?.let { if (useAir) it.airspeedMs else it.groundspeedMs }
             ?: pos?.takeIf { posFresh }?.let { hypot(it.vxMs, it.vyMs) }
-        val tapeTop = size.height * 0.28f
-        val tapeHeight = size.height * 0.44f
-        val tapeWidth = 56.dp.toPx()
+        val dp = 1.dp.toPx()
+        val tapeTop = TapeGeometry.top(size.height)
+        val tapeHeight = TapeGeometry.height(size.height)
+        val tapeWidth = TapeGeometry.width(dp)
         verticalTape(
-            left = 12.dp.toPx(), top = tapeTop, width = tapeWidth, height = tapeHeight, value = speed,
+            left = TapeGeometry.speedLeft(dp), top = tapeTop, width = tapeWidth, height = tapeHeight, value = speed,
             span = 20f, minor = 1f, major = 5f, label = if (useAir) "AS" else "GS", alignRight = false, stroke = stroke,
         )
 
         // Altitude tape (right) with REL/MSL reference and the vertical-speed bar.
         val altitude = pos?.takeIf { posFresh }?.let { if (altRef == AltitudeReference.Rel) it.altRelM else it.altMslM }
-        val altLeft = size.width - tapeWidth - 24.dp.toPx()
+        val altLeft = TapeGeometry.altitudeLeft(size.width, dp)
         verticalTape(
             left = altLeft, top = tapeTop, width = tapeWidth, height = tapeHeight, value = altitude,
             span = 40f, minor = 2f, major = 10f, label = if (altRef == AltitudeReference.Rel) "REL" else "MSL", alignRight = true, stroke = stroke,
@@ -302,6 +303,15 @@ internal class HudPainter(
         val y = if (frac >= 0) mid - barH else mid
         drawRect(if (abs(climb) > HudMath.VSI_FULL_SCALE_MS * 0.6f) colors.hudWarn else colors.hudGood, Offset(left, y), Size(w, barH))
     }
+}
+
+/** Where the speed (left) and altitude (right) tapes sit in a HUD of a given size; [dp] is px per dp. */
+internal object TapeGeometry {
+    fun top(hudHeight: Float): Float = hudHeight * 0.28f
+    fun height(hudHeight: Float): Float = hudHeight * 0.44f
+    fun width(dp: Float): Float = 56f * dp
+    fun speedLeft(dp: Float): Float = 12f * dp
+    fun altitudeLeft(hudWidth: Float, dp: Float): Float = hudWidth - width(dp) - 24f * dp
 }
 
 /** Pure HUD geometry, unit-tested. */
