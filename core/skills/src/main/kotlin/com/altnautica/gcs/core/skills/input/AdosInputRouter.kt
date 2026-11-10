@@ -392,8 +392,13 @@ class AdosInputRouter @Inject constructor(
         if (held != null && !(down && event.repeatCount > 0)) {
             // In the cockpit a press while another button is held is a chord (L2+R2+Circle kill,
             // Options+Circle return home): none of its buttons also moves a sheet, so Circle never closes it.
-            if (down && othersHeld && capture != null) chordMask = _buttons.value
             val bit = 1 shl button
+            if (down && othersHeld && capture != null) {
+                // A held button whose press already reached a sheet ends there now: the chord swallows its real release.
+                val delivered = _buttons.value and chordMask.inv() and bit.inv()
+                if (ui) for (b in 0..GamepadButton.LAST) if (delivered and (1 shl b) != 0) uiReleaseForChord(b).forEach { _uiInput.tryEmit(it) }
+                chordMask = _buttons.value
+            }
             val inChord = chordMask and bit != 0
             if (!down) chordMask = chordMask and bit.inv()
             // With the cockpit open, PS is its brake/RTH button even while one of its sheets navigates.

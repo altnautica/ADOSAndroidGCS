@@ -342,6 +342,33 @@ class AdosInputRouterTest {
     }
 
     @Test
+    fun `a chord started under a held Cross releases it at once and its later release confirms nothing`() = runTest {
+        val r = router(capture(uiNavigation = true))
+        val ui = collectUi(r)
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_A, repeat = 0, gamepad = true))
+        assertEquals(listOf<UiInput>(UiInput.Activate(true)), ui)
+        ui.clear()
+        // Circle while Cross is held starts a chord: the held confirm must end now, not on a later Cross-up.
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_B, repeat = 0, gamepad = true))
+        assertEquals(listOf<UiInput>(UiInput.Activate(false)), ui)
+        ui.clear()
+        r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_A, repeat = 0, gamepad = true))
+        r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_B, repeat = 0, gamepad = true))
+        assertTrue("nothing after the chord start: no second release, no Back", ui.isEmpty())
+    }
+
+    @Test
+    fun `a chord started under a held More ends the hold without a More tap`() = runTest {
+        val r = router(capture(uiNavigation = true))
+        val ui = collectUi(r)
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_X, repeat = 0, gamepad = true))
+        ui.clear()
+        press(r, KeyEvent.KEYCODE_BUTTON_B)
+        r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_X, repeat = 0, gamepad = true))
+        assertEquals(listOf<UiInput>(UiInput.Command(UiCommand.MoreUp)), ui)
+    }
+
+    @Test
     fun `a capture overlay navigates with buttons while the sticks keep flying`() = runTest {
         val r = router(capture(uiNavigation = true))
         val ui = collectUi(r)
