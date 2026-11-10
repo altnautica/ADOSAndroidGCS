@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.model.GpsState
 import com.altnautica.gcs.core.model.SystemHealth
 import com.altnautica.gcs.core.model.VibrationState
 import com.altnautica.gcs.core.data.cockpit.BatteryBands
+import com.altnautica.gcs.feature.cockpit.testSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -38,10 +39,20 @@ class AlertEngineTest {
     }
 
     @Test
-    fun `battery bands raise warning then critical`() {
+    fun `battery bands raise warning then critical, at or below each band`() {
         assertEquals(listOf(AlertId.BATT_LOW to AlertLevel.Warning), ids(inputs(battery = 25)))
-        assertEquals(listOf(AlertId.BATT_CRIT to AlertLevel.Critical), ids(inputs(battery = 10)))
-        assertEquals(emptyList<Pair<String, AlertLevel>>(), ids(inputs(battery = 30)))
+        assertEquals(listOf(AlertId.BATT_LOW to AlertLevel.Warning), ids(inputs(battery = 30)))
+        assertEquals(listOf(AlertId.BATT_CRIT to AlertLevel.Critical), ids(inputs(battery = 20)))
+        assertEquals(emptyList<Pair<String, AlertLevel>>(), ids(inputs(battery = 31)))
+    }
+
+    @Test
+    fun `without an operator choice a 20 percent pack warns and is not critical, as the web`() {
+        val fallback = testSpec.layout.battery!!.lowFallbackPct!!
+        assertEquals(BatteryBands(lowPct = fallback, criticalPct = 10), BatteryBands.DEFAULT)
+        assertEquals(AlertLevel.Warning, AlertEngine.batteryLevel(20, BatteryBands.DEFAULT))
+        assertEquals(AlertLevel.Critical, AlertEngine.batteryLevel(10, BatteryBands.DEFAULT))
+        assertEquals(null, AlertEngine.batteryLevel(21, BatteryBands.DEFAULT))
     }
 
     @Test

@@ -26,7 +26,8 @@ class PreflightChecklistTest {
         linkFresh = true,
         lastPrearmMs = null,
         navChip = NavChip(NavLabel.Gps, null, NavTone.Good),
-        storageFreeBytes = 4_000_000_000L,
+        storageUsedPct = 40.0,
+        storageWarnPct = 90,
     )
 
     private fun failing(i: PreflightInputs) = PreflightChecklist.evaluate(i, now).failing.map { it.item }
@@ -43,6 +44,8 @@ class PreflightChecklistTest {
     fun `each input fails its own check`() {
         assertEquals(listOf(PreflightItem.Gps3d), failing(good.copy(gps = GpsState(GpsFix.Fix2D, 6, 2f, now))))
         assertEquals(listOf(PreflightItem.Battery), failing(good.copy(batteryPct = 25)))
+        // At the low band the pack already warns in flight: the check fails with it.
+        assertEquals(listOf(PreflightItem.Battery), failing(good.copy(batteryPct = 30)))
         assertEquals(listOf(PreflightItem.Ekf), failing(good.copy(ekf = good.ekf!!.copy(compassVar = 0.9f))))
         assertEquals(listOf(PreflightItem.Ekf), failing(good.copy(ekf = good.ekf!!.copy(flags = 1 or (1 shl 10)))))
         assertEquals(listOf(PreflightItem.Home), failing(good.copy(home = null)))
@@ -65,11 +68,22 @@ class PreflightChecklistTest {
     }
 
     @Test
-    fun `a stale nav source fails its check and a full disk only warns`() {
+    fun `a stale nav source fails its check and a nearly full disk only warns`() {
         assertEquals(listOf(PreflightItem.NavSource), failing(good.copy(navChip = NavChip(NavLabel.Stale, null, NavTone.Muted))))
-        val lowDisk = PreflightChecklist.evaluate(good.copy(storageFreeBytes = 10_000L), now)
-        assertFalse(lowDisk.checks.first { it.item == PreflightItem.Storage }.passed)
-        assertTrue("storage never blocks the arm", lowDisk.ready)
+        val storage = { pct: Double? -> PreflightChecklist.evaluate(good.copy(storageUsedPct = pct), now).checks.first { it.item == PreflightItem.Storage } }
+        assertTrue(storage(89.9).passed)
+        // Graded on percent used at the spec's warning band, as the pill: a big volume with 2 GB free is 98 % used.
+        assertFalse(storage(90.0).passed)
+        assertFalse(storage(null).known)
+        val full = PreflightChecklist.evaluate(good.copy(storageUsedPct = 98.0), now)
+        assertEquals(98.0, full.storageUsedPct!!, 0.0)
+        assertTrue("storage never blocks the arm", full.ready)
+    }
+
+    @Test
+    fun `percent used reads the volume's total and available bytes`() {
+        assertEquals(98.0, usedPct(totalBytes = 128_000_000_000L, availableBytes = 2_560_000_000L)!!, 1e-9)
+        assertEquals(null, usedPct(totalBytes = 0L, availableBytes = 0L))
     }
 
     @Test

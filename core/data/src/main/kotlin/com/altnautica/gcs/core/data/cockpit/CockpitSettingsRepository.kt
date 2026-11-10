@@ -19,10 +19,14 @@ enum class AltitudeReference { Rel, Msl }
 /** Cockpit density. */
 enum class CockpitDensity { Min, Std, Full }
 
-/** Operator battery bands: below [lowPct] warns, below [criticalPct] is critical. */
+/**
+ * Operator battery bands: at or below [lowPct] warns, at or below [criticalPct] is critical.
+ * Until the operator picks bands they are the shared fallback: low from the cockpit spec's
+ * `layout.json` `battery.low_fallback_pct`, critical 10 (the cockpit tests hold them equal).
+ */
 data class BatteryBands(val lowPct: Int, val criticalPct: Int) {
     companion object {
-        val DEFAULT = BatteryBands(lowPct = 30, criticalPct = 20)
+        val DEFAULT = BatteryBands(lowPct = 20, criticalPct = 10)
     }
 }
 
