@@ -574,7 +574,12 @@ data class FlightStateRuleSpec(
     val dim: Boolean = false,
     val button: String? = null,
     @SerialName("suffix_if_landing_seq") val suffixIfLandingSeq: String? = null,
+    /** A button that replaces [button] when its own match also holds. */
+    @SerialName("button_if") val buttonIf: ChipButtonIfSpec? = null,
 )
+
+@Serializable
+data class ChipButtonIfSpec(val match: FlightStateMatchSpec, val button: String)
 
 /** Every non-null field must hold for the rule to match. */
 @Serializable
@@ -587,6 +592,9 @@ data class FlightStateMatchSpec(
     @SerialName("vtol_transitioning") val vtolTransitioning: Boolean? = null,
     @SerialName("fc_mode_class") val fcModeClass: String? = null,
     @SerialName("control_mode") val controlMode: String? = null,
+    /** A launch sequence runs: present, its step not `done`, no error. */
+    @SerialName("sequence_running") val sequenceRunning: Boolean? = null,
+    @SerialName("fc_failsafe") val fcFailsafe: Boolean? = null,
 )
 
 @Serializable
@@ -602,7 +610,13 @@ data class FlightStateSecondarySpec(
     @SerialName("avoid_state") val avoidState: Map<String, SecondaryTextSpec?>,
     @SerialName("hold_reason") val holdReason: SecondaryTextSpec,
     @SerialName("control_mode") val controlMode: Map<String, String>,
+    @SerialName("fc_failsafe") val fcFailsafe: SecondaryTextSpec? = null,
+    @SerialName("mission_paused_line") val missionPausedLine: MatchedTextSpec? = null,
 )
+
+/** A secondary part shown only while its [match] holds. */
+@Serializable
+data class MatchedTextSpec(val match: FlightStateMatchSpec, val text: String, val color: String)
 
 @Serializable
 data class SecondaryTextSpec(val text: String, val color: String)

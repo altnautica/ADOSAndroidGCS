@@ -43,12 +43,32 @@ class PillCasesTest {
                 PillFcStatus(o["severity"].long()!!.toInt(), o["text"].str()!!)
             }
             val storage = (i["storage_pct"]?.takeUnless { it is JsonNull } as? JsonPrimitive)?.doubleOrNull
-            val s = pill.summary(pill.alerts(alerts, readiness, prearm, storage, fc), emptySet())
+            val preflight = (i["preflight_failing"] as? JsonArray).orEmpty().map {
+                val o = it.jsonObject
+                o["id"].str()!! to o["label"].str()!!
+            }
+            val s = pill.summary(
+                pill.alerts(
+                    alerts, readiness, prearm, storage, fc,
+                    pilotRule = true,
+                    pilotAgeMs = i["pilot_age_ms"].long(),
+                    agentReachable = i["agent_reachable"].bool() ?: true,
+                    controllerLost = i["controller_lost"].bool() ?: false,
+                    preflightFailing = preflight,
+                ),
+                emptySet(),
+            )
             val e = c.expected
             assertEquals(c.name, e["severity"].str(), s.severity.wire)
             assertEquals(c.name, e["text"].str(), s.text)
             assertEquals(c.name, e["count"].long()!!.toInt(), s.count)
             assertEquals(c.name, e["ids"].strings(), s.alerts.map { it.id })
         }
+    }
+
+    @Test
+    fun `the pill rule is off for a surface that does not read the pilot kind`() {
+        val alerts = pill.alerts(emptyList(), emptyList(), null, null, pilotAgeMs = null)
+        assertEquals(emptyList<PillAlert>(), alerts)
     }
 }

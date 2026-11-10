@@ -103,6 +103,28 @@ class PilotWireTest {
     }
 
     @Test
+    fun `FC failsafe, its cause and a paused mission parse, a missing fc_failsafe is false`() {
+        val golden = checkNotNull(PilotWire.parseState(data, 0L))
+        assertFalse(golden.fcFailsafe)
+        assertNull(golden.failsafeCause)
+
+        val failsafe = JsonObject(data + mapOf(
+            "fc_failsafe" to JsonPrimitive(true),
+            "failsafe_cause" to JsonPrimitive("rc_or_failsafe"),
+        ))
+        val f = checkNotNull(PilotWire.parseState(failsafe, 0L))
+        assertTrue(f.fcFailsafe)
+        assertEquals("rc_or_failsafe", f.failsafeCause)
+
+        val paused = Json.parseToJsonElement(
+            """{"owner":"pilot","mission":{"state":"paused","seq":3,"total":6}}""",
+        ) as JsonObject
+        val p = checkNotNull(PilotWire.parseState(paused, 0L))
+        assertEquals(MissionState.Paused, p.mission?.state)
+        assertFalse(p.fcFailsafe)
+    }
+
+    @Test
     fun `pilot frame envelope wraps the golden state`() {
         val text = """{"kind":"pilot","ts_ms":1793960000000,"data":$fixture}"""
         val f = PilotWire.parseFrame(text, receivedAtMs = 7L) as PilotFrame.State

@@ -148,7 +148,7 @@ private fun ControlModeSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: Mo
     val label = labels[values.indexOf(target)]
     val confirm = spec.controlMode.confirm
     ConfirmedChange(
-        label = stringResource(R.string.mode_sheet_hold_switch, label),
+        label = specText("flow.mode.hold_to_switch", "mode" to label),
         holdMs = if (confirm.kind == SpecConfirmKind.Tap) 0 else confirm.ms,
         tag = TAG_CONTROL_HOLD,
     ) {
@@ -171,8 +171,8 @@ private fun AvoidanceSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: Mode
         }
     }
     if (pendingOff) {
-        Text(stringResource(R.string.mode_sheet_avoid_off_warning), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.statusWarning)
-        ConfirmedChange(stringResource(R.string.mode_sheet_hold_avoid_off), spec.avoidance.confirmOff.ms, TAG_AVOID_HOLD, danger = true) {
+        Text(specText("flow.mode.avoid_off_warning"), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.statusWarning)
+        ConfirmedChange(specText("flow.mode.avoid_off_hold"), spec.avoidance.confirmOff.ms, TAG_AVOID_HOLD, danger = true) {
             pendingOff = false
             actions.onAvoid(AvoidMode.Off)
         }

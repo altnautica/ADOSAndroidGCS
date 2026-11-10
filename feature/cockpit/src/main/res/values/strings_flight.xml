@@ -7,9 +7,6 @@
     <string name="flight_chip_take_control">Take control</string>
 
     <!-- Mode sheet (titles, sections and the no-pilot note come from the cockpit spec) -->
-    <string name="mode_sheet_avoid_off_warning">With avoidance off the drone does not brake for obstacles.</string>
-    <string name="mode_sheet_hold_avoid_off">Hold to turn avoidance off</string>
-    <string name="mode_sheet_hold_switch">Hold to switch to %1$s</string>
     <string name="mode_sheet_fc_modes_hide">Hide flight controller modes</string>
     <string name="mode_sheet_fc_modes_note">Selecting a flight controller mode hands control to the flight controller.</string>
 

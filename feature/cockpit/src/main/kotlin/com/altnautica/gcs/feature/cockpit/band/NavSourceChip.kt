@@ -87,7 +87,7 @@ private fun NavSourceSheet(chip: NavChip, inputs: NavInputs?, text: TargetText, 
                 Row {
                     val active = set == chip.activeSet
                     Text(
-                        stringResource(R.string.hud_nav_set, set) + if (active) " · " + stringResource(R.string.hud_nav_active) else "",
+                        stringResource(R.string.hud_nav_set, set) + if (active) " · " + specText("nav_source.active") else "",
                         Modifier.width(96.dp),
                         style = mono,
                         color = if (active) c.hudGood else c.hudInk,
@@ -116,13 +116,13 @@ private fun NavSourceSheet(chip: NavChip, inputs: NavInputs?, text: TargetText, 
                 ),
                 style = mono,
             )
-            Text(stringResource(R.string.hud_nav_ekf_readout, flagWords(inputs?.ekfFlags)), style = mono)
+            Text(specText("nav_source.ekf") + " " + flagWords(inputs?.ekfFlags), style = mono)
             if (inputs?.nav?.mode == "external_nav" && inputs.navFresh) {
-                Text(stringResource(R.string.hud_nav_auto_switch), style = MaterialTheme.typography.bodySmall, color = c.hudWarn)
+                Text(specText("nav_source.auto_note"), style = MaterialTheme.typography.bodySmall, color = c.hudWarn)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), modifier = Modifier.padding(vertical = AdosSpacing.S2)) {
                 for (set in 1..3) {
-                    AdosButton(stringResource(R.string.hud_nav_use_set, set), onClick = {
+                    AdosButton(specText("nav_source.use_set", "n" to set.toString()), onClick = {
                         onDismiss()
                         onUseSet(set)
                     })

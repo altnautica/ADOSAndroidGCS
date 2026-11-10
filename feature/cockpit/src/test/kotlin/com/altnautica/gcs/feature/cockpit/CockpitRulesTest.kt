@@ -50,7 +50,7 @@ class CockpitRulesTest {
         assertEquals(LightbarState.Failsafe, light(PilotOwner.Pilot, lowBattery = true, failsafe = true))
     }
 
-    private val chips = FlightStateChipResolver(testSpec.flightState, testSpec.tokens)
+    private val chips = FlightStateChipResolver(testSpec.flightState, testSpec.tokens, testSpec.setupStrings.strings)
 
     @Test
     fun `a hold after a skill's lease is taken away reads Skill stopped`() {

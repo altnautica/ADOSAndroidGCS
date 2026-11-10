@@ -33,6 +33,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.RangeCue
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.skillbar.isWide
 
@@ -53,7 +54,7 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
     val range = follow.rangeM?.takeIf { !stale }
     val sigma = follow.rangeSigmaM?.takeIf { !stale }
     val (phaseWord, phaseColor) = phaseWord(follow.phase, stale)
-    val description = stringResource(R.string.hud_range_description)
+    val description = specText("follow.range")
     Surface(
         modifier = modifier.alpha(if (stale) 0.5f else 1f).semantics { contentDescription = description },
         shape = RoundedCornerShape(8.dp),
@@ -87,28 +88,27 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
                 Text(if (range != null && sigma != null) HudGeometry.rangeInterval(range, sigma) else DASH, style = small)
             }
             if (width.isWide()) {
+                val depression = follow.depressionDeg?.takeIf { !stale }?.let { Math.round(it).toString() } ?: DASH
+                val bearing = follow.bearingDeg?.takeIf { !stale }?.let(HudGeometry::bearing3) ?: DASH
+                val speed = follow.targetSpeedMps?.takeIf { !stale }?.let(HudGeometry::oneDecimal) ?: DASH
                 Text(
-                    stringResource(
-                        R.string.hud_range_geometry,
-                        follow.depressionDeg?.takeIf { !stale }?.let { Math.round(it).toString() } ?: DASH,
-                        follow.bearingDeg?.takeIf { !stale }?.let(HudGeometry::bearing3) ?: DASH,
-                        follow.targetSpeedMps?.takeIf { !stale }?.let(HudGeometry::oneDecimal) ?: DASH,
-                    ),
+                    specText("follow.geo.depression", "v" to "$depression°") + " · " +
+                        specText("follow.geo.bearing", "v" to "$bearing°") + " · $speed m/s",
                     style = small,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
-                    Cue(stringResource(R.string.hud_range_cue_ground), RangeCue.Ground in follow.rangeCues && !stale)
-                    Cue(stringResource(R.string.hud_range_cue_box), RangeCue.BoxHeight in follow.rangeCues && !stale)
-                    Cue(stringResource(R.string.hud_range_cue_lidar), RangeCue.Lidar in follow.rangeCues && !stale)
+                    Cue(specText("follow.cue.ground"), RangeCue.Ground in follow.rangeCues && !stale)
+                    Cue(specText("follow.cue.box_height"), RangeCue.BoxHeight in follow.rangeCues && !stale)
+                    Cue(specText("follow.cue.lidar"), RangeCue.Lidar in follow.rangeCues && !stale)
                     val lat = follow.pipelineLatencyMs?.takeIf { !stale }
                     Text(
-                        stringResource(R.string.hud_range_latency, lat?.let { Math.round(it).toString() } ?: DASH),
+                        specText("follow.latency", "v" to (lat?.let { Math.round(it).toString() } ?: DASH) + " ms"),
                         style = small,
                         color = if (lat != null && lat > LATENCY_WARN_MS) c.hudWarn else c.hudInk,
                     )
                     val mode = when (follow.reacquireMode) {
-                        "strict" -> stringResource(R.string.hud_rail_strict)
-                        "smart" -> stringResource(R.string.hud_rail_smart)
+                        "strict" -> specText("follow.mode.strict")
+                        "smart" -> specText("follow.mode.smart")
                         else -> DASH
                     }
                     Text(mode, style = small)
@@ -121,14 +121,14 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
 @Composable
 private fun phaseWord(phase: FollowPhase, stale: Boolean): Pair<String, Color> {
     val c = AdosTheme.colors
-    if (stale) return stringResource(R.string.hud_range_stale) to c.hudWarn
+    if (stale) return specText("follow.phase.stale") to c.hudWarn
     return when (phase) {
-        FollowPhase.Following -> stringResource(R.string.hud_range_following) to c.hudTrack
-        FollowPhase.Acquiring -> stringResource(R.string.hud_range_acquiring) to c.hudTrack
-        FollowPhase.Coasting -> stringResource(R.string.hud_range_coasting) to c.hudCoast
-        FollowPhase.Searching -> stringResource(R.string.hud_range_searching) to c.hudCoast
-        FollowPhase.Holding -> stringResource(R.string.hud_range_hold) to c.hudWarn
-        FollowPhase.Lost -> stringResource(R.string.hud_range_lost) to c.hudCrit
+        FollowPhase.Following -> specText("follow.phase.following") to c.hudTrack
+        FollowPhase.Acquiring -> specText("follow.phase.acquiring") to c.hudTrack
+        FollowPhase.Coasting -> specText("follow.phase.coasting") to c.hudCoast
+        FollowPhase.Searching -> specText("follow.phase.searching") to c.hudCoast
+        FollowPhase.Holding -> specText("follow.phase.holding") to c.hudWarn
+        FollowPhase.Lost -> specText("follow.phase.lost") to c.hudCrit
         FollowPhase.Idle -> DASH to c.hudMuted
     }
 }

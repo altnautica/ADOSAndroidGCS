@@ -51,8 +51,8 @@ internal fun layerLabel(id: String): String = when (id) {
     LayerSpec.AR_ROUTE -> stringResource(R.string.layer_ar_route)
     LayerSpec.AR_MOTION -> stringResource(R.string.layer_ar_motion)
     LayerSpec.OBSTACLES -> stringResource(R.string.layer_obstacles)
-    LayerSpec.DEPTH -> stringResource(R.string.layer_depth)
-    LayerSpec.SURFACES -> stringResource(R.string.layer_surfaces)
+    LayerSpec.DEPTH -> specText("vision.depth")
+    LayerSpec.SURFACES -> specText("vision.surfaces")
     else -> id
 }
 

@@ -1,18 +1,18 @@
 package com.altnautica.gcs.feature.cockpit.chip
 
+import com.altnautica.gcs.core.model.LaunchStep
 import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.skills.spec.FcModeClassSpec
-import com.altnautica.gcs.core.skills.spec.FlightStateRuleSpec
+import com.altnautica.gcs.core.skills.spec.FlightStateMatchSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateSpec
 import com.altnautica.gcs.core.skills.spec.SpecColor
 import com.altnautica.gcs.core.skills.spec.TokensSpec
-import kotlin.math.floor
 
 /** A button the chip offers beside its text. */
-enum class ChipButton { SetUpAircraft, Resume, TakeControl }
+enum class ChipButton { SetUpAircraft, Resume, TakeControl, Abort }
 
 /** One coloured text run of the chip; [color] is 0xAARRGGBB. */
 data class ChipText(val text: String, val colorKey: String, val color: Long)
@@ -52,18 +52,23 @@ data class ChipContext(
  * the pilot state and [ChipContext], a missing number reads `—`, and a trailing empty ` · `
  * segment is dropped. A vehicle with no pilot state shows its FC mode.
  */
-class FlightStateChipResolver(private val spec: FlightStateSpec, private val tokens: TokensSpec) {
+class FlightStateChipResolver(
+    private val spec: FlightStateSpec,
+    private val tokens: TokensSpec,
+    /** `setup-strings.json` strings, for the launch step names in `{step}`. */
+    private val strings: Map<String, String> = emptyMap(),
+) {
 
     fun resolve(pilot: PilotState?, ctx: ChipContext): FlightStateChipUi {
         if (pilot == null) return noPilot(ctx)
         val stale = ctx.nowMs - pilot.receivedAtMs > spec.staleAfterMs
-        val rule = spec.rules.firstOrNull { matches(it, pilot, ctx, stale) }
+        val rule = spec.rules.firstOrNull { matches(it.match, pilot, ctx, stale) }
             ?: return FlightStateChipUi(
                 ruleId = RULE_NONE,
                 primary = chipText(pilot.owner.wire.uppercase(), FC_KEY),
                 dim = false,
                 button = null,
-                secondary = secondary(pilot),
+                secondary = secondary(pilot, ctx, stale),
             )
         val text = fill(rule.text, values(pilot, ctx)) +
             (rule.suffixIfLandingSeq?.takeIf { pilot.mission?.landingSeq == true }.orEmpty())
@@ -71,8 +76,9 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
             ruleId = rule.id,
             primary = chipText(text, rule.color),
             dim = rule.dim,
-            button = button(rule.button, pilot),
-            secondary = if (rule.id == RULE_LINK_STALE) emptyList() else secondary(pilot),
+            button = rule.buttonIf?.takeIf { matches(it.match, pilot, ctx, stale) }?.let { button(it.button, pilot) }
+                ?: button(rule.button, pilot),
+            secondary = if (rule.id == RULE_LINK_STALE) emptyList() else secondary(pilot, ctx, stale),
         )
     }
 
@@ -88,8 +94,7 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
         )
     }
 
-    private fun matches(rule: FlightStateRuleSpec, p: PilotState, ctx: ChipContext, stale: Boolean): Boolean {
-        val m = rule.match
+    private fun matches(m: FlightStateMatchSpec, p: PilotState, ctx: ChipContext, stale: Boolean): Boolean {
         m.pilotStale?.let { if (it != stale) return false }
         m.owner?.let { if (p.owner.wire != it) return false }
         m.ready?.let { if ((p.firstBlock == null) != it) return false }
@@ -101,6 +106,8 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
         m.vtolTransitioning?.let { if ((p.vtolTransitioning || ctx.vtolTransitioning) != it) return false }
         m.fcModeClass?.let { if (fcModeClass(p) != it) return false }
         m.controlMode?.let { if (p.controlMode?.wire != it) return false }
+        m.sequenceRunning?.let { if ((launchStep(p) != null) != it) return false }
+        m.fcFailsafe?.let { if (p.fcFailsafe != it) return false }
         return true
     }
 
@@ -117,6 +124,7 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
     }
 
     private fun values(p: PilotState, ctx: ChipContext): Map<String, String> = mapOf(
+        "step" to launchStep(p)?.let(::stepLabel).orEmpty().uppercase(),
         "first_block_msg" to p.firstBlock?.msg.orEmpty(),
         "profile_upper" to (p.profile ?: PilotProfile.Normal).wire.uppercase(),
         "skill_label_upper" to (p.skill?.label ?: DEFAULT_SKILL_LABEL).uppercase(),
@@ -134,13 +142,28 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
     private fun button(id: String?, p: PilotState): ChipButton? = when (id) {
         "setup_link_when_setup_needed" -> ChipButton.SetUpAircraft.takeIf { p.readiness.any { it.id == SETUP_NEEDED && !it.ok } }
         "resume" -> ChipButton.Resume
+        "abort" -> ChipButton.Abort
         "take_control" -> ChipButton.TakeControl
         else -> null
     }
 
-    /** The secondary line in the spec's order: hold reason, avoidance state, control mode. */
-    private fun secondary(p: PilotState): List<ChipText> = spec.secondary.order.mapNotNull { part ->
+    /** The running launch step: a sequence is present, its step is not `done` and it has no error. */
+    private fun launchStep(p: PilotState): LaunchStep? =
+        p.sequence?.takeIf { it.step != LaunchStep.Done && it.error == null }?.step
+
+    /** The step's spec name (`flow.launch.step.<step>`, `after` reads `after_label`). */
+    private fun stepLabel(step: LaunchStep): String {
+        val key = if (step == LaunchStep.After) "after_label" else step.wire
+        return strings["flow.launch.step.$key"] ?: step.wire
+    }
+
+    /** The secondary line in the spec's order (FC failsafe, paused mission, hold reason, avoidance, control mode). */
+    private fun secondary(p: PilotState, ctx: ChipContext, stale: Boolean): List<ChipText> = spec.secondary.order.mapNotNull { part ->
         when (part) {
+            "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
+            "mission_paused_line" -> spec.secondary.missionPausedLine?.takeIf { matches(it.match, p, ctx, stale) }?.let {
+                chipText(fill(it.text, values(p, ctx)), it.color)
+            }
             "hold_reason" -> p.holdReason?.takeIf { it.isNotEmpty() }?.let { reason ->
                 val hold = spec.secondary.holdReason
                 chipText(fill(hold.text, mapOf("hold_reason_label" to holdReasonLabel(reason))), hold.color)
@@ -201,12 +224,13 @@ class FlightStateChipResolver(private val spec: FlightStateSpec, private val tok
             return if (d == null || !d.isFinite()) NO_VALUE else Math.round(d).toString()
         }
 
-        /** `ETA m:ss`, or `ETA s s` under a minute; empty when unknown. */
+        /** `ETA m:ss`, or `ETA s s` under a minute; the total is rounded first (119.6 s reads 2:00); empty when unknown. */
         fun formatEta(s: Float?): String {
             val d = s?.toDouble()
             if (d == null || !d.isFinite()) return ""
-            val m = floor(d / 60).toLong()
-            return if (m > 0) "ETA $m:${Math.round(d % 60).toString().padStart(2, '0')}" else "ETA ${Math.round(d)} s"
+            val total = Math.round(d)
+            val m = total / 60
+            return if (m > 0) "ETA $m:${(total % 60).toString().padStart(2, '0')}" else "ETA $total s"
         }
 
         /** True when the pilot state is older than the chip's staleness limit. */

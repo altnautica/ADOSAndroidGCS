@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.skills.hud
 
+import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 
@@ -21,6 +22,9 @@ enum class PillSource(val wire: String) {
     NavSource("nav_source"),
     Storage("storage"),
     Video("video"),
+    Pilot("pilot"),
+    Controller("controller"),
+    Preflight("preflight"),
 }
 
 enum class PillSeverity(val wire: String) { Ok("ok"), Warning("warning"), Critical("critical") }
@@ -41,15 +45,34 @@ data class PillSummary(
  * `hud/status-pill.ts` held to the same golden cases: every active alert, worst first, then in
  * source order, and the pill's face.
  */
-class StatusPill(private val text: SpecText, private val storageWarnPct: Int, private val storageCritPct: Int) {
+class StatusPill(
+    private val text: SpecText,
+    private val storageWarnPct: Int,
+    private val storageCritPct: Int,
+    private val staleAfterMs: Long = PilotState.STALE_MS,
+) {
 
-    /** Every active pill alert. [prearm] is null while unknown; [storagePct] null when unknown. */
+    /**
+     * Every active pill alert. [prearm] is null while unknown; [storagePct] null when unknown.
+     *
+     * [pilotRule] turns the pilot rule on for a surface that reads the pilot kind. Then
+     * [pilotAgeMs] is the newest pilot state's age, null when none ever arrived: at or past the
+     * spec's stale age (or null) the pill shows one `pilot_not_answering` warning and drops the
+     * readiness, FC status-text and controller items that came from that stale frame.
+     * [agentReachable] false is a critical link item; [controllerLost] (see [controllerLost])
+     * a warning; each [preflightFailing] item (`id` to its label, passed only on the ground) a warning.
+     */
     fun alerts(
         alerts: List<PillAlertInput>,
         readiness: List<ReadinessItem>,
         prearm: List<String>?,
         storagePct: Double?,
         fcStatus: List<PillFcStatus> = emptyList(),
+        pilotRule: Boolean = false,
+        pilotAgeMs: Long? = null,
+        agentReachable: Boolean = true,
+        controllerLost: Boolean = false,
+        preflightFailing: List<Pair<String, String>> = emptyList(),
     ): List<PillAlert> {
         val out = mutableListOf<PillAlert>()
         for (a in alerts) {
@@ -60,11 +83,24 @@ class StatusPill(private val text: SpecText, private val storageWarnPct: Int, pr
             }
             out += PillAlert("alert:${a.id}", alertSource(a.id), sev, a.title)
         }
-        for (r in readiness) {
+        if (!agentReachable) {
+            out += PillAlert("agent_unreachable", PillSource.Link, PillSeverity.Critical, text.text("alert.agent_unreachable"))
+        }
+        val pilotStale = pilotRule && (pilotAgeMs == null || pilotAgeMs >= staleAfterMs)
+        if (pilotStale) {
+            out += PillAlert("pilot_not_answering", PillSource.Pilot, PillSeverity.Warning, text.text("alert.pilot_not_answering"))
+        }
+        for (r in if (pilotStale) emptyList() else readiness) {
             if (r.ok) continue
             // A blocking item refuses take-off: critical, as the pre-flight sheet fails it.
             val sev = if (r.severity == ReadinessSeverity.Block) PillSeverity.Critical else PillSeverity.Warning
             out += PillAlert("pilot:${r.id}", PillSource.PilotReadiness, sev, r.msg.ifEmpty { r.id })
+        }
+        if (controllerLost && !pilotStale) {
+            out += PillAlert("controller_lost", PillSource.Controller, PillSeverity.Warning, text.text("alert.controller_lost"))
+        }
+        for ((id, label) in preflightFailing) {
+            out += PillAlert("preflight:$id", PillSource.Preflight, PillSeverity.Warning, text.text("alert.preflight_failing", mapOf("item" to label)))
         }
         if (!prearm.isNullOrEmpty()) {
             val t = prearm.last().replace(PREARM, "")
@@ -72,7 +108,7 @@ class StatusPill(private val text: SpecText, private val storageWarnPct: Int, pr
         }
         // The FC repeats a warning while its condition lasts: one alert per text, at its worst severity.
         val fcAt = HashMap<String, Int>()
-        for (s in fcStatus) {
+        for (s in if (pilotStale) emptyList() else fcStatus) {
             if (PREARM.containsMatchIn(s.text)) continue
             val sev = if (s.severity <= 2) PillSeverity.Critical else PillSeverity.Warning
             val at = fcAt[s.text]
@@ -88,7 +124,7 @@ class StatusPill(private val text: SpecText, private val storageWarnPct: Int, pr
                 "storage",
                 PillSource.Storage,
                 if (storagePct >= storageCritPct) PillSeverity.Critical else PillSeverity.Warning,
-                "${text.text("cockpit.status.source.storage")} ${jsRound(storagePct)}%",
+                text.text("cockpit.status.storage_used", mapOf("pct" to jsRound(storagePct))),
             )
         }
         return out.sortedBy { if (it.severity == PillSeverity.Critical) 0 else 1 }
@@ -112,6 +148,10 @@ class StatusPill(private val text: SpecText, private val storageWarnPct: Int, pr
 
     companion object {
         private val PREARM = Regex("""^(PreArm|Arm):\s*""")
+
+        /** The pilot holds for a lost controller while armed and airborne (`status_pill.controller_rule`). */
+        fun controllerLost(p: PilotState?): Boolean =
+            p != null && p.holdReason == "controller-lost" && p.armed && !p.landed
 
         /** The pill source of an alert id. */
         fun alertSource(id: String): PillSource = when {

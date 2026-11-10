@@ -297,6 +297,10 @@ fun statusItemTitle(item: StatusItem): String {
         val detail = a.detail?.let { d -> fcStateDetailRes(d)?.let { stringResource(it) } ?: d }
         return if (detail != null) "$title · $detail" else title
     }
+    if (item.specKey == StatusModel.PREFLIGHT_FAILING_KEY && item.check != null) {
+        return specText(item.specKey, "item" to preflightItemLabel(item.check, known = true))
+    }
+    item.specKey?.let { return specText(it) }
     item.check?.let { return preflightItemLabel(it, known = true) }
     return item.text.orEmpty()
 }

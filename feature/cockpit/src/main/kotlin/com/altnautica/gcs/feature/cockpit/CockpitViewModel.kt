@@ -102,6 +102,7 @@ import com.altnautica.gcs.feature.cockpit.pilot.ControllerContext
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerHold
 import com.altnautica.gcs.feature.cockpit.pilot.Ds4ActionDispatcher
 import com.altnautica.gcs.feature.cockpit.pilot.OnScreenSticks
+import com.altnautica.gcs.feature.cockpit.pilot.PillFacts
 import com.altnautica.gcs.feature.cockpit.pilot.PilotStickStreamer
 import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
 import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
@@ -127,6 +128,8 @@ import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
 import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.StatusPill
+import com.altnautica.gcs.core.skills.hud.pilotFresh as isPilotFresh
 import com.altnautica.gcs.core.skills.hud.aglMark
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -794,10 +797,26 @@ class CockpitViewModel @AssistedInject constructor(
 
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
 
-    /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings (from the link and the agent's pilot). */
-    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, tick500) { a, p, w, _ ->
+    /**
+     * The status pill's spec inputs beyond alerts and readiness (`status_pill` pilot,
+     * agent, controller and pre-flight rules), re-checked on the 2 Hz tick.
+     */
+    val pillFacts: StateFlow<PillFacts> = combine(pilot.link, pilot.linked, pilot.state, preflight, tick500) { link, linked, p, pre, _ ->
         val now = clock.nowMs()
-        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS })
+        val fresh = isPilotFresh(p?.receivedAtMs, now)
+        PillFacts(
+            pilotRule = link != null,
+            pilotAgeMs = p?.let { now - it.receivedAtMs },
+            agentReachable = link == null || linked || fresh,
+            controllerLost = StatusPill.controllerLost(p),
+            preflightFailing = if (airborne()) emptyList() else pre.failing.map { it.item },
+        )
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), PillFacts())
+
+    /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings (from the link and the agent's pilot). */
+    val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, pillFacts, tick500) { a, p, w, facts, _ ->
+        val now = clock.nowMs()
+        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS }, facts)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /**
@@ -808,7 +827,7 @@ class CockpitViewModel @AssistedInject constructor(
      */
     val flightValues: StateFlow<FlightValues> = combine(hud.flightValues, autonomy.feed.follow, pilot.state, tick500) { v, f, p, _ ->
         val follow = f?.takeIf { autonomy.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value?.takeIf { it.aglM != null }
-        val fromPilot = p?.takeIf { clock.nowMs() - it.receivedAtMs <= PilotState.STALE_MS && it.aglM != null }
+        val fromPilot = p?.takeIf { isPilotFresh(it.receivedAtMs, clock.nowMs()) && it.aglM != null }
         val (agl, tag) = when {
             v == FlightValues.Empty -> null to null
             // The pilot's height is measured only from a rangefinder, else it is the EKF height
@@ -847,7 +866,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Flight-state chip and flows --------------------------------------------------
 
-    private val chipResolver = FlightStateChipResolver(spec.flightState, spec.tokens)
+    private val chipResolver = FlightStateChipResolver(spec.flightState, spec.tokens, spec.setupStrings.strings)
     private val missionCompleteSince = MutableStateFlow<Long?>(null)
 
     init {
@@ -888,6 +907,8 @@ class CockpitViewModel @AssistedInject constructor(
             ChipButton.Resume -> activate(BuiltinIds.RESUME)
             ChipButton.TakeControl -> pilotAction(PilotAction(PilotAction.TAKE_CONTROL))
             ChipButton.SetUpAircraft -> _events.tryEmit(CockpitEvent.SetUpAircraft)
+            // Abort a running launch the same way the launch banner does.
+            ChipButton.Abort -> activate(BuiltinIds.PAUSE)
         }
     }
 
@@ -896,16 +917,16 @@ class CockpitViewModel @AssistedInject constructor(
      * on the 2 Hz tick, so everything derived from a stalled pilot hides instead of freezing.
      */
     val pilotFresh: StateFlow<Boolean> = combine(pilot.state, tick500) { p, _ ->
-        p != null && clock.nowMs() - p.receivedAtMs <= PilotState.STALE_MS
+        isPilotFresh(p?.receivedAtMs, clock.nowMs())
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
 
     /**
      * Banners, gate ring, stick session, countdowns and the launch steps from the pilot state.
-     * A frame older than [PilotState.STALE_MS] shows none of them: a frozen countdown or
+     * A frame that is not fresh ([isPilotFresh]) shows none of them: a frozen countdown or
      * handover would read as live.
      */
     val flow: StateFlow<FlowUi> = combine(pilot.state, streamer.streaming, tick500) { p, streaming, _ ->
-        if (p != null && clock.nowMs() - p.receivedAtMs > PilotState.STALE_MS) FlowUi() else FlowUi.of(p, PilotWire.SRC_ANDROID, streaming)
+        if (p != null && !isPilotFresh(p.receivedAtMs, clock.nowMs())) FlowUi() else FlowUi.of(p, PilotWire.SRC_ANDROID, streaming)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlowUi())
 
     private val _paramNudges = MutableSharedFlow<Int>(extraBufferCapacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)

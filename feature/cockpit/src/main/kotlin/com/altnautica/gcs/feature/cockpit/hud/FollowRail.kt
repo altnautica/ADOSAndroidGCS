@@ -49,6 +49,7 @@ import com.altnautica.gcs.core.designsystem.theme.GLOVE_TOUCH_SCALE
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 
 /** What the rail shows; every action dispatches through the cockpit's skill gates. */
@@ -96,16 +97,16 @@ internal fun FollowRail(
                 if (ui.followActive) {
                     RailButton(Icons.Outlined.Close, stringResource(R.string.hud_rail_tracking) + " ×", size, c.hudTrack, true, onFollow)
                 } else {
-                    RailButton(Icons.Outlined.PersonPinCircle, stringResource(R.string.hud_rail_follow), size, c.hudInk, ui.followEnabled, onFollow)
+                    RailButton(Icons.Outlined.PersonPinCircle, specText("follow.chip"), size, c.hudInk, ui.followEnabled, onFollow)
                 }
                 ReacquireToggle(ui.reacquireMode, ui.pendingMode, size, onReacquireMode)
             }
             val showExtras = !fold || unfolded
-            if (fold && !unfolded) RailButton(Icons.Outlined.MoreHoriz, stringResource(R.string.hud_rail_more), size, c.hudInk, true) { unfolded = true }
+            if (fold && !unfolded) RailButton(Icons.Outlined.MoreHoriz, specText("follow.more"), size, c.hudInk, true) { unfolded = true }
             if (showExtras) {
                 ui.swapLabels?.let { (a, b) -> RailButton(Icons.Outlined.SwapVert, stringResource(R.string.hud_rail_cam_swap, a, b), size, c.hudInk, true, onSwap) }
                 if (ui.canRecord) {
-                    RailButton(Icons.Outlined.FiberManualRecord, stringResource(R.string.hud_rail_rec), size, if (ui.recording) c.hudCrit else c.hudInk, true, onRecord)
+                    RailButton(Icons.Outlined.FiberManualRecord, specText("follow.rec"), size, if (ui.recording) c.hudCrit else c.hudInk, true, onRecord)
                 }
             }
         }
@@ -144,7 +145,7 @@ internal fun ReacquireToggle(mode: String?, pending: String?, size: Dp, onSelect
     val description = stringResource(R.string.hud_rail_reacquire_description)
     val pendingWord = stringResource(R.string.hud_rail_pending)
     Column(Modifier.semantics { contentDescription = description }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        for ((value, label) in listOf("strict" to stringResource(R.string.hud_rail_strict), "smart" to stringResource(R.string.hud_rail_smart))) {
+        for ((value, label) in listOf("strict" to specText("follow.mode.strict"), "smart" to specText("follow.mode.smart"))) {
             val active = (pending ?: mode) == value
             val isPending = pending == value
             Box(

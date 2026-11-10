@@ -23,6 +23,8 @@ import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.Vehicle
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.skills.SkillReason
+import com.altnautica.gcs.core.skills.hud.FlyHereRoute
+import com.altnautica.gcs.core.skills.hud.flyHereOffered
 import com.altnautica.gcs.core.skills.spec.BuiltinSpec
 import com.altnautica.gcs.core.skills.spec.BuiltinsSpec
 import com.altnautica.gcs.core.skills.spec.Ds4Spec
@@ -543,15 +545,16 @@ object SetModeSkill : BuiltinSkill(
 }
 
 /**
- * True when a map point goes to the onboard pilot's `goto`: ADOS Pilot control and the pilot
- * offers `goto` to this surface. The goto takes over from any running mission or skill, as the
- * hold confirm says. Under FC manual or ELRS control, or with no `goto` offered, the point
- * takes the flight controller's route.
+ * True when a map point goes to the onboard pilot's `goto`: the shared Fly Here offer picks
+ * the pilot route (a fresh state under ADOS Pilot control that offers `goto`, armed, airborne,
+ * outside an FC failsafe, which the pilot refuses). The goto takes over from any running
+ * mission or skill, as the hold confirm says. Otherwise the point takes the flight
+ * controller's route; a stale pilot would only answer "no answer".
  */
 internal fun SkillContext.flyHereToPilot(): Boolean {
-    val p = pilot ?: return false
-    // A stale pilot would only answer "no answer": the FC route flies the point instead.
-    return routesToPilot() && PilotAction.GOTO in p.surfaceOps && pilotLink?.stateFresh == true
+    val link = pilotLink ?: return false
+    val ageMs = if (link.stateFresh) 0L else Long.MAX_VALUE
+    return flyHereOffered(pilot, ageMs, fc = null) == FlyHereRoute.Pilot
 }
 
 /** The pilot's goto refusal codes, each with its own operator sentence; any other code is shown verbatim. */

@@ -46,33 +46,13 @@
     <string name="hud_lock_locked">Locked</string>
     <string name="hud_lock_uncertain">Uncertain</string>
     <string name="hud_lock_not_in_view">Not in view</string>
-    <string name="hud_lock_waiting">Waiting for feed</string>
-    <string name="hud_lock_release">Release target</string>
 
     <!-- Range panel. -->
-    <string name="hud_range_following">FOLLOWING</string>
-    <string name="hud_range_acquiring">ACQUIRING</string>
-    <string name="hud_range_coasting">COASTING</string>
-    <string name="hud_range_searching">SEARCHING</string>
-    <string name="hud_range_hold">HOLD</string>
-    <string name="hud_range_lost">LOST</string>
-    <string name="hud_range_stale">STALE</string>
-    <string name="hud_range_geometry">DEP %1$s° · BRG %2$s° · %3$s m/s</string>
-    <string name="hud_range_cue_ground">GND</string>
-    <string name="hud_range_cue_box">BOX</string>
-    <string name="hud_range_cue_lidar">LIDAR</string>
-    <string name="hud_range_latency">LAT %1$s ms</string>
     <string name="hud_range_compact">%1$s m ±%2$s</string>
-    <string name="hud_range_description">Follow range</string>
 
     <!-- Right rail. -->
-    <string name="hud_rail_follow">FOLLOW</string>
     <string name="hud_rail_tracking">TRACKING</string>
-    <string name="hud_rail_strict">STRICT</string>
-    <string name="hud_rail_smart">SMART</string>
     <string name="hud_rail_cam_swap">%1$s ⇄ %2$s</string>
-    <string name="hud_rail_rec">REC</string>
-    <string name="hud_rail_more">More</string>
     <string name="hud_rail_mode_not_applied">Re-acquire mode not applied</string>
     <string name="hud_rail_reacquire_description">Re-acquire mode</string>
     <string name="hud_rail_pending">pending</string>
@@ -100,9 +80,7 @@
     <string name="hud_nav_q_hold_ok">HOLD OK</string>
     <string name="hud_nav_q_no_flow">NO FLOW</string>
     <string name="hud_nav_q_drift">DRIFT</string>
-    <string name="hud_nav_auto_switch">Vision-nav switches sets automatically; a manual switch may be overridden.</string>
     <string name="hud_nav_set">Set %1$d</string>
-    <string name="hud_nav_active">ACTIVE</string>
     <string name="hud_nav_posxy">Position</string>
     <string name="hud_nav_velxy">Velocity</string>
     <string name="hud_nav_yaw">Yaw</string>
@@ -114,10 +92,8 @@
     <string name="hud_nav_src_wheel">Wheel encoder</string>
     <string name="hud_nav_src_other">Other</string>
     <string name="hud_nav_src_unknown">—</string>
-    <string name="hud_nav_use_set">Use set %1$d</string>
     <string name="hud_nav_extnav_readout">External nav %1$s · %2$s Hz</string>
     <string name="hud_nav_gps_readout">GPS %1$s · %2$s sats · HDOP %3$s</string>
-    <string name="hud_nav_ekf_readout">EKF %1$s</string>
     <string name="hud_nav_flag_vel_h">VEL H</string>
     <string name="hud_nav_flag_pos_rel">POS REL</string>
     <string name="hud_nav_flag_pos_abs">POS ABS</string>
@@ -139,9 +115,6 @@
     <string name="hud_map_fc_pos">FC POS</string>
     <string name="hud_map_toast_local">Minimap: local frame (no GNSS position)</string>
     <string name="hud_map_origin">ORIGIN</string>
-    <string name="hud_map_pin_auto">AUTO</string>
-    <string name="hud_map_pin_local">LOCAL</string>
-    <string name="hud_map_pin_map">MAP</string>
     <string name="hud_map_scale">%1$d m</string>
     <string name="hud_map_description">Local map</string>
 

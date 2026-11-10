@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.model.PilotInput
 import com.altnautica.gcs.core.model.PilotLink
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.core.skills.hud.pilotFresh
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
@@ -77,7 +78,7 @@ internal class PilotChannel(
     override val stateFresh: Boolean
         get() {
             val at = lastStateMs ?: return false
-            return _connected.value && clock.nowMs() - at <= PilotState.STALE_MS
+            return _connected.value && pilotFresh(at, clock.nowMs())
         }
     @Volatile private var lastHbMs: Long? = null
     private var actionId = 0L

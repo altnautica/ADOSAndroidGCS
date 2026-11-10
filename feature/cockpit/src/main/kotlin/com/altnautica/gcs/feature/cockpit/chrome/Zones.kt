@@ -63,6 +63,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.model.Attitude
+import com.altnautica.gcs.core.skills.hud.ReadoutFormat
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.hypot
@@ -253,11 +254,11 @@ fun GimbalPad(label: String, hint: String, size: Dp, onRate: (Float, Float) -> U
 fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
     val c = LocalChrome.current
     val cells = listOf(
-        Cell("D", "cockpit.readout.distance", values.distanceM, "m"),
-        Cell("H", "cockpit.readout.height", values.heightM, "m"),
-        Cell("H.S", "cockpit.readout.hspeed", values.hSpeedMs, "m/s"),
-        Cell("V.S", "cockpit.readout.vspeed", values.vSpeedMs, "m/s"),
-        Cell("AGL", "cockpit.readout.agl", values.aglM, "m"),
+        Cell("D", "cockpit.readout.distance", values.distanceM, ReadoutFormat.Kind.Distance),
+        Cell("H", "cockpit.readout.height", values.heightM, ReadoutFormat.Kind.Metres),
+        Cell("H.S", "cockpit.readout.hspeed", values.hSpeedMs, ReadoutFormat.Kind.Speed),
+        Cell("V.S", "cockpit.readout.vspeed", values.vSpeedMs, ReadoutFormat.Kind.Speed),
+        Cell("AGL", "cockpit.readout.agl", values.aglM, ReadoutFormat.Kind.Metres),
     )
     ChromePanel(modifier.fillMaxSize().testTag("bottom-row")) {
         Row(
@@ -265,12 +266,13 @@ fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            for ((tag, key, value, unit) in cells) {
+            for ((tag, key, value, kind) in cells) {
+                val (text, unit) = ReadoutFormat.readoutParts(kind, value?.toDouble())
                 Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.semantics(mergeDescendants = true) {}.testTag("value-$tag")) {
                     val label = specText(key)
                     val shown = if (tag == "AGL" && values.aglTag != null) "$label ${values.aglTag}" else label
                     Text(shown, style = c.labelText, modifier = Modifier.padding(end = 4.dp, bottom = 2.dp), maxLines = 1)
-                    Text(formatValue(value), style = c.valueText, maxLines = 1, overflow = TextOverflow.Clip)
+                    Text(text, style = c.valueText, maxLines = 1, overflow = TextOverflow.Clip)
                     Text(unit, style = c.labelText, modifier = Modifier.padding(start = 2.dp, bottom = 2.dp), maxLines = 1)
                 }
             }
@@ -278,8 +280,8 @@ fun BottomRow(values: FlightValues, modifier: Modifier = Modifier) {
     }
 }
 
-/** One bottom-row readout: its test tag, spec label key, value and unit. */
-private data class Cell(val tag: String, val key: String, val value: Float?, val unit: String)
+/** One bottom-row readout: its test tag, spec label key, value and how it reads. */
+private data class Cell(val tag: String, val key: String, val value: Float?, val kind: ReadoutFormat.Kind)
 
 /**
  * The bottom-left card: one page at a time (map, attitude, obstacles), switched by a

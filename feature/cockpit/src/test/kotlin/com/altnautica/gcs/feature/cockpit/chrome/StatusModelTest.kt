@@ -4,8 +4,10 @@ import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.skills.hud.ReadoutFormat
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
+import com.altnautica.gcs.feature.cockpit.pilot.PillFacts
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightCheck
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightItem
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightResult
@@ -84,11 +86,38 @@ class StatusModelTest {
     }
 
     @Test
-    fun `bottom row values format with a dash when unknown`() {
-        assertEquals("—", formatValue(null))
-        assertEquals("12.3", formatValue(12.34f))
-        assertEquals("-0.5", formatValue(-0.5f))
-        assertEquals("120", formatValue(120.4f))
+    fun `bottom row values read through the shared readout formatters`() {
+        assertEquals("—" to "m", ReadoutFormat.readoutParts(ReadoutFormat.Kind.Distance, null))
+        assertEquals("120" to "m", ReadoutFormat.readoutParts(ReadoutFormat.Kind.Distance, 120.4))
+        assertEquals("1.25" to "km", ReadoutFormat.readoutParts(ReadoutFormat.Kind.Distance, 1250.0))
+        assertEquals("120.4" to "m", ReadoutFormat.readoutParts(ReadoutFormat.Kind.Metres, 120.4))
+        assertEquals("0.0" to "m/s", ReadoutFormat.readoutParts(ReadoutFormat.Kind.Speed, -0.04))
+        assertEquals("—" to "m/s", ReadoutFormat.readoutParts(ReadoutFormat.Kind.Speed, null))
+    }
+
+    @Test
+    fun `a missing or stale pilot reads not answering and drops its readiness and controller items`() {
+        val readiness = PreflightResult(emptyList(), listOf(ReadinessItem("position", ok = false, severity = ReadinessSeverity.Block, msg = "No position estimate")))
+        val fresh = StatusModel.items(emptyList(), readiness, emptyList(), PillFacts(pilotRule = true, pilotAgeMs = 1_999, controllerLost = true))
+        assertEquals(listOf("ready:position", "controller_lost"), fresh.map { it.key })
+        val stale = StatusModel.items(emptyList(), readiness, emptyList(), PillFacts(pilotRule = true, pilotAgeMs = 2_000, controllerLost = true))
+        assertEquals(listOf("pilot_not_answering"), stale.map { it.key })
+        val never = StatusModel.items(emptyList(), none, emptyList(), PillFacts(pilotRule = true, pilotAgeMs = null))
+        assertEquals(listOf("pilot_not_answering"), never.map { it.key })
+        // A vehicle without an agent has no pilot rule.
+        assertEquals(emptyList<StatusItem>(), StatusModel.items(emptyList(), none, emptyList(), PillFacts(pilotRule = false)))
+    }
+
+    @Test
+    fun `an unreachable agent is critical and failing pre-flight items each warn`() {
+        val items = StatusModel.items(
+            emptyList(), none, emptyList(),
+            PillFacts(pilotRule = true, pilotAgeMs = 100, agentReachable = false, preflightFailing = listOf(PreflightItem.Gps3d, PreflightItem.Battery)),
+        )
+        assertEquals(listOf("agent_unreachable", "preflight:Gps3d", "preflight:Battery"), items.map { it.key })
+        assertEquals(StatusSeverity.Critical, StatusModel.pill(items, emptySet()).severity)
+        assertEquals(StatusSource.Preflight, items[1].source)
+        assertEquals(StatusModel.PREFLIGHT_FAILING_KEY, items[1].specKey)
     }
 
     @Test

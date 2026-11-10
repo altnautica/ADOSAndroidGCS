@@ -140,6 +140,8 @@ object PilotWire {
             linkLossAction = data.str("link_loss_action"),
             vtolTransitioning = data.bool("vtol_transitioning") == true,
             setupStep = data.str("setup_step"),
+            fcFailsafe = data.bool("fc_failsafe") == true,
+            failsafeCause = data.str("failsafe_cause"),
         )
     }
 

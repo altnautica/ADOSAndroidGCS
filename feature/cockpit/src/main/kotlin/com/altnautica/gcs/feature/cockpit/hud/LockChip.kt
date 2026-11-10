@@ -34,6 +34,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.LockState
 import com.altnautica.gcs.feature.cockpit.autonomy.TargetState
+import com.altnautica.gcs.feature.cockpit.flow.specText
 
 private const val REACQUIRED_WORD_MS = 4_000L
 
@@ -57,7 +58,7 @@ internal fun LockChip(
     val c = AdosTheme.colors
     val who = stringResource(R.string.hud_lock_who, TargetState.classWord(detection?.classLabel ?: "").ifBlank { "—" }, trackId ?: 0)
     val word = when {
-        !feedFresh -> stringResource(R.string.hud_lock_waiting)
+        !feedFresh -> specText("target.waiting_for_feed")
         follow != null && followFresh && follow.phase != FollowPhase.Idle -> when (follow.phase) {
             FollowPhase.Following -> stringResource(R.string.hud_lock_following)
             FollowPhase.Acquiring -> stringResource(R.string.hud_lock_acquiring)
@@ -90,7 +91,7 @@ internal fun LockChip(
             Spacer(Modifier.width(AdosSpacing.S3))
             Text(detection?.let { "${TargetState.pct(it.confidence)}%" } ?: "—", style = AdosTypography.numeric.small)
             IconButton(onClick = onRelease, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.hud_lock_release))
+                Icon(Icons.Outlined.Close, contentDescription = specText("target.release_target"))
             }
         }
     }

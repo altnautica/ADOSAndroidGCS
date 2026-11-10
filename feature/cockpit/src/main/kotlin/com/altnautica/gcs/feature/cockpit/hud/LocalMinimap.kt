@@ -209,9 +209,9 @@ private fun PinToggle(pin: String, onPin: (String) -> Unit) {
     val style = AdosTypography.numeric.small.copy(fontSize = 10.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         for ((value, label) in listOf(
-            CockpitSettingsRepository.MINIMAP_AUTO to stringResource(R.string.hud_map_pin_auto),
-            CockpitSettingsRepository.MINIMAP_LOCAL to stringResource(R.string.hud_map_pin_local),
-            CockpitSettingsRepository.MINIMAP_MAP to stringResource(R.string.hud_map_pin_map),
+            CockpitSettingsRepository.MINIMAP_AUTO to specText("minimap.pin.auto"),
+            CockpitSettingsRepository.MINIMAP_LOCAL to specText("minimap.pin.local"),
+            CockpitSettingsRepository.MINIMAP_MAP to specText("minimap.pin.map"),
         )) {
             val on = value == pin
             Text(

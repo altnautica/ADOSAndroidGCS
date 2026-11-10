@@ -393,12 +393,12 @@ private fun rememberLayerLabels(): LayerLabels {
         LayerLabels(
             unavailable(spec.format("layer.name.ar")),
             unavailable(r.getString(R.string.layer_obstacles)),
-            unavailable(r.getString(R.string.layer_depth)),
-            unavailable(r.getString(R.string.layer_surfaces)),
+            unavailable(spec.format("vision.depth")),
+            unavailable(spec.format("vision.surfaces")),
             unavailable(r.getString(R.string.layer_targets)),
             spec.format("layer.depth_unscaled"),
             spec.format("layer.ar_approx"),
-            r.getString(R.string.layer_reduced_rate),
+            spec.format("nav.reduced_rate"),
         )
     }
 }

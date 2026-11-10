@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.cockpit.CockpitViewModel
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -92,11 +93,11 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(stringResource(R.string.vision_panel_title), color = c.mediaOn)
+        Text(specText("vision.title"), color = c.mediaOn)
 
-        Text(stringResource(R.string.vision_detections), color = c.mediaOn)
+        Text(specText("vision.detections"), color = c.mediaOn)
         val items = batches[cameraId]?.items.orEmpty()
-        if (items.isEmpty()) Text(stringResource(R.string.vision_detections_none), color = c.mediaOn.copy(alpha = 0.7f))
+        if (items.isEmpty()) Text(specText("vision.no_detections"), color = c.mediaOn.copy(alpha = 0.7f))
         for (d in items.sortedByDescending { it.confidence }.take(MAX_ROWS)) {
             val pct = Math.round(d.confidence * 100)
             val row = d.trackId?.let { stringResource(R.string.vision_detection_row_track, d.classLabel, pct, it) }
@@ -104,10 +105,10 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
             Text(row, color = c.mediaOn)
         }
 
-        Text(stringResource(R.string.vision_model), color = c.mediaOn)
+        Text(specText("vision.detector_model"), color = c.mediaOn)
         val s = status
         if (s == null) {
-            if (unreachable) Text(stringResource(R.string.vision_model_unavailable), color = c.mediaOn.copy(alpha = 0.7f))
+            if (unreachable) Text(specText("vision.engine_unreachable"), color = c.mediaOn.copy(alpha = 0.7f))
         } else {
             for (m in s.models.filter { it.kind == DETECTION_KIND }) {
                 val text = if (m.loaded) stringResource(R.string.vision_model_active, m.id) else stringResource(R.string.vision_model_switch, m.id)
@@ -139,20 +140,20 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
                 Switch(checked = sw.checked, enabled = sw.enabled, onCheckedChange = { layers.toggle(id) })
             }
         }
-        Text(stringResource(R.string.vision_depth_style), color = c.mediaOn)
+        Text(specText("vision.depth_style"), color = c.mediaOn)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(depth.style == CellStyle.Solid, { layers.setDepthOptions(depth.copy(style = CellStyle.Solid)) }, { Text(stringResource(R.string.vision_depth_solid)) })
-            FilterChip(depth.style == CellStyle.Outline, { layers.setDepthOptions(depth.copy(style = CellStyle.Outline)) }, { Text(stringResource(R.string.vision_depth_outline)) })
+            FilterChip(depth.style == CellStyle.Solid, { layers.setDepthOptions(depth.copy(style = CellStyle.Solid)) }, { Text(specText("vision.depth_style.solid")) })
+            FilterChip(depth.style == CellStyle.Outline, { layers.setDepthOptions(depth.copy(style = CellStyle.Outline)) }, { Text(specText("vision.depth_style.outline")) })
         }
-        Text(stringResource(R.string.vision_depth_range), color = c.mediaOn)
+        Text(specText("vision.depth_range"), color = c.mediaOn)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (r in DEPTH_RANGES) {
-                val label = r?.let { stringResource(R.string.vision_depth_range_m, it.toInt()) } ?: stringResource(R.string.vision_depth_range_off)
+                val label = r?.let { stringResource(R.string.vision_depth_range_m, it.toInt()) } ?: specText("vision.off")
                 FilterChip(depth.rangeM == r, { layers.setDepthOptions(depth.copy(rangeM = r)) }, { Text(label) })
             }
         }
 
-        Text(stringResource(R.string.vision_health), color = c.mediaOn)
+        Text(specText("vision.engine"), color = c.mediaOn)
         s?.let { st ->
             val fps = st.models.firstOrNull { it.loaded && it.kind == DETECTION_KIND }?.fps
             Text(

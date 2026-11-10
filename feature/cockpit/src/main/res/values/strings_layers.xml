@@ -4,26 +4,12 @@
     <string name="layer_ar_route">Route</string>
     <string name="layer_ar_motion">Motion</string>
     <string name="layer_obstacles">Obstacles</string>
-    <string name="layer_depth">Depth</string>
-    <string name="layer_surfaces">Surfaces</string>
-    <string name="layer_reduced_rate">Reduced update rate (radio)</string>
-    <string name="vision_panel_title">Vision</string>
-    <string name="vision_detections">Detections</string>
-    <string name="vision_detections_none">No detections</string>
     <string name="vision_detection_row">%1$s · %2$d %%</string>
     <string name="vision_detection_row_track">#%3$d %1$s · %2$d %%</string>
-    <string name="vision_model">Detector</string>
     <string name="vision_model_switch">Switching restarts the vision engine. Hold to use %1$s.</string>
     <string name="vision_model_active">%1$s · active</string>
-    <string name="vision_model_unavailable">Vision engine unavailable</string>
-    <string name="vision_depth_style">Depth style</string>
-    <string name="vision_depth_solid">Solid</string>
-    <string name="vision_depth_outline">Outline</string>
-    <string name="vision_depth_range">Depth range</string>
     <string name="vision_layer_forced">On in the Vision view</string>
-    <string name="vision_depth_range_off">Off</string>
     <string name="vision_depth_range_m">%1$d m</string>
-    <string name="vision_health">Engine</string>
     <string name="vision_health_rate">%1$s · %2$.1f fps</string>
     <string name="vision_health_state">%1$s</string>
 </resources>

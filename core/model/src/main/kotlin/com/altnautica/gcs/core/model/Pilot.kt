@@ -184,6 +184,10 @@ data class PilotState(
     val vtolTransitioning: Boolean = false,
     /** The setup step a tuning flight is running (`autotune_roll`, ...), while one runs. */
     val setupStep: String? = null,
+    /** True during a true FC failsafe (RC loss, battery, GCS link); the agent omits it while false. */
+    val fcFailsafe: Boolean = false,
+    /** What raised the failsafe (`rc_or_failsafe`, `fc`), while [fcFailsafe] holds. */
+    val failsafeCause: String? = null,
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }

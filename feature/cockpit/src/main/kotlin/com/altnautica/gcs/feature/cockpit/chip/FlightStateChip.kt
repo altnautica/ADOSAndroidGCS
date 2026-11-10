@@ -50,6 +50,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** A spec colour (0xAARRGGBB) as a Compose colour. */
 fun specColor(argb: Long): Color = Color(argb.toInt())
@@ -134,13 +135,12 @@ fun FlightStateChip(
 
 @Composable
 private fun ChipActionButton(button: ChipButton, tint: Color, onClick: () -> Unit) {
-    val label = stringResource(
-        when (button) {
-            ChipButton.SetUpAircraft -> R.string.flight_chip_set_up_aircraft
-            ChipButton.Resume -> R.string.flight_chip_resume
-            ChipButton.TakeControl -> R.string.flight_chip_take_control
-        },
-    )
+    val label = when (button) {
+        ChipButton.SetUpAircraft -> stringResource(R.string.flight_chip_set_up_aircraft)
+        ChipButton.Resume -> stringResource(R.string.flight_chip_resume)
+        ChipButton.TakeControl -> stringResource(R.string.flight_chip_take_control)
+        ChipButton.Abort -> specText("flow.launch.abort")
+    }
     Surface(
         modifier = Modifier
             .defaultMinSize(minHeight = AdosTheme.touchMin, minWidth = AdosTheme.touchMin)

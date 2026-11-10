@@ -25,7 +25,7 @@ import java.io.File
 /** The shared chip golden cases (`chip-cases.json`), every field of every case. */
 class ChipCasesTest {
 
-    private val chips = FlightStateChipResolver(testSpec.flightState, testSpec.tokens)
+    private val chips = FlightStateChipResolver(testSpec.flightState, testSpec.tokens, testSpec.setupStrings.strings)
 
     private val cases: List<JsonObject> =
         Json.parseToJsonElement(File("../../core/skills/src/test/resources/fixtures/chip-cases.json").readText()).jsonArray.map { it.jsonObject }
@@ -38,6 +38,7 @@ class ChipCasesTest {
         ChipButton.SetUpAircraft -> "setup"
         ChipButton.Resume -> "resume"
         ChipButton.TakeControl -> "take_control"
+        ChipButton.Abort -> "abort"
         null -> null
     }
 
