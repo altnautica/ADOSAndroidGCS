@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.video.whep
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -26,8 +27,14 @@ class WhepException(message: String, val httpCode: Int? = null) : IOException(me
  *     POST {base}/whep[?camera=id]   Content-Type: application/sdp, X-ADOS-Key
  *     201  Location: /whep/<session>?camera=<id>   body: answer SDP
  *     DELETE <Location resolved against the base>
+ *
+ * The blocking calls run on [io]; tests pass their own dispatcher so the
+ * exchange completes on the test scheduler.
  */
-class WhepSignaling(private val client: OkHttpClient) {
+class WhepSignaling(
+    private val client: OkHttpClient,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) {
 
     /**
      * POSTs the offer. The exchange runs to completion even when the caller is
@@ -36,7 +43,7 @@ class WhepSignaling(private val client: OkHttpClient) {
      * is rethrown. Nothing the agent created is left behind.
      */
     suspend fun offer(baseUrl: String, cameraId: String?, apiKey: String?, offerSdp: String): WhepAnswer {
-        val answer = withContext(NonCancellable + Dispatchers.IO) { post(baseUrl, cameraId, apiKey, offerSdp) }
+        val answer = withContext(NonCancellable + io) { post(baseUrl, cameraId, apiKey, offerSdp) }
         if (!currentCoroutineContext().isActive) {
             answer.resourceUrl?.let { withContext(NonCancellable) { delete(it, apiKey) } }
             currentCoroutineContext().ensureActive()
@@ -63,7 +70,7 @@ class WhepSignaling(private val client: OkHttpClient) {
 
     /** Best effort: a teardown proceeds whether or not the DELETE lands. */
     suspend fun delete(resourceUrl: HttpUrl, apiKey: String?) {
-        withContext(Dispatchers.IO) {
+        withContext(io) {
             val request = Request.Builder()
                 .url(resourceUrl)
                 .delete()

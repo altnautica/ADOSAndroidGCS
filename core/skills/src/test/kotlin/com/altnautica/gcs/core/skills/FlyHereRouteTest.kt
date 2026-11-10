@@ -36,6 +36,21 @@ class FlyHereRouteTest {
     }
 }
 
+class FlyHereFcRouteTest {
+    private val vehicle = FakeVehicle()
+
+    private fun ctx(mode: String) = SkillContext(
+        vehicle, armed = true, mode = com.altnautica.gcs.core.model.FlightMode(0, mode), linkFresh = true,
+        checklistReady = true, autonomousNav = true,
+    )
+
+    @Test
+    fun `without the pilot route, Fly Here is offered only while the FC flies GUIDED`() {
+        assertEquals(SkillReason.FLY_HERE_NOT_GUIDED, FlyHereSkill.state(ctx("LOITER")).reasonKey)
+        assertTrue(FlyHereSkill.state(ctx("GUIDED")).enabled)
+    }
+}
+
 class LaunchRangeTest {
     @Test
     fun `take-off altitude range and default are the spec's launch values`() {

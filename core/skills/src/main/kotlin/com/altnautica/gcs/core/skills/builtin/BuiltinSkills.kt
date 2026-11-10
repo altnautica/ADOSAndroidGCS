@@ -577,7 +577,14 @@ object FlyHereSkill : BuiltinSkill(
     bindable = false,
 ) {
     override fun state(ctx: SkillContext): SkillState {
-        disabledIfNoLink(ctx, ctx.flyHereToPilot())?.let { return it }
+        val toPilot = ctx.flyHereToPilot()
+        disabledIfNoLink(ctx, toPilot)?.let { return it }
+        // The FC's reposition is offered only while it flies GUIDED (on firmware that has it):
+        // in any other mode the FC would refuse or leave the mode the operator chose.
+        if (!toPilot) {
+            val guided = ctxModes(ctx).any { it.name.equals(GUIDED_MODE, ignoreCase = true) }
+            if (guided && !ctx.mode?.name.equals(GUIDED_MODE, ignoreCase = true)) return disabledState(SkillReason.FLY_HERE_NOT_GUIDED)
+        }
         return when (ctx.armed) {
             false -> disabledState(SkillReason.NOT_ARMED)
             null -> disabledState(SkillReason.NO_FC_LINK)
@@ -601,6 +608,7 @@ object FlyHereSkill : BuiltinSkill(
         return send(ctx, VehicleCommand.FlyTo(lat, lon, alt))
     }
 
+    private const val GUIDED_MODE = "GUIDED"
     private const val PILOT_LAT = "lat"
     private const val PILOT_LON = "lon"
     private const val PILOT_ALT_M = "alt_m"

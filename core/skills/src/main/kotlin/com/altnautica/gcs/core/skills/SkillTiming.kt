@@ -68,6 +68,9 @@ object SkillReason {
 
     /** The FC flies a failsafe return or landing; pause would cancel it. Same code as the pilot's refusal. */
     const val FAILSAFE = "failsafe"
+
+    /** Fly Here by the FC route needs the FC in GUIDED; same code as the pilot's refusal. */
+    const val FLY_HERE_NOT_GUIDED = "control_mode"
     const val NO_RESPONSE = "noResponse"
     const val PLUGIN_STOPPED = "pluginStopped"
     const val STOP_QUEUED = "stopQueued"

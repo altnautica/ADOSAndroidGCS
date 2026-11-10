@@ -32,6 +32,8 @@ app's `versionName`.
   "Refused: <code>".
 - Without a camera that zooms or shoots, zoom goes digital (1×, 2×, 4×) and a
   photo saves the shown frame on the device.
+- Fly Here by the flight controller's route is offered only while it flies
+  GUIDED; the pilot route is unchanged.
 - The aircraft setup wizard no longer opens by itself on connect: the app
   offers it once per flight controller, on the ground. The notification
   permission is asked only on Home with no vehicle armed.
