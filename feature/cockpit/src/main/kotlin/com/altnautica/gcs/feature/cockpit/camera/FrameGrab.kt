@@ -38,13 +38,6 @@ class ShownVideo(zoom: Float = 1f) {
     /** A SurfaceView for a decoder, a TextureView for a software-canvas producer; null while none exists. */
     var view: View? = null
 
-    /** [view] as set from a SurfaceView-only callback. */
-    var surfaceView: SurfaceView?
-        get() = view as? SurfaceView
-        set(value) {
-            view = value
-        }
-
     var bounds: Rect = Rect.Zero
     var zoom: Float = zoom
 }

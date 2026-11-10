@@ -58,14 +58,12 @@ private fun rememberVideoSessionManager(): VideoSessionManager {
  * role's view while it exists (null after release), for callers that copy its
  * pixels (the cockpit's panel backdrop and frame grab): a SurfaceView for a
  * decoder, a TextureView for a software-canvas producer (`bufferScale < 1`).
- * [onSurfaceView] receives that view only when it is a SurfaceView.
  */
 @Composable
 fun VideoSurface(
     source: VideoSource?,
     modifier: Modifier = Modifier,
     role: VideoSurfaceRole = VideoSurfaceRole.Main,
-    onSurfaceView: ((SurfaceView?) -> Unit)? = null,
     onVideoView: ((View?) -> Unit)? = null,
 ) {
     val manager = rememberVideoSessionManager()
@@ -79,7 +77,7 @@ fun VideoSurface(
         }
     }
     val h = handle ?: return
-    VideoSessionView(h, role, modifier, onSurfaceView, onVideoView)
+    VideoSessionView(h, role, modifier, onVideoView)
 }
 
 /**
@@ -93,18 +91,10 @@ internal fun VideoSessionView(
     handle: VideoSessionHandle,
     role: VideoSurfaceRole,
     modifier: Modifier,
-    onSurfaceView: ((SurfaceView?) -> Unit)? = null,
     onVideoView: ((View?) -> Unit)? = null,
 ) {
     // Only the main role reports its view; a picture-in-picture view is never sampled.
-    val report: ((View?) -> Unit)? = if (role != VideoSurfaceRole.Main || (onSurfaceView == null && onVideoView == null)) {
-        null
-    } else {
-        { view ->
-            onVideoView?.invoke(view)
-            if (view == null || view is SurfaceView) onSurfaceView?.invoke(view as SurfaceView?)
-        }
-    }
+    val report: ((View?) -> Unit)? = if (role != VideoSurfaceRole.Main) null else onVideoView
     key(handle) {
         when (val out = handle.output) {
             is VideoOutput.Sinks -> when (role) {

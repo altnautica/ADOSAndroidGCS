@@ -7,15 +7,6 @@
     <string name="cockpit_unknown_node_message">This node is not reachable through any link. Connect to it from the fleet first.</string>
     <string name="cockpit_no_carried_title">No drone linked to this ground station</string>
     <string name="cockpit_no_carried_message">Pair a drone with this ground station on its Carried drones tab, then open the cockpit again.</string>
-    <string name="cockpit_leave_armed_title">Leave the cockpit?</string>
-    <string name="cockpit_leave_armed_message">The vehicle is armed. Leaving the cockpit does not disarm it.</string>
-    <string name="cockpit_leave">Leave</string>
-    <string name="cockpit_stay">Stay</string>
-    <string name="cockpit_stream_switch_failed">Could not switch to that camera</string>
-    <string name="cockpit_recording_failed">Recording command failed</string>
-    <string name="cockpit_photo_not_saved">Photo not saved</string>
-    <string name="cockpit_checklist_overridden">Preflight checklist overridden</string>
-    <string name="cockpit_swap_video_map">Swap video and map</string>
     <string name="cockpit_split_divider">Resize video and map</string>
     <string name="cockpit_tts_mode">Mode %1$s</string>
 
@@ -26,23 +17,9 @@
     <string name="cockpit_reach_cloud">CLOUD</string>
     <string name="cockpit_reach_phone_radio">PHONE RADIO</string>
     <string name="cockpit_reach_blocked">NO LINK</string>
-    <string name="cockpit_armed">ARMED</string>
-    <string name="cockpit_disarmed">DISARMED</string>
-    <string name="cockpit_video_live">LIVE</string>
-    <string name="cockpit_video_frozen">FROZEN</string>
-    <string name="cockpit_video_connecting">VIDEO…</string>
-    <string name="cockpit_video_none">NO VIDEO</string>
     <string name="cockpit_stick_blocked">STICKS N/A</string>
     <!-- Stick chip: on/off with the controller battery, and the mode that blocks stick control -->
-    <string name="cockpit_stick_on_battery">STICK ON · %1$d %%</string>
-    <string name="cockpit_stick_off_battery">STICK OFF · %1$d %%</string>
-    <string name="cockpit_stick_on_battery_unknown">STICK ON · —</string>
-    <string name="cockpit_stick_off_battery_unknown">STICK OFF · —</string>
     <string name="cockpit_stick_mode_blocked">STICK · %1$s</string>
-    <string name="cockpit_preflight_chip">PREFLIGHT %1$d/%2$d</string>
-    <string name="cockpit_rec">REC</string>
-    <string name="cockpit_flight_time">FLT</string>
-    <string name="cockpit_kill">KILL</string>
 
     <!-- Alerts -->
     <string name="cockpit_alert_level_critical">CRITICAL</string>
@@ -68,51 +45,21 @@
     <!-- Preflight -->
     <string name="cockpit_preflight_title">Preflight %1$d of %2$d</string>
     <string name="cockpit_preflight_gps">GPS 3D fix</string>
-    <string name="cockpit_preflight_battery">Battery above the low band</string>
     <string name="cockpit_preflight_ekf">EKF healthy</string>
     <string name="cockpit_preflight_home">Home position set</string>
-    <string name="cockpit_preflight_link">Link fresh</string>
-    <string name="cockpit_preflight_prearm">No pre-arm failures</string>
     <string name="cockpit_preflight_not_reported">%1$s (not reported)</string>
     <string name="cockpit_preflight_pass">PASS</string>
     <string name="cockpit_preflight_fail">FAIL</string>
 
     <!-- Skills -->
-    <string name="cockpit_skill_drawer">All skills</string>
 
     <!-- Skill reasons -->
-    <string name="cockpit_reason_no_fc_link">No flight controller link</string>
-    <string name="cockpit_reason_receive_only">Receive-only link</string>
     <string name="cockpit_reason_already_armed">Already armed</string>
-    <string name="cockpit_reason_not_armed">Not armed</string>
     <string name="cockpit_reason_already_disarmed">Already disarmed</string>
-    <string name="cockpit_reason_mode_unavailable">Mode not available on this vehicle</string>
-    <string name="cockpit_reason_no_autonomous_nav">Needs autonomous navigation</string>
-    <string name="cockpit_reason_no_charges">No charges left</string>
-    <string name="cockpit_reason_command_rejected">Command rejected</string>
-    <string name="cockpit_reason_command_timeout">No answer from the vehicle</string>
-    <string name="cockpit_reason_command_unsupported">Not supported on this link</string>
-    <string name="cockpit_reason_command_denied">Command not sent</string>
-    <string name="cockpit_reason_command_queued">Command queued</string>
-    <string name="cockpit_reason_command_failed">Command failed</string>
-    <string name="cockpit_reason_state_error">Skill state unavailable</string>
-    <string name="cockpit_reason_fly_here_target">Fly here needs a point and an altitude of 2 to 120 m</string>
-    <string name="cockpit_reason_superseded">Replaced by a newer recovery command</string>
-    <string name="cockpit_reason_goto_bad_args">Fly Here refused: the point or altitude is not valid</string>
-    <string name="cockpit_reason_goto_not_armed">Fly Here refused: the drone is not armed</string>
-    <string name="cockpit_reason_goto_landed">Fly Here refused: the drone is on the ground</string>
-    <string name="cockpit_reason_goto_tuning">Fly Here refused: a setup step is running</string>
-    <string name="cockpit_reason_goto_no_home">Fly Here refused: the drone has no home position yet</string>
-    <string name="cockpit_reason_goto_launching">Fly Here refused: the drone is still taking off</string>
-    <string name="cockpit_reason_goto_control_mode">Fly Here refused: the flight controller has control</string>
-    <string name="cockpit_reason_goto_failsafe">Fly Here refused: the drone is in a failsafe return or landing; change mode first</string>
-    <string name="cockpit_reason_no_target">No target in view to designate</string>
-    <string name="cockpit_reason_vehicle_class">Not available on this vehicle type</string>
 
     <!-- Confirm sheet -->
 
     <!-- Flight mode picker -->
-    <string name="cockpit_mode_picker_title">Flight mode</string>
     <string name="cockpit_mode_picker_empty">The vehicle has not reported its flight modes yet.</string>
     <string name="cockpit_mode_current">Current mode</string>
     <string name="cockpit_mode_tier_tap">Tap to switch</string>
@@ -127,11 +74,7 @@
     <string name="grid_mode_photo">Photo mode</string>
     <string name="grid_mode_video">Video mode</string>
     <string name="cockpit_menu_home">Back to Home</string>
-    <string name="cockpit_menu_preflight">Pre-flight checklist (%1$d/%2$d)</string>
-    <string name="cockpit_menu_modes">Flight modes</string>
-    <string name="cockpit_menu_settings">Camera and display settings</string>
     <string name="cockpit_menu_camera">Camera: %1$s</string>
-    <string name="cockpit_menu_view">Next view</string>
     <string name="cockpit_menu_link">Link: %1$s</string>
     <string name="cockpit_menu_controller">Controller: %1$s</string>
     <!-- Controller stick control: alerts, mode picker line, all-modes opt-in -->

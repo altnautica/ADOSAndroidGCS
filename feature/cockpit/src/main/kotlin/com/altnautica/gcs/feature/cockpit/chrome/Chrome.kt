@@ -6,6 +6,8 @@ import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
 import android.view.SurfaceView
+import android.view.TextureView
+import android.view.View
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -148,8 +150,9 @@ val BackdropBlurSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSIO
 
 /**
  * A low-resolution copy of the main video, sampled a few times a second, that the panels
- * draw blurred behind themselves. Compose cannot read a SurfaceView's pixels in its draw
- * pass, so [BackdropSampler] copies them with PixelCopy instead.
+ * draw blurred behind themselves. Compose cannot read the video view's pixels in its draw
+ * pass, so [BackdropSampler] copies them (PixelCopy for a SurfaceView, `getBitmap` for a
+ * TextureView).
  */
 @Stable
 class ChromeBackdrop {
@@ -160,8 +163,8 @@ class ChromeBackdrop {
     /** Where the video draws, in root coordinates. */
     var videoBounds: Rect by mutableStateOf(Rect.Zero)
 
-    /** The main video's SurfaceView while it exists. */
-    var surfaceView: SurfaceView? = null
+    /** The main video's view while it exists: a SurfaceView, or a TextureView for a software-canvas producer. */
+    var view: View? = null
 }
 
 val LocalChromeBackdrop = staticCompositionLocalOf<ChromeBackdrop?> { null }
@@ -177,15 +180,19 @@ fun BackdropSampler(backdrop: ChromeBackdrop) {
         var shown: Bitmap? = null
         while (isActive) {
             delay(SAMPLE_MS)
-            val view = backdrop.surfaceView ?: continue
-            if (view.width <= 0 || view.height <= 0 || !view.holder.surface.isValid) continue
+            val view = backdrop.view ?: continue
+            if (view.width <= 0 || view.height <= 0) continue
             val w = (view.width / DOWNSCALE).coerceAtLeast(1)
             val h = (view.height / DOWNSCALE).coerceAtLeast(1)
             val target = spare?.takeIf { it.width == w && it.height == h } ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val ok = suspendCancellableCoroutine { cont ->
-                runCatching {
-                    PixelCopy.request(view, target, { result -> if (cont.isActive) cont.resume(result == PixelCopy.SUCCESS) }, handler)
-                }.onFailure { if (cont.isActive) cont.resume(false) }
+            val ok = when (view) {
+                is SurfaceView -> view.holder.surface.isValid && suspendCancellableCoroutine { cont ->
+                    runCatching {
+                        PixelCopy.request(view, target, { result -> if (cont.isActive) cont.resume(result == PixelCopy.SUCCESS) }, handler)
+                    }.onFailure { if (cont.isActive) cont.resume(false) }
+                }
+                is TextureView -> view.isAvailable && runCatching { view.getBitmap(target) }.isSuccess
+                else -> false
             }
             if (ok) {
                 spare = shown

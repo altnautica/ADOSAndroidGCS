@@ -6,6 +6,8 @@ import com.altnautica.gcs.core.skills.hud.refusalText
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CenterFocusStrong
@@ -128,44 +130,9 @@ private val REASONS_WITHOUT_SPEC = mapOf(
     SkillReason.ALREADY_DISARMED to R.string.cockpit_reason_already_disarmed,
 )
 
-private val REASONS = mapOf(
-    SkillReason.NO_FC_LINK to R.string.cockpit_reason_no_fc_link,
-    SkillReason.RECEIVE_ONLY to R.string.cockpit_reason_receive_only,
-    SkillReason.ALREADY_ARMED to R.string.cockpit_reason_already_armed,
-    SkillReason.NOT_ARMED to R.string.cockpit_reason_not_armed,
-    SkillReason.ALREADY_DISARMED to R.string.cockpit_reason_already_disarmed,
-    SkillReason.MODE_UNAVAILABLE to R.string.cockpit_reason_mode_unavailable,
-    SkillReason.NO_AUTONOMOUS_NAV to R.string.cockpit_reason_no_autonomous_nav,
-    SkillReason.NO_CHARGES to R.string.cockpit_reason_no_charges,
-    SkillReason.COMMAND_REJECTED to R.string.cockpit_reason_command_rejected,
-    SkillReason.COMMAND_TIMEOUT to R.string.cockpit_reason_command_timeout,
-    SkillReason.COMMAND_UNSUPPORTED to R.string.cockpit_reason_command_unsupported,
-    SkillReason.COMMAND_DENIED to R.string.cockpit_reason_command_denied,
-    SkillReason.COMMAND_QUEUED to R.string.cockpit_reason_command_queued,
-    SkillReason.COMMAND_FAILED to R.string.cockpit_reason_command_failed,
-    SkillReason.STATE_ERROR to R.string.cockpit_reason_state_error,
-    SkillReason.FLY_HERE_TARGET to R.string.cockpit_reason_fly_here_target,
-    CockpitAutonomy.REASON_NO_TARGET to R.string.cockpit_reason_no_target,
-    SkillReason.EKF_SOURCE_SET to R.string.cockpit_reason_ekf_set,
-    SkillReason.PILOT_UNAVAILABLE to R.string.cockpit_pilot_unavailable,
-    SkillReason.VEHICLE_CLASS to R.string.cockpit_reason_vehicle_class,
-    SkillReason.SUPERSEDED to R.string.cockpit_reason_superseded,
-    SkillReason.GOTO_BAD_ARGS to R.string.cockpit_reason_goto_bad_args,
-    SkillReason.GOTO_NOT_ARMED to R.string.cockpit_reason_goto_not_armed,
-    SkillReason.GOTO_LANDED to R.string.cockpit_reason_goto_landed,
-    SkillReason.GOTO_TUNING to R.string.cockpit_reason_goto_tuning,
-    SkillReason.GOTO_NO_HOME to R.string.cockpit_reason_goto_no_home,
-    SkillReason.GOTO_LAUNCHING to R.string.cockpit_reason_goto_launching,
-    SkillReason.GOTO_CONTROL_MODE to R.string.cockpit_reason_goto_control_mode,
-    SkillReason.GOTO_FAILSAFE to R.string.cockpit_reason_goto_failsafe,
-)
-
 /** Built-in labels are localized; an extension's label is shown as the extension provides it. */
 @Composable
 fun skillLabel(skill: Skill): String = skill.builtinLabelRes()?.let { stringResource(it) } ?: skill.labelKey
-
-/** String resource of a known reason key, or null for extension text. */
-fun reasonRes(reasonKey: String): Int? = REASONS[reasonKey]
 
 /** The text of a known reason key from the spec strings, or null for extension text. */
 fun reasonKeyText(strings: SetupStringsSpec, reasonKey: String): String? =
@@ -177,14 +144,16 @@ fun reasonKeyText(strings: SetupStringsSpec, reasonKey: String): String? =
  * answer with (failsafe, not_ready:<item>, …) through the spec's refusal texts; any other
  * reason is extension text shown verbatim.
  */
-@Composable
-fun reasonText(reasonKey: String): String {
-    val strings = LocalCockpitStrings.current
+fun reasonTextOf(strings: SetupStringsSpec, resources: Resources, reasonKey: String): String {
     reasonKeyText(strings, reasonKey)?.let { return it }
-    REASONS_WITHOUT_SPEC[reasonKey]?.let { return stringResource(it) }
+    REASONS_WITHOUT_SPEC[reasonKey]?.let { return resources.getString(it) }
     val spec = SpecText(strings)
     return if (spec.knowsRefusal(reasonKey)) spec.refusalText(reasonKey) else reasonKey
 }
+
+@Composable
+fun reasonText(reasonKey: String): String =
+    reasonTextOf(LocalCockpitStrings.current, LocalResources.current, reasonKey)
 
 @Composable
 fun confirmTitle(key: String, fallback: String): String = CONFIRM_TITLES[key]?.let { specText(it) } ?: fallback

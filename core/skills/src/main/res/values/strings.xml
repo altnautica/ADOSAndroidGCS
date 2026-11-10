@@ -5,5 +5,4 @@
     <string name="skill_label_fly_here">Fly here</string>
     <string name="skill_label_ekf_source_set">Switch nav source</string>
     <!-- Skill state notices. -->
-    <string name="skill_notice_stop_queued">Stop queued until the link returns</string>
 </resources>

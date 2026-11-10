@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
@@ -462,7 +463,7 @@ private fun FlowBanners(vm: CockpitViewModel, modifier: Modifier) {
     val flow by vm.flow.collectAsStateWithLifecycle()
     val pilot by vm.pilotState.collectAsStateWithLifecycle()
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        flow.launch?.let { LaunchProgressBanner(it, onAbort = { vm.activate(BuiltinIds.PAUSE) }) }
+        flow.launch?.let { LaunchProgressBanner(it, onAbort = vm::abortLaunch) }
         flow.banner?.let { HandoverBanner(it) }
         flow.sticksWith?.let { SticksWithBanner(it, vm::takeSticks) }
         flow.linkLossInS?.let { s ->
@@ -538,6 +539,7 @@ private fun VideoStage(
             return@Box
         }
         val sampler = backdrop?.takeIf { sampleBackdrop }
+        SideEffect { shown?.zoom = zoom.toFloat() }
         // Digital zoom: the video is laid out [zoom] times larger around its centre and clipped to its slot.
         BoxWithConstraints(
             Modifier.fillMaxSize().clipToBounds().zIndex(Z.VIDEO).onGloballyPositioned { shown?.bounds = it.boundsInRoot() },
@@ -550,9 +552,9 @@ private fun VideoStage(
                     .onGloballyPositioned { coords ->
                         sampler?.videoBounds = coords.boundsInRoot()
                     },
-                onSurfaceView = { view ->
-                    sampler?.surfaceView = view
-                    shown?.surfaceView = view
+                onVideoView = { view ->
+                    sampler?.view = view
+                    shown?.view = view
                 },
             )
         }

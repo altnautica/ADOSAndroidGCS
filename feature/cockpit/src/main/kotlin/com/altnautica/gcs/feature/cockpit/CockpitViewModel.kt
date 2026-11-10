@@ -229,6 +229,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** Spec strings with the shared interpolation rules (refusals, link loss, AGL marks). */
     private val specText by lazy { SpecText(spec.setupStrings) }
+    private val statusPill by lazy { StatusPill(specText, spec.layout.statusPill!!.storageWarnPct!!, spec.layout.statusPill!!.storageCritPct!!) }
     internal val cockpitSpec: CockpitSpecRepository get() = spec
 
     // ---- Node and vehicle -------------------------------------------------------------
@@ -386,7 +387,8 @@ class CockpitViewModel @AssistedInject constructor(
 
     private val preflightContext = MutableStateFlow(PreflightContext(null, false, null))
 
-    val preflight: StateFlow<PreflightResult> = cockpitPreflight(viewModelScope, clock, telemetry, settings, prearmText, preflightContext, tick500)
+    val preflight: StateFlow<PreflightResult> =
+        cockpitPreflight(viewModelScope, clock, telemetry, settings, prearmText, preflightContext, tick500, spec.layout.statusPill!!.storageWarnPct!!)
 
     private val armGate = FirstArmGate()
     private val _armGateOpen = MutableStateFlow(false)
@@ -836,7 +838,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** The status pill's items: alerts, pilot readiness, failing nav-source and storage checks, FC warnings (from the link and the agent's pilot). */
     val statusItems: StateFlow<List<StatusItem>> = combine(alerts, preflight, warningTexts, pillFacts, tick500) { a, p, w, facts, _ ->
         val now = clock.nowMs()
-        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS }, facts)
+        StatusModel.items(a, p, w.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS }, facts, statusPill)
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /**
@@ -1030,6 +1032,13 @@ class CockpitViewModel @AssistedInject constructor(
 
     fun setCameraSettings(open: Boolean) {
         overlays.camera.value = open
+    }
+
+    /** The status pill's alert list; Back closes it like a sheet. */
+    val statusListOpen: StateFlow<Boolean> = overlays.statusList.asStateFlow()
+
+    fun setStatusList(open: Boolean) {
+        overlays.statusList.value = open
     }
 
     fun setPreflight(open: Boolean) {

@@ -55,7 +55,7 @@ import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.feature.cockpit.skillbar.widthClassFor
-import com.altnautica.gcs.feature.cockpit.skillbar.reasonRes
+import com.altnautica.gcs.feature.cockpit.skillbar.reasonTextOf
 
 /**
  * Full-screen cockpit for [nodeId]; a ground station's cockpit flies its carried
@@ -114,11 +114,11 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
         vm.events.collect { event ->
             when (event) {
                 CockpitEvent.ExitRequested -> requestExit()
-                CockpitEvent.StreamSwitchFailed -> snackbar.showSnackbar(resources.getString(R.string.cockpit_stream_switch_failed))
-                CockpitEvent.RecordingFailed -> snackbar.showSnackbar(resources.getString(R.string.cockpit_recording_failed))
-                CockpitEvent.ChecklistOverridden -> snackbar.showSnackbar(resources.getString(R.string.cockpit_checklist_overridden))
+                CockpitEvent.StreamSwitchFailed -> snackbar.showSnackbar(vm.specStrings.format("cockpit.toast.stream_switch_failed"))
+                CockpitEvent.RecordingFailed -> snackbar.showSnackbar(vm.specStrings.format("cockpit.toast.recording_failed"))
+                CockpitEvent.ChecklistOverridden -> snackbar.showSnackbar(vm.specStrings.format("cockpit.toast.checklist_overridden"))
                 is CockpitEvent.TargetRefused ->
-                    snackbar.showSnackbar(reasonRes(event.reasonKey)?.let(resources::getString) ?: event.reasonKey)
+                    snackbar.showSnackbar(reasonTextOf(vm.specStrings, resources, event.reasonKey))
                 is CockpitEvent.Reacquired -> snackbar.showSnackbar(
                     resources.getString(
                         R.string.hud_toast_reacquired,
@@ -145,9 +145,9 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
             val specKey = SPEC_NOTICE_KEYS[notice.reasonKey]
             val reason = when {
                 specKey != null -> spec.format(specKey, notice.args)
-                else -> notice.reasonKey?.let { key -> reasonRes(key)?.let(resources::getString) ?: key }
+                else -> notice.reasonKey?.let { key -> reasonTextOf(spec, resources, key) }
             }
-            val detail = notice.message?.let { m -> reasonRes(m)?.let(resources::getString) ?: m }
+            val detail = notice.message?.let { m -> reasonTextOf(spec, resources, m) }
             val text = listOfNotNull(reason, detail).distinct().joinToString(" · ")
             if (text.isNotEmpty()) {
                 snackbar.showSnackbar(text)

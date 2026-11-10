@@ -3,8 +3,6 @@
     <!-- Flight-state chip -->
 
     <!-- Mode sheet (titles, sections and the no-pilot note come from the cockpit spec) -->
-    <string name="mode_sheet_fc_modes_hide">Hide flight controller modes</string>
-    <string name="mode_sheet_fc_modes_note">Selecting a flight controller mode hands control to the flight controller.</string>
 
     <!-- Skill picker -->
 
@@ -13,15 +11,10 @@
     <string name="preflight_gate_blocked">Clear the blocking items to continue.</string>
 
     <!-- Stick chip in pilot control -->
-    <string name="cockpit_stick_pilot">STICKS · ADOS PILOT</string>
-    <string name="cockpit_stick_pilot_battery">STICKS · ADOS PILOT · %1$d %%</string>
 
     <!-- Cockpit grid -->
     <string name="grid_shutter">Take photo</string>
     <string name="grid_record">Record video</string>
-    <string name="grid_gimbal_recenter">Recentre gimbal</string>
-    <string name="grid_card_map">Show map</string>
-    <string name="grid_card_radar">Show obstacle radar</string>
     <string name="on_screen_stick_left">Left stick: climb, descend and turn</string>
     <string name="on_screen_stick_right">Right stick: forward, back and sideways</string>
 

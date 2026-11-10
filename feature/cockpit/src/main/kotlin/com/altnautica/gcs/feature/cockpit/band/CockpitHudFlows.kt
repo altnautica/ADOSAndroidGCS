@@ -122,8 +122,8 @@ internal class CockpitHudFlows(
 
     private fun batteryBand(pct: Int?, s: CockpitSettings): BatteryBand = when {
         pct == null -> BatteryBand.Unknown
-        pct < s.batteryBands.criticalPct -> BatteryBand.Critical
-        pct < s.batteryBands.lowPct -> BatteryBand.Low
+        pct <= s.batteryBands.criticalPct -> BatteryBand.Critical
+        pct <= s.batteryBands.lowPct -> BatteryBand.Low
         else -> BatteryBand.Good
     }
 
