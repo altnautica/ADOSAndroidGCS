@@ -1,6 +1,7 @@
 package com.altnautica.gcs
 
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -90,15 +91,30 @@ class AppViewModel @Inject constructor(
     }
 
     private val setupCandidates = MutableStateFlow<List<SetupOffer>>(emptyList())
-    private val offeredUids: Flow<Set<String>> = dataStore.data.map { it[SETUP_OFFERED].orEmpty() }
+    private val offeredUids: Flow<Set<String>> = dataStore.data.map { it[SETUP_OFFERED].orEmpty() + it[LEGACY_SETUP_OFFERED].orEmpty() }
+
+    init {
+        viewModelScope.launch {
+            dataStore.edit { if (LEGACY_SETUP_OFFERED in it) it[SETUP_OFFERED] = it.takeOffered() }
+        }
+        // A candidate whose link closes is dropped; it is offered again only when the vehicle connects again.
+        viewModelScope.launch {
+            var previous = emptySet<DeviceId>()
+            vehicles.openVehicles.collect { open ->
+                val closed = previous - open.keys
+                previous = open.keys
+                if (closed.isNotEmpty()) setupCandidates.update { list -> list.filterNot { it.nodeId in closed } }
+            }
+        }
+    }
 
     /**
-     * The aircraft setup offer to show, or null: the first connected vehicle whose
-     * flight controller never finished the ground wizard and was never offered on
+     * The aircraft setup offer to show, or null: the first connected vehicle, still open,
+     * whose flight controller never finished the ground wizard and was never offered on
      * this device. Ground only: null while any open vehicle is armed.
      */
-    val setupOffer: StateFlow<SetupOffer?> = combine(setupCandidates, offeredUids, anyArmed) { candidates, offered, armed ->
-        if (armed) null else candidates.firstOrNull { it.uid !in offered }
+    val setupOffer: StateFlow<SetupOffer?> = combine(setupCandidates, offeredUids, anyArmed, vehicles.openVehicles) { candidates, offered, armed, open ->
+        if (armed) null else candidates.firstOrNull { it.uid !in offered && it.nodeId in open }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val openWizard = Channel<DeviceId>(Channel.BUFFERED)
@@ -108,20 +124,23 @@ class AppViewModel @Inject constructor(
 
     /** Opens the ground wizard for the current offer (via [setupNavigation]) and marks it offered. */
     fun openSetup() {
-        val offer = setupOffer.value ?: return
+        val offer = liveOffer() ?: return
         openWizard.trySend(offer.nodeId)
         markOffered(offer.uid)
     }
 
     /** Dismisses the current offer for good on this device. */
     fun later() {
-        val offer = setupOffer.value ?: return
+        val offer = liveOffer() ?: return
         markOffered(offer.uid)
     }
 
+    /** The current offer while its vehicle's link is still open: a gone vehicle never spends its one offer. */
+    private fun liveOffer(): SetupOffer? = setupOffer.value?.takeIf { it.nodeId in vehicles.openVehicles.value }
+
     private fun markOffered(uid: String) {
         setupCandidates.update { list -> list.filterNot { it.uid == uid } }
-        viewModelScope.launch { dataStore.edit { it[SETUP_OFFERED] = it[SETUP_OFFERED].orEmpty() + uid } }
+        viewModelScope.launch { dataStore.edit { it[SETUP_OFFERED] = it.takeOffered() + uid } }
     }
 
     /** Opens a log replay and hands its node id to [onReady] (to push the cockpit). */
@@ -156,5 +175,11 @@ class AppViewModel @Inject constructor(
 
         /** Flight-controller uids already offered aircraft setup on this device. */
         val SETUP_OFFERED = stringSetPreferencesKey("setup.offered_uids")
+
+        /** The same set under its earlier name; folded into [SETUP_OFFERED] and removed on first use. */
+        val LEGACY_SETUP_OFFERED = stringSetPreferencesKey("app.aircraftSetupOffered")
+
+        /** The offered uids, folding in and removing the set stored under the earlier key name. */
+        fun MutablePreferences.takeOffered(): Set<String> = this[SETUP_OFFERED].orEmpty() + remove(LEGACY_SETUP_OFFERED).orEmpty()
     }
 }

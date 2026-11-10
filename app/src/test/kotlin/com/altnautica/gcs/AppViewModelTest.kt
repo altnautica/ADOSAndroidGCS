@@ -1,5 +1,7 @@
 package com.altnautica.gcs
 
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.altnautica.gcs.core.data.home.SelectedVehicleStore
 import com.altnautica.gcs.core.link.vehicle.OpenLink
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
@@ -18,6 +20,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -117,6 +120,7 @@ class AppViewModelTest {
         val vm = viewModel()
         val navigated = observe(vm)
         var home = 0
+        linkUp()
 
         vm.connected(node, onSelected = { home++ })
 
@@ -134,6 +138,7 @@ class AppViewModelTest {
         setupUid = "fc-uid-1"
         val first = viewModel()
         observe(first)
+        linkUp()
         first.connected(node) {}
         first.openSetup()
 
@@ -149,6 +154,7 @@ class AppViewModelTest {
         setupUid = "fc-uid-1"
         val first = viewModel()
         val navigated = observe(first)
+        linkUp()
         first.connected(node) {}
         first.later()
         assertNull(first.setupOffer.value)
@@ -181,5 +187,50 @@ class AppViewModelTest {
         observe(vm)
         vm.connected(node) {}
         assertNull(vm.setupOffer.value)
+    }
+
+    @Test
+    fun offersMadeBeforeTheKeyRenameStillCount() = runTest(dispatcher) {
+        prefs.edit { it[LEGACY_OFFERED] = setOf("fc-uid-1") }
+        setupUid = "fc-uid-1"
+        val vm = viewModel()
+        observe(vm)
+        linkUp()
+
+        vm.connected(node) {}
+        assertNull(vm.setupOffer.value)
+
+        val stored = prefs.data.first()
+        assertNull(stored[LEGACY_OFFERED])
+        assertEquals(setOf("fc-uid-1"), stored[OFFERED])
+    }
+
+    @Test
+    fun aClosedLinkDropsItsOfferWithoutSpendingIt() = runTest(dispatcher) {
+        setupUid = "fc-uid-1"
+        val vm = viewModel()
+        val navigated = observe(vm)
+        linkUp()
+        vm.connected(node) {}
+        assertEquals(SetupOffer("fc-uid-1", node), vm.setupOffer.value)
+
+        links.value = emptyList()
+        open.value = emptyMap()
+        assertNull(vm.setupOffer.value)
+        vm.openSetup()
+        vm.later()
+        assertEquals(emptyList<DeviceId>(), navigated)
+        assertNull(prefs.data.first()[OFFERED])
+
+        // The dropped candidate stays dropped until the vehicle connects again.
+        linkUp()
+        assertNull(vm.setupOffer.value)
+        vm.connected(node) {}
+        assertEquals(SetupOffer("fc-uid-1", node), vm.setupOffer.value)
+    }
+
+    private companion object {
+        val OFFERED = stringSetPreferencesKey("setup.offered_uids")
+        val LEGACY_OFFERED = stringSetPreferencesKey("app.aircraftSetupOffered")
     }
 }
