@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.hud.layers
 
+import com.altnautica.gcs.core.designsystem.tokens.AdosCockpitColors
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -23,12 +24,12 @@ import kotlin.math.sin
 
 /** Layer colours (cockpit spec `tokens.json`: `semantic.ar.*`, `semantic.layer.*`). */
 object LayerColors {
-    val Route = Color(0xFFFF3EC8)
+    val Route = AdosCockpitColors.ArRoute
     val Future = Color.White.copy(alpha = 0.8f)
-    val Home = Color(0xFFFFD400)
-    val Follow = Color(0xFF22D3EE)
-    val Detour = Color(0xFFF59E0B) // primitive.color.amber.500
-    val Blocked = Color(0xFFEF4444) // primitive.color.red.500
+    val Home = AdosCockpitColors.ArHome
+    val Follow = AdosCockpitColors.ArFollow
+    val Detour = AdosCockpitColors.ArDetour
+    val Blocked = AdosCockpitColors.ArBlocked
     val Halo = Color.Black.copy(alpha = 0.6f)
     val Paused = Color(0xFF9CA3AF)
     val Near = Blocked.copy(alpha = 0.45f) // obstacles ≤ 2 m

@@ -158,13 +158,13 @@ fun SticksWithBanner(session: InputSession, onTakeOver: () -> Unit, modifier: Mo
     }
 }
 
-/** The link-loss countdown: the action the pilot takes and the seconds left. */
+/** The link-loss countdown: [text] names the action the pilot takes and the seconds left (`linkLossLine`). */
 @Composable
-fun LinkLossBanner(inS: Float, action: String, modifier: Modifier = Modifier) {
+fun LinkLossBanner(text: String, modifier: Modifier = Modifier) {
     Box(modifier) {
         BannerShell(Icons.Outlined.LinkOff, AdosTheme.colors.statusError, "flow-link-loss") {
             Text(
-                specText("flow.link_loss.countdown", "action" to action, "in_s" to countdownSeconds(inS).toString()),
+                text,
                 color = AdosTheme.colors.fgPrimary,
                 style = MaterialTheme.typography.titleSmall,
             )

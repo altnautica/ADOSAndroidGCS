@@ -29,6 +29,8 @@ import java.nio.file.Files
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -116,7 +118,8 @@ class ControlsConfigTest {
         val square = rows.first { it.control == "square" && it.gesture == Gesture.TAP && it.with.isEmpty() }
         val edited = (setRowAction(rows, square, "record_toggle") as EditResult.Applied).rows
         assertEquals(SaveResult.Saved, first.saveBindings(edited))
-        scope1.cancel()
+        // Join, not just cancel: the file stays registered as active until the first store's job completes.
+        scope1.coroutineContext[Job]!!.cancelAndJoin()
 
         // A new repository on the same file: what the app reads after a restart.
         val scope2 = CoroutineScope(Dispatchers.IO + SupervisorJob())

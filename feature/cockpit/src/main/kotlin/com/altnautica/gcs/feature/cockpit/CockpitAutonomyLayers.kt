@@ -9,6 +9,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.SideEffect
@@ -151,35 +158,48 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
     val fresh = follow?.let { now - it.atMs <= TargetState.FOLLOW_STALE_MS } == true
     val active = state != null && fresh && state.phase != FollowPhase.Idle && state.phase != FollowPhase.Lost
     val followingMode = (state != null && state.phase != FollowPhase.Idle) || (designation != null && installed)
+    var expanded by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize()) {
-        designation?.let { d ->
-            val batch = batches[d.cameraId]
-            val det = batch?.items?.firstOrNull { d.trackId != null && it.trackId == d.trackId }
-            LockChip(
-                trackId = d.trackId,
-                detection = det,
-                feedFresh = batch != null && now - batch.receivedAtMs <= TargetState.DETECTION_STALE_MS,
-                follow = state,
-                followFresh = fresh,
-                lastReacquired = events.filterIsInstance<FollowEvent.Reacquired>().lastOrNull(),
-                nowMs = now,
-                onRelease = a::release,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = topInset + AdosSpacing.S2),
-            )
+        // A short centre (a phone in landscape) keeps even the open panel on one line.
+        val short = maxHeight < SHORT_CENTRE
+        // The follow strip: directly under the top bar (below the heading scale at Instruments),
+        // between the columns. The lock chip and a one-line range panel share it; a tap on the
+        // panel opens the full panel right under the strip. Nothing sits at the centre.
+        Column(
+            Modifier.align(Alignment.TopCenter).padding(top = topInset + AdosSpacing.S2).testTag("follow-strip"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {
+                designation?.let { d ->
+                    val batch = batches[d.cameraId]
+                    val det = batch?.items?.firstOrNull { d.trackId != null && it.trackId == d.trackId }
+                    LockChip(
+                        trackId = d.trackId,
+                        detection = det,
+                        feedFresh = batch != null && now - batch.receivedAtMs <= TargetState.DETECTION_STALE_MS,
+                        follow = state,
+                        followFresh = fresh,
+                        lastReacquired = events.filterIsInstance<FollowEvent.Reacquired>().lastOrNull(),
+                        nowMs = now,
+                        onRelease = a::release,
+                    )
+                }
+                if (followingMode && state != null && !expanded) {
+                    FollowRangePanel(state, stale = !fresh, width = WidthClass.Compact, modifier = Modifier.clickable { expanded = true })
+                }
+            }
+            if (followingMode && state != null && expanded) {
+                val panelWidth = if (width.isWide() && !short) 320.dp else Dp.Unspecified
+                FollowRangePanel(
+                    state, stale = !fresh, width = if (short) WidthClass.Compact else width,
+                    modifier = Modifier
+                        .clickable { expanded = false }
+                        .let { m -> if (panelWidth != Dp.Unspecified) m.widthIn(min = panelWidth) else m },
+                )
+            }
         }
         if (!followingMode) return@BoxWithConstraints
-        state?.let {
-            // A short centre (a phone in landscape) takes the one-line panel, so the reticle and heading stay clear.
-            val short = maxHeight < SHORT_CENTRE
-            val panelWidth = if (width.isWide() && !short) 320.dp else Dp.Unspecified
-            FollowRangePanel(
-                it, stale = !fresh, width = if (short) WidthClass.Compact else width,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = AdosSpacing.S2)
-                    .let { m -> if (panelWidth != Dp.Unspecified) m.widthIn(min = panelWidth) else m },
-            )
-        }
         val belly = video.streams.firstOrNull { it.role == CockpitAutonomy.ROLE_DOWN && it.live }
         val concurrent = video.streams.count { it.live && it.switchKind == StreamSwitchKind.Concurrent } >= 2
         val mainId = a.mainCamera(video)

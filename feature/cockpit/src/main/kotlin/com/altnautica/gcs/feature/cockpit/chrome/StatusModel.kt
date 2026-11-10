@@ -54,7 +54,8 @@ object StatusModel {
             val severity = when (a.level) {
                 AlertLevel.Critical -> StatusSeverity.Critical
                 AlertLevel.Warning -> StatusSeverity.Warning
-                AlertLevel.Advisory -> continue
+                // FC pre-arm text is an advisory alert, but it is why arming fails: the pill shows it.
+                AlertLevel.Advisory -> if (a.id == AlertId.PREARM) StatusSeverity.Warning else continue
             }
             out += StatusItem("alert:${a.id}:${a.detail.orEmpty()}", sourceOf(a.id), severity, alert = a)
         }
@@ -122,13 +123,6 @@ data class FlightValues(
     companion object {
         val Empty = FlightValues(null, null, null, null, null)
     }
-}
-
-/** The AGL tag for a height from [source]: null when it is the [ground] (rangefinder) source, else the reference it is from. */
-internal fun aglTag(source: String?, ground: String): String? = when (source) {
-    ground -> null
-    null, "" -> "EST"
-    else -> source.uppercase()
 }
 
 /** The bottom-left card's pages, switched by swipe or by its dots. */

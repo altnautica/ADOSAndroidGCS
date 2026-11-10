@@ -6,6 +6,9 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.linkLossLine
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -58,7 +61,6 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
@@ -96,6 +98,17 @@ import com.altnautica.gcs.feature.cockpit.chrome.ControllerIndicator
 import com.altnautica.gcs.feature.cockpit.chrome.FlightGrid
 import com.altnautica.gcs.feature.cockpit.chrome.FlightZones
 import com.altnautica.gcs.feature.cockpit.chrome.GimbalPad
+import com.altnautica.gcs.feature.cockpit.chrome.clamp
+import com.altnautica.gcs.feature.cockpit.chrome.splitDivider
+import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.skills.tips.TipsEngine
+import com.altnautica.gcs.feature.cockpit.tips.LocalTipAnchors
+import com.altnautica.gcs.feature.cockpit.tips.TipAnchorRegistry
+import com.altnautica.gcs.feature.cockpit.tips.TipFacts
+import com.altnautica.gcs.feature.cockpit.tips.TipLayer
+import com.altnautica.gcs.feature.cockpit.tips.rememberTipsHandle
+import com.altnautica.gcs.feature.cockpit.tips.tipAnchor
+import com.altnautica.gcs.feature.cockpit.tips.tipsRepository
 import com.altnautica.gcs.feature.cockpit.chrome.LinkIcon
 import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.chrome.LocalChromeBackdrop
@@ -177,6 +190,11 @@ internal fun CockpitScreen(
     val backdrop = remember { ChromeBackdrop() }
     val sizes = remember(width) { flightSizes(width) }
     val status = remember { StatusListState() }
+    val anchors = remember { TipAnchorRegistry() }
+    val tips = rememberTipsHandle()
+    val tipsEngine = remember(vm) { TipsEngine(vm.cockpitSpec.tips) }
+    val padButtons by vm.padButtons.collectAsStateWithLifecycle()
+    LaunchedEffect(padButtons) { if (padButtons != 0) tips.dismissFromControllerButton() }
     CompositionLocalProvider(
         LocalCockpitStrings provides vm.specStrings,
         LocalLayoutClass provides layoutClass,
@@ -184,6 +202,7 @@ internal fun CockpitScreen(
         LocalChromeBackdrop provides backdrop,
         // Sheets, dialogs and menus start below the top bar, so STOP takes the first press with any of them open.
         LocalOverlayTopInset provides sizes.edge + sizes.topBar,
+        LocalTipAnchors provides anchors,
     ) {
         BackdropSampler(backdrop)
         Box(Modifier.fillMaxSize().background(Color.Black).focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing)) {
@@ -194,14 +213,17 @@ internal fun CockpitScreen(
                 }
             }
             Overlays(vm, width, status)
+            // Last, so a tip draws above the chrome; the layer itself takes no touch.
+            TipLayer(tipFacts(vm, status), tipsRepository(LocalContext.current), tipsEngine, Modifier.zIndex(Z.SHEETS), handle = tips)
         }
     }
 }
 
-/** The status pill's alert list: open or not, and the pill's left edge it hangs under. */
+/** The status pill's alert list (open or not, and the pill's left edge it hangs under) and whether the Menu is open. */
 private class StatusListState {
     var open by mutableStateOf(false)
     var pillX by mutableFloatStateOf(0f)
+    var menuOpen by mutableStateOf(false)
 }
 
 @Composable
@@ -230,6 +252,7 @@ private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, status: Status
                     width = width,
                     overflow = overflow,
                     onExit = onExit,
+                    onMenuOpen = { status.menuOpen = it },
                     pill = {
                         StatusPill(
                             StatusModel.pill(statusItems, acknowledged),
@@ -238,20 +261,20 @@ private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, status: Status
                                 acknowledged = statusItems.mapTo(HashSet()) { it.key }
                                 status.open = true
                             },
-                            modifier = Modifier.onGloballyPositioned { status.pillX = it.boundsInRoot().left },
+                            modifier = Modifier.tipAnchor("status_pill").onGloballyPositioned { status.pillX = it.boundsInRoot().left },
                         )
                     },
                 )
             },
-            leftColumn = { LeftColumn(vm, sizes.leftButton, sizes.leftGap) },
+            leftColumn = { Box(Modifier.fillMaxSize().tipAnchor("left_column")) { LeftColumn(vm, sizes.leftButton, sizes.leftGap) } },
             rightColumn = { inColumn -> RightColumn(vm, sizes, inColumn) },
             gimbalPad = { Pad(vm, sizes.gimbalPad) },
-            card = { if (view == CockpitView.Map) VideoCard(vm) else Card(vm) },
+            card = { Box(Modifier.fillMaxSize().tipAnchor("bottom_left_card")) { if (view == CockpitView.Map) VideoCard(vm) else Card(vm) } },
             bottomRow = {
                 val values by vm.flightValues.collectAsStateWithLifecycle()
                 BottomRow(values)
             },
-            skills = { PickerChip(vm, Modifier.align(Alignment.BottomEnd)) },
+            skills = { PickerChip(vm, Modifier.align(Alignment.BottomEnd).tipAnchor("skill_picker_chip")) },
             centre = { zones -> Centre(vm, width, zones, snackbar) },
         )
     }
@@ -287,6 +310,7 @@ private fun FlightTopBar(
     width: WidthClass,
     overflow: TopBarOverflow,
     onExit: () -> Unit,
+    onMenuOpen: (Boolean) -> Unit,
     pill: @Composable () -> Unit,
 ) {
     val chip by vm.chip.collectAsStateWithLifecycle()
@@ -294,12 +318,13 @@ private fun FlightTopBar(
     val reserve by vm.batteryReserve.collectAsStateWithLifecycle()
     val video by vm.video.collectAsStateWithLifecycle()
     val menu = rememberAdosMenuState()
+    LaunchedEffect(menu.expanded) { onMenuOpen(menu.expanded) }
     val linkText = linkText(band)
     val controllerText = controllerText(band.stick)
     TopBar(
         overflow = overflow,
         overflowOrder = remember(vm) { TopBarItem.order(vm.cockpitSpec.layout.zones.firstOrNull { it.id == "top_bar" }?.overflow?.toMenuOrder.orEmpty()) },
-        chip = { FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton) },
+        chip = { Box(Modifier.tipAnchor("flight_state_chip")) { FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton) } },
         pill = pill,
         battery = {
             BatteryGauge(
@@ -326,9 +351,9 @@ private fun FlightTopBar(
                 StickChip.NoGamepad -> Unit
             }
         },
-        layers = { LayerLevelButton(vm.autonomy.layers) },
+        layers = { LayerLevelButton(vm.autonomy.layers, Modifier.tipAnchor("layer_button")) },
         menu = { MenuButton(onClick = { menu.expanded = true }, modifier = Modifier.adosMenuAnchor(menu)) },
-        stop = { StopButton(onClick = { vm.activate(BuiltinIds.KILL) }) },
+        stop = { StopButton(onClick = { vm.activate(BuiltinIds.KILL) }, modifier = Modifier.tipAnchor("stop")) },
     )
     val moved = overflow.moved
     val nav by vm.autonomy.navChip.collectAsStateWithLifecycle()
@@ -474,6 +499,7 @@ private fun Pad(vm: CockpitViewModel, size: Dp) {
         size = size,
         onRate = vm.gimbal::deflect,
         onRecenter = vm::recenterGimbal,
+        modifier = Modifier.tipAnchor("gimbal_pad"),
     )
 }
 
@@ -590,7 +616,8 @@ private val VISION_PANEL_WIDTH = 320.dp
 
 @Composable
 private fun SplitView(vm: CockpitViewModel, savedRatio: Float, hudInset: PaddingValues, modifier: Modifier) {
-    var ratio by remember(savedRatio) { mutableFloatStateOf(savedRatio) }
+    val divider = remember(vm) { splitDivider(vm.cockpitSpec.views) }
+    var ratio by remember(savedRatio, divider) { mutableFloatStateOf(divider.clamp(savedRatio)) }
     val splitLabel = stringResource(R.string.cockpit_split_divider)
     BoxWithConstraints(modifier) {
         val total = constraints.maxWidth.toFloat()
@@ -605,7 +632,7 @@ private fun SplitView(vm: CockpitViewModel, savedRatio: Float, hudInset: Padding
                     .draggable(
                         orientation = Orientation.Horizontal,
                         state = rememberDraggableState { delta ->
-                            ratio = (ratio + delta / total).coerceIn(CockpitSettingsRepository.MIN_SPLIT, CockpitSettingsRepository.MAX_SPLIT)
+                            ratio = divider.clamp(ratio + delta / total)
                         },
                         onDragStopped = { vm.setSplitRatio(ratio) },
                     ),
@@ -642,13 +669,13 @@ private fun FlowBanners(vm: CockpitViewModel, modifier: Modifier) {
         flow.launch?.let { LaunchProgressBanner(it, onAbort = { vm.activate(BuiltinIds.PAUSE) }) }
         flow.banner?.let { HandoverBanner(it) }
         flow.sticksWith?.let { SticksWithBanner(it, vm::takeSticks) }
-        flow.linkLossInS?.let { LinkLossBanner(it, pilot?.banner?.args?.get("action") ?: LINK_LOSS_DEFAULT_ACTION) }
+        flow.linkLossInS?.let { s ->
+            // The configured action in words ("Return home", "Land", "Hold"); a dash when unknown.
+            SpecText(vm.cockpitSpec.setupStrings).linkLossLine(s, pilot?.linkLossAction ?: pilot?.banner?.args?.get("action"))?.let { LinkLossBanner(it) }
+        }
         flow.rthCountdownS?.let { LowBatteryBanner(it, vm::cancelRthCountdown) }
     }
 }
-
-/** The pilot's link-loss action when its banner does not name one (`pilot.link_loss_action` default). */
-private const val LINK_LOSS_DEFAULT_ACTION = "rth"
 
 /** The centre-sticks gate ring and the controller hold ring. */
 @Composable
@@ -823,8 +850,6 @@ private fun SkillTweak(vm: CockpitViewModel, skill: Skill) {
  */
 @Composable
 private fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusListState) {
-    val quickOpen by vm.quickSettingsOpen.collectAsStateWithLifecycle()
-    val preflightOpen by vm.preflightOpen.collectAsStateWithLifecycle()
     val confirm by vm.confirm.state.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val maxBrightness by vm.maxBrightness.collectAsStateWithLifecycle()
@@ -841,15 +866,7 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusList
     val wide = width == WidthClass.Expanded || width == WidthClass.Tv
     val sizes = remember(width) { flightSizes(width) }
 
-    val open = buildSet {
-        if (status.open) add(CockpitSheet.Status)
-        if (quickOpen) add(CockpitSheet.Quick)
-        if (picker != null) add(CockpitSheet.Picker)
-        if (modeSheet != null) add(CockpitSheet.Mode)
-        if (launch != null) add(CockpitSheet.Launch)
-        if (preflightOpen) add(CockpitSheet.Preflight)
-        if (confirm != null) add(CockpitSheet.Confirm)
-    }
+    val open = openSheets(vm, status)
     val previous = remember { arrayOf(emptySet<CockpitSheet>()) }
     LaunchedEffect(open) {
         for (sheet in SheetStack.toClose(previous[0], open)) {
@@ -933,4 +950,45 @@ private fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusList
             ControllerTourCard(step, vm::nextTourStep, vm::finishTour)
         }
     }
+}
+
+/** The sheets open now, before [SheetStack] picks the one that draws. */
+@Composable
+private fun openSheets(vm: CockpitViewModel, status: StatusListState): Set<CockpitSheet> {
+    val quickOpen by vm.quickSettingsOpen.collectAsStateWithLifecycle()
+    val preflightOpen by vm.preflightOpen.collectAsStateWithLifecycle()
+    val confirm by vm.confirm.state.collectAsStateWithLifecycle()
+    val picker by vm.picker.collectAsStateWithLifecycle()
+    val modeSheet by vm.modeSheet.collectAsStateWithLifecycle()
+    val launch by vm.launch.collectAsStateWithLifecycle()
+    return buildSet {
+        if (status.open) add(CockpitSheet.Status)
+        if (quickOpen) add(CockpitSheet.Quick)
+        if (picker != null) add(CockpitSheet.Picker)
+        if (modeSheet != null) add(CockpitSheet.Mode)
+        if (launch != null) add(CockpitSheet.Launch)
+        if (preflightOpen) add(CockpitSheet.Preflight)
+        if (confirm != null) add(CockpitSheet.Confirm)
+    }
+}
+
+/** What the tip queue needs from the flight screen ([TipFacts]); airborne as the left column reads it. */
+@Composable
+private fun tipFacts(vm: CockpitViewModel, status: StatusListState): TipFacts {
+    val pilot by vm.pilotState.collectAsStateWithLifecycle()
+    val band by vm.band.collectAsStateWithLifecycle()
+    val tourStep by vm.tourStep.collectAsStateWithLifecycle()
+    val gimbal by vm.gimbal.available.collectAsStateWithLifecycle()
+    val skills by vm.skillsAvailable.collectAsStateWithLifecycle()
+    val sheets = openSheets(vm, status)
+    val p = pilot
+    return TipFacts(
+        armed = p?.armed ?: (band.armed == true),
+        airborne = p?.let { it.armed && !it.landed } ?: (band.armed == true),
+        sheetOrMenuOpen = sheets.isNotEmpty() || status.menuOpen,
+        tourVisible = tourStep != null,
+        skillsAvailable = skills,
+        gotoOffered = p != null && PilotAction.GOTO in p.surfaceOps,
+        gimbalAvailable = gimbal,
+    )
 }

@@ -52,6 +52,18 @@ class StatusModelTest {
     }
 
     @Test
+    fun `FC pre-arm text raised as an advisory still shows in the pill as a warning`() {
+        val items = StatusModel.items(
+            listOf(CockpitAlert(AlertId.PREARM, AlertLevel.Advisory, "prearm", "Compass not calibrated", 1)),
+            none,
+            emptyList(),
+        )
+        assertEquals(1, items.size)
+        assertEquals(StatusSource.FcPrearm, items.single().source)
+        assertEquals(StatusSeverity.Warning, items.single().severity)
+    }
+
+    @Test
     fun `a new item flashes until the list is opened, and a later one flashes again`() {
         val first = StatusModel.items(listOf(CockpitAlert(AlertId.BATT_LOW, AlertLevel.Warning, "battLow", null, 1)), none, emptyList())
         assertTrue(StatusModel.pill(first, emptySet()).flashing)
