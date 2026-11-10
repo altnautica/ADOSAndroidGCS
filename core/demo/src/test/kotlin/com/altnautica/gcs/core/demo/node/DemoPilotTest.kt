@@ -260,6 +260,46 @@ class DemoPilotTest {
     }
 
     @Test
+    fun `the failsafe pins report a flight controller failsafe and refuse pause`() {
+        assertFalse(state()["fc_failsafe"]!!.jsonPrimitive.boolean)
+        for (scenario in listOf(DemoScenario.FcFailsafeRtl, DemoScenario.GotoRefusedFailsafe)) {
+            scenarios.pin(scenario)
+            val s = state()
+            assertEquals(scenario.name, true, s["fc_failsafe"]?.jsonPrimitive?.boolean)
+            assertEquals(scenario.name, "fc", s.str("failsafe_cause"))
+            assertEquals(scenario.name, "failsafe", action("pause").str("err"))
+        }
+        scenarios.pin(null)
+        val live = state()
+        assertFalse(live["fc_failsafe"]!!.jsonPrimitive.boolean)
+        assertTrue(live["failsafe_cause"] is JsonNull)
+        assertNull(action("pause").str("err"))
+    }
+
+    @Test
+    fun `actions answer from the pinned flight state, not the flight controller's`() {
+        // A disarmed vehicle on the ground pinned to a flying mission.
+        scenarios.pin(DemoScenario.MissionActive)
+        assertEquals("armed", action("arm").str("err"))
+        assertEquals("not_landed", action("disarm").str("err"))
+        assertEquals("airborne", action("takeoff").str("err"))
+        assertTrue(action("rth")["ok"]!!.jsonPrimitive.boolean)
+        assertFalse(fc.armed)
+
+        // A flying vehicle pinned disarmed on the ground.
+        scenarios.pin(null)
+        fc.armed = true
+        fc.altitudeM = 10.0
+        fc.mode = GUIDED
+        scenarios.pin(DemoScenario.GotoRefusedNotArmed)
+        assertEquals("disarmed", action("land").str("err"))
+        assertEquals("disarmed", action("take_control").str("err"))
+
+        scenarios.pin(null)
+        assertTrue(action("land")["ok"]!!.jsonPrimitive.boolean)
+    }
+
+    @Test
     fun `the failsafe pin holds an RTL the flight controller entered on its own`() {
         scenarios.pin(DemoScenario.FcFailsafeRtl)
         repeat(2) {

@@ -4,6 +4,7 @@ import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -54,5 +55,17 @@ class PadPromptTest {
 
         assertEquals(listOf(true), seen)
         job.cancel()
+    }
+
+    @Test
+    fun `a pad attached and removed while nothing watches is remembered`() = runTest(UnconfinedTestDispatcher()) {
+        val connected = MutableStateFlow(false)
+        val router = mockk<AdosInputRouter> { every { gamepadConnected } returns connected }
+        val memory = PadSeenMemory(router)
+
+        connected.value = true
+        connected.value = false
+
+        assertEquals(true, memory.seen.first())
     }
 }

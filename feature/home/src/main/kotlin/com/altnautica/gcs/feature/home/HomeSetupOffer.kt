@@ -24,13 +24,14 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
 
 /**
- * Inline offer to run aircraft setup for [nodeId], a newly found vehicle; nothing shows
- * while it is null. It sits in the Home content above the vehicle row: no scrim, the
- * rest of Home stays usable.
+ * Inline offer to run aircraft setup for [nodeId], a newly found vehicle. It shows only
+ * while that vehicle is the [selectedId] one, so Open sets up the vehicle the operator is
+ * looking at; nothing shows while [nodeId] is null. It sits in the Home content above the
+ * vehicle row: no scrim, the rest of Home stays usable.
  */
 @Composable
-internal fun HomeSetupOffer(nodeId: DeviceId?, onOpen: () -> Unit, onLater: () -> Unit, modifier: Modifier = Modifier) {
-    if (nodeId == null) return
+internal fun HomeSetupOffer(nodeId: DeviceId?, selectedId: DeviceId?, onOpen: () -> Unit, onLater: () -> Unit, modifier: Modifier = Modifier) {
+    if (nodeId == null || nodeId != selectedId) return
     val colors = AdosTheme.colors
     Row(
         modifier = modifier

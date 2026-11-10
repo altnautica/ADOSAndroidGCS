@@ -3,6 +3,7 @@ package com.altnautica.gcs
 import android.app.Application
 import android.util.Log
 import com.altnautica.gcs.di.LinkGraphReport
+import com.altnautica.gcs.feature.settings.controller.PadSeenMemory
 import com.altnautica.gcs.link.FlightLogController
 import com.altnautica.gcs.link.LinkServiceController
 import dagger.hilt.android.HiltAndroidApp
@@ -19,6 +20,9 @@ class AdosApplication : Application() {
     @Inject lateinit var flightLogController: FlightLogController
 
     @Inject lateinit var linkGraphReport: dagger.Lazy<LinkGraphReport>
+
+    /** Injected here so it watches for pads from process start, not from the first Controls visit. */
+    @Inject lateinit var padSeenMemory: PadSeenMemory
 
     /** Process-lifetime scope for app-wide observers. */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
