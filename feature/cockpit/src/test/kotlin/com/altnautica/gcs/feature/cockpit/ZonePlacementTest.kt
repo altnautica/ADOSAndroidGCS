@@ -52,6 +52,19 @@ class ZonePlacementTest {
     }
 
     @Test
+    fun `a short right column drops the gimbal pad first, then zoom, and the rest still fits`() {
+        val sizes = flightSizes(WidthClass.Compact)
+        // Tall: everything in the column.
+        val tall = flightZones(1280.dp, 1600.dp, sizes, gimbal = true)
+        assertTrue(tall.gimbalInColumn && tall.zoomInColumn)
+        // Short: no room for the full column; the pad has left and so has zoom.
+        val short = flightZones(580.dp, 260.dp, sizes, gimbal = true)
+        assertFalse(short.gimbalInColumn)
+        assertFalse(short.zoomInColumn)
+        assertTrue(short.rightColumn.height <= sizes.rightColumnHeight - sizes.zoom - sizes.rightGap)
+    }
+
+    @Test
     fun `sticks show only at the spec's classes`() {
         val classes = testSpec.layout.onScreenSticks.classes
         for (cls in WidthClass.entries) {

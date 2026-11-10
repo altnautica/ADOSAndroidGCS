@@ -104,6 +104,8 @@ data class FlightZones(
     val bottomRow: ZoneRect,
     val skills: ZoneRect,
     val centre: ZoneRect,
+    /** False when the column is too short even without the gimbal pad: zoom leaves it next (`right_column.drop_order`). */
+    val zoomInColumn: Boolean = true,
 ) {
     /** Every zone with its name, for checks. */
     fun named(): List<Pair<String, ZoneRect>> = listOfNotNull(
@@ -145,7 +147,10 @@ fun flightZones(width: Dp, height: Dp, sizes: FlightSizes, gimbal: Boolean): Fli
     val spanR = rightBottom - bodyTop
     val withPad = sizes.rightColumnHeight + sizes.gimbalPad + sizes.rightGap
     val gimbalInColumn = gimbal && spanR >= withPad
-    val rightH = minOf(if (gimbalInColumn) withPad else sizes.rightColumnHeight, spanR)
+    // Drop order (`right_column.drop_order`): the gimbal pad leaves the column first, then zoom.
+    val withoutZoom = sizes.rightColumnHeight - sizes.zoom - sizes.rightGap
+    val zoomInColumn = gimbalInColumn || spanR >= sizes.rightColumnHeight
+    val rightH = minOf(if (gimbalInColumn) withPad else if (zoomInColumn) sizes.rightColumnHeight else withoutZoom, spanR)
     val rightW = if (gimbalInColumn) maxOf(sizes.shutter, sizes.gimbalPad) else sizes.shutter
     val rightColumn = ZoneRect(width - e - rightW, bodyTop + ((spanR - rightH) / 2).coerceAtLeast(0.dp), rightW, rightH)
     val gimbalPad = when {
@@ -163,7 +168,7 @@ fun flightZones(width: Dp, height: Dp, sizes: FlightSizes, gimbal: Boolean): Fli
     val centreRight = (gimbalPad?.takeIf { !gimbalInColumn }?.x ?: rightColumn.x) - g
     val centreBottom = minOf(card.y, bottomRow.y) - g
     val centre = ZoneRect(centreX, bodyTop, (centreRight - centreX).coerceAtLeast(0.dp), (centreBottom - bodyTop).coerceAtLeast(0.dp))
-    return FlightZones(topBar, leftColumn, rightColumn, gimbalPad, gimbalInColumn, card, bottomRow, skills, centre)
+    return FlightZones(topBar, leftColumn, rightColumn, gimbalPad, gimbalInColumn, card, bottomRow, skills, centre, zoomInColumn)
 }
 
 /** One zone's content, placed at its rectangle. */
@@ -184,7 +189,7 @@ fun FlightGrid(
     background: @Composable BoxScope.(FlightZones) -> Unit,
     topBar: @Composable BoxScope.() -> Unit,
     leftColumn: @Composable BoxScope.() -> Unit,
-    rightColumn: @Composable BoxScope.(gimbalInColumn: Boolean) -> Unit,
+    rightColumn: @Composable BoxScope.(zones: FlightZones) -> Unit,
     gimbalPad: @Composable BoxScope.() -> Unit,
     card: @Composable BoxScope.() -> Unit,
     bottomRow: @Composable BoxScope.() -> Unit,
@@ -199,7 +204,7 @@ fun FlightGrid(
         Zone(zones.card, "zone-card", ZONE_Z) { card() }
         Zone(zones.bottomRow, "zone-bottom-row", ZONE_Z) { bottomRow() }
         Zone(zones.leftColumn, "zone-left-column", ZONE_Z) { leftColumn() }
-        Zone(zones.rightColumn, "zone-right-column", ZONE_Z) { rightColumn(zones.gimbalInColumn) }
+        Zone(zones.rightColumn, "zone-right-column", ZONE_Z) { rightColumn(zones) }
         zones.gimbalPad?.takeIf { !zones.gimbalInColumn }?.let { Zone(it, "zone-gimbal-pad", ZONE_Z) { gimbalPad() } }
         Zone(zones.skills, "zone-skills", ZONE_Z) { skills() }
         Zone(zones.topBar, "zone-top-bar", TOP_Z) { topBar() }

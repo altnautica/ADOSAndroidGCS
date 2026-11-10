@@ -267,7 +267,7 @@ private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, status: Status
                 )
             },
             leftColumn = { Box(Modifier.fillMaxSize().tipAnchor("left_column")) { LeftColumn(vm, sizes.leftButton, sizes.leftGap) } },
-            rightColumn = { inColumn -> RightColumn(vm, sizes, inColumn) },
+            rightColumn = { z -> RightColumn(vm, sizes, z.gimbalInColumn, z.zoomInColumn) },
             gimbalPad = { Pad(vm, sizes.gimbalPad) },
             card = { Box(Modifier.fillMaxSize().tipAnchor("bottom_left_card")) { if (view == CockpitView.Map) VideoCard(vm) else Card(vm) } },
             bottomRow = {
@@ -451,7 +451,7 @@ private fun LeftColumn(vm: CockpitViewModel, size: Dp, gap: Dp) {
 
 /** Shutter, photo/video switch, zoom, the gimbal pad when it fits here, camera settings. */
 @Composable
-private fun RightColumn(vm: CockpitViewModel, sizes: com.altnautica.gcs.feature.cockpit.chrome.FlightSizes, gimbalInColumn: Boolean) {
+private fun RightColumn(vm: CockpitViewModel, sizes: com.altnautica.gcs.feature.cockpit.chrome.FlightSizes, gimbalInColumn: Boolean, zoomInColumn: Boolean) {
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
     var videoMode by rememberSaveable { mutableStateOf(false) }
@@ -477,15 +477,17 @@ private fun RightColumn(vm: CockpitViewModel, sizes: com.altnautica.gcs.feature.
             width = sizes.shutter,
             height = sizes.modeSwitch,
         )
-        ZoomPill(
-            inLabel = stringResource(R.string.grid_zoom_in),
-            outLabel = stringResource(R.string.grid_zoom_out),
-            onIn = vm::zoomIn,
-            onOut = vm::zoomOut,
-            onLongPress = null,
-            width = sizes.rightButton,
-            height = sizes.zoom,
-        )
+        if (zoomInColumn) {
+            ZoomPill(
+                inLabel = stringResource(R.string.grid_zoom_in),
+                outLabel = stringResource(R.string.grid_zoom_out),
+                onIn = vm::zoomIn,
+                onOut = vm::zoomOut,
+                onLongPress = null,
+                width = sizes.rightButton,
+                height = sizes.zoom,
+            )
+        }
         if (gimbalInColumn) Pad(vm, sizes.gimbalPad)
         RoundButton(Icons.Outlined.Tune, stringResource(R.string.grid_camera_settings), sizes.rightButton, "grid-camera-settings", { vm.setQuickSettings(true) })
     }
