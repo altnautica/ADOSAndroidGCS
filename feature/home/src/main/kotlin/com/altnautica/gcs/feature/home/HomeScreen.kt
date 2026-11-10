@@ -49,8 +49,8 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Console Home: the app root. Picks a vehicle and launches the surfaces that act on it.
- * With [setupOfferNodeId] set, an inline banner offers aircraft setup for that node:
- * Open calls [onOpenSetupOffer], Later calls [onSetupOfferLater].
+ * With [setupOfferNodeId] set and that node selected, an inline banner offers aircraft
+ * setup for it: Open calls [onOpenSetupOffer], Later calls [onSetupOfferLater].
  */
 @Composable
 fun HomeRoute(
@@ -142,7 +142,7 @@ internal fun HomeScreen(
     val vehicleRow: @Composable () -> Unit = {
         VehicleRow(state.vehicles, selectedId, onSelect, onAddVehicle)
     }
-    val setupOffer: @Composable () -> Unit = { HomeSetupOffer(setupOfferNodeId, onOpenSetupOffer, onSetupOfferLater) }
+    val setupOffer: @Composable () -> Unit = { HomeSetupOffer(setupOfferNodeId, selectedId, onOpenSetupOffer, onSetupOfferLater) }
 
     if (isLandscape()) {
         Box(modifier.fillMaxSize()) {

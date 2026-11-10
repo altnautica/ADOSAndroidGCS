@@ -1,5 +1,8 @@
 package com.altnautica.gcs.feature.home
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -13,7 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
-/** The aircraft-setup offer on Home: shown for a node, each button reaches its callback, absent without a node. */
+/** The aircraft-setup offer on Home: shown for the selected node, each button reaches its callback, absent otherwise. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class HomeSetupOfferTest {
@@ -25,7 +28,7 @@ class HomeSetupOfferTest {
         var opened = 0
         var later = 0
         compose.setContent {
-            AdosTheme { HomeSetupOffer(DeviceId("node-1"), onOpen = { opened++ }, onLater = { later++ }) }
+            AdosTheme { HomeSetupOffer(DeviceId("node-1"), DeviceId("node-1"), onOpen = { opened++ }, onLater = { later++ }) }
         }
 
         compose.onNodeWithTag("home-setup-offer").assertIsDisplayed()
@@ -38,11 +41,26 @@ class HomeSetupOfferTest {
     @Test
     fun noOfferWithoutANode() {
         compose.setContent {
-            AdosTheme { HomeSetupOffer(null, onOpen = {}, onLater = {}) }
+            AdosTheme { HomeSetupOffer(null, DeviceId("node-1"), onOpen = {}, onLater = {}) }
         }
 
         compose.onNodeWithTag("home-setup-offer").assertDoesNotExist()
         compose.onNodeWithTag("home-setup-offer-open").assertDoesNotExist()
         compose.onNodeWithTag("home-setup-offer-later").assertDoesNotExist()
+    }
+
+    @Test
+    fun noOfferWhileAnotherVehicleIsSelected() {
+        var opened = 0
+        var selected by mutableStateOf(DeviceId("node-2"))
+        compose.setContent {
+            AdosTheme { HomeSetupOffer(DeviceId("node-1"), selected, onOpen = { opened++ }, onLater = {}) }
+        }
+
+        compose.onNodeWithTag("home-setup-offer").assertDoesNotExist()
+
+        selected = DeviceId("node-1")
+        compose.onNodeWithTag("home-setup-offer-open").performClick()
+        assertEquals(1, opened)
     }
 }
