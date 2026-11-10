@@ -216,4 +216,35 @@ class LayerStackTest {
             assertTrue("steady draw allocated $perDraw bytes per draw", perDraw < 8_192)
         }
     }
+
+    @Test
+    fun `a hidden layer shows its unavailable chip clear of the chrome`() {
+        val c = controller()
+        val obstacles = LayerParse.obstacles(javaClass.classLoader!!.getResource("fixtures/obstacles-frame.json")!!.readText())
+        compose.runOnUiThread { c.store.push(LayerFrame.Obstacles(obstacles), clock) }
+        val density = Density(2f)
+        val measurer = TextMeasurer(createFontFamilyResolver(ApplicationProvider.getApplicationContext()), density, LayoutDirection.Ltr)
+        val layerCanvas = LayerCanvas(LayerPainter(measurer), LayerLabels("ar", "Obstacles unavailable", "depth", "surfaces", "targets", "unscaled", "approx", "reduced"))
+        val flags = c.flags.value.copy(on = setOf(LayerSpec.OBSTACLES))
+        // The chrome covers the top 30 dp, the left 40 dp and the bottom 40 dp of the 320 x 180 dp video.
+        val presentation = LayerPresentation(chipInset = androidx.compose.foundation.layout.PaddingValues(start = 40.dp, top = 30.dp, bottom = 40.dp))
+        fun inked(): List<Pair<Int, Int>> {
+            val bitmap = ImageBitmap(640, 360)
+            compose.runOnUiThread {
+                CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(bitmap), Size(640f, 360f)) {
+                    with(layerCanvas) { draw(c, "main", 1280f, 720f, flags, DepthOptions(), presentation, null) }
+                }
+            }
+            val px = IntArray(640 * 360)
+            bitmap.readPixels(px)
+            return px.indices.filter { (px[it] ushr 24) != 0 }.map { (it % 640) to (it / 640) }
+        }
+        // Past the 2 s hide age the cells are gone and only the chip is drawn.
+        clock += 2_300
+        val chip = inked()
+        assertTrue("the obstacles unavailable chip is drawn", chip.size > 200)
+        assertTrue("the chip stays right of the left chrome", chip.all { it.first >= 80 })
+        assertTrue("the chip stays below the top chrome", chip.all { it.second >= 60 })
+        assertTrue("the chip stays above the bottom chrome", chip.all { it.second <= 280 })
+    }
 }

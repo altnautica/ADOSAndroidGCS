@@ -51,8 +51,13 @@ app's `versionName`.
   control, when the drone offers it, the onboard pilot flies the point and takes
   over from any running mission or skill; otherwise the flight controller's
   reposition flies it. Each pilot refusal reads as a sentence.
-- A newer pause, return, land or kill always wins: an older press still waiting
-  on the pilot never falls back to the flight controller after it.
+- The newest flight command always wins: an older pause, return, land or kill
+  still waiting on the pilot never falls back to the flight controller after a
+  newer command (including a Mode sheet change), and if the pilot accepts the
+  older one late, the newer command is sent again so the drone ends on it.
+- Fly Here refused during a failsafe return or landing reads as a sentence.
+- A hidden layer's "unavailable" chip sits in the video's free corner, clear of
+  the top bar and banners.
 - Relayed flight controller texts keep the newest critical alert and the newest
   warnings in the status pill.
 

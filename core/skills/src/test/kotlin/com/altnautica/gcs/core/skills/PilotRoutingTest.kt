@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.model.Binding
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.ConfirmPolicy
 import com.altnautica.gcs.core.model.ControlMode
+import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PilotInput
@@ -21,6 +22,7 @@ import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.skills.builtin.BuiltinSkills
 import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
+import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -176,6 +178,54 @@ class PilotRoutingTest {
     }
 
     @Test
+    fun `a mode change during a recovery wait wins over the older press's fallback`() = runTest {
+        val link = FakePilotLink(answer = PilotActionResult.NoAnswer).apply { gate = CompletableDeferred() }
+        val first = async { builtin("rth").activate(ctx(link), emptyMap()) }
+        testScheduler.runCurrent()
+        assertEquals(CommandResult.Accepted, SetModeSkill.activate(ctx(link), mapOf(SkillArgs.TARGET_MODE to "LOITER")))
+        link.gate!!.complete(Unit)
+        assertEquals(CommandResult.Denied(SkillReason.SUPERSEDED), first.await())
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.SetMode(FlightMode(5, "LOITER"))), vehicle.control.sent)
+    }
+
+    @Test
+    fun `a pilot that accepts an older recovery press late gets the newer command sent again last`() = runTest {
+        // The newer command escalated to the FC: it goes to the FC again after the late answer.
+        for ((older, newer, want) in listOf(
+            Triple("rth", "land", VehicleCommand.Land),
+            Triple("land", "kill", VehicleCommand.Kill),
+        )) {
+            vehicle.control.sent.clear()
+            val link = FakePilotLink().apply { gate = CompletableDeferred() }
+            val first = async { builtin(older).activate(ctx(link), emptyMap()) }
+            testScheduler.runCurrent()
+            assertEquals(CommandResult.Accepted, builtin(newer).activate(ctx(link), emptyMap()))
+            link.gate!!.complete(Unit)
+            assertEquals("$older then $newer", CommandResult.Denied(SkillReason.SUPERSEDED), first.await())
+            assertEquals("$older then $newer", listOf<VehicleCommand>(want, want), vehicle.control.sent)
+            assertEquals("$older then $newer", listOf(older), link.actions.map { it.name })
+        }
+        // A newer mode change from the Mode sheet goes to the FC again too.
+        vehicle.control.sent.clear()
+        val link = FakePilotLink().apply { gate = CompletableDeferred() }
+        val first = async { builtin("rth").activate(ctx(link), emptyMap()) }
+        testScheduler.runCurrent()
+        SetModeSkill.activate(ctx(link), mapOf(SkillArgs.TARGET_MODE to "LOITER"))
+        link.gate!!.complete(Unit)
+        assertEquals(CommandResult.Denied(SkillReason.SUPERSEDED), first.await())
+        val loiter = VehicleCommand.SetMode(FlightMode(5, "LOITER"))
+        assertEquals(listOf<VehicleCommand>(loiter, loiter), vehicle.control.sent)
+    }
+
+    @Test
+    fun `a recovery press accepted on time is not sent again`() = runTest {
+        val link = FakePilotLink()
+        assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(link), emptyMap()))
+        assertEquals(listOf("rth"), link.actions.map { it.name })
+        assertTrue(vehicle.control.sent.isEmpty())
+    }
+
+    @Test
     fun `an unanswered recovery press with no newer one still falls back to the FC`() = runTest {
         val link = FakePilotLink(answer = PilotActionResult.NoAnswer)
         builtin("land").activate(ctx(link), emptyMap())
@@ -195,6 +245,7 @@ class PilotRoutingTest {
             "no_home" to SkillReason.GOTO_NO_HOME,
             "launching" to SkillReason.GOTO_LAUNCHING,
             "control_mode" to SkillReason.GOTO_CONTROL_MODE,
+            "failsafe" to SkillReason.GOTO_FAILSAFE,
             "something_new" to "something_new",
         )) {
             val link = FakePilotLink(answer = PilotActionResult.Refused(code))

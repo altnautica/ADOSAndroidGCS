@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.cockpit
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -56,6 +58,9 @@ private val SHORT_CENTRE = 320.dp
  * drag). [cameraId] is the camera this surface shows. The picture-in-picture video
  * draws no layers.
  */
+/** The part of the video the flight chrome covers; the layer chips stay clear of it. */
+internal val LocalLayerChipInset = staticCompositionLocalOf { PaddingValues(0.dp) }
+
 @Composable
 internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modifier = Modifier) {
     val a = vm.autonomy
@@ -85,7 +90,7 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
         LayerStack(
             a.layers, cameraId, layer.frameW, layer.frameH, Modifier.fillMaxSize(),
             targets = layer,
-            presentation = layoutClass.layerPresentation().copy(reducedRate = reducedRate),
+            presentation = layoutClass.layerPresentation().copy(reducedRate = reducedRate, chipInset = LocalLayerChipInset.current),
         )
         TargetSemantics(layer, a, onSelect = { item ->
             item.rect?.let { r ->

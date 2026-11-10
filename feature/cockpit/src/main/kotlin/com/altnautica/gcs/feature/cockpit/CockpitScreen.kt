@@ -208,7 +208,9 @@ private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, onExit: () -> 
             width = width,
             gimbal = gimbal,
             background = { zones ->
-                MainView(vm, view, settings.splitRatio, centreInset(zones), Modifier.fillMaxSize())
+                CompositionLocalProvider(LocalLayerChipInset provides layerChipInset(zones)) {
+                    MainView(vm, view, settings.splitRatio, centreInset(zones), Modifier.fillMaxSize())
+                }
             },
             topBar = {
                 FlightTopBar(
@@ -254,6 +256,12 @@ private fun FlightScreen(vm: CockpitViewModel, width: WidthClass, onExit: () -> 
 }
 
 /** The HUD's inset: the centre zone's sides and top, so no column or the top bar ever sits on a tape or the heading scale. */
+/** The video's corner left free by the chrome: the layer chips stack up from the centre zone's bottom-left. */
+private fun layerChipInset(zones: FlightZones): PaddingValues {
+    val windowHeight = zones.card.bottom + zones.topBar.y
+    return PaddingValues(start = zones.centre.x, top = zones.centre.y, bottom = windowHeight - zones.centre.bottom)
+}
+
 private fun centreInset(zones: FlightZones): PaddingValues {
     val windowWidth = zones.topBar.right + zones.topBar.x
     return PaddingValues(start = zones.centre.x, top = zones.centre.y, end = windowWidth - zones.centre.right)

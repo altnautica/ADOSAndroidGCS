@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.hud.layers
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -17,6 +18,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -90,9 +93,16 @@ interface CanvasTargets {
  * How the window's layout class (`layout.json`) shapes the layers: [fpsCap] caps the
  * redraw rate (the TV class draws at 30 fps), and [distanceOnly] keeps only distances
  * in the labels (no waypoint ETA). [reducedRate] marks layers fed by the 2 Hz status
- * poll because the navigation socket cannot open (a radio link).
+ * poll because the navigation socket cannot open (a radio link). [chipInset] keeps the
+ * layer chips (a hidden layer's "unavailable", "Depth unscaled") off the chrome drawn over
+ * the video: they stack upward from the bottom-left of the video inside it.
  */
-data class LayerPresentation(val fpsCap: Int? = null, val distanceOnly: Boolean = false, val reducedRate: Boolean = false)
+data class LayerPresentation(
+    val fpsCap: Int? = null,
+    val distanceOnly: Boolean = false,
+    val reducedRate: Boolean = false,
+    val chipInset: PaddingValues = PaddingValues(0.dp),
+)
 
 /**
  * Every data layer of one video in a single canvas, in the spec's z order: depth,
@@ -221,7 +231,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
 
     private fun DrawScope.chip(text: String) {
         with(painter) { chip(text, Offset(chipX, chipY)) }
-        chipY += CHIP_STEP_DP * density
+        chipY -= CHIP_STEP_DP * density
     }
 
     fun DrawScope.draw(
@@ -242,8 +252,9 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
         val fh = if (frameH > 0f) frameH else arCam?.frameH ?: DEFAULT_H
         layout(fw, fh, size.width, size.height)
         val view = view
-        chipX = view.left + CHIP_INSET_DP * density
-        chipY = view.top + CHIP_INSET_DP * density
+        val inset = presentation.chipInset
+        chipX = max(view.left, inset.calculateLeftPadding(layoutDirection).toPx()) + CHIP_INSET_DP * density
+        chipY = min(view.bottom, size.height - inset.calculateBottomPadding().toPx()) - (CHIP_INSET_DP + CHIP_STEP_DP) * density
         painter.etaInLabels = !presentation.distanceOnly
         if (presentation.reducedRate) chip(labels.reducedRate)
         val order = controller.spec.canvasOrder

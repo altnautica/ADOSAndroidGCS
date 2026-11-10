@@ -184,7 +184,45 @@ abstract class BuiltinSkill(
     final override val source: SkillSource = SkillSource.Builtin
     final override val toggle: Boolean = false
 
-    protected suspend fun send(ctx: SkillContext, command: VehicleCommand): CommandResult = ctx.run(command)
+    /**
+     * Sends [command] to the flight controller. With a pilot link it becomes the newest
+     * command on that link: an older recovery press still waiting on the pilot never runs after it.
+     */
+    protected suspend fun send(ctx: SkillContext, command: VehicleCommand): CommandResult {
+        ctx.pilotLink?.let { CommandOrder.supersede(it) { ctx.run(command) } }
+        return ctx.run(command)
+    }
+}
+
+/**
+ * Per pilot link, the order of the flight commands this surface sent: a count, and how to send
+ * the newest again. A recovery press waiting on the pilot compares the count to tell a newer
+ * command went out; if the pilot then accepts the older action late, the newest goes out again
+ * on its own route, so the vehicle ends on it.
+ */
+internal object CommandOrder {
+    private class Order {
+        val generation = AtomicLong()
+        @Volatile var newest: (suspend () -> Unit)? = null
+    }
+
+    private val orders = WeakHashMap<PilotLink, Order>()
+
+    private fun order(link: PilotLink): Order = synchronized(orders) { orders.getOrPut(link) { Order() } }
+
+    /** Marks a newer command on [link]; [resend] sends it again. Returns its generation. */
+    fun supersede(link: PilotLink, resend: suspend () -> Unit): Long {
+        val o = order(link)
+        o.newest = resend
+        return o.generation.incrementAndGet()
+    }
+
+    fun current(link: PilotLink): Long = order(link).generation.get()
+
+    /** Sends the newest command on [link] again. */
+    suspend fun resendNewest(link: PilotLink) {
+        order(link).newest?.invoke()
+    }
 }
 
 /** Takeoff altitude from the arguments, clamped to the allowed range; default when absent. */
@@ -299,27 +337,34 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
         if (spec.id == BuiltinIds.TAKE_CONTROL) return ctx.sendPilot(PilotAction(spec.pilotAction))
         val recovery = spec.id in RECOVERY_BUILTINS
         val link = ctx.pilotLink
-        // Every recovery press supersedes the ones before it on this link: an older press
-        // still waiting on the pilot never falls back to the FC after a newer one went out.
-        val generation = if (recovery && link != null) recoveryGeneration(link).incrementAndGet() else 0L
         // A second recovery press while the first still waits on the pilot goes to the FC at once.
         val escalate = recovery && link != null && link in pendingRecovery
         if (!escalate && ctx.builtinRoutesToPilot(spec.id)) {
             val pilotArgs = if (spec.id == BuiltinIds.TAKEOFF) mapOf(PILOT_ARG_ALT_M to takeoffAltitude(args)) else emptyMap()
             if (!recovery || link == null) return ctx.sendPilot(PilotAction(spec.pilotAction, pilotArgs))
+            val action = PilotAction(spec.pilotAction, pilotArgs)
+            // Every recovery press supersedes the commands before it on this link: an older press
+            // still waiting on the pilot never runs after a newer one went out.
+            val generation = CommandOrder.supersede(link) { link.action(action) }
             pendingRecovery.add(link)
             val answer = try {
-                link.action(PilotAction(spec.pilotAction, pilotArgs))
+                link.action(action)
             } finally {
                 pendingRecovery.remove(link)
             }
             when (answer) {
-                PilotActionResult.Accepted -> return CommandResult.Accepted
+                // Accepted late, after a newer command went out: the newest goes out again so it is the last.
+                PilotActionResult.Accepted -> return if (CommandOrder.current(link) == generation) {
+                    CommandResult.Accepted
+                } else {
+                    CommandOrder.resendNewest(link)
+                    CommandResult.Denied(SkillReason.SUPERSEDED)
+                }
                 is PilotActionResult.Refused -> return CommandResult.Rejected(-1, answer.reason.orEmpty())
                 // The pilot did not answer: the flight controller takes the action when it can,
                 // unless a newer recovery command went out meanwhile.
                 PilotActionResult.NoAnswer, PilotActionResult.Unavailable -> when {
-                    recoveryGeneration(link).get() != generation -> return CommandResult.Denied(SkillReason.SUPERSEDED)
+                    CommandOrder.current(link) != generation -> return CommandResult.Denied(SkillReason.SUPERSEDED)
                     !ctx.linkFresh -> return if (answer == PilotActionResult.NoAnswer) CommandResult.Timeout else CommandResult.Denied(SkillReason.PILOT_UNAVAILABLE)
                 }
             }
@@ -369,11 +414,6 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
 
         /** Pilot links with a recovery action still waiting on the pilot's answer. */
         val pendingRecovery: MutableSet<PilotLink> = ConcurrentHashMap.newKeySet()
-
-        /** Per pilot link, a count of recovery presses: a waiting press compares it to tell a newer one went out. */
-        private val generations = WeakHashMap<PilotLink, AtomicLong>()
-
-        fun recoveryGeneration(link: PilotLink): AtomicLong = synchronized(generations) { generations.getOrPut(link) { AtomicLong() } }
     }
 }
 
@@ -442,6 +482,7 @@ private val GOTO_REFUSALS = mapOf(
     "no_home" to SkillReason.GOTO_NO_HOME,
     "launching" to SkillReason.GOTO_LAUNCHING,
     "control_mode" to SkillReason.GOTO_CONTROL_MODE,
+    "failsafe" to SkillReason.GOTO_FAILSAFE,
 )
 
 /**

@@ -639,7 +639,7 @@ class CockpitViewModelTest {
         runCurrent()
         vm.setQuickSettings(true)
         hold("triangle")
-        advanceTimeBy(600)
+        advanceTimeBy(1_600)
         runCurrent()
         assertTrue(vehicle.control.sent.isEmpty())
         assertTrue(vm.quickSettingsOpen.value)
