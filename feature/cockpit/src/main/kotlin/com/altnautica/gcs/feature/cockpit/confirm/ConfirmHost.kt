@@ -67,14 +67,17 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
     val policy = state.request.policy
     val skill = state.request.skill
     val targetMode = state.request.args[SkillArgs.TARGET_MODE] as? String
-    // The emergency stop names itself the same way on every surface (`stop.hold_label`).
-    val holdLabel = if (skill.id == com.altnautica.gcs.core.skills.builtin.BuiltinIds.KILL) {
-        com.altnautica.gcs.feature.cockpit.flow.specText("stop.hold_label")
-    } else {
-        specText("confirm.hold", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(policy.holdMs / 1000f))
+    // The emergency stop reads the same on every surface: "Emergency stop", one hold button
+    // (`stop.hold_label`) that counts down the hold still needed while it is held.
+    val isStop = skill.id == com.altnautica.gcs.core.skills.builtin.BuiltinIds.KILL
+    val holdingS = (state.guardCountdown() as? GuardCountdown.Holding)?.seconds
+    val holdLabel = when {
+        holdingS != null -> specText("hold.keep_holding", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(holdingS))
+        isStop -> specText("stop.hold_label")
+        else -> specText("confirm.hold", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(policy.holdMs / 1000f))
     }
     AdosConfirmSheet(
-        title = confirmTitle(policy.titleKey, skillLabel(skill)),
+        title = if (isStop) specText("cockpit.estop") else confirmTitle(policy.titleKey, skillLabel(skill)),
         message = targetMode?.let { specText("confirm.mode.to", "mode" to it) } ?: confirmMessage(policy.messageKey),
         onDismiss = actions::cancel,
         danger = policy.danger,
@@ -110,16 +113,6 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
                 }
             }
             ConfirmGesture.Guarded -> {
-                val countdown = when (val c = state.guardCountdown()) {
-                    is GuardCountdown.Holding -> specText("confirm.guard_holding", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(c.seconds.toFloat()))
-                    is GuardCountdown.Window -> specText("confirm.guard", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(c.seconds.toFloat()))
-                    null -> ""
-                }
-                Text(
-                    countdown,
-                    style = AdosTypography.numeric.medium,
-                    color = AdosTheme.colors.statusError,
-                )
                 HoldRing(holdLabel, state.progress, state.gestureEnabled, true, actions::onTouchHold)
             }
             ConfirmGesture.Hold, ConfirmGesture.Tap -> {
