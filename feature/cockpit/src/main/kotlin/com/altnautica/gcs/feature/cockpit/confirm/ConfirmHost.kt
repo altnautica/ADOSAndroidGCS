@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -41,7 +40,6 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.builtin.TakeoffAltitude
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
 import com.altnautica.gcs.feature.cockpit.skillbar.confirmMessage
@@ -73,23 +71,23 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
     val holdLabel = if (skill.id == com.altnautica.gcs.core.skills.builtin.BuiltinIds.KILL) {
         com.altnautica.gcs.feature.cockpit.flow.specText("stop.hold_label")
     } else {
-        stringResource(R.string.cockpit_confirm_hold, policy.holdMs / 1000f)
+        specText("confirm.hold", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(policy.holdMs / 1000f))
     }
     AdosConfirmSheet(
         title = confirmTitle(policy.titleKey, skillLabel(skill)),
-        message = targetMode?.let { stringResource(R.string.cockpit_confirm_mode_to, it) } ?: confirmMessage(policy.messageKey),
+        message = targetMode?.let { specText("confirm.mode.to", "mode" to it) } ?: confirmMessage(policy.messageKey),
         onDismiss = actions::cancel,
         danger = policy.danger,
     ) {
         state.altitudeM?.let { alt -> AltitudeStepper(alt, actions::setAltitude) }
 
         if (state.failingChecks.isNotEmpty()) {
-            Text(stringResource(R.string.cockpit_confirm_checklist_failing), style = MaterialTheme.typography.labelLarge, color = AdosTheme.colors.statusWarning)
+            Text(specText("confirm.checklist_failing"), style = MaterialTheme.typography.labelLarge, color = AdosTheme.colors.statusWarning)
             for (check in state.failingChecks) {
                 Text("• " + preflightItemLabel(check.item, check.known), style = MaterialTheme.typography.bodyMedium)
             }
             SwitchSettingRow(
-                title = stringResource(R.string.cockpit_confirm_override),
+                title = specText("confirm.override"),
                 checked = state.overrideChecklist,
                 onCheckedChange = actions::setOverride,
             )
@@ -98,12 +96,12 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
         when (state.gesture) {
             ConfirmGesture.Slide -> {
                 SlideToConfirm(
-                    label = stringResource(R.string.cockpit_confirm_slide),
+                    label = specText("confirm.slide"),
                     onConfirmed = actions::onSlideCompleted,
                     enabled = state.gestureEnabled,
                 )
                 Text(
-                    stringResource(R.string.cockpit_confirm_slide_hint, policy.holdMs / 1000f),
+                    specText("confirm.slide_hint", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(policy.holdMs / 1000f)),
                     style = MaterialTheme.typography.bodySmall,
                     color = AdosTheme.colors.fgSecondary,
                 )
@@ -113,8 +111,8 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
             }
             ConfirmGesture.Guarded -> {
                 val countdown = when (val c = state.guardCountdown()) {
-                    is GuardCountdown.Holding -> stringResource(R.string.cockpit_confirm_guard_holding, c.seconds)
-                    is GuardCountdown.Window -> stringResource(R.string.cockpit_confirm_guard, c.seconds)
+                    is GuardCountdown.Holding -> specText("confirm.guard_holding", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(c.seconds.toFloat()))
+                    is GuardCountdown.Window -> specText("confirm.guard", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(c.seconds.toFloat()))
                     null -> ""
                 }
                 Text(
@@ -128,7 +126,7 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
                 HoldRing(holdLabel, state.progress, state.gestureEnabled, policy.danger, actions::onTouchHold)
             }
         }
-        Text(stringResource(R.string.cockpit_confirm_input_hint), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgTertiary)
+        Text(specText("confirm.input_hint"), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgTertiary)
     }
 }
 
@@ -172,11 +170,11 @@ private fun AltitudeStepper(altitude: Float, onChange: (Float) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(specText("flow.launch.alt_m"), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
         IconButton(onClick = { onChange(altitude - TakeoffAltitude.STEP_M) }, enabled = altitude > TakeoffAltitude.MIN_M) {
-            Icon(Icons.Outlined.Remove, contentDescription = stringResource(R.string.cockpit_confirm_altitude_down))
+            Icon(Icons.Outlined.Remove, contentDescription = specText("confirm.altitude_down"))
         }
-        Text(stringResource(R.string.cockpit_altitude_m, altitude.roundToInt()), style = AdosTypography.numeric.large)
+        Text(specText("cockpit.unit.m", "n" to altitude.roundToInt().toString()), style = AdosTypography.numeric.large)
         IconButton(onClick = { onChange(altitude + TakeoffAltitude.STEP_M) }, enabled = altitude < TakeoffAltitude.MAX_M) {
-            Icon(Icons.Outlined.Add, contentDescription = stringResource(R.string.cockpit_confirm_altitude_up))
+            Icon(Icons.Outlined.Add, contentDescription = specText("confirm.altitude_up"))
         }
     }
 }

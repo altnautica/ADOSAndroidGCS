@@ -1,8 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.autonomy
 
-import android.content.Context
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.altnautica.gcs.feature.cockpit.testSpec
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -12,7 +11,7 @@ import org.robolectric.annotation.Config
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class NavSourceTest {
-    private val text = TargetText(ApplicationProvider.getApplicationContext<Context>().resources)
+    private val text = TargetText(testSpec.setupStrings)
 
     private fun inputs(
         flags: Int?,

@@ -20,7 +20,10 @@ import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.model.PositionFix
+import androidx.compose.runtime.CompositionLocalProvider
 import com.altnautica.gcs.feature.cockpit.FakeTelemetry
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
+import com.altnautica.gcs.feature.cockpit.testSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -45,7 +48,7 @@ class HudLevelTest {
         }
         var instruments by mutableStateOf(false)
         compose.setContent {
-            AdosTheme {
+            CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) { AdosTheme {
                 Box(Modifier.size(800.dp, 400.dp).background(Color.Black).testTag("stage")) {
                     HudCanvas(
                         telemetry = telemetry,
@@ -56,7 +59,7 @@ class HudLevelTest {
                         nowMs = { 1_000L },
                     )
                 }
-            }
+            } }
         }
         val clean = lit()
         instruments = true

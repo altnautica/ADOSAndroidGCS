@@ -7,7 +7,10 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.model.PositionFix
+import androidx.compose.runtime.CompositionLocalProvider
 import com.altnautica.gcs.feature.cockpit.FakeTelemetry
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
+import com.altnautica.gcs.feature.cockpit.testSpec
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import org.junit.Assert.assertEquals
@@ -36,7 +39,7 @@ class HudCanvasTest {
         // The HUD keeps a 500 ms stale-redraw ticker; drive frames by hand so idling never waits on it.
         compose.mainClock.autoAdvance = false
         compose.setContent {
-            AdosTheme {
+            CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) { AdosTheme {
                 HudCanvas(
                     telemetry = telemetry,
                     altitudeReference = AltitudeReference.Rel,
@@ -46,7 +49,7 @@ class HudCanvasTest {
                     drawProbe = { draws++ },
                     invalidationProbe = { invalidations++ },
                 )
-            }
+            } }
         }
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()

@@ -33,7 +33,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -48,7 +47,6 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.theme.GLOVE_TOUCH_SCALE
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 
@@ -95,7 +93,7 @@ internal fun FollowRail(
         Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (ui.followInstalled) {
                 if (ui.followActive) {
-                    RailButton(Icons.Outlined.Close, stringResource(R.string.hud_rail_tracking) + " ×", size, c.hudTrack, true, onFollow)
+                    RailButton(Icons.Outlined.Close, specText("follow.tracking").uppercase() + " ×", size, c.hudTrack, true, onFollow)
                 } else {
                     RailButton(Icons.Outlined.PersonPinCircle, specText("follow.chip"), size, c.hudInk, ui.followEnabled, onFollow)
                 }
@@ -104,7 +102,7 @@ internal fun FollowRail(
             val showExtras = !fold || unfolded
             if (fold && !unfolded) RailButton(Icons.Outlined.MoreHoriz, specText("follow.more"), size, c.hudInk, true) { unfolded = true }
             if (showExtras) {
-                ui.swapLabels?.let { (a, b) -> RailButton(Icons.Outlined.SwapVert, stringResource(R.string.hud_rail_cam_swap, a, b), size, c.hudInk, true, onSwap) }
+                ui.swapLabels?.let { (a, b) -> RailButton(Icons.Outlined.SwapVert, specText("follow.cam_swap", "from" to a, "to" to b), size, c.hudInk, true, onSwap) }
                 if (ui.canRecord) {
                     RailButton(Icons.Outlined.FiberManualRecord, specText("follow.rec"), size, if (ui.recording) c.hudCrit else c.hudInk, true, onRecord)
                 }
@@ -142,8 +140,8 @@ private fun railText() = AdosTypography.numeric.small.copy(fontSize = 9.sp, font
 @Composable
 internal fun ReacquireToggle(mode: String?, pending: String?, size: Dp, onSelect: (String) -> Unit) {
     val c = AdosTheme.colors
-    val description = stringResource(R.string.hud_rail_reacquire_description)
-    val pendingWord = stringResource(R.string.hud_rail_pending)
+    val description = specText("target.reacquire_mode")
+    val pendingWord = specText("setup.state.pending").lowercase()
     Column(Modifier.semantics { contentDescription = description }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         for ((value, label) in listOf("strict" to specText("follow.mode.strict"), "smart" to specText("follow.mode.smart"))) {
             val active = (pending ?: mode) == value

@@ -17,8 +17,6 @@
     <string name="cockpit_checklist_overridden">Preflight checklist overridden</string>
     <string name="cockpit_swap_video_map">Swap video and map</string>
     <string name="cockpit_split_divider">Resize video and map</string>
-    <string name="cockpit_hud_description">Flight instruments</string>
-    <string name="cockpit_radar_description">Proximity radar</string>
     <string name="cockpit_tts_mode">Mode %1$s</string>
 
     <!-- Safety band -->
@@ -45,7 +43,6 @@
     <string name="cockpit_rec">REC</string>
     <string name="cockpit_flight_time">FLT</string>
     <string name="cockpit_kill">KILL</string>
-    <string name="cockpit_quick_settings">Quick settings</string>
 
     <!-- Alerts -->
     <string name="cockpit_alert_level_critical">CRITICAL</string>
@@ -113,38 +110,6 @@
     <string name="cockpit_reason_vehicle_class">Not available on this vehicle type</string>
 
     <!-- Confirm sheet -->
-    <string name="cockpit_confirm_arm_title">Arm motors</string>
-    <string name="cockpit_confirm_arm_message">The propellers can spin as soon as the vehicle arms. Keep clear.</string>
-    <string name="cockpit_confirm_disarm_title">Disarm motors</string>
-    <string name="cockpit_confirm_disarm_message">Disarming in flight stops the motors.</string>
-    <string name="cockpit_confirm_takeoff_title">Take off</string>
-    <string name="cockpit_confirm_takeoff_message">The vehicle arms and climbs to the altitude below.</string>
-    <string name="cockpit_confirm_land_title">Land</string>
-    <string name="cockpit_confirm_land_message">The vehicle descends and lands where it is.</string>
-    <string name="cockpit_confirm_rth_title">Return home</string>
-    <string name="cockpit_confirm_rth_message">The vehicle flies back to its home position.</string>
-    <string name="cockpit_confirm_resume_title">Resume mission</string>
-    <string name="cockpit_confirm_resume_message">The vehicle continues its mission.</string>
-    <string name="cockpit_confirm_abort_title">Abort</string>
-    <string name="cockpit_confirm_abort_message">The vehicle stops what it is doing and lands.</string>
-    <string name="cockpit_confirm_kill_title">Kill motors</string>
-    <string name="cockpit_confirm_kill_message">The motors stop at once. In flight the vehicle falls.</string>
-    <string name="cockpit_confirm_mode_title">Change flight mode</string>
-    <string name="cockpit_confirm_mode_message">The vehicle switches to the selected mode.</string>
-    <string name="cockpit_confirm_mode_to">The vehicle switches to %1$s.</string>
-    <string name="cockpit_confirm_fly_here_title">Fly here</string>
-    <string name="cockpit_confirm_fly_here_message">The vehicle flies to the selected point, taking over from any running mission or skill.</string>
-    <string name="cockpit_confirm_checklist_failing">Preflight checks not passed:</string>
-    <string name="cockpit_confirm_override">Override checklist</string>
-    <string name="cockpit_confirm_slide">Slide to confirm</string>
-    <string name="cockpit_confirm_slide_hint">Or hold the gamepad button or Enter for %1$.1f s</string>
-    <string name="cockpit_confirm_hold">Hold for %1$.1f s</string>
-    <string name="cockpit_confirm_guard">Guard armed: hold within %1$.1f s</string>
-    <string name="cockpit_confirm_guard_holding">Keep holding: %1$.1f s</string>
-    <string name="cockpit_confirm_input_hint">Gamepad: hold the same button. Keyboard: hold Enter.</string>
-    <string name="cockpit_confirm_altitude_down">Lower altitude</string>
-    <string name="cockpit_confirm_altitude_up">Raise altitude</string>
-    <string name="cockpit_altitude_m">%1$d m</string>
 
     <!-- Flight mode picker -->
     <string name="cockpit_mode_picker_title">Flight mode</string>
@@ -155,15 +120,6 @@
     <string name="cockpit_mode_tier_slide">Slide to confirm</string>
 
     <!-- Quick settings and panels -->
-    <string name="cockpit_qs_altitude_reference">Altitude reference</string>
-    <string name="cockpit_alt_rel">Home-relative (REL)</string>
-    <string name="cockpit_alt_msl">Sea level (MSL)</string>
-    <string name="cockpit_qs_density">Density</string>
-    <string name="cockpit_density_min">Minimal</string>
-    <string name="cockpit_density_std">Standard</string>
-    <string name="cockpit_density_full">Full</string>
-    <string name="cockpit_qs_max_brightness">Maximum brightness</string>
-    <string name="cockpit_qs_telemetry_pane">Telemetry pane</string>
     <string name="cockpit_qs_pip">Picture-in-picture</string>
     <string name="grid_card_page_map">Map</string>
     <string name="grid_card_attitude">Attitude</string>
@@ -183,11 +139,4 @@
     <string name="cockpit_alert_controller_lost">Controller disconnected: stick control off</string>
     <string name="cockpit_alert_controller_battery">Controller battery low</string>
     <string name="cockpit_mode_ends_stick">Stick control will turn off</string>
-    <string name="cockpit_qs_stick_all_modes">Stick control in all modes (this vehicle)</string>
-    <string name="cockpit_qs_stick_all_modes_summary">When off, the sticks fly only in altitude- or position-holding modes</string>
-    <string name="cockpit_all_modes_title">Allow stick control in all modes?</string>
-    <string name="cockpit_all_modes_warning">The DualShock 4 throttle stick springs back to centre. In modes without altitude hold, centre throttle is not a hover. Only enable this if you fly manual modes with this controller.</string>
-    <string name="cockpit_all_modes_confirm">Hold to allow</string>
-    <string name="cockpit_battery_to_empty">%1$s to empty</string>
-    <string name="cockpit_battery_to_empty_short">%1$s to empty</string>
 </resources>

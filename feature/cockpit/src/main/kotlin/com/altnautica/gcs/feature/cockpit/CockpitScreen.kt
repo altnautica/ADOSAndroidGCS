@@ -379,7 +379,7 @@ private fun FlightTopBar(
     val moved = overflow.moved
     val nav by vm.autonomy.navChip.collectAsStateWithLifecycle()
     val layerFlags by vm.autonomy.layers.flags.collectAsStateWithLifecycle()
-    val navText = com.altnautica.gcs.feature.cockpit.autonomy.TargetText(androidx.compose.ui.platform.LocalResources.current)
+    val navText = com.altnautica.gcs.feature.cockpit.autonomy.TargetText(LocalCockpitStrings.current)
     val menuOrder = vm.cockpitSpec.layout.menu?.order.orEmpty().ifEmpty { DEFAULT_MENU_ORDER }
     val strings = LocalCockpitStrings.current
     val items = buildList {

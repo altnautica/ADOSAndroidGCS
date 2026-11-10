@@ -24,12 +24,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.cockpit.CockpitViewModel
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -100,8 +98,8 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
         if (items.isEmpty()) Text(specText("vision.no_detections"), color = c.mediaOn.copy(alpha = 0.7f))
         for (d in items.sortedByDescending { it.confidence }.take(MAX_ROWS)) {
             val pct = Math.round(d.confidence * 100)
-            val row = d.trackId?.let { stringResource(R.string.vision_detection_row_track, d.classLabel, pct, it) }
-                ?: stringResource(R.string.vision_detection_row, d.classLabel, pct)
+            val row = d.trackId?.let { specText("vision.detection_row_track", "id" to it.toString(), "label" to d.classLabel, "pct" to pct.toString()) }
+                ?: specText("vision.detection_row", "label" to d.classLabel, "pct" to pct.toString())
             Text(row, color = c.mediaOn)
         }
 
@@ -111,7 +109,7 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
             if (unreachable) Text(specText("vision.engine_unreachable"), color = c.mediaOn.copy(alpha = 0.7f))
         } else {
             for (m in s.models.filter { it.kind == DETECTION_KIND }) {
-                val text = if (m.loaded) stringResource(R.string.vision_model_active, m.id) else stringResource(R.string.vision_model_switch, m.id)
+                val text = if (m.loaded) specText("vision.model_active", "model" to m.id) else specText("vision.model_switch", "model" to m.id)
                 Text(
                     text,
                     color = c.mediaOn,
@@ -135,7 +133,7 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text(layerLabel(id), color = c.mediaOn)
-                    if (sw.forced) Text(stringResource(R.string.vision_layer_forced), color = c.mediaOn.copy(alpha = 0.7f))
+                    if (sw.forced) Text(specText("vision.layer_forced"), color = c.mediaOn.copy(alpha = 0.7f))
                 }
                 Switch(checked = sw.checked, enabled = sw.enabled, onCheckedChange = { layers.toggle(id) })
             }
@@ -148,7 +146,7 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
         Text(specText("vision.depth_range"), color = c.mediaOn)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (r in DEPTH_RANGES) {
-                val label = r?.let { stringResource(R.string.vision_depth_range_m, it.toInt()) } ?: specText("vision.off")
+                val label = r?.let { specText("cockpit.unit.m", "n" to it.toInt().toString()) } ?: specText("vision.off")
                 FilterChip(depth.rangeM == r, { layers.setDepthOptions(depth.copy(rangeM = r)) }, { Text(label) })
             }
         }
@@ -157,7 +155,7 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
         s?.let { st ->
             val fps = st.models.firstOrNull { it.loaded && it.kind == DETECTION_KIND }?.fps
             Text(
-                if (fps != null) stringResource(R.string.vision_health_rate, st.state, fps) else stringResource(R.string.vision_health_state, st.state),
+                if (fps != null) specText("vision.health_rate", "state" to st.state, "fps" to String.format(java.util.Locale.ROOT, "%.1f", fps)) else st.state,
                 color = c.mediaOn,
             )
         }

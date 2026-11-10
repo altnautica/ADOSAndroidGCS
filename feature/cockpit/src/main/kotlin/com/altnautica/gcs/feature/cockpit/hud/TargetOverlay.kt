@@ -23,7 +23,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalResources
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -102,14 +102,14 @@ internal class TargetDrawer(
 internal fun rememberTargetDrawer(autonomy: CockpitAutonomy, motion: MotionPrefs, compact: Boolean): TargetDrawer {
     val colors = AdosTheme.colors
     val measurer = rememberTextMeasurer()
-    val resources = LocalResources.current
-    return remember(colors, measurer, resources, motion, autonomy, compact) {
+    val strings = LocalCockpitStrings.current
+    return remember(colors, measurer, strings, motion, autonomy, compact) {
         val style = AdosTypography.numeric.small.copy(
             fontSize = 11.sp,
             fontWeight = FontWeight(AdosHudTarget.TagFontWeight),
             letterSpacing = AdosHudTarget.TagLetterSpacingEm.em,
         )
-        TargetDrawer(colors, measurer, style, TargetText(resources), motion, autonomy, compact)
+        TargetDrawer(colors, measurer, style, TargetText(strings), motion, autonomy, compact)
     }
 }
 
@@ -124,7 +124,7 @@ internal fun TargetSemantics(
     onSelect: (DrawItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val text = TargetText(LocalResources.current)
+    val text = TargetText(LocalCockpitStrings.current)
     val haptics = LocalHapticFeedback.current
     var size by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(autonomy) {

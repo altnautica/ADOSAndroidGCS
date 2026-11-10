@@ -204,8 +204,8 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
         val concurrent = video.streams.count { it.live && it.switchKind == StreamSwitchKind.Concurrent } >= 2
         val mainId = a.mainCamera(video)
         val swap = if (belly != null && concurrent) {
-            val front = androidx.compose.ui.res.stringResource(R.string.hud_leg_front)
-            val bellyWord = androidx.compose.ui.res.stringResource(R.string.hud_leg_belly)
+            val front = com.altnautica.gcs.feature.cockpit.flow.specText("hud.leg.front").uppercase()
+            val bellyWord = com.altnautica.gcs.feature.cockpit.flow.specText("hud.leg.belly").uppercase()
             if (mainId == belly.id) bellyWord to front else front to bellyWord
         } else {
             null

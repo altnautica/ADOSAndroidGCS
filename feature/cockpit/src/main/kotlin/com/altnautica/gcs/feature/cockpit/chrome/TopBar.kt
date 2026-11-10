@@ -63,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
 import com.altnautica.gcs.feature.cockpit.alerts.alertTitle
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.alerts.fcStateDetailRes
 import com.altnautica.gcs.feature.cockpit.flow.specText
@@ -380,10 +379,10 @@ fun BatteryGauge(
     val reserveLabel = specText("cockpit.battery.reserve")
     val clock = ui.timeLeftS?.let(::formatClock)
     val timeLeft = clock?.let {
-        if (ui.toReserve) specText(reserveTextKey, "t" to it) else stringResource(R.string.cockpit_battery_to_empty, it)
+        if (ui.toReserve) specText(reserveTextKey, "t" to it) else specText("cockpit.battery.to_empty", "time" to it)
     }
     val shown = clock?.let {
-        if (ui.toReserve) specText(reserveShortKey, "t" to it) else stringResource(R.string.cockpit_battery_to_empty_short, it)
+        if (ui.toReserve) specText(reserveShortKey, "t" to it) else specText("cockpit.battery.to_empty", "time" to it)
     }
     val described = listOfNotNull(ui.pct?.let { "$it%" } ?: "—", timeLeft, ui.reservePct?.let { "$reserveLabel $it%" }).joinToString(", ")
     Row(
