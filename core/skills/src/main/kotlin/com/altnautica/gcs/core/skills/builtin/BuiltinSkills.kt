@@ -185,11 +185,14 @@ abstract class BuiltinSkill(
     final override val toggle: Boolean = false
 
     /**
-     * Sends [command] to the flight controller. With a pilot link it becomes the newest
-     * command on that link: an older recovery press still waiting on the pilot never runs after it.
+     * Sends [command] to the flight controller. With a pilot link, a flight command becomes the
+     * newest command on that link: an older recovery press still waiting on the pilot never runs
+     * after it. Configuration commands (EKF source set, gimbal, camera, motor test, reboot) leave
+     * a pending recovery press alone.
      */
     protected suspend fun send(ctx: SkillContext, command: VehicleCommand): CommandResult {
-        ctx.pilotLink?.let { CommandOrder.supersede(it) { ctx.run(command) } }
+        val link = ctx.pilotLink
+        if (link != null && CommandOrder.supersedes(command)) CommandOrder.supersede(link) { ctx.run(command) }
         return ctx.run(command)
     }
 }
@@ -209,6 +212,20 @@ internal object CommandOrder {
     private val orders = WeakHashMap<PilotLink, Order>()
 
     private fun order(link: PilotLink): Order = synchronized(orders) { orders.getOrPut(link) { Order() } }
+
+    /**
+     * The explicit allowlist of flight-affecting commands that supersede a pending recovery
+     * press: mode changes, arm/disarm, takeoff, reposition, and the recovery commands. Any
+     * other command, including every one added later, never does.
+     */
+    fun supersedes(command: VehicleCommand): Boolean = when (command) {
+        is VehicleCommand.SetMode, is VehicleCommand.Arm, is VehicleCommand.Disarm, is VehicleCommand.Takeoff,
+        is VehicleCommand.FlyTo, VehicleCommand.Land, VehicleCommand.ReturnToLaunch, VehicleCommand.PauseMission,
+        VehicleCommand.ResumeMission, VehicleCommand.Kill -> true
+        is VehicleCommand.SetEkfSourceSet, is VehicleCommand.MotorTest, VehicleCommand.RebootAutopilot,
+        is VehicleCommand.GimbalRate, VehicleCommand.GimbalRecenter, is VehicleCommand.CameraZoom,
+        VehicleCommand.CapturePhoto -> false
+    }
 
     /** Marks a newer command on [link]; [resend] sends it again. Returns its generation. */
     fun supersede(link: PilotLink, resend: suspend () -> Unit): Long {

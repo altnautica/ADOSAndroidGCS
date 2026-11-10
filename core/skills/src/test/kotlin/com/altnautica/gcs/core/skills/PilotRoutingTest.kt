@@ -21,7 +21,9 @@ import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.skills.builtin.BuiltinSkills
+import com.altnautica.gcs.core.skills.builtin.EkfSourceSetSkill
 import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
+import com.altnautica.gcs.core.skills.builtin.CommandOrder
 import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -186,6 +188,33 @@ class PilotRoutingTest {
         link.gate!!.complete(Unit)
         assertEquals(CommandResult.Denied(SkillReason.SUPERSEDED), first.await())
         assertEquals(listOf<VehicleCommand>(VehicleCommand.SetMode(FlightMode(5, "LOITER"))), vehicle.control.sent)
+    }
+
+    @Test
+    fun `an EKF source switch during a kill wait does not supersede it - the kill still falls back to the FC`() = runTest {
+        val link = FakePilotLink(answer = PilotActionResult.NoAnswer).apply { gate = CompletableDeferred() }
+        val first = async { builtin("kill").activate(ctx(link), emptyMap()) }
+        testScheduler.runCurrent()
+        assertEquals(CommandResult.Accepted, EkfSourceSetSkill.activate(ctx(link), mapOf(SkillArgs.EKF_SOURCE_SET to 2)))
+        link.gate!!.complete(Unit)
+        assertEquals(CommandResult.Accepted, first.await())
+        assertEquals(listOf(VehicleCommand.SetEkfSourceSet(2), VehicleCommand.Kill), vehicle.control.sent)
+    }
+
+    @Test
+    fun `only flight commands supersede a recovery press - configuration commands never do`() {
+        val flight = listOf(
+            VehicleCommand.Arm(), VehicleCommand.Disarm(), VehicleCommand.Takeoff(10f), VehicleCommand.Land,
+            VehicleCommand.ReturnToLaunch, VehicleCommand.SetMode(FlightMode(5, "LOITER")), VehicleCommand.PauseMission,
+            VehicleCommand.ResumeMission, VehicleCommand.Kill, VehicleCommand.FlyTo(1.0, 2.0, 3f),
+        )
+        val config = listOf(
+            VehicleCommand.SetEkfSourceSet(2), VehicleCommand.MotorTest(1, 5f, 1f), VehicleCommand.RebootAutopilot,
+            VehicleCommand.GimbalRate(1f, 1f), VehicleCommand.GimbalRecenter, VehicleCommand.CameraZoom(1),
+            VehicleCommand.CapturePhoto,
+        )
+        flight.forEach { assertTrue("$it", CommandOrder.supersedes(it)) }
+        config.forEach { assertTrue("$it", !CommandOrder.supersedes(it)) }
     }
 
     @Test

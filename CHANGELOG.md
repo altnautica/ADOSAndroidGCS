@@ -54,7 +54,10 @@ app's `versionName`.
 - The newest flight command always wins: an older pause, return, land or kill
   still waiting on the pilot never falls back to the flight controller after a
   newer command (including a Mode sheet change), and if the pilot accepts the
-  older one late, the newer command is sent again so the drone ends on it.
+  older one late, the newer command is sent again so the drone ends on it. Only
+  flight commands count (mode changes, arm, disarm, takeoff, Fly Here and the
+  recovery commands); an EKF source switch or other configuration command never
+  cancels a pending pause, return, land or kill.
 - Fly Here refused during a failsafe return or landing reads as a sentence.
 - A hidden layer's "unavailable" chip sits in the video's free corner, clear of
   the top bar and banners.
