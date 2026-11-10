@@ -71,18 +71,20 @@ class VideoSessionViewTest {
     private fun viewsIn(root: View): List<View> =
         listOf(root) + ((root as? ViewGroup)?.let { g -> (0 until g.childCount).flatMap { viewsIn(g.getChildAt(it)) } } ?: emptyList())
 
-    private fun mainViewFor(scale: Float): List<View> {
-        val handle = object : VideoSessionHandle {
-            override val source = VideoSource.AgentWhep(DeviceId("d1"), "demo://local/", "main")
-            override val state = MutableStateFlow<VideoState>(VideoState.Live(null))
-            override val output: VideoOutput = object : VideoOutput.SurfaceTarget {
-                override fun setSurface(surface: Surface?) = Unit
-                override val bufferScale: Float = scale
-            }
-            override val recording: VideoRecording? = null
-            override fun start() = Unit
-            override suspend fun stop() = Unit
+    private fun mainHandle(scale: Float) = object : VideoSessionHandle {
+        override val source = VideoSource.AgentWhep(DeviceId("d1"), "demo://local/", "main")
+        override val state = MutableStateFlow<VideoState>(VideoState.Live(null))
+        override val output: VideoOutput = object : VideoOutput.SurfaceTarget {
+            override fun setSurface(surface: Surface?) = Unit
+            override val bufferScale: Float = scale
         }
+        override val recording: VideoRecording? = null
+        override fun start() = Unit
+        override suspend fun stop() = Unit
+    }
+
+    private fun mainViewFor(scale: Float): List<View> {
+        val handle = mainHandle(scale)
         lateinit var root: View
         compose.setContent {
             root = LocalView.current.rootView
@@ -90,6 +92,34 @@ class VideoSessionViewTest {
         }
         compose.waitForIdle()
         return viewsIn(root)
+    }
+
+    /** Every view the main role reports while composed with [scale], then after it leaves. */
+    private fun reportedViews(scale: Float): List<View?> {
+        val reported = mutableListOf<View?>()
+        val handle = mainHandle(scale)
+        var shown by mutableStateOf(true)
+        compose.setContent {
+            if (shown) VideoSessionView(handle, VideoSurfaceRole.Main, Modifier, onVideoView = { reported += it })
+        }
+        compose.waitForIdle()
+        shown = false
+        compose.waitForIdle()
+        return reported
+    }
+
+    @Test
+    fun `a main video on a TextureView reports its view, and null once it is gone`() {
+        val reported = reportedViews(0.5f)
+        assertTrue(reported.first() is TextureView)
+        assertEquals(null, reported.last())
+    }
+
+    @Test
+    fun `a main video on a SurfaceView reports its view, and null once it is gone`() {
+        val reported = reportedViews(1f)
+        assertTrue(reported.first() is SurfaceView)
+        assertEquals(null, reported.last())
     }
 
     @Test
