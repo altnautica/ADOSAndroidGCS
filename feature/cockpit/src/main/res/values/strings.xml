@@ -111,6 +111,7 @@
     <string name="cockpit_reason_goto_tuning">Fly Here refused: a setup step is running</string>
     <string name="cockpit_reason_goto_no_home">Fly Here refused: the drone has no home position yet</string>
     <string name="cockpit_reason_goto_launching">Fly Here refused: the drone is still taking off</string>
+    <string name="cockpit_reason_goto_control_mode">Fly Here refused: the flight controller has control</string>
     <string name="cockpit_reason_no_target">No target in view to designate</string>
     <string name="cockpit_reason_vehicle_class">Not available on this vehicle type</string>
 

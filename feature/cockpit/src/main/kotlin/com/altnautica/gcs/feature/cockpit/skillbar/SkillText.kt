@@ -110,6 +110,7 @@ private val REASONS = mapOf(
     SkillReason.GOTO_TUNING to R.string.cockpit_reason_goto_tuning,
     SkillReason.GOTO_NO_HOME to R.string.cockpit_reason_goto_no_home,
     SkillReason.GOTO_LAUNCHING to R.string.cockpit_reason_goto_launching,
+    SkillReason.GOTO_CONTROL_MODE to R.string.cockpit_reason_goto_control_mode,
 )
 
 /** Built-in labels are localized; an extension's label is shown as the extension provides it. */

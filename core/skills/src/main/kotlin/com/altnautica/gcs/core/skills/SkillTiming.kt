@@ -80,4 +80,5 @@ object SkillReason {
     const val GOTO_TUNING = "gotoTuning"
     const val GOTO_NO_HOME = "gotoNoHome"
     const val GOTO_LAUNCHING = "gotoLaunching"
+    const val GOTO_CONTROL_MODE = "gotoControlMode"
 }

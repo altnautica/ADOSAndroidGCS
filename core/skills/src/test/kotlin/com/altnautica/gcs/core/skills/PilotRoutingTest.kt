@@ -194,6 +194,7 @@ class PilotRoutingTest {
             "tuning" to SkillReason.GOTO_TUNING,
             "no_home" to SkillReason.GOTO_NO_HOME,
             "launching" to SkillReason.GOTO_LAUNCHING,
+            "control_mode" to SkillReason.GOTO_CONTROL_MODE,
             "something_new" to "something_new",
         )) {
             val link = FakePilotLink(answer = PilotActionResult.Refused(code))
