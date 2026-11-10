@@ -21,11 +21,11 @@ class CockpitSpecTest {
     }
 
     @Test
-    fun `the tips file names a text key for every tip and keeps STOP, the left column, the chip and the alerts clear`() {
+    fun `the tips file names a text key for every tip and keeps STOP, the left column, the chip, the alerts and the top bar clear`() {
         val tips = testSpec.tips
         assertEquals(listOf(1, 2, 3, 4, 5, 6, 7, 8), tips.tips.map { it.order }.sorted())
         for (t in tips.tips) assertTrue(t.id, testSpec.setupStrings.strings.containsKey("tips.${t.id}"))
-        assertEquals(listOf("stop", "left_column", "flight_state_chip", "alert_stack"), tips.rules.neverCoverZones)
+        assertEquals(listOf("stop", "left_column", "flight_state_chip", "alert_stack", "top_bar"), tips.rules.neverCoverZones)
         assertEquals(false, tips.rules.showOnlyWhen["armed"])
         assertEquals(false, tips.rules.showOnlyWhen["alert_banner_visible"])
         assertTrue(testSpec.setupStrings.strings.containsKey("tips.reset"))
