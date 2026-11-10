@@ -325,7 +325,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
     /**
      * The table's arm requirement. Landed comes from a fresh pilot, else from the FC's own
      * landed state; a disarm waits until one of them says landed, so it can never cut motors in the air.
-     * Firmware with no landed-state source (MSP) skips the landed check: disarm there is a motor stop.
+     * Firmware with no landed-state source (MSP) and no fresh pilot skips the landed check: disarm there is a motor stop.
      */
     private fun armGate(ctx: SkillContext): SkillState? {
         val armed = ctx.armed
@@ -345,7 +345,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
             SpecArmRequirement.ArmedLanded -> when {
                 armed == null -> disabledState(SkillReason.NO_FC_LINK)
                 !armed -> disabledState(SkillReason.ALREADY_DISARMED)
-                ctx.vehicle?.telemetry?.reportsLandedState == false -> null
+                ctx.vehicle?.telemetry?.reportsLandedState == false && !ctx.pilotFresh() -> null
                 landed == null -> disabledState(SkillReason.LANDED_UNKNOWN)
                 !landed -> disabledState(SkillReason.NOT_LANDED)
                 else -> null

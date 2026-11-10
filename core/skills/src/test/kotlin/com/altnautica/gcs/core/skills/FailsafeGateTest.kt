@@ -96,6 +96,9 @@ class FailsafeGateTest {
         vehicle.telemetry.reportsLandedState = false
         try {
             assertTrue(disarm.state(ctx(mode = FlightMode(5, "LOITER"))).enabled)
+            // A fresh pilot is a landed source on any firmware: its landed=false still holds the disarm.
+            val flying = ctx(mode = FlightMode(5, "LOITER"), pilot = adosPilot().copy(landed = false), link = FakePilotLink())
+            assertEquals(SkillReason.NOT_LANDED, disarm.state(flying).reasonKey)
         } finally {
             vehicle.telemetry.reportsLandedState = true
         }
