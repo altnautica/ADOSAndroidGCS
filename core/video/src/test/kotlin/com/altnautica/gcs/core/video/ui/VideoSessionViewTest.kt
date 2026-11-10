@@ -1,5 +1,10 @@
 package com.altnautica.gcs.core.video.ui
 
+import android.view.SurfaceView
+import android.view.TextureView
+import android.view.View
+import android.view.ViewGroup
+import androidx.compose.ui.platform.LocalView
 import android.view.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +19,7 @@ import com.altnautica.gcs.core.video.VideoOutput
 import com.altnautica.gcs.core.video.VideoRecording
 import com.altnautica.gcs.core.video.VideoSessionHandle
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -60,5 +66,41 @@ class VideoSessionViewTest {
         current = a
         compose.waitForIdle()
         assertEquals(listOf<Surface?>(null), b.surfaces)
+    }
+
+    private fun viewsIn(root: View): List<View> =
+        listOf(root) + ((root as? ViewGroup)?.let { g -> (0 until g.childCount).flatMap { viewsIn(g.getChildAt(it)) } } ?: emptyList())
+
+    private fun mainViewFor(scale: Float): List<View> {
+        val handle = object : VideoSessionHandle {
+            override val source = VideoSource.AgentWhep(DeviceId("d1"), "demo://local/", "main")
+            override val state = MutableStateFlow<VideoState>(VideoState.Live(null))
+            override val output: VideoOutput = object : VideoOutput.SurfaceTarget {
+                override fun setSurface(surface: Surface?) = Unit
+                override val bufferScale: Float = scale
+            }
+            override val recording: VideoRecording? = null
+            override fun start() = Unit
+            override suspend fun stop() = Unit
+        }
+        lateinit var root: View
+        compose.setContent {
+            root = LocalView.current.rootView
+            VideoSessionView(handle, VideoSurfaceRole.Main, Modifier)
+        }
+        compose.waitForIdle()
+        return viewsIn(root)
+    }
+
+    @Test
+    fun `a software canvas producer never draws into a SurfaceView, whose teardown would wait on its lock`() {
+        val views = mainViewFor(0.5f)
+        assertTrue(views.any { it is TextureView })
+        assertTrue(views.none { it is SurfaceView })
+    }
+
+    @Test
+    fun `a decoder keeps the SurfaceView in the main role`() {
+        assertTrue(mainViewFor(1f).any { it is SurfaceView })
     }
 }

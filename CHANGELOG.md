@@ -3,6 +3,12 @@
 All notable changes to ADOS Android GCS are recorded here. Versions follow the
 app's `versionName`.
 
+## [Unreleased]
+
+- Switching views no longer freezes the flight screen: a video drawn with a
+  software canvas (the demo drone) renders into a texture view, whose teardown
+  wakes the drawing thread instead of waiting on it.
+
 ## [0.4.0] - 2026-11-10
 
 ### Flight screen

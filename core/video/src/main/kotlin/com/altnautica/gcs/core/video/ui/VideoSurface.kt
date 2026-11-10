@@ -97,9 +97,14 @@ internal fun VideoSessionView(
                 VideoSurfaceRole.Main -> SinkSurfaceView(out, modifier, onSurfaceView)
                 VideoSurfaceRole.Pip -> SinkTextureView(out, modifier)
             }
-            is VideoOutput.SurfaceTarget -> when (role) {
-                VideoSurfaceRole.Main -> TargetSurfaceView(out, modifier, onSurfaceView)
-                VideoSurfaceRole.Pip -> TargetTextureView(out, modifier)
+            // A software-canvas producer (bufferScale < 1) holds the Surface's lock while it
+            // waits for a free buffer. A SurfaceView checks that same lock on the UI thread when
+            // it is torn down, and its buffers may never come back once the view is leaving, so
+            // a view switch froze the whole flight screen. A TextureView abandons its queue on
+            // destroy, which wakes the producer instead, so such producers always get one.
+            is VideoOutput.SurfaceTarget -> when {
+                role == VideoSurfaceRole.Main && out.bufferScale >= 1f -> TargetSurfaceView(out, modifier, onSurfaceView)
+                else -> TargetTextureView(out, modifier)
             }
         }
     }
@@ -239,7 +244,10 @@ private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier
 
                     override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
                         out.setSurface(null)
-                        surface?.release()
+                        // Returning true abandons the queue, waking a producer blocked in
+                        // lockCanvas; only then can its Surface be released without waiting
+                        // on the UI thread for the lock that producer holds.
+                        surface?.let { s -> Thread({ s.release() }, "video-surface-release").start() }
                         surface = null
                         return true
                     }
