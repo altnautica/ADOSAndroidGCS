@@ -8,7 +8,6 @@ import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.pilot.PilotWire
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
-import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.agent.video.StreamCatalog
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
@@ -32,6 +31,7 @@ import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotState
@@ -70,6 +70,8 @@ import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
 import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
+import com.altnautica.gcs.feature.cockpit.camera.CockpitCamera
+import com.altnautica.gcs.feature.cockpit.camera.FrameGrab
 import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.CockpitAlertsController
 import com.altnautica.gcs.feature.cockpit.alerts.ControllerFeedback
@@ -88,6 +90,8 @@ import com.altnautica.gcs.feature.cockpit.input.CockpitInputMapper
 import com.altnautica.gcs.feature.cockpit.launch.LaunchDraft
 import com.altnautica.gcs.feature.cockpit.launch.LaunchUi
 import com.altnautica.gcs.feature.cockpit.launch.LaunchAfter
+import com.altnautica.gcs.feature.cockpit.launch.abortRefusedNotice
+import com.altnautica.gcs.feature.cockpit.launch.sendLaunchAbort
 import com.altnautica.gcs.feature.cockpit.launch.NedPoint
 import com.altnautica.gcs.feature.cockpit.launch.launchArgs
 import com.altnautica.gcs.feature.cockpit.launch.launchGotoNed
@@ -156,6 +160,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -447,9 +452,11 @@ class CockpitViewModel @AssistedInject constructor(
 
     val loadout: StateFlow<Loadout> = bindings.loadout.stateIn(viewModelScope, SharingStarted.Eagerly, Loadout.defaults(spec.builtins))
 
+    /** Notices the cockpit raises itself (a refused launch Abort). */
+    private val ownNotices = MutableSharedFlow<SkillNotice>(extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
     /** Skill notices; a flight controller's MAV_RESULT name in the detail reads as the spec's sentence. */
-    val notices: SharedFlow<SkillNotice> = session.notices
-        .map { it.copy(message = specText.mavResultText(it.message)) }
+    val notices: SharedFlow<SkillNotice> = merge(session.notices.map { it.copy(message = specText.mavResultText(it.message)) }, ownNotices)
         .shareIn(viewModelScope, SharingStarted.Eagerly)
 
     /** Every skill's current state by id: enabled flags for the follow rail. */
@@ -739,6 +746,19 @@ class CockpitViewModel @AssistedInject constructor(
         pilotAction(PilotAction(PilotAction.LAUNCH, args))
     }
 
+    /**
+     * Abort of a running launch (the banner's and the chip's): the pilot's pause, sent
+     * directly so it works in the checks and arm steps too; a refusal reads `flow.launch.abort_refused`.
+     */
+    fun abortLaunch() {
+        viewModelScope.launch {
+            when (val result = sendLaunchAbort(pilot.link.value)) {
+                is PilotActionResult.Refused -> ownNotices.tryEmit(abortRefusedNotice(result.reason, spec.setupStrings, specText))
+                else -> pilotActionEvent(result, specText)?.let(_events::tryEmit)
+            }
+        }
+    }
+
     /** Cancels the low-battery return countdown. */
     fun cancelRthCountdown() = pilotAction(PilotAction(PilotAction.RTH_CANCEL))
 
@@ -907,8 +927,7 @@ class CockpitViewModel @AssistedInject constructor(
             ChipButton.Resume -> activate(BuiltinIds.RESUME)
             ChipButton.TakeControl -> pilotAction(PilotAction(PilotAction.TAKE_CONTROL))
             ChipButton.SetUpAircraft -> _events.tryEmit(CockpitEvent.SetUpAircraft)
-            // Abort a running launch the same way the launch banner does.
-            ChipButton.Abort -> activate(BuiltinIds.PAUSE)
+            ChipButton.Abort -> abortLaunch()
         }
     }
 
@@ -1133,7 +1152,7 @@ class CockpitViewModel @AssistedInject constructor(
             CockpitControllerAction.Designate -> autonomy.designateCentre(autonomy.mainCamera())
             CockpitControllerAction.Photo -> capturePhoto()
             CockpitControllerAction.RecordToggle -> toggleRecording()
-            is CockpitControllerAction.Zoom -> zoom(a.step)
+            is CockpitControllerAction.Zoom -> camera.zoom(a.step)
             is CockpitControllerAction.GimbalPitchRate -> if (a.dps != lastGimbalDps) {
                 lastGimbalDps = a.dps
                 runCommand(VehicleCommand.GimbalRate(a.dps, 0f))
@@ -1146,46 +1165,19 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
-    private val _digitalZoom = MutableStateFlow(1)
+    private val camera = CockpitCamera(viewModelScope) { vehicle.value?.control }
 
-    /**
-     * Digital zoom of the shown video (1, 2 or 4) once the vehicle's camera refused a zoom
-     * command; label `camera.digital_zoom`. Stays 1 while the camera zooms itself.
-     */
-    val digitalZoom: StateFlow<Int> = _digitalZoom
+    /** Digital zoom of the shown video (1, 2 or 4) once the vehicle's camera refused a zoom; label `camera.digital_zoom`. */
+    val digitalZoom: StateFlow<Int> = camera.digitalZoom
 
-    private val _frameGrabs = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** Every shutter press: the screen copies the shown frame at once and saves it when the camera did not take the photo. */
+    val frameGrabs: SharedFlow<FrameGrab> = camera.frameGrabs
 
-    /** A photo the vehicle's camera could not take: the screen saves the shown frame on the device (`camera.saved`). */
-    val frameGrabs: SharedFlow<Unit> = _frameGrabs
+    fun capturePhoto() = camera.capturePhoto()
 
-    /** The vehicle's camera takes the photo when it can; otherwise the shown frame is saved here. */
-    fun capturePhoto() {
-        val v = vehicle.value
-        if (v == null) {
-            _frameGrabs.tryEmit(Unit)
-            return
-        }
-        viewModelScope.launch {
-            if (!v.control.run(VehicleCommand.CapturePhoto).cameraTookIt()) _frameGrabs.tryEmit(Unit)
-        }
-    }
+    fun zoomIn() = camera.zoom(1)
 
-    fun zoomIn() = zoom(1)
-
-    fun zoomOut() = zoom(-1)
-
-    /** The vehicle's camera zooms when it can; otherwise the video zooms digitally 1× → 2× → 4×. */
-    private fun zoom(step: Int) {
-        val v = vehicle.value
-        if (_digitalZoom.value > 1 || v == null) {
-            _digitalZoom.value = digitalZoomStep(_digitalZoom.value, step)
-            return
-        }
-        viewModelScope.launch {
-            if (!v.control.run(VehicleCommand.CameraZoom(step)).cameraTookIt()) _digitalZoom.value = digitalZoomStep(_digitalZoom.value, step)
-        }
-    }
+    fun zoomOut() = camera.zoom(-1)
 
     fun recenterGimbal() = runCommand(VehicleCommand.GimbalRecenter)
 
@@ -1255,14 +1247,4 @@ class CockpitViewModel @AssistedInject constructor(
 internal fun goalDistanceM(goal: List<Float>, local: com.altnautica.gcs.core.model.LocalPosition?): Float? {
     if (local == null || goal.size < 2) return null
     return hypot(goal[0] - local.northM, goal[1] - local.eastM)
-}
-
-/** The camera accepted (or queued) the command itself. */
-private fun CommandResult.cameraTookIt(): Boolean = this == CommandResult.Accepted || this is CommandResult.Queued
-
-/** The next digital zoom level, 1× ↔ 2× ↔ 4×. */
-internal fun digitalZoomStep(current: Int, step: Int): Int {
-    val levels = listOf(1, 2, 4)
-    val at = levels.indexOf(current).coerceAtLeast(0)
-    return levels[(at + step.coerceIn(-1, 1)).coerceIn(0, levels.lastIndex)]
 }

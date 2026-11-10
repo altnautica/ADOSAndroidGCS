@@ -71,7 +71,7 @@ internal fun FakeVehicle.heartbeatAt(now: Long, armed: Boolean, mode: String = "
  * screen-only flows kept hot like a visible cockpit. The caller sets the main dispatcher.
  */
 internal fun TestScope.testCockpitVm(
-    vehicle: FakeVehicle,
+    vehicle: com.altnautica.gcs.core.model.Vehicle,
     localApis: Set<LocalNodeApis> = emptySet(),
     nodes: List<NodeSummary> = listOf(testDroneNode(vehicle.id.value)),
 ): CockpitViewModel {

@@ -6,6 +6,7 @@ import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
@@ -53,9 +54,11 @@ private fun rememberVideoSessionManager(): VideoSessionManager {
 /**
  * Shows [source] and keeps its session alive while composed. A null source,
  * or one no factory can play, draws nothing; read [rememberVideoState] to
- * show the matching empty state over it. [onSurfaceView] receives the main
- * role's SurfaceView while it exists (null after release), for callers that
- * sample its pixels (the cockpit's panel backdrop).
+ * show the matching empty state over it. [onVideoView] receives the main
+ * role's view while it exists (null after release), for callers that copy its
+ * pixels (the cockpit's panel backdrop and frame grab): a SurfaceView for a
+ * decoder, a TextureView for a software-canvas producer (`bufferScale < 1`).
+ * [onSurfaceView] receives that view only when it is a SurfaceView.
  */
 @Composable
 fun VideoSurface(
@@ -63,6 +66,7 @@ fun VideoSurface(
     modifier: Modifier = Modifier,
     role: VideoSurfaceRole = VideoSurfaceRole.Main,
     onSurfaceView: ((SurfaceView?) -> Unit)? = null,
+    onVideoView: ((View?) -> Unit)? = null,
 ) {
     val manager = rememberVideoSessionManager()
     var handle by remember { mutableStateOf<VideoSessionHandle?>(null) }
@@ -75,7 +79,7 @@ fun VideoSurface(
         }
     }
     val h = handle ?: return
-    VideoSessionView(h, role, modifier, onSurfaceView)
+    VideoSessionView(h, role, modifier, onSurfaceView, onVideoView)
 }
 
 /**
@@ -90,11 +94,21 @@ internal fun VideoSessionView(
     role: VideoSurfaceRole,
     modifier: Modifier,
     onSurfaceView: ((SurfaceView?) -> Unit)? = null,
+    onVideoView: ((View?) -> Unit)? = null,
 ) {
+    // Only the main role reports its view; a picture-in-picture view is never sampled.
+    val report: ((View?) -> Unit)? = if (role != VideoSurfaceRole.Main || (onSurfaceView == null && onVideoView == null)) {
+        null
+    } else {
+        { view ->
+            onVideoView?.invoke(view)
+            if (view == null || view is SurfaceView) onSurfaceView?.invoke(view as SurfaceView?)
+        }
+    }
     key(handle) {
         when (val out = handle.output) {
             is VideoOutput.Sinks -> when (role) {
-                VideoSurfaceRole.Main -> SinkSurfaceView(out, modifier, onSurfaceView)
+                VideoSurfaceRole.Main -> SinkSurfaceView(out, modifier, report)
                 VideoSurfaceRole.Pip -> SinkTextureView(out, modifier)
             }
             // A software-canvas producer (bufferScale < 1) holds the Surface's lock while it
@@ -103,8 +117,8 @@ internal fun VideoSessionView(
             // a view switch froze the whole flight screen. A TextureView abandons its queue on
             // destroy, which wakes the producer instead, so such producers always get one.
             is VideoOutput.SurfaceTarget -> when {
-                role == VideoSurfaceRole.Main && out.bufferScale >= 1f -> TargetSurfaceView(out, modifier, onSurfaceView)
-                else -> TargetTextureView(out, modifier)
+                role == VideoSurfaceRole.Main && out.bufferScale >= 1f -> TargetSurfaceView(out, modifier, report)
+                else -> TargetTextureView(out, modifier, report)
             }
         }
     }
@@ -130,7 +144,7 @@ fun rememberVideoState(source: VideoSource?): State<VideoState> {
  * constructor), so the EGL surface is ready before the first frame arrives.
  */
 @Composable
-private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier, onSurfaceView: ((SurfaceView?) -> Unit)?) {
+private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier, onView: ((View?) -> Unit)?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -144,11 +158,11 @@ private fun SinkSurfaceView(out: VideoOutput.Sinks, modifier: Modifier, onSurfac
                     override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) = Unit
                     override fun surfaceDestroyed(holder: SurfaceHolder) = out.removeSink(renderer)
                 })
-                onSurfaceView?.invoke(this)
+                onView?.invoke(this)
             }
         },
         onRelease = { view ->
-            onSurfaceView?.invoke(null)
+            onView?.invoke(null)
             out.removeSink(view)
             view.release()
         },
@@ -194,7 +208,7 @@ private fun SinkTextureView(out: VideoOutput.Sinks, modifier: Modifier) {
 }
 
 @Composable
-private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onSurfaceView: ((SurfaceView?) -> Unit)?) {
+private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onView: ((View?) -> Unit)?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -210,18 +224,18 @@ private fun TargetSurfaceView(out: VideoOutput.SurfaceTarget, modifier: Modifier
                         if (w > 0 && h > 0) holder.setFixedSize(w, h)
                     }
                 }
-                onSurfaceView?.invoke(this)
+                onView?.invoke(this)
             }
         },
         onRelease = {
-            onSurfaceView?.invoke(null)
+            onView?.invoke(null)
             out.setSurface(null)
         },
     )
 }
 
 @Composable
-private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier) {
+private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier, onView: ((View?) -> Unit)?) {
     AndroidView(
         modifier = modifier,
         factory = { ctx: Context ->
@@ -254,9 +268,13 @@ private fun TargetTextureView(out: VideoOutput.SurfaceTarget, modifier: Modifier
 
                     override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
                 }
+                onView?.invoke(this)
             }
         },
-        onRelease = { out.setSurface(null) },
+        onRelease = {
+            onView?.invoke(null)
+            out.setSurface(null)
+        },
     )
 }
 

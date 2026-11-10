@@ -1,71 +1,113 @@
 package com.altnautica.gcs.feature.cockpit.camera
 
+import android.app.Activity
 import android.content.ContentResolver
 import android.content.ContentValues
-import android.graphics.Bitmap
-import android.os.Handler
-import android.os.Looper
-import android.provider.MediaStore
-import android.view.PixelCopy
-import android.view.SurfaceView
-import android.view.Window
-import android.app.Activity
 import android.content.ContextWrapper
+import android.graphics.Bitmap
+import android.provider.MediaStore
+import android.view.SurfaceView
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.feature.cockpit.CockpitViewModel
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
-import androidx.compose.ui.geometry.Rect
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.coroutines.resume
-import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** The main video as the screen shows it: its SurfaceView while it draws on one, and its bounds in the window. */
+/**
+ * The main video as the screen shows it: its view while it exists, the bounds of its slot in
+ * the window, and the digital [zoom] it is shown at (the view is laid out [zoom] times the slot
+ * around the slot's centre and clipped to it).
+ */
 @Stable
-class ShownVideo {
-    var surfaceView: SurfaceView? = null
+class ShownVideo(zoom: Float = 1f) {
+    /** A SurfaceView for a decoder, a TextureView for a software-canvas producer; null while none exists. */
+    var view: View? = null
+
+    /** [view] as set from a SurfaceView-only callback. */
+    var surfaceView: SurfaceView?
+        get() = view as? SurfaceView
+        set(value) {
+            view = value
+        }
+
     var bounds: Rect = Rect.Zero
+    var zoom: Float = zoom
 }
 
 /** The flight screen's [ShownVideo]; the main video stage registers itself here. */
 val LocalShownVideo = staticCompositionLocalOf<ShownVideo?> { null }
 
+internal const val KEY_SAVED = "camera.saved"
+internal const val KEY_NO_VIDEO = "camera.no_video"
+internal const val KEY_NOT_SAVED = "camera.not_saved"
+
 /**
- * Saves the shown frame when the vehicle's camera could not take a photo
- * ([CockpitViewModel.frameGrabs]) and says so through [onToast]: `camera.saved`, or
- * `camera.no_video` while no video plays.
+ * Copies the shown frame at every shutter press ([CockpitViewModel.frameGrabs]) and saves it
+ * once the vehicle's camera did not take the photo, saying so through [onToast]:
+ * `camera.saved`, `camera.not_saved`, or `camera.no_video` while no video plays. A photo the
+ * camera took says nothing here.
  */
 @Composable
 internal fun FrameGrabEffect(vm: CockpitViewModel, video: ShownVideo, onToast: (String) -> Unit) {
     val context = LocalContext.current
     val toast by rememberUpdatedState(onToast)
-    val saved = specText("camera.saved")
-    val noVideo = specText("camera.no_video")
-    val failed = stringResource(R.string.cockpit_photo_not_saved)
+    val texts by rememberUpdatedState(listOf(KEY_SAVED, KEY_NO_VIDEO, KEY_NOT_SAVED).associateWith { specText(it) })
     LaunchedEffect(vm, video) {
-        vm.frameGrabs.collect {
-            if (vm.videoState.value !is VideoState.Live) {
-                toast(noVideo)
-                return@collect
+        vm.frameGrabs.collect { grab ->
+            // Each press waits for its own camera answer, so the next press still copies at once.
+            launch {
+                val window = context.findActivity()?.window
+                val key = frameGrabOutcome(
+                    live = vm.videoState.value is VideoState.Live,
+                    keep = grab.keep,
+                    copy = { window?.let { copyShownFrame(video, it) } },
+                    save = { savePicture(context.contentResolver, it, System.currentTimeMillis()) },
+                )
+                key?.let { toast(texts.getValue(it)) }
             }
-            val window = context.findActivity()?.window
-            val frame = window?.let { copyShownFrame(video, it) }
-            val ok = frame != null && savePicture(context.contentResolver, frame, System.currentTimeMillis())
-            toast(if (ok) saved else failed)
         }
+    }
+}
+
+/**
+ * One press: copies the frame now while the video is [live], then waits for [keep] (true when
+ * the camera did not take the photo; a failed command counts as not taken). Returns the spec
+ * key to toast, or null when the camera took it and the copy is dropped.
+ */
+internal suspend fun <F : Any> frameGrabOutcome(
+    live: Boolean,
+    keep: Deferred<Boolean>,
+    copy: suspend () -> F?,
+    save: suspend (F) -> Boolean,
+): String? {
+    val frame = if (live) copy() else null
+    val kept = try {
+        keep.await()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        true
+    }
+    return when {
+        !kept -> null
+        !live -> KEY_NO_VIDEO
+        frame != null && save(frame) -> KEY_SAVED
+        else -> KEY_NOT_SAVED
     }
 }
 
@@ -73,33 +115,6 @@ private tailrec fun android.content.Context.findActivity(): Activity? = when (th
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
-}
-
-/**
- * The shown video frame at full size: copied from the video's SurfaceView, or, when the
- * video draws on a texture (a software decoder), from the window inside the video's
- * bounds. Null when nothing could be copied.
- */
-internal suspend fun copyShownFrame(video: ShownVideo, window: Window): Bitmap? {
-    val view = video.surfaceView?.takeIf { it.width > 0 && it.height > 0 && it.holder.surface.isValid }
-    if (view != null) {
-        val target = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-        return pixelCopy(target) { listener, handler -> PixelCopy.request(view, target, listener, handler) }
-    }
-    val b = video.bounds
-    if (b.width < 1f || b.height < 1f) return null
-    val src = android.graphics.Rect(b.left.roundToInt(), b.top.roundToInt(), b.right.roundToInt(), b.bottom.roundToInt())
-    val target = Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888)
-    return pixelCopy(target) { listener, handler -> PixelCopy.request(window, src, target, listener, handler) }
-}
-
-private suspend fun pixelCopy(
-    target: Bitmap,
-    request: (PixelCopy.OnPixelCopyFinishedListener, Handler) -> Unit,
-): Bitmap? = suspendCancellableCoroutine { cont ->
-    runCatching {
-        request({ result -> if (cont.isActive) cont.resume(if (result == PixelCopy.SUCCESS) target else null) }, Handler(Looper.getMainLooper()))
-    }.onFailure { if (cont.isActive) cont.resume(null) }
 }
 
 /** Saves [bitmap] as a PNG in the shared Pictures/ADOS folder; true once written. */

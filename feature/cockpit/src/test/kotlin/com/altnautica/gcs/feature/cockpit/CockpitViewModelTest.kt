@@ -10,7 +10,6 @@ import com.altnautica.gcs.core.link.manual.ManualControlInput
 import com.altnautica.gcs.core.link.manual.ManualControlStreamer
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
-import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.BatteryState
 import com.altnautica.gcs.core.model.ConfirmGesture
@@ -350,32 +349,6 @@ class CockpitViewModelTest {
         val goto = gotoOf()
         vm.viewModelScope.cancel()
         return goto
-    }
-
-    @Test
-    fun `without a camera that zooms or shoots, zoom goes digital and a photo saves the shown frame`() = runTest(dispatcher) {
-        val vehicle = FakeVehicle()
-        vehicle.beat(armed = true, now = testScheduler.currentTime)
-        val vm = vm(listOf(node("drone-1")), vehicle)
-        backgroundScope.launch { vm.vehicle.collect {} }
-        runCurrent()
-        vehicle.control.result = CommandResult.Unsupported
-        val grabs = mutableListOf<Unit>()
-        backgroundScope.launch { vm.frameGrabs.collect { grabs += it } }
-        vm.zoomIn()
-        runCurrent()
-        assertEquals(2, vm.digitalZoom.value)
-        vm.zoomIn()
-        runCurrent()
-        assertEquals(4, vm.digitalZoom.value)
-        vm.capturePhoto()
-        runCurrent()
-        assertEquals(1, grabs.size)
-        vehicle.control.result = CommandResult.Accepted
-        vm.capturePhoto()
-        runCurrent()
-        assertEquals("the camera took it", 1, grabs.size)
-        vm.viewModelScope.cancel()
     }
 
     @Test
