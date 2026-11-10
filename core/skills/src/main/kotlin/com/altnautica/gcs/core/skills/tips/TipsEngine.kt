@@ -121,6 +121,13 @@ class TipsEngine(spec: TipsSpec) {
         /** The state of a device that has seen no tip. */
         fun resetTips(): TipsState = TipsState()
 
+        /**
+         * Whether [d] puts its tip in `hiddenThisOpen`: only an unseen auto-dismissal does.
+         * Arming marks the tip seen, and a tip hidden because it stopped being allowed (a
+         * banner, a sheet, the tour, its anchor gone) goes back to the head of the queue.
+         */
+        fun hiddenThisOpenAfter(d: TipDecision): Boolean = d is TipDecision.Hide && d.reason == HideReason.AutoDismiss
+
         private fun intersects(a: TipRect, b: TipRect) = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
 
         private fun contains(outer: TipRect, inner: TipRect) =

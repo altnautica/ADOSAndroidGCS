@@ -94,7 +94,7 @@ class TipsController(
                 shownAtMs = now
                 _shown.value = d
             }
-            is TipDecision.Hide -> hide(d.tipId, now, seen = d.markSeen)
+            is TipDecision.Hide -> hide(d.tipId, now, seen = d.markSeen, skipThisOpen = TipsEngine.hiddenThisOpenAfter(d))
             TipDecision.None, is TipDecision.Wait -> Unit
         }
         d
@@ -123,23 +123,26 @@ class TipsController(
 
     /**
      * The tip [id] found no spot clear of the never-cover zones and was never drawn: hidden
-     * unseen and not offered again until the next open, as when its anchor is gone.
+     * unseen and not offered again until the next open.
      */
     suspend fun unplaced(id: String) {
         lock.withLock {
-            if (_shown.value?.tipId == id) hide(id, clock(), seen = false)
+            if (_shown.value?.tipId == id) hide(id, clock(), seen = false, skipThisOpen = true)
         }
     }
 
-    /** Hides [id]: seen for good, or unseen and not offered again until the next open. */
-    private suspend fun hide(id: String, now: Long, seen: Boolean) {
+    /**
+     * Hides [id]: seen for good, or unseen. An unseen tip is skipped until the next open only
+     * when [skipThisOpen] (auto-dismissed or never placeable); otherwise it keeps its turn.
+     */
+    private suspend fun hide(id: String, now: Long, seen: Boolean, skipThisOpen: Boolean = false) {
         _shown.value = null
         shownAtMs = null
         lastDismissedAtMs = now
         if (seen) {
             seenThisOpen += id
             withContext(NonCancellable) { markSeen(id) }
-        } else {
+        } else if (skipThisOpen) {
             hiddenThisOpen += id
         }
     }

@@ -129,4 +129,18 @@ class TipsControllerTest {
         assertTrue(markedSeen.isEmpty())
         assertTrue(state.seen.isEmpty())
     }
+
+    @Test
+    fun `a tip hidden by a banner keeps its turn and shows again after the gap`() = runTest {
+        controller.open()
+        tickAt(2_500)
+        assertEquals("status_pill", shownId())
+        assertEquals(TipDecision.Hide("status_pill", markSeen = false, reason = HideReason.NotAllowed), tickAt(3_000, ground.copy(alertBannerVisible = true)))
+        assertNull(shownId())
+        tickAt(6_999)
+        assertNull(shownId())
+        tickAt(7_000)
+        assertEquals("status_pill", shownId())
+        assertTrue(markedSeen.isEmpty())
+    }
 }
