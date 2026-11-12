@@ -1,5 +1,7 @@
 package com.altnautica.gcs.feature.node.logs
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -40,6 +42,8 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.node.R
 import com.altnautica.gcs.feature.node.common.ProblemState
+import java.time.Instant
+import java.time.ZoneId
 
 @Composable
 fun NodeLogsTab(nodeId: String, modifier: Modifier = Modifier) {
@@ -87,15 +91,18 @@ fun NodeLogsContent(
             IconButton(onClick = onRefresh) { Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.node_logs_refresh)) }
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = AdosSpacing.S4),
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
         ) {
             LogLevel.entries.forEach { level ->
                 FilterChip(selected = state.level == level, onClick = { onLevel(level) }, label = { Text(levelLabel(level)) })
             }
         }
-        state.storeWarning?.let {
-            StatusChip(StatusLevel.Warning, stringResource(R.string.node_logs_store_warning, it), modifier = Modifier.padding(AdosSpacing.S4))
+        if (state.storeWarning != null) {
+            Column(Modifier.padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
+                StatusChip(StatusLevel.Warning, stringResource(R.string.node_logs_store_off))
+                Text(stringResource(R.string.node_logs_store_off_hint), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+            }
         }
         when {
             state.problem != null -> ProblemState(state.problem, onRefresh)
@@ -132,13 +139,15 @@ private fun LogRow(e: LogEntry) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             StatusChip(level, e.level)
             Text(e.logger, style = MaterialTheme.typography.labelMedium, color = colors.fgSecondary, modifier = Modifier.weight(1f))
-            Text(e.timestamp?.substringAfter('T')?.take(TIME_CHARS) ?: "—", style = AdosTypography.numeric.small, color = colors.fgTertiary)
+            Text(
+                NodeLogsViewModel.logTime(e.timestamp, ZoneId.systemDefault(), Instant.now()) ?: "—",
+                style = AdosTypography.numeric.small,
+                color = colors.fgTertiary,
+            )
         }
         Text(e.message, style = MaterialTheme.typography.bodySmall)
     }
 }
-
-private const val TIME_CHARS = 12
 
 @Composable
 private fun levelLabel(level: LogLevel): String = stringResource(

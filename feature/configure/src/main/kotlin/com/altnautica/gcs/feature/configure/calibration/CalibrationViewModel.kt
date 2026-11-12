@@ -15,6 +15,10 @@ import com.altnautica.gcs.feature.configure.common.ConfigureTarget
 import com.altnautica.gcs.feature.configure.common.ConfigureTargetSource
 import com.altnautica.gcs.feature.configure.common.LINK_FRESH_MS
 import com.altnautica.gcs.feature.configure.common.secondTicks
+import com.altnautica.gcs.core.model.FcVariant
+import com.altnautica.gcs.feature.configure.R
+import com.altnautica.gcs.feature.configure.common.fcVariant
+import com.altnautica.gcs.feature.configure.setup.SetupCatalog
 import com.altnautica.gcs.feature.configure.wizard.SetupBackendSource
 import com.altnautica.gcs.feature.configure.wizard.SetupProblem
 import com.altnautica.gcs.feature.configure.wizard.SetupSession
@@ -28,6 +32,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -43,6 +48,14 @@ enum class CalibrationBlock { NoVehicle, LinkStale, Armed }
 /** Accelerometer step: [index] is 1-based of [total] poses. */
 data class AccelStep(val pose: AccelPose, val index: Int, val total: Int = AccelPose.entries.size)
 
+/** Words the operator must act on before [this] calibration starts; null when none. */
+fun CalibrationKind.precaution(): Int? = when (this) {
+    CalibrationKind.Esc -> R.string.cfg_cal_esc_precaution
+    CalibrationKind.CompassMot -> R.string.cfg_cal_compassmot_precaution
+    CalibrationKind.Airspeed -> R.string.cfg_cal_airspeed_precaution
+    else -> null
+}
+
 /** The vehicle's setup step that runs [this] calibration when the vehicle is agent-connected; null when none does. */
 fun CalibrationKind.agentStep(): String? = when (this) {
     CalibrationKind.Accel -> "accel"
@@ -51,7 +64,13 @@ fun CalibrationKind.agentStep(): String? = when (this) {
     CalibrationKind.Radio -> "radio"
     // The vehicle's engine calibrates the gyros as part of the accelerometer step.
     CalibrationKind.Gyro -> null
+    // Run straight on the flight controller only.
+    CalibrationKind.Esc, CalibrationKind.CompassMot, CalibrationKind.Airspeed -> null
 }
+
+/** The flight controller applies the offsets of [this] calibration only after a reboot. */
+fun CalibrationKind.needsReboot(): Boolean =
+    this == CalibrationKind.Compass || this == CalibrationKind.Accel || this == CalibrationKind.Level
 
 data class CalibrationUiState(
     val block: CalibrationBlock? = CalibrationBlock.NoVehicle,
@@ -67,6 +86,9 @@ data class CalibrationUiState(
     /** The agent step started from this screen, live. */
     val agentStep: SetupStep? = null,
     val agentProblem: SetupProblem? = null,
+    val variant: FcVariant = FcVariant.Unknown,
+    /** MAV_TYPE from the heartbeat; null while unknown. */
+    val mavType: Int? = null,
 ) {
     val running: Boolean
         get() = if (agent) {
@@ -80,8 +102,20 @@ data class CalibrationUiState(
     /** A new calibration may start: link usable, disarmed, nothing running. */
     val canStart: Boolean get() = block == null && !running && !busy
 
-    /** Whether [kind] is offered on this link. */
-    fun offers(kind: CalibrationKind): Boolean = !agent || kind.agentStep() != null
+    /**
+     * Whether [kind] is offered on this link and vehicle: ESC on rotorcraft, CompassMot on
+     * ArduPilot rotorcraft, airspeed on fixed wing.
+     */
+    fun offers(kind: CalibrationKind): Boolean {
+        if (agent) return kind.agentStep() != null
+        val copter = mavType in SetupCatalog.COPTER_TYPES
+        return when (kind) {
+            CalibrationKind.Esc -> copter
+            CalibrationKind.CompassMot -> copter && variant == FcVariant.MavlinkArdupilot
+            CalibrationKind.Airspeed -> mavType in SetupCatalog.PLANE_TYPES
+            else -> true
+        }
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -149,6 +183,8 @@ class CalibrationViewModel internal constructor(
                 compass.reports.isNotEmpty() && compass.reports.all { it.status == CompassStatus.Success },
             busy = isBusy,
             lastResult = result,
+            variant = hb?.fcVariant() ?: FcVariant.Unknown,
+            mavType = hb?.vehicleType,
         )
     }
 
@@ -160,14 +196,41 @@ class CalibrationViewModel internal constructor(
                 agent = true,
                 agentStep = stepId?.let { snap?.step(FcSetupApi.WIZARD_GROUND, it) },
                 agentProblem = snap?.problem,
-                busy = base.busy || snap?.busy == true,
+                busy = base.busy || snap?.actionsBlocked == true,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, CalibrationUiState())
 
+    private val _rebootAdvised = MutableStateFlow(false)
+
+    /**
+     * A flight-controller calibration whose offsets apply after a reboot (compass,
+     * accelerometer, level) just finished; the host offers the reboot, then calls
+     * [consumeRebootAdvice].
+     */
+    val rebootAdvised: StateFlow<Boolean> = _rebootAdvised.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            var previous: CalibrationState = CalibrationState.Idle
+            state.collect { s ->
+                val cal = s.calibration
+                // Only a finish seen here: a success left over from an earlier visit does not count.
+                val wasRunning = previous !is CalibrationState.Idle && previous !is CalibrationState.Succeeded &&
+                    previous !is CalibrationState.Failed
+                if (!s.agent && wasRunning && cal is CalibrationState.Succeeded && cal.kind.needsReboot()) _rebootAdvised.value = true
+                previous = cal
+            }
+        }
+    }
+
+    fun consumeRebootAdvice() {
+        _rebootAdvised.value = false
+    }
+
     fun start(kind: CalibrationKind) {
         val current = state.value
-        if (!current.canStart) return
+        if (!current.canStart || !current.offers(kind)) return
         if (current.agent) {
             val step = kind.agentStep() ?: return
             agentStepId.value = step
@@ -184,6 +247,9 @@ class CalibrationViewModel internal constructor(
                     t.calibration.startRadio()
                     null
                 }
+                CalibrationKind.Esc -> t.calibration.startEsc()
+                CalibrationKind.CompassMot -> t.calibration.startCompassMot()
+                CalibrationKind.Airspeed -> t.calibration.startAirspeed()
             }
         }
     }

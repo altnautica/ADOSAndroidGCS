@@ -1,6 +1,8 @@
 package com.altnautica.gcs.feature.cockpit.pilot
 
 import androidx.compose.runtime.Immutable
+import com.altnautica.gcs.core.skills.hud.PillLinkLoss
+import com.altnautica.gcs.core.skills.hud.PillNavSource
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightItem
 
 /**
@@ -16,4 +18,10 @@ data class PillFacts(
     val agentReachable: Boolean = true,
     val controllerLost: Boolean = false,
     val preflightFailing: List<PreflightItem> = emptyList(),
+    /** The link-loss countdown a fresh pilot state reports, or null with none running. */
+    val linkLoss: PillLinkLoss? = null,
+    /** True while the arm state is unknown: every pre-flight item hides. */
+    val armUnknown: Boolean = false,
+    /** The nav source the EKF uses and its tone; a degraded one raises `nav_source_degraded`. */
+    val navSource: PillNavSource? = null,
 )

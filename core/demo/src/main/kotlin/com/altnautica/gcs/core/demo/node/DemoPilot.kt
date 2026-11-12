@@ -6,14 +6,17 @@ import com.altnautica.gcs.core.demo.DemoScenarioStore
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.ALTHOLD
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.AUTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FC_MODE
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.GOTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.GUIDED
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.IDLE
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.LAND
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.LANDED_ALT_M
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.LOITER
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.MISSION_FC
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.PILOT
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.POSHOLD
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.READINESS_BLOCK_ID
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.RTL
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.number
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.text
 import com.altnautica.gcs.core.mavlink.enums.MavCmd
@@ -30,7 +33,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.put
 
@@ -80,7 +82,7 @@ internal class DemoPilot(
     private var pinnedScenario: DemoScenario? = null
     private var pinnedAtMs = 0L
 
-    /** When a surface's `goto` was accepted under [DemoScenario.FlyHere]; the owner shows `goto` for [GOTO_SHOWN_MS]. */
+    /** When a surface's `goto` was accepted; the owner shows `goto` for [GOTO_SHOWN_MS]. */
     private var gotoAtMs: Long? = null
 
     private val stalled: Boolean get() = scenarios.pinned.value == DemoScenario.PilotStalled
@@ -96,32 +98,34 @@ internal class DemoPilot(
 
     /** One `{kind:"pilot", ts_ms, data}` frame of the current state. */
     fun frame(): String {
-        val t = now()
-        return frameOf(t, state(t))
+        val c = capture(now())
+        return frameOf(c.t, build(c))
     }
 
     /** The current pilot frame (null while stalled) and the view the other demo feeds follow, from one state. */
     fun snapshot(): Snapshot {
-        val t = now()
-        return synchronized(lock) {
-            val data = state(t)
-            Snapshot(if (stalled) null else frameOf(t, data), pilotView(data, t - pinnedAtMs))
-        }
+        val c = capture(now())
+        val data = build(c)
+        return Snapshot(if (c.scenario == DemoScenario.PilotStalled) null else frameOf(c.t, data), pilotView(data, c.sincePinMs))
     }
 
     /** What the demo's layer and follow feeds follow: the state the pilot reports, pin included. */
     fun view(): DemoPilotView {
-        val t = now()
-        return synchronized(lock) { pilotView(state(t), t - pinnedAtMs) }
+        val c = capture(now())
+        return pilotView(build(c), c.sincePinMs)
     }
 
     class Snapshot(val frame: String?, val view: DemoPilotView)
 
-    private fun frameOf(t: Long, data: JsonObject): String = buildJsonObject {
-        put("kind", "pilot")
-        put("ts_ms", t)
-        put("data", data)
-    }.toString()
+    /** The pilot's state at [t], copied out under the lock so the frame is built and serialised outside it. */
+    private class Captured(
+        val t: Long,
+        val live: PilotLive,
+        val fc: FcLive,
+        val pins: DemoPilotPins,
+        val scenario: DemoScenario?,
+        val sincePinMs: Long,
+    )
 
     /** Applies one client frame; returns the `action_result` frame for an action. A stalled pilot reads nothing. */
     fun handle(text: String): String? {
@@ -269,20 +273,22 @@ internal class DemoPilot(
         if (controlMode == "ados" && pinned(t) == DemoScenario.ReadinessBlocked) "not_ready:$READINESS_BLOCK_ID" else null
 
     /**
-     * A surface's "fly here" (`{lat, lon, alt_m}`), offered only while a scenario pins `goto` in
-     * `surface_ops`: a goto refusal pin refuses with its code; under [DemoScenario.FlyHere] the
-     * arguments and the control mode are checked as the vehicle's pilot does, then the owner
-     * shows `goto`.
+     * A surface's "fly here" (`{lat, lon, alt_m}`), offered in ADOS control as the vehicle's
+     * pilot offers it: a goto refusal pin refuses with its code; otherwise the arguments, the
+     * control mode, a failsafe and the reported armed and landed are checked as the pilot
+     * does, then the owner shows `goto`.
      */
     private fun goto(args: JsonObject?, t: Long): String? {
         val scenario = pinned(t)
-        if (scenario == null || !scenario.offersGoto) return "unknown_action"
-        scenario.gotoRefusal?.let { return it }
+        scenario?.gotoRefusal?.let { return it }
         val lat = args?.number("lat")
         val lon = args?.number("lon")
         val alt = args?.number("alt_m")
         if (lat == null || lon == null || alt == null || lat !in -90.0..90.0 || lon !in -180.0..180.0 || !alt.isFinite()) return "bad_args"
         if (controlMode != "ados") return "control_mode"
+        if (DemoPilotPins.failsafe(scenario)) return "failsafe"
+        if (!armed(t)) return "not_armed"
+        if (grounded(t)) return "landed"
         gotoAtMs = t
         return null
     }
@@ -302,22 +308,47 @@ internal class DemoPilot(
     /** True while the flight controller is in the air because a flying pin put it there. */
     private var pinLifted = false
 
+    /** The mode the flying pin puts the flight controller in, and whether it waits for the climb to end. */
+    private var pinMode: Int? = null
+    private var pinModePending = false
+
     /**
-     * The flight controller follows a flying pin into the air, so its own telemetry agrees with
-     * the pilot frame; it lands again when the pin is lifted for one that is not flying.
+     * The flight controller follows the pin: a flying pin takes it into the air and then into
+     * the pin's flight mode, so its own telemetry agrees with the pilot frame; it lands again
+     * when the pin is lifted for one that is not flying. [DemoScenario.NoGnss] drops its fix.
      */
     private fun followPin(scenario: DemoScenario?) {
+        val fix = scenario != DemoScenario.NoGnss
+        if (fc.gnssFix != fix) fc.gnssFix = fix
+        pinModePending = false
         if (DemoPilotPins.airborne(scenario)) {
-            if (fc.armed && !landed()) return
+            // An RTL would bring the flight controller home and land it, ending the pin.
+            pinMode = DemoPilotPins.fcMode(scenario)?.takeIf { it != RTL }
+            if (fc.armed && !landed()) {
+                // Still coming down from an earlier pin: this pin's flight lands again when lifted.
+                if (fc.mode == LAND) pinLifted = true
+                holdPinMode()
+                return
+            }
             launch = null
             setMode(GUIDED)
             fc.command(MavCmd.MAV_CMD_COMPONENT_ARM_DISARM, 1f)
             fc.command(MavCmd.MAV_CMD_NAV_TAKEOFF, p7 = DemoPilotPins.PIN_HEIGHT_M.toFloat())
             pinLifted = true
-        } else if (pinLifted) {
-            pinLifted = false
-            if (fc.armed) fc.command(MavCmd.MAV_CMD_NAV_LAND)
+            pinModePending = true
+        } else {
+            pinMode = null
+            if (pinLifted) {
+                pinLifted = false
+                if (fc.armed) fc.command(MavCmd.MAV_CMD_NAV_LAND)
+            }
         }
+    }
+
+    /** Puts the airborne flight controller in the pin's mode; one still landing for an earlier pin holds in GUIDED. */
+    private fun holdPinMode() {
+        val mode = pinMode ?: if (fc.mode == LAND) GUIDED else return
+        if (fc.mode != mode) setMode(mode)
     }
 
     private fun pins() = DemoPilotPins(controlMode, profile, gotoAccepted = gotoAtMs != null)
@@ -372,6 +403,10 @@ internal class DemoPilot(
         if (l != null && l.endedMs?.let { t - it > SEQUENCE_SHOWN_MS } == true) launch = null
         if (guidedSentMs?.let { t - it >= MODE_SETTLE_MS } == true) guidedSentMs = null
         if (gotoAtMs?.let { t - it > GOTO_SHOWN_MS } == true) gotoAtMs = null
+        if (pinModePending && armed && fc.altitudeM >= ARRIVED_FRACTION * DemoPilotPins.PIN_HEIGHT_M) {
+            pinModePending = false
+            holdPinMode()
+        }
         owner = when {
             !armed -> IDLE
             fc.mode == AUTO -> MISSION_FC
@@ -423,48 +458,36 @@ internal class DemoPilot(
         l.endedMs = t
     }
 
-    private fun altArg(args: JsonObject?): Float? = (args?.get("alt_m") as? JsonPrimitive)?.doubleOrNull?.toFloat()?.takeIf { it.isFinite() && it > 0f }
-
-    /** The pilot kind's `data`: the live state with the pinned scenario's fields laid over it. */
-    private fun state(t: Long): JsonObject = synchronized(lock) {
-        tick(t)
-        val scenario = pinned(t)
-        val summary = "owner=$owner input_src=${session?.src} armed=${fc.armed} landed=${landed()} fc_mode=${fc.mode} step=${launch?.step} pin=$scenario"
-        if (summary != lastSummary) {
-            lastSummary = summary
-            onTransition(summary)
+    /** Advances the state to [t] and copies it out under the lock; the transition line is told outside it. */
+    private fun capture(t: Long): Captured {
+        var transition: String? = null
+        val c = synchronized(lock) {
+            tick(t)
+            val scenario = pinned(t)
+            val landed = landed()
+            val summary = "owner=$owner input_src=${session?.src} armed=${fc.armed} landed=$landed fc_mode=${fc.mode} step=${launch?.step} pin=$scenario"
+            if (summary != lastSummary) {
+                lastSummary = summary
+                transition = summary
+            }
+            // An accepted goto shows as the owner until it times out or another command takes over.
+            val shownOwner = if (gotoAtMs != null && owner != IDLE) GOTO else owner
+            Captured(
+                t = t,
+                live = PilotLive(shownOwner, controlMode, profile, avoid, session?.copy(), gate?.copy(), launch?.copy()),
+                fc = FcLive(fc.armed, fc.mode, landed, fc.altitudeM),
+                pins = pins(),
+                scenario = scenario,
+                sincePinMs = t - pinnedAtMs,
+            )
         }
-        val live = liveFrame(
-            PilotLive(owner, controlMode, profile, avoid, session, gate, launch),
-            FcLive(fc.armed, fc.mode, landed(), fc.altitudeM),
-            t,
-        )
-        if (scenario == null) live else JsonObject(live + pins().fields(scenario, t - pinnedAtMs))
+        transition?.let(onTransition)
+        return c
     }
 
-    private companion object {
-        const val TICK_MS = 100L
-        const val SESSION_LIVE_MS = 1_000L
-        const val GATE_MS = 500L
-        const val GATE_CENTRED = 0.1f
-        const val PREEMPT_AXIS = 0.3f
-        const val STEP_TIMEOUT_MS = 3_000L
-        const val TAKEOFF_TIMEOUT_MS = 60_000L
-        const val RESEND_MS = 1_000L
-        const val MODE_SETTLE_MS = 1_500L
-        const val SEQUENCE_SHOWN_MS = 5_000L
-        const val GOTO_SHOWN_MS = 20_000L
-        const val ARRIVED_FRACTION = 0.9f
-        const val TAKEOFF_ALT_M = 1.5f
-        const val LAUNCH_ALT_M = 3f
-        const val MAX_ALT_M = 120f
-        const val FORCE_DISARM = 21196f
-
-        /** ArduCopter modes the flight controller arms in. */
-        val ARMABLE_MODES = setOf(0, 1, ALTHOLD, GUIDED, LOITER, 13, POSHOLD)
-        val AFTERS = setOf("hold", "skill", "mission", "goto")
-        val PROFILES = setOf("cine", "normal", "sport")
-        val CONTROL_MODES = setOf("ados", "fc_manual", "elrs")
-        val AVOID_MODES = setOf("brake", "bypass", "off")
+    /** The pilot kind's `data`: the live state with the pinned scenario's fields laid over it. */
+    private fun build(c: Captured): JsonObject {
+        val live = liveFrame(c.live, c.fc, c.t)
+        return if (c.scenario == null) live else JsonObject(live + c.pins.fields(c.scenario, c.sincePinMs))
     }
 }

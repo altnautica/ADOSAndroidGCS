@@ -3,7 +3,6 @@ package com.altnautica.gcs.core.extensions.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.extensions.data.ApiResult
-import com.altnautica.gcs.core.extensions.data.ExtensionFailure
 import com.altnautica.gcs.core.extensions.data.ExtensionRepository
 import com.altnautica.gcs.core.extensions.data.ExtensionsState
 import com.altnautica.gcs.core.extensions.data.WriteOutcome
@@ -36,8 +35,24 @@ data class NodeExtensionsUiState(
     val catalog: List<CatalogEntry>? = null,
     val busy: Set<String> = emptySet(),
     val install: InstallProgress? = null,
-    val lastError: String? = null,
+    /** The last write's result, shown once in the screen's snackbar, then cleared. */
+    val notice: ExtensionNotice? = null,
 )
+
+/** What the operator hears about a finished write. */
+sealed interface ExtensionNotice {
+    data class Installed(val name: String) : ExtensionNotice
+    data class Uninstalled(val name: String) : ExtensionNotice
+
+    /** [outcome] is a [WriteOutcome.NoPath] or [WriteOutcome.Failed]. */
+    data class Problem(val outcome: WriteOutcome) : ExtensionNotice
+
+    companion object {
+        /** Null for a quiet success (enable, grant): the switch itself shows the result. */
+        fun of(outcome: WriteOutcome, success: ExtensionNotice?): ExtensionNotice? =
+            if (outcome == WriteOutcome.Done) success else Problem(outcome)
+    }
+}
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -74,19 +89,21 @@ class NodeExtensionsViewModel @Inject constructor(
         }
     }
 
-    fun setEnabled(pluginId: String, enabled: Boolean) = run(pluginId) { n -> repository.setEnabled(n, pluginId, enabled) }
+    fun setEnabled(pluginId: String, enabled: Boolean) = run(pluginId, success = null) { n -> repository.setEnabled(n, pluginId, enabled) }
 
-    fun setGranted(pluginId: String, permission: String, granted: Boolean) = run("$pluginId/$permission") { n ->
+    fun setGranted(pluginId: String, permission: String, granted: Boolean) = run("$pluginId/$permission", success = null) { n ->
         if (granted) repository.grant(n, pluginId, permission) else repository.revoke(n, pluginId, permission)
     }
 
-    fun uninstall(pluginId: String) = run(pluginId) { n -> repository.uninstall(n, pluginId) }
+    /** [name] is the extension's display name for the result line; the screen confirms first. */
+    fun uninstall(pluginId: String, name: String) =
+        run(pluginId, success = ExtensionNotice.Uninstalled(name)) { n -> repository.uninstall(n, pluginId) }
 
     fun install(entry: CatalogEntry) {
         val n = node.value ?: return
         if (local.value.install != null) return
         val jobId = "and-" + UUID.randomUUID()
-        local.update { it.copy(install = InstallProgress(entry, null), lastError = null) }
+        local.update { it.copy(install = InstallProgress(entry, null), notice = null) }
         val progress = viewModelScope.launch {
             val api = repository.api(n) ?: return@launch
             try {
@@ -105,31 +122,19 @@ class NodeExtensionsViewModel @Inject constructor(
         viewModelScope.launch {
             val outcome = repository.install(n, entry, jobId)
             progress.cancel()
-            local.update { it.copy(install = null, lastError = outcome.errorText()) }
+            local.update { it.copy(install = null, notice = ExtensionNotice.of(outcome, ExtensionNotice.Installed(entry.name))) }
             if (outcome == WriteOutcome.Done) catalog.value = (repository.catalog(n) as? ApiResult.Ok)?.value
         }
     }
 
-    fun clearError() = local.update { it.copy(lastError = null) }
+    fun clearNotice() = local.update { it.copy(notice = null) }
 
-    private fun run(busyKey: String, op: suspend (DeviceId) -> WriteOutcome) {
+    private fun run(busyKey: String, success: ExtensionNotice?, op: suspend (DeviceId) -> WriteOutcome) {
         val n = node.value ?: return
-        local.update { it.copy(busy = it.busy + busyKey, lastError = null) }
+        local.update { it.copy(busy = it.busy + busyKey, notice = null) }
         viewModelScope.launch {
             val outcome = op(n)
-            local.update { it.copy(busy = it.busy - busyKey, lastError = outcome.errorText()) }
-        }
-    }
-
-    private fun WriteOutcome.errorText(): String? = when (this) {
-        WriteOutcome.Done -> null
-        is WriteOutcome.NoPath -> reasonKey
-        is WriteOutcome.Failed -> when (val f = failure) {
-            is ExtensionFailure.Refused -> f.message ?: "refused"
-            is ExtensionFailure.Network -> f.message ?: "network error"
-            ExtensionFailure.Unauthorized -> "unauthorized"
-            ExtensionFailure.PinRequired -> "PIN required"
-            ExtensionFailure.FeatureAbsent -> "not supported by this agent"
+            local.update { it.copy(busy = it.busy - busyKey, notice = ExtensionNotice.of(outcome, success)) }
         }
     }
 }

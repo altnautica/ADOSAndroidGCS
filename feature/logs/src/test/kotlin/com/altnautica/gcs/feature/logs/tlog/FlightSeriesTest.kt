@@ -57,7 +57,7 @@ class FlightSeriesTest {
     fun replayEmitsFramesAndRefusesWrites() = runTest {
         val frames = listOf(v(Heartbeat(type = 2, autopilot = 3)), v(VfrHud(groundspeed = 1f)))
         val bytes = log(ByteOrder.BIG_ENDIAN, t0 to frames[0], t0 + 1_000_000 to frames[1])
-        val replay = TlogReplayTransport({ bytes.inputStream() }, speed = 10f)
+        val replay = TlogReplayTransport({ bytes.inputStream() }, "unreadable", speed = 10f)
         replay.incoming.test {
             assertArrayEquals(frames[0], awaitItem())
             assertArrayEquals(frames[1], awaitItem())
@@ -65,5 +65,13 @@ class FlightSeriesTest {
         }
         assertEquals(TransportState.Closed(TlogReplayTransport.END_OF_LOG), replay.state.value)
         assertEquals(WriteResult.ReceiveOnly, replay.write(byteArrayOf(1)))
+    }
+
+    @Test
+    fun unreadableReplayFailsWithTheGivenWords() = runTest {
+        val garbage = ByteArray(8) + byteArrayOf(0x42, 0x01, 0x02)
+        val replay = TlogReplayTransport({ garbage.inputStream() }, "This log could not be read")
+        replay.incoming.test { awaitComplete() }
+        assertEquals(TransportState.Failed("This log could not be read"), replay.state.value)
     }
 }

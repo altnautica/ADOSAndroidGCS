@@ -38,10 +38,10 @@ fun SkillContext.fcFailsafe(): Boolean {
 }
 
 /**
- * On the ground as known: a fresh pilot's own report, else the FC's `EXTENDED_SYS_STATE`
- * landed state; null when neither is known.
+ * On the ground as known: a fresh pilot's own report, else (no pilot, or a pilot with no FC
+ * link) the FC's `EXTENDED_SYS_STATE` landed state; null when neither is known.
  */
-internal fun SkillContext.knownLanded(): Boolean? = if (pilotFresh()) pilot!!.landed else fcLanded
+internal fun SkillContext.knownLanded(): Boolean? = (if (pilotFresh()) pilot!!.landed else null) ?: fcLanded
 
 /** Fly Here's route from the shared offer; null when it is not offered. */
 internal fun SkillContext.flyHereRoute(): FlyHereRoute? {
@@ -51,14 +51,20 @@ internal fun SkillContext.flyHereRoute(): FlyHereRoute? {
         armed = armed == true,
         landed = knownLanded() == true,
     )
-    return flyHereOffered(pilot, ageMs, fc)
+    return flyHereOffered(pilot, ageMs, fc).route
 }
 
-/** Why Fly Here is not offered, most specific first. */
+/**
+ * Why Fly Here is not offered, most specific first, as the pilot's own goto refusal codes, so
+ * a local refusal reads "Fly Here refused: …" like one from the pilot. A vehicle known to be
+ * on the ground reads "on the ground" before the GUIDED test: an armed drone sitting in
+ * LOITER is landed, not in another controller's hands.
+ */
 internal fun SkillContext.flyHereRefusal(): String = when {
     armed == null -> SkillReason.NO_FC_LINK
-    armed == false -> SkillReason.NOT_ARMED
-    (pilotFresh() && pilot!!.fcFailsafe) || fcFailsafe() -> SkillReason.FAILSAFE
-    !mode?.name.equals(GUIDED_MODE, ignoreCase = true) -> SkillReason.FLY_HERE_NOT_GUIDED
-    else -> SkillReason.FLY_HERE_LANDED
+    armed == false -> SkillReason.GOTO_NOT_ARMED
+    (pilotFresh() && pilot!!.fcFailsafe) || fcFailsafe() -> SkillReason.GOTO_FAILSAFE
+    knownLanded() == true -> SkillReason.GOTO_LANDED
+    !mode?.name.equals(GUIDED_MODE, ignoreCase = true) -> SkillReason.GOTO_CONTROL_MODE
+    else -> SkillReason.GOTO_LANDED
 }

@@ -58,6 +58,9 @@ fun VisorSessionsTab(nodeId: String, modifier: Modifier = Modifier) {
     var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     Column(modifier.fillMaxSize()) {
         ActionFeedback(state.action, vm::dismissAction, Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1))
+        (state.sessions as? Load.Ready)?.takeIf { it.stale }?.let {
+            StatusChip(StatusLevel.Warning, stringResource(R.string.visor_stale), Modifier.padding(horizontal = AdosSpacing.S4))
+        }
         when (val load = state.sessions) {
             Load.Loading -> LoadingState(stringResource(R.string.node_loading))
             is Load.Failed -> ProblemState(load.problem, onRetry = { vm.show(NodeTab.Sessions) })

@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
@@ -29,17 +28,16 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** Label of a check; [known] false appends "not reported". */
 @Composable
 fun preflightItemLabel(item: PreflightItem, known: Boolean): String {
     val base = when (item) {
-        PreflightItem.Gps3d -> stringResource(R.string.cockpit_preflight_gps)
+        PreflightItem.Gps3d -> specText("flow.preflight.gps")
         PreflightItem.Battery -> specText("flow.preflight.battery")
-        PreflightItem.Ekf -> stringResource(R.string.cockpit_preflight_ekf)
-        PreflightItem.Home -> stringResource(R.string.cockpit_preflight_home)
+        PreflightItem.Ekf -> specText("flow.preflight.ekf")
+        PreflightItem.Home -> specText("flow.preflight.home")
         PreflightItem.Link -> specText("flow.preflight.link")
         PreflightItem.NoPrearm -> specText("flow.preflight.fc_prearm")
         PreflightItem.NavSource -> specText("flow.preflight.nav_source")
@@ -47,7 +45,7 @@ fun preflightItemLabel(item: PreflightItem, known: Boolean): String {
         PreflightItem.Controller -> specText("flow.preflight.controller_optional")
         PreflightItem.Storage -> specText("flow.preflight.storage")
     }
-    return if (known) base else stringResource(R.string.cockpit_preflight_not_reported, base)
+    return if (known) base else specText("flow.preflight.not_reported", "item" to base)
 }
 
 /**
@@ -63,7 +61,7 @@ fun PreflightSheet(result: PreflightResult, gating: Boolean, onContinue: () -> U
             Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S4),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
         ) {
-            Text(stringResource(R.string.cockpit_preflight_title, result.passed, result.total), style = MaterialTheme.typography.titleMedium)
+            Text(specText("flow.preflight.title_count", "n" to result.passed.toString(), "total" to result.total.toString()), style = MaterialTheme.typography.titleMedium)
             for (check in result.checks) {
                 val (icon, tint) = when {
                     check.passed -> Icons.Outlined.CheckCircle to colors.statusSuccess
@@ -76,10 +74,10 @@ fun PreflightSheet(result: PreflightResult, gating: Boolean, onContinue: () -> U
             for (item in result.readiness) ReadinessRow(item)
             if (gating) {
                 if (!result.ready) {
-                    Text(stringResource(R.string.preflight_gate_blocked), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
+                    Text(specText("flow.preflight.blocked"), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
                 }
                 AdosButton(
-                    stringResource(R.string.preflight_gate_continue),
+                    specText("flow.preflight.continue"),
                     onClick = onContinue,
                     enabled = result.ready,
                     modifier = Modifier.fillMaxWidth().testTag(PREFLIGHT_CONTINUE_TAG),
@@ -107,7 +105,7 @@ private fun CheckRow(icon: ImageVector, tint: Color, label: String, passed: Bool
         Spacer(Modifier.size(AdosSpacing.S2))
         Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         Text(
-            stringResource(if (passed) R.string.cockpit_preflight_pass else R.string.cockpit_preflight_fail),
+            specText(if (passed) "setup.result.pass" else "setup.result.fail"),
             style = MaterialTheme.typography.labelMedium,
             color = tint,
         )

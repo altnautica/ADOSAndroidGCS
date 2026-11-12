@@ -52,7 +52,7 @@ internal fun LazyListScope.categoryContent(
         SettingsCategory.Cockpit -> cockpit(state, vm)
         SettingsCategory.Controller -> {
             item {
-                LinkRow(stringResource(R.string.settings_bindings), stringResource(R.string.settings_bindings_summary), links.onOpenController)
+                LinkRow(vm.specText("controls.title"), stringResource(R.string.settings_controls_summary), links.onOpenController)
             }
             item { AdosListItem(headline = vm.specText("controls.tour.replay"), onClick = vm::replayControllerTour) }
             item { AdosListItem(headline = vm.specText("tips.reset"), onClick = vm::resetTips) }
@@ -302,17 +302,14 @@ private fun EndpointRow(endpoint: DirectEndpoint, onRemove: () -> Unit) {
 private fun DemoScenarioRow(vm: SettingsViewModel) {
     val pinned by vm.demoScenario.collectAsStateWithLifecycle()
     val live = stringResource(R.string.settings_demo_scenario_live)
+    val labels = com.altnautica.gcs.core.demo.DemoScenario.entries.associateWith { stringResource(it.label) }
     SelectSettingRow(
         title = stringResource(R.string.settings_demo_scenario),
         options = listOf<com.altnautica.gcs.core.demo.DemoScenario?>(null) + com.altnautica.gcs.core.demo.DemoScenario.entries,
         selected = pinned,
-        optionLabel = { it?.let(::demoScenarioLabel) ?: live },
+        optionLabel = { it?.let(labels::getValue) ?: live },
         onSelect = vm::pinDemoScenario,
         summary = stringResource(R.string.settings_demo_scenario_summary),
         modifier = Modifier.testTag("settings-demo-scenario"),
     )
 }
-
-/** "MissionPaused" reads "Mission paused". */
-internal fun demoScenarioLabel(s: com.altnautica.gcs.core.demo.DemoScenario): String =
-    s.name.replace(Regex("(?<=[a-z])(?=[A-Z])"), " ").lowercase().replaceFirstChar { it.uppercase() }

@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -53,6 +54,10 @@ import com.altnautica.gcs.core.extensions.ui.rememberExtensionNodePages
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.node.R
 import com.altnautica.gcs.feature.node.common.KeyValueRow
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
+import com.altnautica.gcs.feature.node.common.linkStateLabel
+import com.altnautica.gcs.feature.node.common.serviceStateLabel
+import com.altnautica.gcs.feature.node.common.sensorName
 import com.altnautica.gcs.feature.node.common.NodeCard
 import com.altnautica.gcs.feature.node.common.ProblemState
 import com.altnautica.gcs.feature.node.common.WriteState
@@ -102,7 +107,11 @@ fun AgentTab(nodeId: String, modifier: Modifier = Modifier) {
             else -> sectionId = null
         }
     }
-    LaunchedEffect(section) { section?.let(vm::openSection) }
+    // Live readouts poll while their section is open, and stop when it closes or the page leaves.
+    DisposableEffect(section) {
+        section?.let(vm::openSection)
+        onDispose { vm.closeSection() }
+    }
     val closeSection: (() -> Unit)? = if (landscape) null else ({ sectionId = null })
 
     Column(modifier.fillMaxSize()) {
@@ -346,6 +355,7 @@ private fun LiveBlock(kind: SectionLive, state: LiveState, busy: Boolean, onRest
         LiveState.Absent -> Unit
         is LiveState.Failed -> NodeCard(title) { ProblemState(state.problem, onRetry) }
         is LiveState.Ready -> NodeCard(title) {
+            if (state.stale) StatusChip(StatusLevel.Warning, stringResource(R.string.node_stale))
             val o = state.value as? JsonObject ?: JsonObject(emptyMap())
             when (kind) {
                 SectionLive.SystemResources -> SystemReadout(o)
@@ -372,7 +382,7 @@ private fun SystemReadout(o: JsonObject) {
     )
     KeyValueRow(stringResource(R.string.agent_disk), o.double("disk_percent").fmt(0, " %"))
     o.obj("temperatures")?.forEach { (sensor, v) ->
-        KeyValueRow(sensor, (v as? JsonPrimitive)?.content?.toDoubleOrNull().fmt(0, " °C"))
+        KeyValueRow(stringResource(R.string.agent_temp_sensor, sensorName(sensor)), (v as? JsonPrimitive)?.content?.toDoubleOrNull().fmt(0, " °C"))
     }
 }
 
@@ -394,7 +404,7 @@ private fun BatteryReadout(o: JsonObject) {
 
 @Composable
 private fun WfbReadout(o: JsonObject) {
-    KeyValueRow(stringResource(R.string.agent_wfb_state), o.str("state"))
+    KeyValueRow(stringResource(R.string.agent_wfb_state), linkStateLabel(o.str("state")))
     KeyValueRow(stringResource(R.string.agent_wfb_channel), o.int("actual_channel")?.toString() ?: o.int("channel")?.toString())
     KeyValueRow(stringResource(R.string.agent_wfb_rssi), o.double("rssi_dbm").fmt(0, " dBm"))
     KeyValueRow(stringResource(R.string.agent_wfb_snr), o.double("snr_db").fmt(0, " dB"))
@@ -422,6 +432,7 @@ private fun ServicesReadout(o: JsonObject, busy: Boolean, onRestart: (String) ->
         Text(stringResource(R.string.agent_services_none), style = MaterialTheme.typography.bodyMedium, color = AdosTheme.colors.fgSecondary)
         return
     }
+    var confirm by rememberSaveable { mutableStateOf<String?>(null) }
     services.forEach { s ->
         val name = s.str("name") ?: return@forEach
         val active = s.bool("active") == true
@@ -430,12 +441,37 @@ private fun ServicesReadout(o: JsonObject, busy: Boolean, onRestart: (String) ->
                 Text(name, style = MaterialTheme.typography.bodyMedium)
                 StatusChip(
                     level = if (active) StatusLevel.Success else StatusLevel.Warning,
-                    label = listOfNotNull(s.str("state"), s.str("sub_state")).joinToString(" · ").ifEmpty { "—" },
+                    label = serviceStateLabel(s.str("state")) ?: s.str("sub_state") ?: "—",
                 )
             }
-            IconButton(onClick = { onRestart(name) }, enabled = !busy) {
+            IconButton(onClick = { confirm = name }, enabled = !busy) {
                 Icon(Icons.Outlined.RestartAlt, contentDescription = stringResource(R.string.agent_restart, name))
             }
         }
     }
+    confirm?.let { name ->
+        AdosConfirmSheet(
+            title = stringResource(R.string.agent_restart_confirm_title, name),
+            message = stringResource(
+                if (carriesLink(name)) R.string.agent_restart_confirm_link else R.string.agent_restart_confirm_message,
+            ),
+            onDismiss = { confirm = null },
+            danger = carriesLink(name),
+        ) {
+            AdosButton(
+                stringResource(R.string.agent_restart_confirm),
+                onClick = {
+                    confirm = null
+                    onRestart(name)
+                },
+                variant = if (carriesLink(name)) AdosButtonVariant.Danger else AdosButtonVariant.Primary,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
 }
+
+/** Units whose restart interrupts the flight link, video or this app's own connection to the agent. */
+private val LINK_UNITS = listOf("ados-mavlink", "ados-wfb", "ados-video", "ados-control", "ados-groundlink", "ados-net")
+
+internal fun carriesLink(service: String): Boolean = LINK_UNITS.any { service.removeSuffix(".service").startsWith(it) }

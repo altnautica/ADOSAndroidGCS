@@ -1,5 +1,12 @@
 package com.altnautica.gcs.core.extensions.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import com.altnautica.gcs.core.designsystem.component.AdosButton
+import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,16 +55,28 @@ fun NodeExtensionsScreen(node: DeviceId, modifier: Modifier = Modifier) {
     val vm: NodeExtensionsViewModel = hiltViewModel(key = "node-extensions:${node.value}")
     LaunchedEffect(vm, node) { vm.start(node) }
     val state by vm.state.collectAsStateWithLifecycle()
-    NodeExtensionsContent(
-        node = node,
-        state = state,
-        onRetry = vm::refresh,
-        onEnabled = vm::setEnabled,
-        onGrant = vm::setGranted,
-        onUninstall = vm::uninstall,
-        onInstall = vm::install,
-        modifier = modifier,
-    )
+    val snackbar = remember { SnackbarHostState() }
+    val notice = state.notice?.let { noticeText(it) }
+    // The snackbar sits over the whole page, so a result is seen wherever the list is scrolled.
+    LaunchedEffect(state.notice) {
+        if (notice != null) {
+            snackbar.showSnackbar(notice)
+            vm.clearNotice()
+        }
+    }
+    Box(modifier) {
+        NodeExtensionsContent(
+            node = node,
+            state = state,
+            onRetry = vm::refresh,
+            onEnabled = vm::setEnabled,
+            onGrant = vm::setGranted,
+            onUninstall = vm::uninstall,
+            onInstall = vm::install,
+            modifier = Modifier.fillMaxSize(),
+        )
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+    }
 }
 
 @Composable
@@ -67,7 +86,7 @@ internal fun NodeExtensionsContent(
     onRetry: () -> Unit,
     onEnabled: (String, Boolean) -> Unit,
     onGrant: (String, String, Boolean) -> Unit,
-    onUninstall: (String) -> Unit,
+    onUninstall: (pluginId: String, name: String) -> Unit,
     onInstall: (CatalogEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -99,9 +118,6 @@ internal fun NodeExtensionsContent(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            state.lastError?.let { err ->
-                item { Text(err, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium) }
-            }
             if (ext.extensions.isEmpty()) {
                 item {
                     EmptyState(
@@ -118,7 +134,7 @@ internal fun NodeExtensionsContent(
             state.install?.let { p ->
                 item {
                     Column(Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.extensions_installing, p.stage ?: p.entry.name))
+                        Text(stringResource(R.string.extensions_installing, p.stage?.let { s -> installStageRes(s)?.let { stringResource(it) } ?: s } ?: p.entry.name))
                         LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 4.dp))
                     }
                 }
@@ -141,9 +157,10 @@ private fun ExtensionCard(
     busy: Set<String>,
     onEnabled: (String, Boolean) -> Unit,
     onGrant: (String, String, Boolean) -> Unit,
-    onUninstall: (String) -> Unit,
+    onUninstall: (pluginId: String, name: String) -> Unit,
 ) {
     var expanded by remember(e.pluginId) { mutableStateOf(false) }
+    var confirmUninstall by remember(e.pluginId) { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(e.name, style = MaterialTheme.typography.titleMedium)
@@ -192,9 +209,27 @@ private fun ExtensionCard(
                     ExtensionParametersPanel(node, e.pluginId, section.parameters, sectionKey = "settings:" + section.id)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    OutlinedButton(onClick = { onUninstall(e.pluginId) }, enabled = e.pluginId !in busy) {
+                    OutlinedButton(onClick = { confirmUninstall = true }, enabled = e.pluginId !in busy) {
                         Text(stringResource(R.string.extensions_uninstall))
                     }
+                }
+            }
+            if (confirmUninstall) {
+                AdosConfirmSheet(
+                    title = stringResource(R.string.extensions_uninstall_confirm_title),
+                    message = stringResource(R.string.extensions_uninstall_confirm_message, e.name),
+                    onDismiss = { confirmUninstall = false },
+                    danger = true,
+                ) {
+                    AdosButton(
+                        stringResource(R.string.extensions_uninstall),
+                        onClick = {
+                            confirmUninstall = false
+                            onUninstall(e.pluginId, e.name)
+                        },
+                        variant = AdosButtonVariant.Danger,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }

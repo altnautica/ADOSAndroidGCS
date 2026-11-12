@@ -52,9 +52,13 @@ data class StatusItem(
     val specKey: String? = null,
 )
 
-/** What the pill shows: the worst severity, the count and whether a new item is unacknowledged. */
+/**
+ * What the pill shows: the worst severity, the count and whether a new item is unacknowledged.
+ * [waiting] holds while neither a pilot frame nor a heartbeat has arrived and nothing is
+ * active: the pill then reads the neutral no-link text, never all systems OK.
+ */
 @Immutable
-data class StatusPillUi(val severity: StatusSeverity, val count: Int, val flashing: Boolean, val top: StatusItem?)
+data class StatusPillUi(val severity: StatusSeverity, val count: Int, val flashing: Boolean, val top: StatusItem?, val waiting: Boolean = false)
 
 object StatusModel {
     /**
@@ -110,7 +114,10 @@ object StatusModel {
             // The list words each item with its check's own label (see [StatusItem]).
             preflightFailing = facts.preflightFailing.map { it.id to it.id },
             failsafe = failsafe,
+            linkLoss = facts.linkLoss,
             linkFcStatus = link.map { PillFcStatus(it.severity, it.text) },
+            armUnknown = facts.armUnknown,
+            navSource = facts.navSource,
         )
         return active.map { p -> item(p, bySpecId, checks) }
     }
@@ -128,12 +135,13 @@ object StatusModel {
     private fun alertKey(id: String, alert: CockpitAlert): String =
         if (alert.id == AlertId.FC_STATE && alert.detail != null) "$id:${alert.detail}" else id
 
-    /** The pill for [items]; it flashes while any item's key is missing from [acknowledged]. */
-    fun pill(items: List<StatusItem>, acknowledged: Set<String>): StatusPillUi = StatusPillUi(
+    /** The pill for [items]; it flashes while any item's key is missing from [acknowledged]. [waiting]: see [StatusPillUi]. */
+    fun pill(items: List<StatusItem>, acknowledged: Set<String>, waiting: Boolean = false): StatusPillUi = StatusPillUi(
         severity = items.maxOfOrNull { it.severity } ?: StatusSeverity.Ok,
         count = items.size,
         flashing = items.any { it.key !in acknowledged },
         top = items.firstOrNull(),
+        waiting = waiting && items.isEmpty(),
     )
 
     /** The shared alert id (`link_lost`, `batt_low`, ...) of a cockpit alert; Android's own alerts keep theirs. */

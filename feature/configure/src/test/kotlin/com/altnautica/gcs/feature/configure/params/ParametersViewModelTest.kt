@@ -100,7 +100,42 @@ class ParametersViewModelTest {
     fun loadFailureReasonsHaveOperatorText() {
         assertEquals(com.altnautica.gcs.feature.configure.R.string.cfg_block_no_vehicle, paramLoadReasonRes("noFcLink"))
         assertEquals(com.altnautica.gcs.feature.configure.R.string.cfg_result_timeout, paramLoadReasonRes("timeout"))
-        assertNull(paramLoadReasonRes("writeFailed"))
+        assertEquals(com.altnautica.gcs.core.link.R.string.link_reason_write_failed, paramLoadReasonRes("writeFailed"))
+        assertEquals(com.altnautica.gcs.core.link.R.string.link_reason_unknown, paramLoadReasonRes("someInternalToken"))
+    }
+
+    @Test
+    fun aWriteInFlightIsNamedAndASecondWriteWaits() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0, "REBOOT" to 0.0))
+        target.value = FakeVehicle().target(params)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        params.setGate = gate
+
+        vm.requestWrite("RATE", "6")
+        assertEquals("RATE", vm.writing.value)
+        vm.requestWrite("REBOOT", "1")
+        assertEquals(listOf("RATE" to 6.0), params.writes)
+
+        gate.complete(Unit)
+        assertNull(vm.writing.value)
+        assertEquals(ParamMessage.Saved("RATE", 6.0, false), vm.message.value)
+    }
+
+    @Test
+    fun aStaleLinkParksTheWriteAsArmUnknown() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0))
+        clock = com.altnautica.gcs.feature.configure.common.LINK_FRESH_MS + 1_000
+        target.value = FakeVehicle(tMs = 0).target(params)
+        assertFalse(content(vm).linkFresh)
+
+        vm.requestWrite("RATE", "6")
+        assertEquals(PendingWrite("RATE", 6.0, armUnknown = true), vm.pendingWrite.value)
+        assertTrue(params.writes.isEmpty())
+        assertEquals(com.altnautica.gcs.feature.configure.R.string.cfg_param_unknown_title, pendingWriteTextRes(vm.pendingWrite.value!!).first)
+        vm.confirmPendingWrite()
+        assertEquals(listOf("RATE" to 6.0), params.writes)
     }
 
     @Test
@@ -263,9 +298,64 @@ class ParametersViewModelTest {
         val vehicle = FakeVehicle()
         target.value = vehicle.target(FakeParamService(mapOf("REBOOT" to 0.0)))
         vm.requestWrite("REBOOT", "1")
+        vm.confirmPendingWrite() // a stale link parks the write: arm state unknown
         assertFalse(content(vm).linkFresh)
         vm.reboot()
         coVerify(exactly = 0) { vehicle.control.run(any()) }
+        assertTrue(vm.rebootPending.value)
+    }
+
+    @Test
+    fun closingTheReviewMidApplyStopsTheBatchAndReportsTheCount() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0, "REBOOT" to 0.0))
+        target.value = FakeVehicle().target(params)
+        vm.importText("RATE,8\nREBOOT,1\n")
+
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        params.setGate = gate
+        vm.applyImport()
+        assertTrue(vm.importReview.value!!.running)
+        vm.dismissImport()
+        assertNull(vm.importReview.value)
+        assertEquals(ParamMessage.ImportStopped(applied = 0, total = 2), vm.message.value)
+
+        gate.complete(Unit)
+        assertEquals("nothing is sent after the review closed", listOf("RATE" to 8.0), params.writes)
+    }
+
+    @Test
+    fun importRowsGetTheSingleEditChecks() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0, "INS_ACC_ID" to 1.0, "STAT_RESET" to 1.0, "REBOOT" to 0.0))
+        target.value = FakeVehicle().target(params)
+
+        vm.importText("RATE,20\nINS_ACC_ID,99\nSTAT_RESET,0\nREBOOT,1\n")
+        val review = vm.importReview.value!!
+        assertEquals(
+            mapOf("RATE" to ParamInvalidReason.AboveMax, "INS_ACC_ID" to ParamInvalidReason.ReadOnly),
+            review.invalid,
+        )
+        assertEquals(listOf("STAT_RESET", "REBOOT"), review.selected.map { it.name })
+        vm.toggleImportRow("RATE")
+        assertEquals("a refused row cannot be ticked", listOf("STAT_RESET", "REBOOT"), vm.importReview.value!!.selected.map { it.name })
+
+        vm.applyImport()
+        assertEquals(listOf("STAT_RESET" to 0.0, "REBOOT" to 1.0), params.writes)
+    }
+
+    @Test
+    fun aFailedFileSaveShowsNoExceptionText() = runTest(dispatcher) {
+        val vm = vm()
+        vm.fileWritten(Result.failure(java.io.IOException("open failed: EACCES (Permission denied)")))
+        assertEquals(ParamMessage.FileWriteFailed, vm.message.value)
+    }
+
+    @Test
+    fun aCalibrationCanRaiseTheRebootBanner() = runTest(dispatcher) {
+        val vm = vm()
+        assertFalse(vm.rebootPending.value)
+        vm.markRebootNeeded()
         assertTrue(vm.rebootPending.value)
     }
 }

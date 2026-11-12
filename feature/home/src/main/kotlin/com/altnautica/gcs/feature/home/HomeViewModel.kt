@@ -6,8 +6,10 @@ import com.altnautica.gcs.core.agent.node.LanNodeSource
 import com.altnautica.gcs.core.data.home.SelectedVehicleStore
 import com.altnautica.gcs.core.demo.DemoSettings
 import com.altnautica.gcs.core.link.node.NodeRepository
+import com.altnautica.gcs.core.link.vehicle.VehicleRepository
 import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.link.node.NodeVitalsRepository
+import kotlinx.coroutines.flow.runningFold
 import com.altnautica.gcs.core.link.node.canFly
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant
@@ -39,6 +41,11 @@ data class FleetCard(
     val showThumbnail: Boolean,
     /** The node has an agent link (LAN or through its ground station), so it can be unpaired. */
     val hasAgentLink: Boolean,
+    /**
+     * The node's vitals can only come from its direct flight-controller link, and that link is
+     * closed: nothing is connecting, so Home shows no vitals and no "Connecting…".
+     */
+    val directLinkClosed: Boolean,
 )
 
 data class HomeUiState(
@@ -61,6 +68,7 @@ class HomeViewModel @Inject constructor(
     private val lanNodes: LanNodeSource,
     private val selectedStore: SelectedVehicleStore,
     private val demoSettings: DemoSettings,
+    vehicleRepository: VehicleRepository,
 ) : ViewModel() {
 
     private val nodes = nodeRepository.nodes
@@ -78,14 +86,18 @@ class HomeViewModel @Inject constructor(
                 combine(
                     keys.map { (id, reaches) ->
                         val node = current[id] ?: placeholder(id, reaches)
-                        vitalsRepository.vitals(node).onStart { emit(NodeVitals.UNKNOWN) }.map { id to it }
+                        val live = vitalsRepository.vitals(node).onStart { emit(NodeVitals.UNKNOWN) }
+                        // A direct link reports nothing once closed: keep what it last reported.
+                        (if (vitalsNeedOpenLink(node)) live.keepLastKnown() else live).map { id to it }
                     },
                 ) { pairs -> pairs.toMap() }
             }
         }
 
-    private val cards: Flow<List<FleetCard>?> = combine(nodes, vitals.onStart { emit(emptyMap()) }) { list, v ->
-        list?.sortedWith(FLEET_RANK)?.map { card(it, v[it.id] ?: NodeVitals.UNKNOWN) }
+    private val openLinks: Flow<Set<DeviceId>> = vehicleRepository.openVehicles.map { it.keys }.distinctUntilChanged()
+
+    private val cards: Flow<List<FleetCard>?> = combine(nodes, vitals.onStart { emit(emptyMap()) }, openLinks) { list, v, open ->
+        list?.sortedWith(FLEET_RANK)?.map { card(it, v[it.id] ?: NodeVitals.UNKNOWN, linkOpen = it.id in open) }
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -147,7 +159,11 @@ class HomeViewModel @Inject constructor(
             NodeProfile.Unknown -> 4
         }
 
-        fun card(node: NodeSummary, vitals: NodeVitals): FleetCard {
+        /**
+         * [linkOpen] says whether the node's vehicle link is open now; it matters only for a node
+         * whose vitals come from that link alone (see [vitalsNeedOpenLink]).
+         */
+        fun card(node: NodeSummary, vitals: NodeVitals, linkOpen: Boolean): FleetCard {
             val agentReach = node.reaches.any { it == Reach.Lan || it is Reach.ViaGround }
             return FleetCard(
                 node = node,
@@ -155,8 +171,13 @@ class HomeViewModel @Inject constructor(
                 canFly = node.canFly(),
                 showThumbnail = node.profile == NodeProfile.Drone && node.liveness == Liveness.Live && agentReach,
                 hasAgentLink = agentReach,
+                directLinkClosed = vitalsNeedOpenLink(node) && !linkOpen,
             )
         }
+
+        /** No agent reports this node's vitals; they arrive only while its direct flight-controller link is open. */
+        fun vitalsNeedOpenLink(node: NodeSummary): Boolean =
+            node.reaches.none { it == Reach.Lan || it is Reach.ViaGround } && node.reaches.firstOrNull() == Reach.DirectFc
 
         /** The stored vehicle when it is in [items], otherwise the first one. */
         internal fun <T> pickSelected(items: List<T>, stored: DeviceId?, id: (T) -> DeviceId): T? =
@@ -168,3 +189,7 @@ class HomeViewModel @Inject constructor(
         )
     }
 }
+
+/** Replaces an all-unknown reading (the link closed) with the last reading that knew something. */
+internal fun Flow<NodeVitals>.keepLastKnown(): Flow<NodeVitals> =
+    runningFold(NodeVitals.UNKNOWN) { last, v -> if (v == NodeVitals.UNKNOWN) last else v }.distinctUntilChanged()

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="connect_title">Add vehicle</string>
+    <string name="connect_title">Add a node</string>
     <string name="connect_hint_select">Select</string>
     <plurals name="connect_discovered_count">
         <item quantity="one">%1$d found</item>
         <item quantity="other">%1$d found</item>
     </plurals>
-    <string name="connect_discovery_help">No agents found on this network. Make sure the phone is on the same Wi-Fi as the vehicle or ground station; some access points block discovery.</string>
+    <string name="connect_discovery_help">No agents found on this network. Make sure the phone is on the same Wi-Fi as the drone or ground station; some access points block discovery.</string>
     <string name="connect_retry">Retry</string>
     <string name="connect_back">Back</string>
     <string name="connect_discovered">On this network</string>
@@ -84,4 +84,11 @@
     <string name="connect_input_host">Not a valid host</string>
     <string name="connect_input_code">Codes use letters and digits, without I, O, 0 or 1</string>
     <string name="connect_input_key">Too short</string>
+    <string name="connect_link_host">From a pairing link. Node address: %1$s. Check it, then tap Pair.</string>
+    <string name="connect_link_no_host">From a pairing link. Check the code, then tap Pair.</string>
+    <string name="connect_busy_searching">Looking for the node…</string>
+    <string name="connect_busy_pairing">Pairing…</string>
+    <string name="connect_busy_connecting">Connecting…</string>
+    <string name="connect_wifi_joining">Joining the ground station network…</string>
+    <string name="connect_wifi_failed">Could not join. Check the passphrase and that the ground station is in range.</string>
 </resources>

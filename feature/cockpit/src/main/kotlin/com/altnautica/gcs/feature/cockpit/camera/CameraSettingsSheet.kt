@@ -5,7 +5,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
@@ -14,7 +13,6 @@ import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamDescriptor
-import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** What the camera-settings sheet shows. */
@@ -64,10 +62,10 @@ internal fun CameraSettingsSheet(
                 modifier = Modifier.testTag("camera-sheet-stream"),
             )
         }
-        if (ui.pipAvailable) SwitchSettingRow(stringResource(R.string.cockpit_qs_pip), ui.pipOn, { onTogglePip() })
+        if (ui.pipAvailable) SwitchSettingRow(specText("cockpit.qs.pip"), ui.pipOn, { onTogglePip() })
         if (ui.hasVideo) {
             // The zoom in use: the camera's own, or the digital zoom of the shown video.
-            val zoom = if (ui.digitalZoom > 1) specText("camera.digital_zoom", "n" to ui.digitalZoom.toString()) else "1×"
+            val zoom = if (ui.digitalZoom > 1) specText("camera.digital_zoom", "n" to ui.digitalZoom.toString()) else specText("camera.zoom_none")
             Text(
                 specText("cockpit.zoom") + " · " + zoom,
                 color = AdosTheme.colors.fgPrimary,

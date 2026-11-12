@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.plan.io
 
 import com.altnautica.gcs.core.map.GeoPoint
+import com.altnautica.gcs.feature.plan.model.Autopilot
 import com.altnautica.gcs.feature.plan.model.CollapsedItems
 import com.altnautica.gcs.feature.plan.model.FenceZone
 import com.altnautica.gcs.feature.plan.model.FlatItem
@@ -67,6 +68,7 @@ object PlanFiles {
     private const val GROUND_STATION = "ADOS GCS"
     private const val DEFAULT_CRUISE_SPEED = 15.0
     private const val FIRMWARE_ARDUPILOT = 3
+    private const val FIRMWARE_PX4 = 12
     private const val VEHICLE_MULTIROTOR = 2
 
     private val json = Json { prettyPrint = true }
@@ -123,7 +125,11 @@ object PlanFiles {
 
     // ── .plan ──────────────────────────────────────────────────
 
-    fun exportPlan(plan: MissionPlan): String {
+    /**
+     * The plan as a QGroundControl `.plan`. The header names the planned vehicle's firmware and
+     * MAV_TYPE; without a connected vehicle it falls back to ArduPilot multirotor.
+     */
+    fun exportPlan(plan: MissionPlan, autopilot: Autopilot = Autopilot.Unknown, mavType: Int? = null): String {
         val home = homeOf(plan)
         val root = buildJsonObject {
             put("fileType", "Plan")
@@ -131,7 +137,7 @@ object PlanFiles {
             put("version", 1)
             putJsonObject("mission") {
                 put("cruiseSpeed", plan.cruiseSpeedMs?.toDouble() ?: DEFAULT_CRUISE_SPEED)
-                put("firmwareType", FIRMWARE_ARDUPILOT)
+                put("firmwareType", if (autopilot == Autopilot.Px4) FIRMWARE_PX4 else FIRMWARE_ARDUPILOT)
                 putJsonArray("items") {
                     MissionFlattener.flatten(plan.items).forEach { item ->
                         addJsonObject {
@@ -154,7 +160,7 @@ object PlanFiles {
                     add(home.first.lonDeg)
                     add(home.second.toDouble())
                 }
-                put("vehicleType", VEHICLE_MULTIROTOR)
+                put("vehicleType", mavType ?: VEHICLE_MULTIROTOR)
                 put("version", 2)
             }
             putJsonObject("geoFence") {

@@ -20,8 +20,9 @@ class TipsCasesTest {
     private val engine = TipsEngine(testSpec.tips)
 
     private fun ctx(o: JsonObject) = TipsContext(
-        armed = o["armed"].bool()!!,
-        airborne = o["airborne"].bool()!!,
+        // Null while the arm state is unknown.
+        armed = o["armed"].bool(),
+        airborne = o["airborne"].bool(),
         flightScreen = o["flightScreen"].bool()!!,
         sheetOrMenuOpen = o["sheetOrMenuOpen"].bool()!!,
         tourVisible = o["tourVisible"].bool()!!,
@@ -91,6 +92,11 @@ class TipsCasesTest {
     @Test
     fun `the shared cases include placements`() {
         assertTrue(goldenCases("tips-cases.json").count { "place" in it.input } >= 4)
+    }
+
+    @Test
+    fun `the shared cases include an unknown arm state`() {
+        assertTrue(goldenCases("tips-cases.json").count { it.name.startsWith("arm_unknown") } >= 2)
     }
 
     @Test

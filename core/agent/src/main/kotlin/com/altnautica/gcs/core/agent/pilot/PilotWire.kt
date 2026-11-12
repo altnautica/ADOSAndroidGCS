@@ -95,8 +95,9 @@ object PilotWire {
             avoid = AvoidMode.of(data.str("avoid")),
             fcMode = data.long("fc_mode")?.toInt(),
             fcModeName = data.str("fc_mode_name"),
-            armed = data.bool("armed") == true,
-            landed = data.bool("landed") ?: true,
+            // Absent or null while the pilot has no FC link: unknown, never a guessed "on the ground".
+            armed = data.bool("armed"),
+            landed = data.bool("landed"),
             inputSrc = data.str("input_src"),
             inputAgeMs = data.long("input_age_ms"),
             holdReason = data.str("hold_reason"),

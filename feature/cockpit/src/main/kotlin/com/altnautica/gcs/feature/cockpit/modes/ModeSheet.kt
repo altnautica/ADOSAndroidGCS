@@ -1,7 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.modes
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import com.altnautica.gcs.feature.cockpit.chrome.padClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -263,17 +264,28 @@ private fun ConfirmedChange(label: String, holdMs: Int, tag: String, danger: Boo
 /** A row of selectable segments, the [selected] one outlined in the accent colour. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun Segments(values: List<String>, labels: List<String>, selected: String?, enabled: Boolean, tag: String, onSelect: (String) -> Unit) {
+internal fun Segments(
+    values: List<String>,
+    labels: List<String>,
+    selected: String?,
+    enabled: Boolean,
+    tag: String,
+    /** Values shown but not selectable now (dimmed); the caller says why. */
+    disabled: Set<String> = emptySet(),
+    onSelect: (String) -> Unit,
+) {
     val colors = AdosTheme.colors
     FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         values.forEachIndexed { i, v ->
             val on = v == selected
+            val usable = enabled && v !in disabled
             Surface(
                 modifier = Modifier
                     .defaultMinSize(minWidth = 88.dp, minHeight = AdosTheme.touchMin)
+                    .alpha(if (v in disabled) DISABLED_ALPHA else 1f)
                     .testTag("$tag:$v")
                     .semantics { this.selected = on }
-                    .clickable(enabled = enabled, role = Role.Tab) { onSelect(v) },
+                    .padClickable(enabled = usable, role = Role.Tab) { onSelect(v) },
                 shape = RoundedCornerShape(AdosRadius.Lg),
                 color = if (on) colors.accentPrimary.copy(alpha = 0.16f) else colors.bgRaised,
                 border = BorderStroke(if (on) 2.dp else 1.dp, if (on) colors.accentPrimary else colors.borderDefault),
@@ -285,6 +297,8 @@ internal fun Segments(values: List<String>, labels: List<String>, selected: Stri
         }
     }
 }
+
+private const val DISABLED_ALPHA = 0.45f
 
 const val TAG_PROFILE = "mode_sheet_profile"
 const val TAG_CONTROL = "mode_sheet_control"

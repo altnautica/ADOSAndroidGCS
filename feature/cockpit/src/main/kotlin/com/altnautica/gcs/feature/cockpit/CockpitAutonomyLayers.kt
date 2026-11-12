@@ -256,9 +256,12 @@ internal fun radarDiameter(width: WidthClass): Dp = when (width) {
     WidthClass.Tv -> 176.dp
 }
 
-/** The minimap in its local frame, sampled at 2 Hz plus every pose. */
+/**
+ * The minimap in its local frame, sampled at 2 Hz plus every pose. A tap runs [onClick]; a
+ * long-press picks the point under it like any cockpit map ([CockpitViewModel.pickLocalPoint]).
+ */
 @Composable
-internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier) {
+internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {
     val a = vm.autonomy
     val now = rememberTick(a)
     val pose by a.feed.pose.collectAsStateWithLifecycle()
@@ -277,6 +280,8 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier) {
             pin,
             a::setMinimapPin,
             Modifier.fillMaxSize(),
+            onTap = onClick,
+            onLongPress = vm::pickLocalPoint,
         )
     }
 }

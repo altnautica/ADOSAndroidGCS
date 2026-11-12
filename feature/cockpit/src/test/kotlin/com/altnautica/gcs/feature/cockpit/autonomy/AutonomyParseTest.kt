@@ -28,6 +28,16 @@ class AutonomyParseTest {
     }
 
     @Test
+    fun `the nav state carries the newest pose's age, null when none`() {
+        fun nav(body: String) = AutonomyParse.nav(kotlinx.serialization.json.Json.parseToJsonElement(body) as kotlinx.serialization.json.JsonObject)
+        assertEquals(180L, nav("""{"mode":"external_nav","pose_age_ms":180}""").poseAgeMs)
+        assertNull(nav("""{"mode":"external_nav","pose_age_ms":null}""").poseAgeMs)
+        assertNull(nav("""{"mode":"external_nav"}""").poseAgeMs)
+        assertNull(nav("""{"mode":"external_nav","pose_age_ms":"180"}""").poseAgeMs)
+        assertEquals("Pose age 180 ms", com.altnautica.gcs.feature.cockpit.band.navPoseAgeText(com.altnautica.gcs.feature.cockpit.testSpec.setupStrings, 180L))
+    }
+
+    @Test
     fun `follow event uses the top-level topic`() {
         val text = """{"kind":"follow_event","ts_ms":1,"topic":"follow.reacquired","data":{"track_id":15,"similarity":0.862,"gap_s":1.8}}"""
         val e = (AutonomyParse.navFrame(text, 7) as NavFrame.Event).event as FollowEvent.Reacquired

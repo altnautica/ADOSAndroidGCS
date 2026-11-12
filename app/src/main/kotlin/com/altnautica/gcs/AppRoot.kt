@@ -90,7 +90,8 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
     val transitions = remember(reducedMotion) { NavTransitions(reducedMotion) }
     ImmersiveSystemBars(enabled = isLandscape())
     LaunchedEffect(pairLinks) {
-        pairLinks.collect { link -> BackStackOps.push(backStack, ConnectKey(link.code, link.host)) }
+        // An outside pair link goes through the leave guard, so it asks first over an armed cockpit.
+        pairLinks.collect { link -> leaveGuard.navigate { BackStackOps.push(backStack, ConnectKey(link.code, link.host)) } }
     }
     val topRoute = backStack.lastOrNull()
     LaunchedEffect(topRoute) { viewModel.topRouteChanged(topRoute) }
@@ -148,6 +149,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onAddVehicle = { BackStackOps.push(backStack, ConnectKey()) },
                         onOpenController = { BackStackOps.push(backStack, ControllerKey) },
                         onOpenQuickMenu = { quickMenuOpen = true },
+                        onUnpair = { BackStackOps.push(backStack, NodeKey(it.value, confirmUnpair = true)) },
                         setupOfferNodeId = setupOffer?.nodeId,
                         onOpenSetupOffer = viewModel::openSetup,
                         onSetupOfferLater = viewModel::later,
@@ -194,6 +196,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                 entry<NodeKey> { key ->
                     NodeDetailRoute(
                         nodeId = DeviceId(key.id),
+                        initialConfirmUnpair = key.confirmUnpair,
                         onBack = { BackStackOps.pop(backStack) },
                         onFly = { fly(backStack, viewModel, it) },
                         onOpenSetup = { BackStackOps.push(backStack, SetupKey(it.value)) },
@@ -210,6 +213,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                             BackStackOps.pop(backStack)
                         },
                         onSetUpAircraft = { id -> BackStackOps.push(backStack, AircraftSetupKey(id.value, GROUND_WIZARD)) },
+                        onOpenControls = { BackStackOps.push(backStack, ControllerKey) },
                     )
                 }
                 entry<ConnectKey> { key ->
@@ -219,7 +223,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         onBack = { BackStackOps.pop(backStack) },
                         onOpenCloud = { BackStackOps.push(backStack, CloudKey) },
                         onOpenPhoneRadio = { BackStackOps.push(backStack, PhoneRadioKey) },
-                        onConnected = { id -> viewModel.connected(id, ::goHome) },
+                        onConnected = { id -> viewModel.connected(id) { BackStackOps.afterConnect(backStack) } },
                     )
                 }
                 entry<FlightKey> { key ->

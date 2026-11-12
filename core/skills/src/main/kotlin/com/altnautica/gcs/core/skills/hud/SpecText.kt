@@ -36,6 +36,10 @@ class SpecText(private val strings: Map<String, String>) {
 
     private companion object {
         val ARG = Regex("""\{([a-z_]+)\}""")
-        val ARG_KEYS = mapOf("source" to "pilot.banner.source.", "action" to "pilot.link_loss_action.")
+        val ARG_KEYS = mapOf(
+            "source" to "pilot.banner.source.",
+            "action" to "pilot.link_loss_action.",
+            "cause" to "pilot.banner.cause.",
+        )
     }
 }

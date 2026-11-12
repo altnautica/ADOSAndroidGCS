@@ -1,7 +1,9 @@
 package com.altnautica.gcs.feature.cockpit.panels
 
+import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.flow.specText
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,15 +11,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.Role
@@ -30,7 +32,6 @@ import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommand
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommandHandler
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
-import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamDescriptor
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
@@ -49,6 +50,7 @@ fun StreamTabs(
 ) {
     if (streams.size < 2) return
     val colors = AdosTheme.colors
+    val chrome = LocalChrome.current
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
         streams.forEachIndexed { i, s ->
             val selected = s.id == selectedId
@@ -61,22 +63,23 @@ fun StreamTabs(
                     kotlinx.coroutines.delay(300)
                 }
             }
-            Surface(
-                modifier = Modifier
-                    .heightIn(min = 32.dp)
+            val shape = RoundedCornerShape(chrome.radiusSmall)
+            ChromePanel(
+                Modifier
+                    .minimumInteractiveComponentSize()
+                    .heightIn(min = chrome.control)
                     .alpha(if (switching) shimmer else 1f)
+                    .then(if (selected) Modifier.border(chrome.borderWidth, colors.hudPrimary, shape) else Modifier)
                     .semantics { this.selected = selected }
                     .clickable(enabled = s.live, role = Role.Tab) { onSelect(s.id) },
-                shape = RoundedCornerShape(AdosRadius.Md),
-                color = if (selected) colors.hudPrimary.copy(alpha = 0.25f) else colors.hudGlass,
-                contentColor = colors.hudInk,
-                border = BorderStroke(1.dp, if (selected) colors.hudPrimary else colors.hudHair),
+                shape = shape,
+                tint = if (selected) colors.hudPrimary.copy(alpha = 0.25f) else null,
             ) {
                 Text(
                     "${i + 1} · ${s.role.ifBlank { s.id }}",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = AdosSpacing.S3, vertical = AdosSpacing.S1),
-                    color = if (s.live) colors.hudInk else colors.hudMuted,
+                    style = chrome.labelText,
+                    modifier = Modifier.align(Alignment.Center).padding(horizontal = chrome.pad, vertical = AdosSpacing.S1),
+                    color = if (s.live) chrome.text else chrome.textDim,
                 )
             }
         }

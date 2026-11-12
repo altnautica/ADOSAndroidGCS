@@ -1,5 +1,9 @@
 package com.altnautica.gcs.feature.settings.controller
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.altnautica.gcs.core.designsystem.tokens.AdosSize
+import com.altnautica.gcs.feature.settings.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -96,6 +100,8 @@ fun ControllerDrawing(
     triggerPressed: Float,
     deadzone: Float,
     labels: Map<String, String>,
+    /** Operator-facing name of each control id, spoken with its binding. */
+    names: Map<String, String>,
     conflicts: Set<String>,
     locked: Set<String>,
     pressedLabel: String,
@@ -120,6 +126,7 @@ fun ControllerDrawing(
             for ((id, _) in hotspots.hotspots) {
                 if (bounds[id] == null) continue
                 val label = labels[id].orEmpty()
+                val spoken = stringResource(R.string.controls_hotspot, names[id] ?: id, label)
                 val state = buildList {
                     if (isPressed(id, pad.value, bitfield, triggerPressed)) add(pressedLabel)
                     if (id in conflicts) add(conflictLabel)
@@ -128,7 +135,7 @@ fun ControllerDrawing(
                     Modifier
                         .layoutId(HotspotId(id))
                         .semantics {
-                            contentDescription = "$id: $label"
+                            contentDescription = spoken
                             stateDescription = state
                         }
                         .testTag("hotspot-$id")
@@ -139,7 +146,12 @@ fun ControllerDrawing(
                 val label = labels[id] ?: continue
                 if (label.isEmpty()) continue
                 Row(
-                    Modifier.layoutId(LabelId(id)).testTag("label-$id"),
+                    Modifier
+                        .layoutId(LabelId(id))
+                        .testTag("label-$id")
+                        // The hotspot carries the control's semantics; the label is a second, larger tap target for it.
+                        .clearAndSetSemantics {}
+                        .clickable { onHotspot(id) },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (id in locked) {
@@ -225,7 +237,7 @@ fun ControllerDrawing(
         }
         val f = layoutControllerLabels(requests, totalWidth, gutter, vbW, vbH, gap, spacing)
         frame = f
-        val minTouch = with(density) { 24.dp.roundToPx() }
+        val minTouch = with(density) { AdosSize.TouchMin.roundToPx() }
         val hotspotPlaceables = measurables.mapNotNull { m ->
             val id = (m.layoutId as? HotspotId)?.id ?: return@mapNotNull null
             val b = bounds.getValue(id)

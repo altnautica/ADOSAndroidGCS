@@ -133,4 +133,43 @@ class CalibrationViewModelTest {
         vm.saveRadio()
         assertEquals(listOf("radio", "saveRadio"), cal.calls)
     }
+
+    @Test
+    fun aFinishedCompassAccelOrLevelCalibrationAdvisesAReboot() = runTest(dispatcher) {
+        val vm = vm()
+        cal.state.value = CalibrationState.Succeeded(CalibrationKind.Level, null)
+        assertFalse("a success left from before is not advice", vm.rebootAdvised.value)
+
+        vm.start(CalibrationKind.Compass)
+        cal.state.value = CalibrationState.Running(CalibrationKind.Compass, null)
+        cal.state.value = CalibrationState.Succeeded(CalibrationKind.Compass, null)
+        assertTrue(vm.rebootAdvised.value)
+        vm.consumeRebootAdvice()
+        assertFalse(vm.rebootAdvised.value)
+
+        cal.state.value = CalibrationState.Running(CalibrationKind.Gyro, null)
+        cal.state.value = CalibrationState.Succeeded(CalibrationKind.Gyro, null)
+        assertFalse("gyro offsets apply without a reboot", vm.rebootAdvised.value)
+    }
+
+    @Test
+    fun escAndCompassMotOnArduCopterAirspeedOnPlanes() = runTest(dispatcher) {
+        val vm = vm()
+        assertTrue(vm.state.value.offers(CalibrationKind.Esc))
+        assertTrue(vm.state.value.offers(CalibrationKind.CompassMot))
+        assertFalse(vm.state.value.offers(CalibrationKind.Airspeed))
+        vm.start(CalibrationKind.Esc)
+        cal.state.value = CalibrationState.Idle
+        vm.start(CalibrationKind.CompassMot)
+        cal.state.value = CalibrationState.Idle
+        vm.start(CalibrationKind.Airspeed) // not offered on a quad: ignored
+        assertEquals(listOf("esc", "compassMot"), cal.calls)
+
+        vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(vehicleType = 1, autopilot = 12) // PX4 fixed wing
+        assertTrue(vm.state.value.offers(CalibrationKind.Airspeed))
+        assertFalse(vm.state.value.offers(CalibrationKind.Esc))
+        assertFalse(vm.state.value.offers(CalibrationKind.CompassMot))
+        assertEquals(null, CalibrationKind.Gyro.precaution())
+        assertTrue(CalibrationKind.Esc.precaution() != null)
+    }
 }

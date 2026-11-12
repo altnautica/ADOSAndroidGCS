@@ -8,7 +8,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -34,6 +40,15 @@ internal fun ControllerTourCard(step: Int, onNext: () -> Unit, onClose: () -> Un
     val key = TOUR_KEYS[step.coerceIn(0, TOUR_KEYS.lastIndex)]
     val focus = remember { FocusRequester() }
     LaunchedEffect(step) { runCatching { focus.requestFocus() } }
+    // Back closes the card; without this it would fall through to the route and leave the cockpit.
+    if (LocalNavigationEventDispatcherOwner.current != null) {
+        val close by rememberUpdatedState(onClose)
+        NavigationBackHandler(
+            state = rememberNavigationEventState(NavigationEventInfo.None),
+            isBackEnabled = true,
+            onBackCompleted = { close() },
+        )
+    }
     ChromePanel(modifier.widthIn(max = 360.dp).testTag(TAG_COCKPIT_TOUR)) {
         Column(Modifier.padding(AdosSpacing.S3), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             Text(specText("controls.tour.$key.title"), style = c.valueText.copy(color = c.text))

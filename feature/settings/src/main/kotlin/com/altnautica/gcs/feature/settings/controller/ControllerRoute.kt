@@ -128,6 +128,7 @@ fun ControllerRoute(
             override fun pressedOnScreen(control: String) = controls.pressedOnScreen(control)
             override fun startCalibration() = controls.startCalibration()
             override fun closeCalibration() = controls.closeCalibration()
+            override fun clearCalibration() = controls.clearCalibration()
             override fun testRumble() = controls.testRumble()
             override fun testLightbar() = controls.testLightbar()
             override fun toggleStickTest() = controls.toggleStickTest()

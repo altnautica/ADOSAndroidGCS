@@ -114,6 +114,7 @@ internal object AutonomyParse {
         obstacleRateHz = o["obstacle_rate_hz"].f(),
         minObstacleM = o["min_obstacle_m"].f(),
         gpsFix = o["gps_fix"].int(),
+        poseAgeMs = o["pose_age_ms"].num()?.toLong(),
     )
 
     fun follow(o: JsonObject): FollowState? {

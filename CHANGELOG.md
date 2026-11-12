@@ -5,6 +5,57 @@ app's `versionName`.
 
 ## [Unreleased]
 
+### Added
+
+- **Fly Here on the local map.** A long-press on the local minimap offers Fly
+  Here without GNSS, converting the point through the flight controller's
+  origin. A long-press the pilot would refuse now says why (failsafe, landed,
+  control mode, not in GUIDED, pilot not answering) and opens no confirm.
+- **Link popover.** Tapping the link cell opens RSSI and LQ on every width,
+  and a reduced update rate is named on the cell, the popover and the Menu.
+- **Video retry.** A failed stream shows a Retry button.
+- **Menu rows.** Layers, Controls, Extension panels and Set up aircraft (only
+  when setup is needed), in the shared spec's Menu order.
+- **Pose age.** The navigation source popover shows how old the newest pose is.
+- **File-size check.** `scripts/check-file-size.sh` holds Kotlin files to 500
+  lines, with a baseline for the few larger ones, and runs in CI.
+
+### Changed
+
+- **Sharper, quieter flight screen.** Smaller radii, near-opaque panels with
+  a light blur, hairline borders and one control height across the top bar.
+  The flight-state chip and the status pill are outlines with a coloured dot,
+  and their words are sentence case from the shared spec. The follow rail,
+  lock chip, layer controls, vision panel, camera tabs, banners and skill chip
+  draw on the same chrome.
+- **Outline status chips.** Status chips, reach badges and chip actions are
+  1 dp outlines with no fill; vehicle tiles are rounded squares.
+- **Flight-screen words.** The remaining flight-screen strings come from the
+  shared spec keys; unused resources are gone.
+- **Per-vehicle layout.** The split ratio and view are remembered per vehicle.
+- **Demo.** The demo flight controller's mode follows the pinned state, and
+  the demo uses varied warning texts.
+
+### Fixed
+
+- **Unknown arm state.** Without a flight-controller link the pilot's arm
+  state is unknown and is treated as possibly airborne: no tips, Land rather
+  than Take off, pre-flight items hidden.
+- **Stale pilot.** A pilot frame is used only while it is fresh, with the
+  spec's stale age (a frame at exactly the stale age is stale); otherwise the
+  heartbeat answers.
+- **Cancelled controller press.** A chord start or a pad disconnect cancels a
+  held select, so the press does nothing on release.
+- **Banner cause.** Pilot banners name their cause.
+- **Phone layout.** Snackbars sit above the bottom row and the map card no
+  longer repeats its title; the centre banner no longer covers the heading.
+- **Hit targets.** Card dots, the Menu, the lock chip's release and each half
+  of the follow rail's Strict/Smart toggle are 48 dp targets.
+- **Credential vault test** runs on a test dispatcher and no longer flakes.
+- **Outside the flight screen.** Home, Connect, node, configure, planner, logs
+  and settings screens no longer show raw ids, enum names or server messages,
+  use one "Add a node" label, and their small rows are 48 dp targets.
+
 ## [0.5.0] - 2026-11-10
 
 This release covers everything since 0.4.0: seventy-one commits, all on

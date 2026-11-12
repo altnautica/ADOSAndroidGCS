@@ -3,9 +3,14 @@ package com.altnautica.gcs
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.altnautica.gcs.core.data.home.SelectedVehicleStore
+import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.core.link.vehicle.OpenLink
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.FcVariant
+import com.altnautica.gcs.core.model.Liveness
+import com.altnautica.gcs.core.model.NodeProfile
+import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.HeartbeatState
 import com.altnautica.gcs.core.model.Reach
@@ -64,7 +69,11 @@ class AppViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = AppViewModel(vehicles, prefs, mockk<ReplayLauncher>(relaxed = true), SelectedVehicleStore(prefs), groundSetup)
+    private val nodes = MutableStateFlow<List<NodeSummary>?>(emptyList())
+    private val nodeRepository = mockk<NodeRepository> { every { nodes } returns this@AppViewModelTest.nodes }
+
+    private fun viewModel() =
+        AppViewModel(vehicles, prefs, mockk<ReplayLauncher>(relaxed = true), SelectedVehicleStore(prefs), groundSetup, nodeRepository)
 
     private fun armed(value: Boolean) {
         heartbeat.value = HeartbeatState(armed = value, mode = FlightMode(0, "STABILIZE"), vehicleType = 2, autopilot = 3, tMs = 0)
@@ -225,6 +234,24 @@ class AppViewModelTest {
         // A link that comes back (failover, retry) without a new connect shows the offer again.
         linkUp()
         assertEquals(SetupOffer("fc-uid-1", node), vm.setupOffer.value)
+    }
+
+    @Test
+    fun aLiveNodeWithNoOpenLinkStillGetsItsOffer() = runTest(dispatcher) {
+        // Home opens no vehicle link after a pair: the agent poll alone says the node is live.
+        setupUid = "fc-uid-1"
+        val vm = viewModel()
+        observe(vm)
+        nodes.value = listOf(
+            NodeSummary(node, "Drone", NodeProfile.Drone, listOf(Reach.Lan), Liveness.Live, null, FcVariant.Unknown, null, null),
+        )
+        vm.connected(node) {}
+        assertEquals(SetupOffer("fc-uid-1", node), vm.setupOffer.value)
+
+        nodes.value = listOf(
+            NodeSummary(node, "Drone", NodeProfile.Drone, listOf(Reach.Lan), Liveness.Offline, null, FcVariant.Unknown, null, null),
+        )
+        assertNull(vm.setupOffer.value)
     }
 
     @Test

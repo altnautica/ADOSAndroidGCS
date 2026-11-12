@@ -92,4 +92,16 @@ class FlightHistoryViewModelTest {
         assertFalse(tlog.exists())
         assertEquals(listOf(4L), fileRows.value.map { it.id })
     }
+
+    @Test
+    fun storeFailureShowsNoExceptionText() = runTest(dispatcher) {
+        val broken = object : FlightSessionDao by sessions {
+            override fun getAll(): Flow<List<FlightSessionEntity>> = kotlinx.coroutines.flow.flow { throw IllegalStateException("SQLiteException: no such table") }
+        }
+        val vm = FlightHistoryViewModel(broken, files, dispatcher)
+        vm.state.test {
+            assertEquals(FlightHistoryUiState.Error, awaitItem())
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

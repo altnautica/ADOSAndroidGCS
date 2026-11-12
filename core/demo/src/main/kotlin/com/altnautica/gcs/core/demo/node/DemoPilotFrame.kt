@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FC_PROFILE_OK
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FOLLOW_SKILL_ID
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.GOTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.HOLD_CONTROLLER_LOST
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.PILOT
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.SKILL
@@ -24,13 +25,13 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 
 /** The live input session: the surface whose sticks the demo pilot follows. */
-internal class PilotSession(val src: String, val id: Long, var lastInputMs: Long?, var axes: FloatArray = FloatArray(4))
+internal data class PilotSession(val src: String, val id: Long, var lastInputMs: Long?, var axes: FloatArray = FloatArray(4))
 
 /** The handover gate: pending until the sticks have been centred long enough. */
-internal class PilotGate(var centredSinceMs: Long? = null, var pending: Boolean = true, var progress: Float = 0f)
+internal data class PilotGate(var centredSinceMs: Long? = null, var pending: Boolean = true, var progress: Float = 0f)
 
 /** A running or just-ended launch sequence. */
-internal class PilotLaunch(
+internal data class PilotLaunch(
     val after: String,
     val altM: Float,
     var step: String,
@@ -127,7 +128,8 @@ internal fun liveFrame(p: PilotLive, fc: FcLive, t: Long): JsonObject {
         }
         put("banner", JsonNull)
         put("rth_countdown_s", JsonNull)
-        putJsonArray("surface_ops") {}
+        // The pilot offers a surface's map point only in ADOS control.
+        putJsonArray("surface_ops") { if (p.controlMode == "ados") add(GOTO) }
         // Height above ground follows the flight controller's height; 0 on the ground.
         put("agl_m", if (fc.landed) 0.0 else round1(fc.altitudeM))
         put("agl_source", AGL_SOURCE)

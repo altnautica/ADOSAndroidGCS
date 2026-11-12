@@ -20,7 +20,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -101,6 +105,10 @@ internal fun LocalMinimap(
     pin: String,
     onPin: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** A tap anywhere on the map (the card swaps video and map); null takes no tap. */
+    onTap: (() -> Unit)? = null,
+    /** A long-press on the map at north and east metres in the local frame: Fly Here. */
+    onLongPress: ((northM: Float, eastM: Float) -> Unit)? = null,
 ) {
     val c = AdosTheme.colors
     var pxPerM by remember { mutableFloatStateOf(10f) }
@@ -121,11 +129,32 @@ internal fun LocalMinimap(
     val droneE = poseFresh?.eastM ?: inputs.fcPosition?.eastM ?: 0f
     val yaw = inputs.attitude?.yawRad ?: poseFresh?.yawRad ?: 0f
     val scaleM = LocalFrame.scaleBarM(pxPerM)
+    // The gesture reads the frame as drawn now, not as it was when the gesture started.
+    val frame by rememberUpdatedState(MapFrame(droneN, droneE, pxPerM, pan))
+    val tap by rememberUpdatedState(onTap)
+    val longPress by rememberUpdatedState(onLongPress)
     Box(modifier.background(c.hudGlassStrong)) {
         Canvas(
             Modifier
                 .fillMaxSize()
-                .semantics { contentDescription = description }
+                .semantics {
+                    contentDescription = description
+                    if (onTap != null) onClick { tap?.invoke(); true }
+                }
+                .pointerInput(onTap != null, onLongPress != null) {
+                    if (onTap == null && onLongPress == null) return@pointerInput
+                    detectTapGestures(
+                        onTap = if (onTap != null) { _ -> tap?.invoke() } else null,
+                        onLongPress = if (onLongPress != null) {
+                            { o ->
+                                val (n, e) = frame.toMap(o.x, o.y, size.width / 2f, size.height / 2f)
+                                longPress?.invoke(n, e)
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                }
                 .pointerInput(Unit) {
                     detectTransformGestures { _, panBy, zoom, _ ->
                         pxPerM = (pxPerM * zoom).coerceIn(MIN_PX_PER_M, MAX_PX_PER_M)
@@ -192,13 +221,23 @@ internal fun LocalMinimap(
             Text(" " + specText("minimap.scale", "m" to scaleM.toString()), style = small)
         }
         Row(Modifier.align(Alignment.BottomEnd)) {
-            IconButton(onClick = { pxPerM = (pxPerM / 1.5f).coerceAtLeast(MIN_PX_PER_M) }, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = { pxPerM = (pxPerM / 1.5f).coerceAtLeast(MIN_PX_PER_M) }, modifier = Modifier.size(48.dp).testTag("minimap-zoom-out")) {
                 Icon(Icons.Outlined.Remove, contentDescription = specText("cockpit.zoom.out"), tint = c.hudInk)
             }
-            IconButton(onClick = { pxPerM = (pxPerM * 1.5f).coerceAtMost(MAX_PX_PER_M) }, modifier = Modifier.size(36.dp)) {
+            IconButton(onClick = { pxPerM = (pxPerM * 1.5f).coerceAtMost(MAX_PX_PER_M) }, modifier = Modifier.size(48.dp).testTag("minimap-zoom-in")) {
                 Icon(Icons.Outlined.Add, contentDescription = specText("cockpit.zoom.in"), tint = c.hudInk)
             }
         }
+    }
+}
+
+/** The local frame as drawn: the drone at the centre (shifted by [pan]) at [pxPerM]. */
+private data class MapFrame(val droneN: Float, val droneE: Float, val pxPerM: Float, val pan: Offset) {
+    /** North and east metres under the screen point ([x], [y]) of a canvas centred at ([cx], [cy]). */
+    fun toMap(x: Float, y: Float, cx: Float, cy: Float): Pair<Float, Float> {
+        val sx = cx + pan.x
+        val sy = cy + pan.y
+        return (droneN - (y - sy) / pxPerM) to (droneE + (x - sx) / pxPerM)
     }
 }
 

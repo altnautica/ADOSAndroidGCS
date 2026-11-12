@@ -26,19 +26,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
-import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
-import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.delay
 
@@ -87,22 +85,25 @@ private fun AlertRow(alert: CockpitAlert) {
         }
     }
     val (icon, levelLabel) = when (alert.level) {
-        AlertLevel.Critical -> Icons.Outlined.Report to stringResource(R.string.cockpit_alert_level_critical)
-        AlertLevel.Warning -> Icons.Outlined.WarningAmber to stringResource(R.string.cockpit_alert_level_warning)
-        AlertLevel.Advisory -> Icons.Outlined.Info to stringResource(R.string.cockpit_alert_level_advisory)
+        AlertLevel.Critical -> Icons.Outlined.Report to specText("alert.level.critical")
+        AlertLevel.Warning -> Icons.Outlined.WarningAmber to specText("alert.level.warning")
+        AlertLevel.Advisory -> Icons.Outlined.Info to specText("alert.level.advisory")
     }
     val title = alertTitle(alert.id)
-    val detail = alert.detail?.let { d -> fcStateDetailRes(d)?.let { stringResource(it) } ?: d }
+    val detail = alertDetail(alert.detail)
+    // The chrome panel: its radius and no-blur fill; the border carries the level and its motion.
+    val c = LocalChrome.current
+    val shape = RoundedCornerShape(c.radius)
     Surface(
         modifier = Modifier
             .widthIn(max = 520.dp)
-            .border(2.dp, tint.copy(alpha = borderAlpha), RoundedCornerShape(AdosRadius.Lg))
+            .border(2.dp, tint.copy(alpha = borderAlpha), shape)
             .semantics {
                 liveRegion = if (alert.level == AlertLevel.Critical) LiveRegionMode.Assertive else LiveRegionMode.Polite
             },
-        shape = RoundedCornerShape(AdosRadius.Lg),
-        color = colors.hudGlassStrong,
-        contentColor = colors.hudInk,
+        shape = shape,
+        color = c.panelNoBlur,
+        contentColor = c.text,
     ) {
         Row(Modifier.padding(horizontal = AdosSpacing.S3, vertical = AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(AdosSize.IconMd))
@@ -114,16 +115,10 @@ private fun AlertRow(alert: CockpitAlert) {
     }
 }
 
-/** Spec keys of the alerts the shared cockpit spec names; the rest keep their Android title. */
-private val SPEC_ALERT_TITLES = mapOf(
-    AlertId.LINK_LOST to "alert.link_lost",
-    AlertId.LINK_STALE to "alert.link_stale",
-    AlertId.BATT_CRIT to "alert.batt_crit",
-    AlertId.BATT_LOW to "alert.batt_low",
-    AlertId.GPS_NO_3D to "alert.gps_no_3d",
-    AlertId.VIDEO_FROZEN to "alert.video_frozen",
-)
-
-/** An alert's on-screen title: the spec wording where the spec names the alert. */
+/** An alert's on-screen title in the spec's words. */
 @Composable
-fun alertTitle(id: String): String = SPEC_ALERT_TITLES[id]?.let { specText(it) } ?: stringResource(alertTitleRes(id))
+fun alertTitle(id: String): String = specText(alertTitleKey(id))
+
+/** An alert's detail: the FC state in the spec's words, any other detail (FC text) verbatim. */
+@Composable
+fun alertDetail(detail: String?): String? = detail?.let { d -> fcStateDetailKey(d)?.let { specText(it) } ?: d }

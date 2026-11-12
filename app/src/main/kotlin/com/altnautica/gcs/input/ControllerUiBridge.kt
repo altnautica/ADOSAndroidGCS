@@ -59,7 +59,9 @@ class ControllerUiBridge(
                 leaveTouchMode()
                 val now = SystemClock.uptimeMillis()
                 if (input.pressed) activateDownTime = now
-                sendKey(if (input.pressed) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, activateDownTime, now)
+                // A chord start or a pad loss ends the press as cancelled: the key-up
+                // carries FLAG_CANCELED so the focused control does not click.
+                sendKey(if (input.pressed) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, activateDownTime, now, input.keyFlags)
             }
             UiInput.Back -> activity.onBackPressedDispatcher.onBackPressed()
             is UiInput.Direction -> {
@@ -95,9 +97,9 @@ class ControllerUiBridge(
     // Activity.dispatchKeyEvent is public platform API; the restriction marker
     // sits on the androidx.core ComponentActivity override in between.
     @SuppressLint("RestrictedApi")
-    private fun sendKey(action: Int, code: Int, downTime: Long, eventTime: Long) {
+    private fun sendKey(action: Int, code: Int, downTime: Long, eventTime: Long, flags: Int = 0) {
         activity.dispatchKeyEvent(
-            KeyEvent(downTime, eventTime, action, code, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD),
+            KeyEvent(downTime, eventTime, action, code, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, flags, InputDevice.SOURCE_KEYBOARD),
         )
     }
 

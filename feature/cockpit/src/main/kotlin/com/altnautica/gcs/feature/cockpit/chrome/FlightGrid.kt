@@ -43,7 +43,7 @@ data class FlightSizes(
     val leftGap: Dp,
     /** The shutter; the right column's width. */
     val shutter: Dp,
-    /** Photo/video switch height, zoom pill height and the camera-settings button. */
+    /** Photo/video switch height, zoom pill height (two 48 dp halves) and the camera-settings button; every target at least 48 dp. */
     val modeSwitch: Dp,
     val zoom: Dp,
     val rightButton: Dp,
@@ -60,7 +60,7 @@ data class FlightSizes(
 fun flightSizes(width: WidthClass): FlightSizes {
     val s = if (width == WidthClass.Tv) 1.33f else 1f
     val card = when (width) {
-        WidthClass.Compact -> DpSize(136.dp, 88.dp)
+        WidthClass.Compact -> DpSize(144.dp, 88.dp)
         WidthClass.Medium -> DpSize(176.dp, 112.dp)
         WidthClass.Expanded -> DpSize(232.dp, 144.dp)
         WidthClass.Tv -> DpSize(232.dp * s, 144.dp * s)
@@ -72,9 +72,9 @@ fun flightSizes(width: WidthClass): FlightSizes {
         leftButton = 56.dp * s,
         leftGap = 12.dp * s,
         shutter = 56.dp * s,
-        modeSwitch = 32.dp * s,
-        zoom = 72.dp * s,
-        rightButton = 40.dp * s,
+        modeSwitch = 48.dp * s,
+        zoom = 96.dp * s,
+        rightButton = 48.dp * s,
         rightGap = 6.dp * s,
         gimbalPad = 76.dp * s,
         card = card,

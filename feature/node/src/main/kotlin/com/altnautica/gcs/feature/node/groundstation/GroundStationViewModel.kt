@@ -15,6 +15,9 @@ import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import com.altnautica.gcs.feature.node.common.NodeApis
 import com.altnautica.gcs.feature.node.common.NodeClients
 import com.altnautica.gcs.feature.node.common.PageProblem
+import com.altnautica.gcs.feature.node.common.NO_AGENT_LINK
+import com.altnautica.gcs.feature.node.common.WriteAction
+import com.altnautica.gcs.feature.node.common.WriteLabel
 import com.altnautica.gcs.feature.node.common.WriteState
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -36,9 +39,14 @@ import kotlinx.serialization.json.put
 
 sealed interface Load<out T> {
     data object Loading : Load<Nothing>
-    data class Ready<T>(val value: T) : Load<T>
+
+    /** [stale]: the latest read failed and [value] is the last good reading. */
+    data class Ready<T>(val value: T, val stale: Boolean = false) : Load<T>
     data class Failed(val problem: PageProblem) : Load<Nothing>
 }
+
+/** A failed poll: the last good reading stays, marked stale; anything else becomes the problem. */
+fun <T> Load<T>.afterFailure(problem: PageProblem): Load<T> = if (this is Load.Ready) copy(stale = true) else Load.Failed(problem)
 
 /** A Wi-Fi join that needs the access point stood down first (`409 E_WLAN0_BUSY_AP_ACTIVE`). */
 data class PendingJoin(val ssid: String, val passphrase: String?)
@@ -134,7 +142,7 @@ class GroundStationViewModel @AssistedInject constructor(
     // ---- gnss ----------------------------------------------------------------
 
     /** RTK base mode; a write refused while armed retries with the override after the hold-to-confirm. */
-    fun setBase(request: BaseModeRequest) = writes.run(label = "gnss_base") { force -> lanes.setBase(request, force) }
+    fun setBase(request: BaseModeRequest) = writes.run(label = WriteLabel(WriteAction.GnssBase)) { force -> lanes.setBase(request, force) }
 
     private fun refresh() {
         val tab = activeTab
@@ -153,7 +161,7 @@ class GroundStationViewModel @AssistedInject constructor(
     }
 
     /** Frees the drone's fleet slot on this ground station; the armed override rides the query (bodiless DELETE). */
-    fun releaseSlot(deviceId: String) = write(deviceId) { c, force -> releaseSlotRequest(c, deviceId, force) }
+    fun releaseSlot(deviceId: String) = write(WriteLabel(WriteAction.ReleaseSlot, deviceId)) { c, force -> releaseSlotRequest(c, deviceId, force) }
 
     // ---- radio ---------------------------------------------------------------
 
@@ -166,9 +174,7 @@ class GroundStationViewModel @AssistedInject constructor(
         _state.update { it.copy(radio = Load.Ready(RadioLink.parse(obj, wfb).copy(adapters = adapters))) }
     }
 
-    fun setChannel(channel: Int) = write("channel") { c, force -> c.groundStation.putWfb(channel, force) }
-
-    fun setTxPower(dbm: Int) = write("tx_power") { c, force ->
+    fun setTxPower(dbm: Int) = write(WriteLabel(WriteAction.TxPower)) { c, force ->
         c.requestJson(
             "PUT",
             "api/wfb/tx-power",
@@ -188,8 +194,8 @@ class GroundStationViewModel @AssistedInject constructor(
         }
     }
 
-    fun saveAccessPoint(enabled: Boolean?, ssid: String?, passphrase: String?, channel: Int?) = write("ap") { c, _ ->
-        c.groundStation.putNetworkAp(ApUpdate(enabled, ssid?.takeIf { it.isNotBlank() }, passphrase?.takeIf { it.isNotEmpty() }, channel))
+    fun saveAccessPoint(enabled: Boolean?, ssid: String?, passphrase: String?, channel: Int?) = write(WriteLabel(WriteAction.AccessPoint)) { c, force ->
+        c.groundStation.putNetworkAp(apUpdate(enabled, ssid, passphrase, channel, force))
     }
 
     fun scanNetworks() {
@@ -210,15 +216,9 @@ class GroundStationViewModel @AssistedInject constructor(
     /** Joins a Wi-Fi network as uplink; an active access point asks before it is stood down. */
     fun join(ssid: String, passphrase: String?, standDownAccessPoint: Boolean = false) {
         _state.update { it.copy(joinNeedsForce = null) }
-        writes.run(label = ssid, onDone = ::refresh) { _ ->
-            val c = client() ?: return@run AgentResult.Err(AgentError.Unauthorized)
-            val r = c.groundStation.joinClientNetwork(
-                buildJsonObject {
-                    put("ssid", ssid)
-                    if (!passphrase.isNullOrEmpty()) put("passphrase", passphrase)
-                    if (standDownAccessPoint) put("force", true)
-                },
-            )
+        writes.run(label = WriteLabel(WriteAction.Join, ssid), onDone = ::refresh) { force ->
+            val c = client() ?: return@run AgentResult.Err(NO_AGENT_LINK)
+            val r = c.groundStation.joinClientNetwork(joinBody(ssid, passphrase, force = standDownAccessPoint || force))
             val err = (r as? AgentResult.Err)?.error
             if (!standDownAccessPoint && err is AgentError.Server && err.code == 409) {
                 _state.update { it.copy(joinNeedsForce = PendingJoin(ssid, passphrase)) }
@@ -229,20 +229,14 @@ class GroundStationViewModel @AssistedInject constructor(
 
     fun cancelJoin() = _state.update { it.copy(joinNeedsForce = null) }
 
-    fun leaveNetwork() = write("leave") { c, _ -> c.groundStation.leaveClientNetwork() }
+    fun leaveNetwork(ssid: String) = write(WriteLabel(WriteAction.Leave, ssid)) { c, force -> c.groundStation.leaveClientNetwork(force) }
 
-    fun saveModem(enabled: Boolean?, apn: String?, capMb: Int?) = write("modem") { c, _ ->
-        c.groundStation.putModem(
-            buildJsonObject {
-                enabled?.let { put("enabled", it) }
-                apn?.let { put("apn", it) }
-                capMb?.let { put("cap_mb", it) }
-            },
-        )
+    fun saveModem(enabled: Boolean?, apn: String?, capMb: Int?) = write(WriteLabel(WriteAction.Modem)) { c, force ->
+        c.groundStation.putModem(modemBody(enabled, apn, capMb, force))
     }
 
-    fun setShareUplink(enabled: Boolean) = write("share_uplink") { c, _ ->
-        c.requestJson("PUT", "api/v1/ground-station/network/share_uplink", buildJsonObject { put("enabled", enabled) })
+    fun setShareUplink(enabled: Boolean) = write(WriteLabel(WriteAction.ShareUplink)) { c, force ->
+        c.requestJson("PUT", "api/v1/ground-station/network/share_uplink", shareUplinkBody(enabled, force))
     }
 
     // ---- mesh ----------------------------------------------------------------
@@ -262,7 +256,7 @@ class GroundStationViewModel @AssistedInject constructor(
         _state.update { it.copy(mesh = Load.Ready(parsed), pairWindow = window) }
     }
 
-    fun setRole(role: String) = write(role) { c, force ->
+    fun setRole(role: String) = write(WriteLabel(WriteAction.Role, role)) { c, force ->
         c.groundStation.putRole(
             buildJsonObject {
                 put("role", role)
@@ -271,23 +265,23 @@ class GroundStationViewModel @AssistedInject constructor(
         )
     }
 
-    fun openPairWindow(durationS: Int = 60) = write("pair") { c, _ ->
+    fun openPairWindow(durationS: Int = 60) = write(WriteLabel(WriteAction.PairOpen)) { c, _ ->
         c.groundStation.pairAccept(buildJsonObject { put("duration_s", durationS) })
     }
 
-    fun closePairWindow() = write("pair") { c, _ -> c.groundStation.pairClose() }
+    fun closePairWindow() = write(WriteLabel(WriteAction.PairClose)) { c, _ -> c.groundStation.pairClose() }
 
-    fun approve(deviceId: String) = write(deviceId) { c, _ -> c.groundStation.pairApprove(deviceId) }
+    fun approve(deviceId: String) = write(WriteLabel(WriteAction.Approve, deviceId)) { c, _ -> c.groundStation.pairApprove(deviceId) }
 
-    fun joinMesh(code: String) = write("join") { c, _ ->
+    fun joinMesh(code: String) = write(WriteLabel(WriteAction.JoinMesh)) { c, _ ->
         c.requestJson("POST", "api/v1/ground-station/pair/join", buildJsonObject { put("code", code.trim()) })
     }
 
     // ---- plumbing ------------------------------------------------------------
 
-    private fun write(label: String, block: suspend (AgentClient, Boolean) -> AgentResult<*>) {
+    private fun write(label: WriteLabel, block: suspend (AgentClient, Boolean) -> AgentResult<*>) {
         writes.run(label = label, onDone = ::refresh) { force ->
-            val c = client() ?: return@run AgentResult.Err(AgentError.Unauthorized)
+            val c = client() ?: return@run AgentResult.Err(NO_AGENT_LINK)
             block(c, force)
         }
     }
@@ -296,10 +290,10 @@ class GroundStationViewModel @AssistedInject constructor(
         _state.update { s ->
             when (tab) {
                 // Keep the last good reading while a poll blips; replace a loading or failed state.
-                NodeTab.CarriedDrones -> if (s.carried is Load.Ready) s else s.copy(carried = Load.Failed(problem))
-                NodeTab.Radio -> if (s.radio is Load.Ready) s else s.copy(radio = Load.Failed(problem))
-                NodeTab.Network -> if (s.network is Load.Ready) s else s.copy(network = Load.Failed(problem))
-                NodeTab.Mesh -> if (s.mesh is Load.Ready) s else s.copy(mesh = Load.Failed(problem))
+                NodeTab.CarriedDrones -> s.copy(carried = s.carried.afterFailure(problem))
+                NodeTab.Radio -> s.copy(radio = s.radio.afterFailure(problem))
+                NodeTab.Network -> s.copy(network = s.network.afterFailure(problem))
+                NodeTab.Mesh -> s.copy(mesh = s.mesh.afterFailure(problem))
                 else -> s
             }
         }
@@ -326,3 +320,26 @@ internal suspend fun releaseSlotRequest(client: AgentClient, deviceId: String, f
         "api/v1/ground-station/wfb/pair/${java.net.URLEncoder.encode(deviceId, "UTF-8").replace("+", "%20")}",
         query = if (force) mapOf("force" to "1") else emptyMap(),
     )
+
+// Write bodies. Each carries the armed override (`force: true`) only on the confirmed retry.
+
+internal fun apUpdate(enabled: Boolean?, ssid: String?, passphrase: String?, channel: Int?, force: Boolean) =
+    ApUpdate(enabled, ssid?.takeIf { it.isNotBlank() }, passphrase?.takeIf { it.isNotEmpty() }, channel, force.takeIf { it })
+
+internal fun joinBody(ssid: String, passphrase: String?, force: Boolean): JsonObject = buildJsonObject {
+    put("ssid", ssid)
+    if (!passphrase.isNullOrEmpty()) put("passphrase", passphrase)
+    if (force) put("force", true)
+}
+
+internal fun modemBody(enabled: Boolean?, apn: String?, capMb: Int?, force: Boolean): JsonObject = buildJsonObject {
+    enabled?.let { put("enabled", it) }
+    apn?.let { put("apn", it) }
+    capMb?.let { put("cap_mb", it) }
+    if (force) put("force", true)
+}
+
+internal fun shareUplinkBody(enabled: Boolean, force: Boolean): JsonObject = buildJsonObject {
+    put("enabled", enabled)
+    if (force) put("force", true)
+}

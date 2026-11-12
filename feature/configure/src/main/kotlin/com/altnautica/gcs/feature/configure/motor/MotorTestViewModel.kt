@@ -91,7 +91,7 @@ class MotorTestViewModel internal constructor(
         session
     }.flatMapLatest { s ->
         s?.state?.map { snap ->
-            AgentMotorTest(snap.step(FcSetupApi.WIZARD_GROUND, OUTPUTS_STEP), snap.busy, snap.problem)
+            AgentMotorTest(snap.step(FcSetupApi.WIZARD_GROUND, OUTPUTS_STEP), snap.actionsBlocked, snap.problem)
         } ?: flowOf(null)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 

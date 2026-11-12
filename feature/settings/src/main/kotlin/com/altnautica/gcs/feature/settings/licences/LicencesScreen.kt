@@ -40,6 +40,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import com.altnautica.gcs.core.designsystem.component.AdosButton
+import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 
 sealed interface NoticesState {
     data object Loading : NoticesState
@@ -67,19 +74,57 @@ class LicencesViewModel @Inject constructor(@ApplicationContext private val cont
         }
     }
 
+    private val _text = MutableStateFlow<LicenceText?>(null)
+
+    /** The licence text open over the notices, or null. */
+    val text: StateFlow<LicenceText?> = _text.asStateFlow()
+
+    fun openText(asset: String) {
+        viewModelScope.launch {
+            _text.value = withContext(Dispatchers.IO) {
+                LicenceText(asset, runCatching { context.assets.open(asset).bufferedReader().use { it.readText() } }.getOrNull())
+            }
+        }
+    }
+
+    fun closeText() {
+        _text.value = null
+    }
+
     companion object {
         const val ASSET = "THIRD_PARTY_NOTICES.md"
     }
 }
 
+/** One bundled licence text; [body] is null when the asset is missing from the build. */
+data class LicenceText(val asset: String, val body: String?)
+
 @Composable
 fun LicencesRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: LicencesViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val text by viewModel.text.collectAsStateWithLifecycle()
+    val open = text
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = open != null,
+        onBackCompleted = viewModel::closeText,
+    )
     ConsoleScaffold(
-        title = stringResource(R.string.settings_licences),
-        onBack = onBack,
+        title = open?.let { licenceTitle(it.asset) } ?: stringResource(R.string.settings_licences),
+        onBack = if (open != null) viewModel::closeText else onBack,
         modifier = modifier,
     ) { padding ->
+        if (open != null) {
+            SelectionContainer {
+                Text(
+                    open.body ?: stringResource(R.string.settings_licences_missing),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AdosTheme.colors.fgSecondary,
+                    modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(AdosSpacing.S4),
+                )
+            }
+            return@ConsoleScaffold
+        }
         when (val s = state) {
             NoticesState.Loading -> LoadingState(stringResource(R.string.settings_loading), Modifier.padding(padding))
             NoticesState.Missing -> ErrorState(
@@ -88,21 +133,34 @@ fun LicencesRoute(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: 
                 onRetry = viewModel::load,
                 modifier = Modifier.padding(padding),
             )
-            is NoticesState.Ready -> SelectionContainer {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(AdosSpacing.S4),
-                    verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
-                ) {
-                    items(s.blocks) { block -> Block(block) }
+            is NoticesState.Ready -> LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(AdosSpacing.S4),
+                verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
+            ) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                        Text(stringResource(R.string.settings_licences_source_offer), style = MaterialTheme.typography.bodyMedium, color = AdosTheme.colors.fgSecondary)
+                        TextLink(licenceTitle(APP_LICENCE_ASSET)) { viewModel.openText(APP_LICENCE_ASSET) }
+                    }
                 }
+                items(s.blocks) { block -> Block(block, viewModel::openText) }
             }
         }
     }
 }
 
 @Composable
-private fun Block(block: NoticeBlock) {
+private fun TextLink(label: String, onClick: () -> Unit) {
+    AdosButton(
+        stringResource(R.string.settings_licences_read, label),
+        onClick = onClick,
+        variant = AdosButtonVariant.Secondary,
+    )
+}
+
+@Composable
+private fun Block(block: NoticeBlock, onOpenText: (String) -> Unit) {
     val colors = AdosTheme.colors
     when (block) {
         is NoticeBlock.Heading -> Text(
@@ -124,6 +182,7 @@ private fun Block(block: NoticeBlock) {
                         block.header.drop(1).zip(row.drop(1)).filter { it.second.isNotBlank() }.forEach { (h, v) ->
                             Text("$h: $v", style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
                         }
+                        licenceAssetsFor(row).forEach { asset -> TextLink(licenceTitle(asset)) { onOpenText(asset) } }
                     }
                 }
             }

@@ -1,18 +1,17 @@
 package com.altnautica.gcs.feature.cockpit.alerts
 
-import android.content.Context
 import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
-import com.altnautica.gcs.feature.cockpit.R
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
 import javax.inject.Inject
 
 /**
  * Speaks and vibrates for newly raised critical alerts, and speaks flight-mode
- * changes, according to the operator's audio settings.
+ * changes, according to the operator's audio settings. Every spoken word is the cockpit
+ * spec's text.
  */
 class AlertAnnouncer @Inject constructor(
-    @ApplicationContext private val context: Context,
+    private val spec: CockpitSpecRepository,
     private val tts: TtsManager,
     private val vibration: VibrationManager,
 ) {
@@ -44,7 +43,7 @@ class AlertAnnouncer @Inject constructor(
         lastMode = mode
         if (!speak || mode == null || previous == null || previous == mode) return
         ensureTts()
-        tts.speak(context.getString(R.string.cockpit_tts_mode, mode.replace('_', ' ').lowercase()), AlertLevel.Advisory)
+        tts.speak(spec.setupStrings.format("cockpit.tts.mode", mapOf("mode" to mode.replace('_', ' ').lowercase())), AlertLevel.Advisory)
     }
 
     /** Speaks a flight-flow prompt (handover, return home, low battery, mission state). */
@@ -53,9 +52,9 @@ class AlertAnnouncer @Inject constructor(
         tts.speak(text, AlertLevel.Warning)
     }
 
-    /** The alert's localized title, or the FC's own text for a STATUSTEXT alert. */
+    /** The alert's spec title, or the FC's own text for a STATUSTEXT alert. */
     fun alertText(alert: CockpitAlert): String {
-        val title = context.getString(alertTitleRes(alert.id))
+        val title = spec.setupStrings.format(alertTitleKey(alert.id))
         return if (alert.id == AlertId.STATUS_TEXT) alert.detail ?: title else title
     }
 
@@ -65,31 +64,30 @@ class AlertAnnouncer @Inject constructor(
     }
 }
 
-/** Localized title of an alert id. */
-fun alertTitleRes(id: String): Int = when (id) {
-    AlertId.LINK_LOST -> R.string.cockpit_alert_link_lost
-    AlertId.LINK_STALE -> R.string.cockpit_alert_link_stale
-    AlertId.BATT_CRIT -> R.string.cockpit_alert_battery_critical
-    AlertId.BATT_LOW -> R.string.cockpit_alert_battery_low
-    AlertId.FC_STATE -> R.string.cockpit_alert_fc_state
-    AlertId.EKF_FAILSAFE -> R.string.cockpit_alert_ekf_failsafe
-    AlertId.FENCE_BREACH -> R.string.cockpit_alert_fence_breach
-    AlertId.STATUS_TEXT -> R.string.cockpit_alert_status_text
-    AlertId.GPS_NO_3D -> R.string.cockpit_alert_gps_no_3d
-    AlertId.VIDEO_FROZEN -> R.string.cockpit_alert_video_frozen
-    AlertId.RC_FAILSAFE -> R.string.cockpit_alert_rc_failsafe
-    AlertId.PREARM -> R.string.cockpit_alert_prearm
-    AlertId.HIGH_VIBRATION -> R.string.cockpit_alert_high_vibration
-    AlertId.STICK_MODE -> R.string.cockpit_alert_stick_mode
-    AlertId.CONTROLLER_LOST -> R.string.cockpit_alert_controller_lost
-    AlertId.CONTROLLER_BATTERY -> R.string.cockpit_alert_controller_battery
-    else -> R.string.cockpit_alert_status_text
+/** The spec key of an alert id's title; an alert the spec does not name reads as an FC message. */
+fun alertTitleKey(id: String): String = when (id) {
+    AlertId.LINK_LOST -> "alert.link_lost"
+    AlertId.LINK_STALE -> "alert.link_stale"
+    AlertId.BATT_CRIT -> "alert.batt_crit"
+    AlertId.BATT_LOW -> "alert.batt_low"
+    AlertId.FC_STATE -> "cockpit.status.source.fc_status_text"
+    AlertId.EKF_FAILSAFE -> "alert.ekf_failsafe"
+    AlertId.FENCE_BREACH -> "alert.fence_breach"
+    AlertId.GPS_NO_3D -> "alert.gps_no_3d"
+    AlertId.VIDEO_FROZEN -> "alert.video_frozen"
+    AlertId.RC_FAILSAFE -> "alert.rc_failsafe"
+    AlertId.PREARM -> "alert.prearm"
+    AlertId.HIGH_VIBRATION -> "alert.high_vibration"
+    AlertId.STICK_MODE -> "alert.stick_mode"
+    AlertId.CONTROLLER_LOST -> "alert.controller_lost"
+    AlertId.CONTROLLER_BATTERY -> "alert.controller_battery"
+    else -> "alert.status_text"
 }
 
-/** Localized detail for the FC-state alert; other details are FC text shown verbatim. */
-fun fcStateDetailRes(detail: String): Int? = when (detail) {
-    FcStateDetail.CRITICAL -> R.string.cockpit_alert_fc_critical
-    FcStateDetail.EMERGENCY -> R.string.cockpit_alert_fc_emergency
-    FcStateDetail.TERMINATION -> R.string.cockpit_alert_fc_termination
+/** The spec key of the FC-state alert's detail; other details are FC text shown verbatim. */
+fun fcStateDetailKey(detail: String): String? = when (detail) {
+    FcStateDetail.CRITICAL -> "alert.fc_state.critical"
+    FcStateDetail.EMERGENCY -> "alert.fc_state.emergency"
+    FcStateDetail.TERMINATION -> "alert.fc_state.termination"
     else -> null
 }

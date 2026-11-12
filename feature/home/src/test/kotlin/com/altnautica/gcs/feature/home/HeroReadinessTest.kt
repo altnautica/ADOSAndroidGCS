@@ -43,4 +43,10 @@ class HeroReadinessTest {
         assertEquals(HeroReadiness.Blocked(R.string.home_reason_offline), heroReadiness(blocked, known))
         assertEquals(HeroReadiness.Blocked(R.string.home_reason_offline), heroReadiness(blocked, NodeVitals.UNKNOWN))
     }
+
+    @Test
+    fun aClosedDirectLinkNeverReadsAsConnecting() {
+        assertEquals(HeroReadiness.OpensOnFly, heroReadiness(flyOpen, NodeVitals.UNKNOWN, linkClosed = true))
+        assertEquals(HeroReadiness.OpensOnFly, heroReadiness(flyOpen, known, linkClosed = true))
+    }
 }

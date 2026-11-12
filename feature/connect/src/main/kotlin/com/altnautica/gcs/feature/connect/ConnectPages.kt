@@ -49,6 +49,15 @@ import com.altnautica.gcs.core.designsystem.component.StatusLevel
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.link.transport.UsbSerialTransport
+import com.altnautica.gcs.core.agent.wifi.WifiJoinState
+import com.altnautica.gcs.core.agent.node.LanNodeAssembler
+import com.altnautica.gcs.core.designsystem.component.node.profileLabel
+import com.altnautica.gcs.core.model.NodeProfile
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 
 /** Example address shown in empty host fields. */
 private const val HOST_PLACEHOLDER = "192.168.1.50"
@@ -85,7 +94,24 @@ internal fun CodePage(state: ConnectUiState, vm: ConnectViewModel) = FormColumn 
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, keyboardType = KeyboardType.Ascii),
         modifier = Modifier.fillMaxWidth(),
     )
+    if (state.fromLink) {
+        StatusChip(
+            StatusLevel.Info,
+            if (state.host.isBlank()) stringResource(R.string.connect_link_no_host) else stringResource(R.string.connect_link_host, state.host),
+        )
+    }
+    BusyRow(state)
     AdosButton(stringResource(R.string.connect_pair), onClick = vm::submitCode, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+}
+
+/** What a busy page is doing, so a long wait does not look like nothing happened. */
+@Composable
+private fun BusyRow(state: ConnectUiState) {
+    if (!state.busy) return
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+        Text(stringResource(busyTextRes(state)), color = AdosTheme.colors.fgSecondary)
+    }
 }
 
 @Composable
@@ -116,6 +142,7 @@ internal fun HostPage(state: ConnectUiState, vm: ConnectViewModel) = FormColumn 
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         modifier = Modifier.fillMaxWidth(),
     )
+    BusyRow(state)
     AdosButton(
         label = stringResource(if (state.apiKey.isBlank()) R.string.connect_pair else R.string.connect_add_with_key),
         onClick = vm::submitHost,
@@ -188,6 +215,7 @@ internal fun NetworkPage(state: ConnectUiState, vm: ConnectViewModel) = FormColu
         )
         PortField(state.tcpPort, vm::setTcpPort, R.string.connect_port, state.tcpPortError)
     }
+    BusyRow(state)
     AdosButton(stringResource(R.string.connect_add), onClick = vm::submitNetwork, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
 }
 
@@ -261,7 +289,15 @@ internal fun WifiJoinPage(state: ConnectUiState, vm: ConnectViewModel) {
             )
         }
         if (denied && !granted) StatusChip(StatusLevel.Warning, stringResource(R.string.connect_wifi_denied))
-        if (state.wifiJoined) StatusChip(StatusLevel.Success, stringResource(R.string.connect_wifi_joined))
+        when (state.wifiJoin) {
+            WifiJoinState.Requesting -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text(stringResource(R.string.connect_wifi_joining), color = AdosTheme.colors.fgSecondary)
+            }
+            WifiJoinState.Joined -> StatusChip(StatusLevel.Success, stringResource(R.string.connect_wifi_joined))
+            WifiJoinState.Unavailable -> StatusChip(StatusLevel.Error, stringResource(R.string.connect_wifi_failed))
+            WifiJoinState.Idle -> Unit
+        }
         if (permanentlyDenied && !granted) {
             AdosButton(
                 label = stringResource(R.string.connect_open_settings),
@@ -277,10 +313,11 @@ internal fun WifiJoinPage(state: ConnectUiState, vm: ConnectViewModel) {
             AdosButton(
                 label = stringResource(R.string.connect_wifi_join),
                 onClick = { if (granted) vm.joinGroundStationWifi() else launcher.launch(permission) },
+                enabled = state.wifiJoin != WifiJoinState.Requesting,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        if (state.wifiJoined) {
+        if (state.wifiJoin == WifiJoinState.Joined) {
             AdosButton(
                 label = stringResource(R.string.connect_wifi_find),
                 onClick = vm::back,
@@ -290,3 +327,14 @@ internal fun WifiJoinPage(state: ConnectUiState, vm: ConnectViewModel) {
         }
     }
 }
+
+/** The busy row's words: looking for a linked node, connecting an endpoint, or pairing. */
+internal fun busyTextRes(state: ConnectUiState): Int = when {
+    state.searching -> R.string.connect_busy_searching
+    state.page == ConnectPage.Network -> R.string.connect_busy_connecting
+    else -> R.string.connect_busy_pairing
+}
+
+/** Words for a discovered agent's advertised profile; null for one this app does not know. */
+internal fun discoveredProfileRes(wire: String): Int? =
+    LanNodeAssembler.profile(wire).takeIf { it != NodeProfile.Unknown }?.let(::profileLabel)

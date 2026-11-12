@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.skillbar
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +48,8 @@ import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillCategory
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.feature.cockpit.SlotUi
+import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** The picker's actions on a skill id. */
@@ -82,25 +85,26 @@ fun SkillPickerChip(chip: PickerChip, onOpen: () -> Unit, modifier: Modifier = M
     val edge = when (chip) {
         is PickerChip.Active -> colors.hudGood
         is PickerChip.ActiveStale -> colors.hudWarn
-        else -> colors.hudHair
+        else -> null
     }
     val openLabel = specText("skill.picker.open")
-    Surface(
-        modifier = modifier
+    val chrome = LocalChrome.current
+    val shape = RoundedCornerShape(chrome.radiusSmall)
+    ChromePanel(
+        modifier
             .testTag(PICKER_CHIP_TAG)
             .defaultMinSize(minHeight = AdosTheme.touchMin, minWidth = 96.dp)
             .graphicsLayer {
                 alpha = if (chip is PickerChip.LastSeen) 0.55f else 1f
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }
+            // A running skill's edge in its state hue, over the chrome hairline.
+            .then(edge?.let { Modifier.border(if (chip is PickerChip.Active) 2.dp else 1.dp, it, shape) } ?: Modifier)
             .clickable(onClickLabel = openLabel, role = Role.Button, onClick = onOpen),
-        shape = RoundedCornerShape(AdosRadius.Xl),
-        color = colors.hudGlassStrong,
-        contentColor = colors.hudInk,
-        border = BorderStroke(if (chip is PickerChip.Active) 2.dp else 1.dp, edge),
+        shape = shape,
     ) {
         Row(
-            Modifier.padding(horizontal = AdosSpacing.S3, vertical = AdosSpacing.S1),
+            Modifier.align(Alignment.CenterStart).padding(horizontal = AdosSpacing.S3, vertical = AdosSpacing.S1),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
         ) {
@@ -110,8 +114,8 @@ fun SkillPickerChip(chip: PickerChip, onOpen: () -> Unit, modifier: Modifier = M
                 Icon(skill?.let { skillIcon(it.icon) } ?: Icons.Outlined.AutoAwesome, contentDescription = null, tint = colors.hudPrimary, modifier = Modifier.size(AdosSize.IconMd))
             }
             Column {
-                Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                detail?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = colors.hudInk2, maxLines = 1) }
+                Text(label, style = chrome.chipText, color = chrome.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                detail?.let { Text(it, style = chrome.labelText, color = chrome.textDim, maxLines = 1) }
             }
         }
     }

@@ -5,7 +5,7 @@
     <!-- Navigation -->
     <string name="nav_settings">Settings</string>
     <string name="nav_plan">Plan</string>
-    <string name="nav_logs">Logs</string>
+    <string name="nav_logs">Flight logs</string>
     <string name="nav_cloud">Cloud</string>
     <string name="nav_back">Back</string>
 
@@ -16,10 +16,10 @@
     <string name="permission_not_now">Not now</string>
 
     <!-- Link foreground service -->
-    <string name="link_channel_name">Vehicle link</string>
-    <string name="link_channel_description">Shown while a vehicle link is open</string>
-    <string name="link_notification_starting">Vehicle link open</string>
-    <string name="link_notification_many">%1$d vehicle links open</string>
+    <string name="link_channel_name">Drone link</string>
+    <string name="link_channel_description">Shown while a drone link is open</string>
+    <string name="link_notification_starting">Drone link open</string>
+    <string name="link_notification_many">%1$d drone links open</string>
     <string name="link_notification_mode_unknown">Mode —</string>
     <string name="link_notification_battery">Battery %1$d%%</string>
     <string name="link_notification_battery_unknown">Battery —</string>

@@ -16,6 +16,9 @@ interface DemoFc {
 
     /** Sends COMMAND_LONG [command] from the onboard computer; the outcome shows in the state above. */
     fun command(command: Int, p1: Float = 0f, p2: Float = 0f, p7: Float = 0f)
+
+    /** The GNSS fix the flight controller reports; false drops it, as a receiver without a fix does. */
+    var gnssFix: Boolean
 }
 
 /**
@@ -29,10 +32,21 @@ interface DemoFc {
 class DemoVehicleHub @Inject constructor() : DemoFc {
     @Volatile private var transport: DemoTransport? = null
 
+    /** Kept here so a link opened later reports the same fix. */
+    @Volatile private var fix = true
+
     /** The link most recently opened to the demo drone. */
     fun attach(link: DemoTransport) {
+        link.simulator.gnssFix = fix
         transport = link
     }
+
+    override var gnssFix: Boolean
+        get() = fix
+        set(value) {
+            fix = value
+            transport?.simulator?.gnssFix = value
+        }
 
     override val armed: Boolean get() = transport?.simulator?.isArmed == true
     override val altitudeM: Double get() = transport?.simulator?.altitudeM ?: 0.0

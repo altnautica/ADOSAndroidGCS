@@ -20,4 +20,37 @@
     <string name="settings_sound">Sound</string>
     <string name="settings_voice_prompts">Voice prompts</string>
     <string name="settings_voice_prompts_summary">Speak handovers, return home, low battery and mission changes.</string>
+
+    <string name="controls_calibrated">Calibrated</string>
+    <string name="controls_calibration_done">Done</string>
+    <string name="controls_calibration_clear">Clear calibration</string>
+    <string name="controls_test_running">Running…</string>
+    <string name="controls_test_sticks_stop">Stop stick test</string>
+    <string name="controls_test_readout">L %1$+.2f, %2$+.2f · R %3$+.2f, %4$+.2f · L2 %5$.2f · R2 %6$.2f</string>
+    <string name="controls_state_pressed">pressed</string>
+    <string name="controls_state_conflict">conflict</string>
+    <string name="controls_hotspot">%1$s: %2$s</string>
+
+    <!-- Controller control names (the spec has no keys for them yet). -->
+    <string name="controls_control_stick_l">Left stick</string>
+    <string name="controls_control_stick_r">Right stick</string>
+    <string name="controls_control_l1">L1</string>
+    <string name="controls_control_r1">R1</string>
+    <string name="controls_control_l2">L2</string>
+    <string name="controls_control_r2">R2</string>
+    <string name="controls_control_l3">L3 (left stick press)</string>
+    <string name="controls_control_r3">R3 (right stick press)</string>
+    <string name="controls_control_dpad_up">D-pad up</string>
+    <string name="controls_control_dpad_down">D-pad down</string>
+    <string name="controls_control_dpad_left">D-pad left</string>
+    <string name="controls_control_dpad_right">D-pad right</string>
+    <string name="controls_control_cross">Cross</string>
+    <string name="controls_control_circle">Circle</string>
+    <string name="controls_control_square">Square</string>
+    <string name="controls_control_triangle">Triangle</string>
+    <string name="controls_control_share">Share</string>
+    <string name="controls_control_options">Options</string>
+    <string name="controls_control_ps">PS button</string>
+    <string name="controls_control_touchpad">Touchpad</string>
+    <string name="controls_control_lightbar">Light bar</string>
 </resources>

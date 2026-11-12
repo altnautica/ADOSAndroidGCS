@@ -24,7 +24,10 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,8 +50,19 @@ data class VehicleSnapshot(
 
 sealed interface StationLoad {
     data object Loading : StationLoad
-    data class Ready(val status: StationStatus) : StationLoad
+
+    /** [stale]: the latest read failed and these are the last good values. */
+    data class Ready(val status: StationStatus, val stale: Boolean = false) : StationLoad
     data class Failed(val problem: PageProblem) : StationLoad
+
+    companion object {
+        /** The next station state after a read: a failure keeps the last good values, marked stale. */
+        fun next(last: StationLoad, result: AgentResult<StationStatus>?): StationLoad = when (result) {
+            null -> Failed(PageProblem.NoAgentLink)
+            is AgentResult.Ok -> Ready(result.value)
+            is AgentResult.Err -> if (last is Ready) last.copy(stale = true) else Failed(PageProblem.from(result.error))
+        }
+    }
 }
 
 data class OverviewUiState(
@@ -101,20 +115,20 @@ class OverviewViewModel @AssistedInject constructor(
         OverviewUiState(node = node, agent = poll, station = station, vehicle = vehicle)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), OverviewUiState())
 
+    private val stationRetry = MutableStateFlow(0)
+
+    /** Reads the station status now instead of at the next poll tick. */
+    fun retryStation() = stationRetry.update { it + 1 }
+
     private fun stationPoll(node: NodeSummary): Flow<StationLoad> = flow {
         emit(StationLoad.Loading)
         var last: StationLoad = StationLoad.Loading
         while (true) {
+            val seen = stationRetry.value
             val client = clients.clientFor(node)
-            val next = when (val r = client?.groundStation?.status()) {
-                null -> StationLoad.Failed(PageProblem.NoAgentLink)
-                is AgentResult.Ok -> StationLoad.Ready(r.value)
-                // Keep the last good reading on a transient failure; the agent poll shows staleness.
-                is AgentResult.Err -> if (last is StationLoad.Ready) last else StationLoad.Failed(PageProblem.from(r.error))
-            }
-            last = next
-            emit(next)
-            delay(STATION_POLL_MS)
+            last = StationLoad.next(last, client?.groundStation?.status())
+            emit(last)
+            withTimeoutOrNull(STATION_POLL_MS) { stationRetry.first { it != seen } }
         }
     }
 

@@ -12,13 +12,18 @@ import com.altnautica.gcs.core.map.PmtilesPack
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.GpsFix
+import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.feature.plan.io.PlanFileFormat
 import com.altnautica.gcs.feature.plan.io.PlanFormatException
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
+import com.altnautica.gcs.feature.plan.model.Autopilot
 import com.altnautica.gcs.feature.plan.model.MissionPlan
+import com.altnautica.gcs.feature.plan.model.FenceLimits
+import com.altnautica.gcs.feature.plan.model.ValidationProfile
 import com.altnautica.gcs.feature.plan.model.MissionValidator
 import com.altnautica.gcs.feature.plan.model.PlanIssue
+import com.altnautica.gcs.feature.plan.model.PlanWarning
 import com.altnautica.gcs.feature.plan.model.PlanStats
 import com.altnautica.gcs.feature.plan.survey.SurveyPlan
 import com.altnautica.gcs.feature.plan.survey.SurveySettings
@@ -59,6 +64,11 @@ sealed interface VehicleLink {
         val homeSlot: Boolean,
         /** HEARTBEAT `type` (MAV_TYPE); null before the first heartbeat. */
         val vehicleType: Int? = null,
+        val autopilot: Autopilot = Autopilot.Unknown,
+        /** Armed and in the autopilot's mission mode (heartbeat AUTO): flying a mission. */
+        val flyingMission: Boolean = false,
+        /** Fence limits from the vehicle's parameters; null when none apply or none are loaded. */
+        val fence: FenceLimits? = null,
     ) : VehicleLink
 }
 
@@ -120,11 +130,14 @@ sealed interface PlannerMessage {
 
     data class Imported(val name: String, val warnings: Int) : PlannerMessage
 
-    data class ImportFailed(val reason: PlanFormatException.Reason?, val detail: String?) : PlannerMessage
+    /** [reason] null means the file itself could not be read; the exception text stays in the log. */
+    data class ImportFailed(val reason: PlanFormatException.Reason?) : PlannerMessage
 
     data class Exported(val format: PlanFileFormat) : PlannerMessage
 
-    data class ExportFailed(val detail: String) : PlannerMessage
+    data object ExportFailed : PlannerMessage
+
+    data object TransferInProgress : PlannerMessage
 
     data object SurveyEmpty : PlannerMessage
 
@@ -191,6 +204,8 @@ data class PlannerUiState(
     /** Set once the mission started; the screen routes to the cockpit and clears it. */
     val missionStartedFor: DeviceId? = null,
     val message: PlannerMessage? = null,
+    /** What the last import dropped or skipped, listed in a sheet until dismissed. */
+    val importWarnings: List<PlanWarning> = emptyList(),
 ) {
     val inSyncWithVehicle: Boolean
         get() = vehiclePlan != null &&
@@ -199,12 +214,31 @@ data class PlannerUiState(
             vehiclePlan.rally == plan.rally
     val transferring: Boolean get() = transfer is TransferState.Running || transfer is TransferState.Verifying
 
+    /**
+     * This plan is what the drone holds: in sync with the last transfer, not empty, and no
+     * other client has replaced it since (the agent mirror says the drone's plan differs).
+     */
+    val planOnVehicle: Boolean get() = inSyncWithVehicle && plan.items.isNotEmpty() && drone?.differs != true
+
+    /**
+     * The drone is flying its mission, by its agent's mirror or its own heartbeat (armed in
+     * mission mode): uploads would swap the mission or limits under it.
+     */
+    val missionInFlight: Boolean
+        get() = drone?.state == MissionState.Active || (link as? VehicleLink.Connected)?.flyingMission == true
+
     /** The plan as drawn: [plan] with an active drag applied. */
     val displayPlan: MissionPlan get() = dragPreview?.applyTo(plan) ?: plan
 
     /** Pre-upload findings for the current plan. */
     val issues: List<PlanIssue>
-        get() = MissionValidator.validate(plan, MissionValidator.takeoffExpected((link as? VehicleLink.Connected)?.vehicleType))
+        get() {
+            val connected = link as? VehicleLink.Connected
+            return MissionValidator.validate(
+                plan,
+                ValidationProfile(connected?.vehicleType, connected?.autopilot ?: Autopilot.Unknown, connected?.fence, connected?.home),
+            )
+        }
 
     val stats: PlanStats get() = PlanStats.of(plan)
 }

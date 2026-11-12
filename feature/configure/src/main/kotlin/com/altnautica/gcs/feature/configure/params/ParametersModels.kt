@@ -16,21 +16,26 @@ data class ParamRow(
 
 data class ParamFilter(val query: String = "", val modifiedOnly: Boolean = false, val showAdvanced: Boolean = false)
 
-/** A write waiting for the operator: armed vehicles need an explicit confirmation. */
-data class PendingWrite(val name: String, val value: Double)
+/**
+ * A write waiting for the operator: armed vehicles need an explicit confirmation, and so does a
+ * vehicle whose arm state is unknown ([armUnknown]: no fresh heartbeat), which is treated as armed.
+ */
+data class PendingWrite(val name: String, val value: Double, val armUnknown: Boolean = false)
 
 /**
  * Parameters loaded from a file, compared with the vehicle and awaiting apply. Every changed
- * row starts selected; the operator unticks the ones to leave alone.
+ * row starts selected except those refused by the single-edit checks ([invalid], with the
+ * reason); the operator unticks the ones to leave alone.
  */
 data class ImportReview(
     val comparison: ParamComparison,
     val deselected: Set<String> = emptySet(),
+    val invalid: Map<String, ParamInvalidReason> = emptyMap(),
     val applied: Int = 0,
     val failed: List<String> = emptyList(),
     val running: Boolean = false,
 ) {
-    val selected: List<ParamDiff> get() = comparison.changed.filter { it.name !in deselected }
+    val selected: List<ParamDiff> get() = comparison.changed.filter { it.name !in deselected && it.name !in invalid }
 }
 
 sealed interface ParamMessage {
@@ -41,8 +46,11 @@ sealed interface ParamMessage {
     data class LoadIncomplete(val missing: Int) : ParamMessage
     data class FileUnreadable(val reason: String) : ParamMessage
     data object FileSaved : ParamMessage
-    data class FileWriteFailed(val reason: String?) : ParamMessage
+    data object FileWriteFailed : ParamMessage
     data class Reboot(val result: CommandResult) : ParamMessage
+
+    /** A file apply closed part-way: [applied] of [total] values were written before it stopped. */
+    data class ImportStopped(val applied: Int, val total: Int) : ParamMessage
 }
 
 enum class ParamWriteFailure { Timeout, UnknownParam, NoLink, Other }

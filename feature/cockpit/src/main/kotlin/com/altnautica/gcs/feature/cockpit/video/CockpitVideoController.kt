@@ -104,6 +104,20 @@ internal class CockpitVideoController(
         }
     }
 
+    /**
+     * Dials the video again after it failed: every source is eligible again, and the
+     * session of the source on screen restarts from scratch.
+     */
+    fun retry() {
+        val src = mainSource.value
+        failedSources.value = emptySet()
+        val handle = src?.let(videoSessions::running) ?: return
+        scope.launch {
+            handle.stop()
+            handle.start()
+        }
+    }
+
     private var switchJob: Job? = null
 
     fun selectStream(streamId: String) {

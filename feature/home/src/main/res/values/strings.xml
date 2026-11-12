@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="home_wordmark" translatable="false">ADOS</string>
-    <string name="home_loading">Looking for vehicles…</string>
-    <string name="home_empty_title">No vehicles yet</string>
+    <string name="home_loading">Looking for drones…</string>
+    <string name="home_empty_title">No drones yet</string>
     <string name="home_empty_message">Drones, ground stations and flight controllers you connect to appear here.</string>
-    <string name="home_add_vehicle">Add vehicle</string>
+    <string name="home_add_vehicle">Add a node</string>
     <string name="home_try_demo">Try the demo drone</string>
-    <string name="home_demo_vehicle">Demo vehicle</string>
+    <string name="home_demo_vehicle">Demo drone</string>
     <string name="home_battery">Battery %1$d%%</string>
     <string name="home_battery_unknown">Battery —</string>
     <string name="home_mode_unknown">Mode —</string>
@@ -18,6 +18,12 @@
     <string name="home_retry">Try again</string>
     <string name="home_ready">Ready to fly</string>
     <string name="home_connecting">Connecting…</string>
+    <string name="home_opens_on_fly">Opens the link when you fly</string>
+    <string name="home_gps_fix_2d">2D</string>
+    <string name="home_gps_fix_3d">3D</string>
+    <string name="home_gps_fix_dgps">DGPS</string>
+    <string name="home_gps_fix_rtk_float">RTK float</string>
+    <string name="home_gps_fix_rtk_fixed">RTK</string>
     <string name="home_setup_offer_title">Set up this aircraft</string>
     <string name="home_setup_offer_open">Open</string>
     <string name="home_setup_offer_later">Later</string>
@@ -31,31 +37,31 @@
     <string name="home_surface_plan">Plan</string>
     <string name="home_surface_setup">Setup</string>
     <string name="home_surface_parameters">Parameters</string>
-    <string name="home_surface_vehicle">Vehicle</string>
-    <string name="home_surface_logs">Logs</string>
+    <string name="home_surface_vehicle">Details</string>
+    <string name="home_surface_logs">Flight logs</string>
     <string name="home_surface_settings">Settings</string>
 
-    <string name="home_reason_offline">Vehicle offline</string>
+    <string name="home_reason_offline">Offline</string>
     <string name="home_reason_no_carried">No drone paired to this ground station</string>
-    <string name="home_reason_no_vehicle">No vehicle selected</string>
+    <string name="home_reason_no_vehicles">No drones yet</string>
     <string name="home_reason_no_fc">No flight controller</string>
     <string name="home_reason_no_link">No usable link</string>
 
     <string name="home_hint_open">Open</string>
-    <string name="home_hint_details">Vehicle details</string>
+    <string name="home_hint_details">Details</string>
     <string name="home_hint_more">More</string>
-    <string name="home_hint_switch">Switch vehicle</string>
+    <string name="home_hint_switch">Switch drone</string>
     <string name="home_hint_menu">Menu</string>
 
-    <string name="home_menu_vehicle_details">Vehicle details</string>
-    <string name="home_menu_plan_for">Plan for this vehicle</string>
-    <string name="home_menu_unpair">Unpair</string>
+    <string name="home_menu_vehicle_details">Details</string>
+    <string name="home_menu_plan_for">Plan for this drone</string>
+    <string name="home_menu_unpair">Unpair…</string>
 
     <string name="home_quick_close">Close</string>
     <string name="home_quick_select">Select</string>
-    <string name="home_quick_no_vehicle">No vehicle selected</string>
+    <string name="home_quick_no_vehicle">No drones yet</string>
     <string name="home_quick_preflight">Preflight %1$d/%2$d</string>
-    <string name="home_quick_controller">Controller</string>
+    <string name="home_quick_controller">Controls</string>
     <string name="home_quick_no_controller">No controller connected</string>
     <string name="home_quick_battery_unknown">Battery —</string>
     <string name="home_quick_charging">Charging</string>
@@ -81,4 +87,22 @@
         <item quantity="one">%1$d active alert</item>
         <item quantity="other">%1$d active alerts</item>
     </plurals>
+
+    <!-- Safety disclaimer, accepted once per version before the app opens. -->
+    <string name="disclaimer_title">Before you fly</string>
+    <string name="disclaimer_subtitle">This app can control real aircraft. Read and accept the following.</string>
+    <string name="disclaimer_lawful_heading">Lawful use only</string>
+    <string name="disclaimer_lawful_body">You agree to use this software only for lawful purposes. You will not use it to conduct surveillance, harass individuals, violate privacy, or support any activity prohibited by law in your country or region.</string>
+    <string name="disclaimer_military_heading">No unauthorised military use</string>
+    <string name="disclaimer_military_body">This software must not be used for offensive military or defence operations without explicit authorisation from the relevant government authority. Unauthorised weaponisation of drones is illegal in virtually every jurisdiction.</string>
+    <string name="disclaimer_aviation_heading">Aviation regulations</string>
+    <string name="disclaimer_aviation_body">You alone are responsible for complying with every aviation regulation that applies to your location and operation, including registering your drone with the aviation authority, holding the pilot certificates or licences required, securing airspace authorisation before flight, and staying within altitude, distance and visual-line-of-sight limits. This software does not guarantee regulatory compliance. It is a tool. You are the pilot in command.</string>
+    <string name="disclaimer_export_heading">Export controls</string>
+    <string name="disclaimer_export_body">Drone control software may be subject to export control and sanctions laws in your country and others. You are responsible for making sure your use, distribution or modification of this software complies with them.</string>
+    <string name="disclaimer_warranty_heading">No warranty and assumption of risk</string>
+    <string name="disclaimer_warranty_body">This software is provided \"as is\", without warranty of any kind, express or implied, including merchantability, fitness for a particular purpose and non-infringement. Drones can cause property damage, injury or death if operated improperly or if software malfunctions. By using this software you assume all risk of its use; the authors and contributors are not liable for any claim, damage or loss arising from it.</string>
+    <string name="disclaimer_license_heading">Open source licence</string>
+    <string name="disclaimer_license_body">This app is licensed under the GNU General Public License v3.0. You are free to use, modify and distribute it under the terms of that licence. Settings › About › Open source licences lists the licence texts.</string>
+    <string name="disclaimer_accept_check">I have read and accept the terms above. I understand that I am the pilot in command and responsible for safe and lawful operation.</string>
+    <string name="disclaimer_accept">Accept and continue</string>
 </resources>

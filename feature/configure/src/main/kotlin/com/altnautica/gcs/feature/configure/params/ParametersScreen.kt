@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.configure.params
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,8 @@ import com.altnautica.gcs.core.link.param.MavlinkParamService
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.feature.configure.R
 import com.altnautica.gcs.feature.configure.common.commandResultText
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
+import com.altnautica.gcs.core.link.text.linkReasonRes
 
 /** Rows split into their groups, in list order: the group name and its rows. */
 internal fun List<ParamRow>.grouped(): List<Pair<String, List<ParamRow>>> =
@@ -70,6 +73,7 @@ fun ParametersListPane(
     onRefresh: () -> Unit,
     onDismissMessage: () -> Unit,
     modifier: Modifier = Modifier,
+    writing: String? = null,
 ) {
     val colors = AdosTheme.colors
     Column(modifier.fillMaxSize()) {
@@ -122,6 +126,13 @@ fun ParametersListPane(
                     )
                 }
                 message?.let { MessageLine(it, state.byName, onDismissMessage) }
+                writing?.let {
+                    StatusChip(
+                        label = stringResource(R.string.cfg_param_writing, it),
+                        level = StatusLevel.Info,
+                        modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1),
+                    )
+                }
                 Text(
                     stringResource(R.string.cfg_param_count, state.rows.size, state.total),
                     style = MaterialTheme.typography.labelSmall,
@@ -226,12 +237,10 @@ internal fun paramMessageText(message: ParamMessage, rows: Map<String, ParamRow>
     is ParamMessage.LoadIncomplete -> stringResource(R.string.cfg_param_incomplete, message.missing) to StatusLevel.Warning
     is ParamMessage.FileUnreadable -> stringResource(R.string.cfg_param_file_unreadable) to StatusLevel.Error
     ParamMessage.FileSaved -> stringResource(R.string.cfg_param_file_saved) to StatusLevel.Success
-    is ParamMessage.FileWriteFailed -> (
-        message.reason?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.cfg_param_file_write_failed, it) }
-            ?: stringResource(R.string.cfg_param_file_write_failed_unknown)
-        ) to StatusLevel.Error
+    ParamMessage.FileWriteFailed -> stringResource(R.string.cfg_param_file_write_failed) to StatusLevel.Error
     is ParamMessage.Reboot -> stringResource(R.string.cfg_reboot_result, commandResultText(message.result)) to
         if (message.result == CommandResult.Accepted) StatusLevel.Success else StatusLevel.Error
+    is ParamMessage.ImportStopped -> stringResource(R.string.cfg_import_stopped, message.applied, message.total) to StatusLevel.Warning
 }
 
 @Composable
@@ -239,7 +248,7 @@ private fun MessageLine(message: ParamMessage, rows: Map<String, ParamRow>, onDi
     val colors = AdosTheme.colors
     val (text, level) = paramMessageText(message, rows)
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onDismiss).padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1),
+        Modifier.fillMaxWidth().heightIn(min = AdosTheme.touchMin).clickable(onClick = onDismiss).padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         StatusChip(label = text, level = level)
@@ -247,12 +256,37 @@ private fun MessageLine(message: ParamMessage, rows: Map<String, ParamRow>, onDi
     }
 }
 
-/** Operator text for a [ParametersUiState.LoadFailed] reason; unknown reasons pass through. */
+/** Operator text for a [ParametersUiState.LoadFailed] reason; never the raw reason token. */
 @Composable
-internal fun paramLoadReason(reason: String): String = paramLoadReasonRes(reason)?.let { stringResource(it) } ?: reason
+internal fun paramLoadReason(reason: String): String = stringResource(paramLoadReasonRes(reason))
 
-internal fun paramLoadReasonRes(reason: String): Int? = when (reason) {
+internal fun paramLoadReasonRes(reason: String): Int = when (reason) {
     MavlinkParamService.REASON_NO_LINK -> R.string.cfg_block_no_vehicle
     MavlinkParamService.REASON_TIMEOUT -> R.string.cfg_result_timeout
-    else -> null
+    else -> linkReasonRes(reason)
+}
+
+/** Title and message for the hold-to-write sheet of a [PendingWrite]; an unknown arm state reads as armed. */
+internal fun pendingWriteTextRes(p: PendingWrite): Pair<Int, Int> =
+    if (p.armUnknown) R.string.cfg_param_unknown_title to R.string.cfg_param_unknown_message
+    else R.string.cfg_param_armed_title to R.string.cfg_param_armed_message
+
+/** Hold-to-write confirmation for a write parked by an armed or arm-unknown vehicle. */
+@Composable
+fun PendingWriteSheet(p: PendingWrite, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val (title, message) = pendingWriteTextRes(p)
+    AdosConfirmSheet(
+        title = stringResource(title),
+        message = stringResource(message, p.name, ParamFile.formatValue(p.value)),
+        onDismiss = onDismiss,
+        danger = true,
+    ) {
+        HoldToConfirmButton(
+            label = stringResource(R.string.cfg_param_armed_confirm),
+            holdMs = 800,
+            danger = true,
+            onConfirmed = onConfirm,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }

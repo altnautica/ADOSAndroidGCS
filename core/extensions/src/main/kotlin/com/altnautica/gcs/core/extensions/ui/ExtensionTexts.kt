@@ -5,6 +5,7 @@ import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.extensions.R
 import com.altnautica.gcs.core.extensions.data.ExtensionFailure
 import com.altnautica.gcs.core.extensions.data.ExtensionReach
+import com.altnautica.gcs.core.extensions.data.WriteOutcome
 
 @Composable
 internal fun failureText(failure: ExtensionFailure): String = when (failure) {
@@ -22,6 +23,29 @@ internal fun noPathText(reason: String): String =
     } else {
         stringResource(R.string.extensions_no_agent)
     }
+
+/** Words for the agent's install job stage; null for a stage this app does not know. */
+internal fun installStageRes(stage: String): Int? = when (stage) {
+    "commanded" -> R.string.extensions_stage_commanded
+    "downloading" -> R.string.extensions_stage_downloading
+    "verifying" -> R.string.extensions_stage_verifying
+    "installing" -> R.string.extensions_stage_installing
+    "completed" -> R.string.extensions_stage_completed
+    "failed" -> R.string.extensions_stage_failed
+    "cancelled" -> R.string.extensions_stage_cancelled
+    else -> null
+}
+
+@Composable
+internal fun noticeText(notice: ExtensionNotice): String = when (notice) {
+    is ExtensionNotice.Installed -> stringResource(R.string.extensions_installed, notice.name)
+    is ExtensionNotice.Uninstalled -> stringResource(R.string.extensions_uninstalled, notice.name)
+    is ExtensionNotice.Problem -> when (val o = notice.outcome) {
+        is WriteOutcome.NoPath -> noPathText(o.reasonKey)
+        is WriteOutcome.Failed -> failureText(o.failure)
+        WriteOutcome.Done -> ""
+    }
+}
 
 /** A manifest label: literal text, or an extension i18n key rendered as readable words. */
 internal fun displayLabel(label: String?, fallback: String): String {

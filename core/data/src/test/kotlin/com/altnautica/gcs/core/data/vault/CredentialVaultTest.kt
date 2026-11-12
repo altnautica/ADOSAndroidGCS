@@ -5,13 +5,15 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.junit.After
@@ -59,13 +61,22 @@ class CredentialVaultTest {
 
     private val scopes = mutableListOf<CoroutineScope>()
 
+    /** One virtual-time scheduler drives the test body and every vault collector, so no read races a real thread. */
+    private val scheduler = TestCoroutineScheduler()
+
+    private fun collectorScope(): CoroutineScope =
+        CoroutineScope(SupervisorJob() + StandardTestDispatcher(scheduler)).also { scopes += it }
+
+    private fun test(body: suspend kotlinx.coroutines.test.TestScope.() -> Unit) =
+        runTest(StandardTestDispatcher(scheduler)) { body() }
+
     @After
     fun tearDown() = scopes.forEach { it.cancel() }
 
     private val stores = HashMap<String, MemoryPreferences>()
 
     private fun vault(name: String, key: SecretKey): Pair<CredentialVault, MemoryPreferences> {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scopes += it }
+        val scope = collectorScope()
         val store = stores.getOrPut(name) { MemoryPreferences() }
         return CredentialVault(store, SoftwareCipherEngine(key), scope) to store
     }
@@ -80,7 +91,7 @@ class CredentialVaultTest {
     )
 
     @Test
-    fun `node credentials round trip and are stored only as ciphertext`() = runBlocking {
+    fun `node credentials round trip and are stored only as ciphertext`() = test {
         val (v, store) = vault("a", newKey())
         v.putNode(drone)
         v.putNode(drone.copy(deviceId = "gs01", apiKey = "secret-key-2", name = "Ground"))
@@ -96,7 +107,7 @@ class CredentialVaultTest {
     }
 
     @Test
-    fun `secrets survive a reopen with the same key`() = runBlocking {
+    fun `secrets survive a reopen with the same key`() = test {
         val key = newKey()
         val (first, _) = vault("b", key)
         first.putNode(drone)
@@ -119,7 +130,7 @@ class CredentialVaultTest {
     }
 
     @Test
-    fun `a vault sealed under another key reads as empty`() = runBlocking {
+    fun `a vault sealed under another key reads as empty`() = test {
         val (first, _) = vault("c", newKey())
         first.putNode(drone)
         scopes.forEach { it.cancel() }
@@ -130,7 +141,7 @@ class CredentialVaultTest {
     }
 
     @Test
-    fun `remove, address update and wipe`() = runBlocking {
+    fun `remove, address update and wipe`() = test {
         val (v, _) = vault("d", newKey())
         v.putNode(drone)
         v.updateAddress(drone.id, lastIp = "192.168.1.51", lastPort = null)
@@ -150,7 +161,7 @@ class CredentialVaultTest {
     }
 
     @Test
-    fun `a passing read fault never overwrites the stored secrets`() = runBlocking {
+    fun `a passing read fault never overwrites the stored secrets`() = test {
         val key = newKey()
         val (first, _) = vault("e", key)
         first.putNode(drone)
@@ -162,8 +173,8 @@ class CredentialVaultTest {
         val store = stores.getValue("e")
         val before = store.data.first()[CredentialVault.DOCUMENT_KEY]
         val flaky = FlakyCipherEngine(key).apply { failing = true }
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scopes += it }
-        val v = CredentialVault(store, flaky, scope)
+        val v = CredentialVault(store, flaky, collectorScope())
+        advanceUntilIdle()
 
         val thrown = runCatching { v.putNode(drone.copy(deviceId = "new01", apiKey = "secret-key-3")) }.exceptionOrNull()
         assertTrue(thrown is VaultUnreadableException)
@@ -178,7 +189,7 @@ class CredentialVaultTest {
     }
 
     @Test
-    fun `an unreadable vault reports itself, refuses strict reads and writes, and recovers on retry`() = runBlocking {
+    fun `an unreadable vault reports itself, refuses strict reads and writes, and recovers on retry`() = test {
         val key = newKey()
         val (first, _) = vault("g", key)
         first.putNode(drone)
@@ -187,8 +198,8 @@ class CredentialVaultTest {
         scopes.clear()
 
         val flaky = FlakyCipherEngine(key).apply { failing = true }
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO).also { scopes += it }
-        val v = CredentialVault(stores.getValue("g"), flaky, scope)
+        val v = CredentialVault(stores.getValue("g"), flaky, collectorScope())
+        advanceUntilIdle()
 
         assertTrue(v.unreadable.first { it })
         // A lenient read cannot tell "absent" from "unreadable"; the strict checks can.
@@ -208,7 +219,7 @@ class CredentialVaultTest {
     }
 
     @Test
-    fun `a lost key resets the vault but keeps the old ciphertext`() = runBlocking {
+    fun `a lost key resets the vault but keeps the old ciphertext`() = test {
         val (first, store) = vault("f", newKey())
         first.putNode(drone)
         val old = store.data.first()[CredentialVault.DOCUMENT_KEY]

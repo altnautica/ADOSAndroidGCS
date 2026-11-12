@@ -24,6 +24,7 @@ class HomeSurfacesTest {
     ) = HomeViewModel.card(
         NodeSummary(DeviceId("n"), "n", profile, reaches, liveness, null, FcVariant.Unknown, carried, null),
         NodeVitals.UNKNOWN,
+        linkOpen = false,
     )
 
     private fun List<SurfaceCard>.of(surface: HomeSurface) = single { it.surface == surface }
@@ -96,7 +97,7 @@ class HomeSurfacesTest {
         assertEquals(all, cards.map { it.surface })
         for (s in listOf(HomeSurface.Fly, HomeSurface.Setup, HomeSurface.Parameters, HomeSurface.Vehicle)) {
             assertFalse(cards.of(s).enabled)
-            assertEquals(R.string.home_reason_no_vehicle, cards.of(s).reason)
+            assertEquals(R.string.home_reason_no_vehicles, cards.of(s).reason)
         }
         for (s in listOf(HomeSurface.Plan, HomeSurface.Logs, HomeSurface.Settings)) assertTrue(cards.of(s).enabled)
     }

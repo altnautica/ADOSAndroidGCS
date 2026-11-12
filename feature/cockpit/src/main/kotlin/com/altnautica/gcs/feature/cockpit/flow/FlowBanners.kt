@@ -1,7 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.flow
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Gamepad
@@ -36,14 +34,19 @@ import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
-import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.InputSession
 import com.altnautica.gcs.core.model.PilotBanner
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.LaunchSequence
 import com.altnautica.gcs.core.model.LaunchStep
+import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.launch.StepStrip
+import com.altnautica.gcs.core.skills.hud.ReadoutFormat
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
+import kotlin.math.roundToLong
 
 /** Hold that takes the stick session over from another surface. */
 const val TAKE_OVER_HOLD_MS = 1_500
@@ -83,30 +86,28 @@ data class FlowUi(
     }
 }
 
-/** The banner text for [banner] from the spec strings; the `source` argument is resolved to its label. */
+/** The banner text for [banner] from the spec strings ([bannerLine]). */
 @Composable
-fun bannerText(banner: PilotBanner): String {
-    val args = banner.args.map { (k, v) ->
-        k to if (k == "source") specText("pilot.banner.source.$v") else v
-    }
-    return specText(banner.textKey, *args.toTypedArray())
-}
+fun bannerText(banner: PilotBanner): String = bannerLine(LocalCockpitStrings.current, banner)
+
+/**
+ * The banner text for [banner] through the shared [SpecText]: its `source`, `action` and
+ * `cause` arguments read as their spec labels; a value the spec does not name stays as sent.
+ */
+fun bannerLine(strings: SetupStringsSpec, banner: PilotBanner): String = SpecText(strings).text(banner.textKey, banner.args)
 
 @Composable
 private fun BannerShell(icon: ImageVector, tint: Color, tag: String, content: @Composable RowScope.() -> Unit) {
-    val colors = AdosTheme.colors
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(colors.overlayPanel, RoundedCornerShape(AdosRadius.Lg))
-            .padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S3)
-            .semantics { liveRegion = LiveRegionMode.Polite }
-            .testTag(tag),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
-    ) {
-        Icon(icon, contentDescription = null, tint = tint)
-        content()
+    // A chrome panel: the blurred video behind the spec tint, a hairline border.
+    ChromePanel(Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }.testTag(tag)) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S3),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
+        ) {
+            Icon(icon, contentDescription = null, tint = tint)
+            content()
+        }
     }
 }
 
@@ -115,7 +116,7 @@ private fun BannerShell(icon: ImageVector, tint: Color, tag: String, content: @C
 fun HandoverBanner(banner: PilotBanner, modifier: Modifier = Modifier) {
     Box(modifier) {
         BannerShell(Icons.Outlined.SwapHoriz, AdosTheme.colors.accentPrimary, "flow-banner") {
-            Text(bannerText(banner), color = AdosTheme.colors.fgPrimary, style = MaterialTheme.typography.titleSmall)
+            Text(bannerText(banner), color = LocalChrome.current.text, style = MaterialTheme.typography.titleSmall)
         }
     }
 }
@@ -124,22 +125,22 @@ fun HandoverBanner(banner: PilotBanner, modifier: Modifier = Modifier) {
 @Composable
 fun GateRing(progress: Float, modifier: Modifier = Modifier) {
     val colors = AdosTheme.colors
-    Column(
-        modifier
-            .background(colors.overlayPanel, RoundedCornerShape(AdosRadius.Xl))
-            .padding(AdosSpacing.S4)
-            .testTag("flow-gate"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
-    ) {
-        val track = colors.borderStrong
-        val fill = colors.accentPrimary
-        Canvas(Modifier.size(64.dp)) {
-            val stroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
-            drawArc(track, 0f, 360f, useCenter = false, style = stroke)
-            drawArc(fill, -90f, 360f * progress.coerceIn(0f, 1f), useCenter = false, style = stroke)
+    val chrome = LocalChrome.current
+    ChromePanel(modifier.testTag("flow-gate")) {
+        Column(
+            Modifier.padding(AdosSpacing.S4),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
+        ) {
+            val track = colors.borderStrong
+            val fill = colors.accentPrimary
+            Canvas(Modifier.size(64.dp)) {
+                val stroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                drawArc(track, 0f, 360f, useCenter = false, style = stroke)
+                drawArc(fill, -90f, 360f * progress.coerceIn(0f, 1f), useCenter = false, style = stroke)
+            }
+            Text(specText("flow.gate.centre_sticks"), color = chrome.text, style = MaterialTheme.typography.titleSmall)
         }
-        Text(specText("flow.gate.centre_sticks"), color = colors.fgPrimary, style = MaterialTheme.typography.titleSmall)
     }
 }
 
@@ -150,7 +151,7 @@ fun SticksWithBanner(session: InputSession, onTakeOver: () -> Unit, modifier: Mo
         BannerShell(Icons.Outlined.Gamepad, AdosTheme.colors.statusWarning, "flow-sticks-with") {
             Text(
                 specText("flow.sticks_with", "label" to session.label.ifBlank { session.src }),
-                color = AdosTheme.colors.fgPrimary,
+                color = LocalChrome.current.text,
                 modifier = Modifier.weight(1f),
             )
             HoldToConfirmButton(specText("flow.sticks_take_over"), TAKE_OVER_HOLD_MS, onTakeOver, modifier = Modifier.widthIn(min = 160.dp))
@@ -165,7 +166,7 @@ fun LinkLossBanner(text: String, modifier: Modifier = Modifier) {
         BannerShell(Icons.Outlined.LinkOff, AdosTheme.colors.statusError, "flow-link-loss") {
             Text(
                 text,
-                color = AdosTheme.colors.fgPrimary,
+                color = LocalChrome.current.text,
                 style = MaterialTheme.typography.titleSmall,
             )
         }
@@ -179,19 +180,19 @@ fun LowBatteryBanner(inS: Float, onCancel: () -> Unit, modifier: Modifier = Modi
         BannerShell(Icons.Outlined.BatteryAlert, AdosTheme.colors.statusError, "flow-low-battery") {
             Column(Modifier.weight(1f)) {
                 Text(
-                    specText("flow.low_battery.title", "in_s" to countdownSeconds(inS).toString()),
-                    color = AdosTheme.colors.fgPrimary,
+                    specText("flow.low_battery.title", "in_s" to lowBatteryCountdown(inS).toString()),
+                    color = LocalChrome.current.text,
                     style = MaterialTheme.typography.titleSmall,
                 )
-                Text(specText("flow.low_battery.cancel_warning"), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
+                Text(specText("flow.low_battery.cancel_warning"), color = LocalChrome.current.textDim, style = MaterialTheme.typography.bodySmall)
             }
             AdosButton(specText("flow.low_battery.cancel"), onClick = onCancel, modifier = Modifier.testTag("flow-low-battery-cancel"))
         }
     }
 }
 
-/** Whole seconds a countdown shows: rounded up, so it reads 0 only when the action fires (as on every surface). */
-fun countdownSeconds(inS: Float): Int = kotlin.math.ceil(inS.toDouble()).toInt().coerceAtLeast(0)
+/** Whole seconds the return countdown shows, through the shared readout ([ReadoutFormat.countdownS]). */
+internal fun lowBatteryCountdown(inS: Float): Long = ReadoutFormat.countdownS((inS * 1000f).roundToLong())
 
 /**
  * The launch sequence while it runs: its steps, the current one marked, and Abort, which

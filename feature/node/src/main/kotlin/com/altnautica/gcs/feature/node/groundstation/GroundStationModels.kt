@@ -73,6 +73,8 @@ data class RadioLink(
     val lossPercent: Double?,
     val channel: Int?,
     val txPowerDbm: Double?,
+    /** The agent's TX power ceiling (`tx_power_max_dbm`); it refuses anything above. */
+    val txPowerMaxDbm: Int,
     val mcsIndex: Int?,
     val role: String?,
     /** `GET /api/v1/radio/adapters`; null when the agent does not serve it. */
@@ -95,10 +97,18 @@ data class RadioLink(
                 lossPercent = link.double("loss_percent"),
                 channel = wfb?.int("channel") ?: link.int("channel"),
                 txPowerDbm = wfb?.double("tx_power_dbm") ?: link.double("tx_power_dbm"),
+                txPowerMaxDbm = (wfb?.double("tx_power_max_dbm") ?: link.double("tx_power_max_dbm"))
+                    ?.toInt()?.takeIf { it >= 1 } ?: DEFAULT_TX_MAX_DBM,
                 mcsIndex = link.int("mcs_index"),
                 role = status.obj("role")?.str("current"),
             )
         }
+
+        /** The agent's ceiling when its config sets none. */
+        const val DEFAULT_TX_MAX_DBM = 15
+
+        /** The stepper's start value: the current power, held inside the ceiling. */
+        fun txPowerStart(current: Double?, max: Int): Int = (current?.toInt() ?: minOf(5, max)).coerceIn(1, max)
     }
 }
 

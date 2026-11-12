@@ -27,6 +27,9 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-37.0" "build-tools;37.0.0" "ndk;26.3.11579264" > /dev/null
 
+      - name: Kotlin file-size ratchet
+        run: bash scripts/check-file-size.sh
+
       - name: Build, unit test and lint
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug
 

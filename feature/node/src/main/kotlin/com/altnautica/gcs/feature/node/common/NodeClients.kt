@@ -27,18 +27,21 @@ sealed interface PageProblem {
     data class PinRequired(val message: String?) : PageProblem
     /** The agent does not serve this page (older agent or other profile). */
     data object Unsupported : PageProblem
-    data class Unreachable(val message: String?) : PageProblem
+    /** The agent did not answer. Exception and server text never reach the operator. */
+    data object Unreachable : PageProblem
 
     companion object {
         fun from(error: AgentError): PageProblem = when (error) {
             AgentError.Unauthorized -> Unauthorized
             is AgentError.PinRequired -> PinRequired(error.message)
             AgentError.FeatureAbsent, AgentError.ProfileMismatch -> Unsupported
-            is AgentError.Network -> Unreachable(error.cause.message)
-            is AgentError.Server -> Unreachable(error.message ?: "HTTP ${error.code}")
-            is AgentError.PeerApi -> Unreachable(error.message ?: error.code)
-            is AgentError.RelayTicket -> Unreachable(error.reason)
-            is AgentError.Armed -> Unreachable(null)
+            is AgentError.Network, is AgentError.Server, is AgentError.PeerApi, is AgentError.RelayTicket, is AgentError.Armed -> Unreachable
         }
     }
 }
+
+/**
+ * The write had no agent link to go out on (not paired here, cloud only, offline). A network
+ * error, not a refusal: the chip reads as "no agent link", never as a rejected key.
+ */
+val NO_AGENT_LINK: AgentError = AgentError.Network(java.io.IOException("no agent link"))

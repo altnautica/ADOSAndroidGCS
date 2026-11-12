@@ -78,6 +78,14 @@ class PilotFailsafeGateTest {
     }
 
     @Test
+    fun `a fresh pilot with no FC link leaves landed to the FC's own state`() {
+        val unknown = adosPilot().copy(armed = null, landed = null)
+        val link = FakePilotLink(connected = true)
+        assertEquals(SkillReason.LANDED_UNKNOWN, builtin("disarm").state(ctx(mode = loiter, link = link, pilot = unknown)).reasonKey)
+        assertTrue(builtin("disarm").state(ctx(mode = loiter, link = link, pilot = unknown, fcLanded = true)).enabled)
+    }
+
+    @Test
     fun `an armed take-off with the landed state unknown reads landed unknown`() {
         assertEquals(SkillReason.LANDED_UNKNOWN, builtin("takeoff").state(ctx(mode = loiter, fcLanded = null)).reasonKey)
         assertEquals(SkillReason.ALREADY_ARMED, builtin("takeoff").state(ctx(mode = loiter, fcLanded = false)).reasonKey)
@@ -105,14 +113,14 @@ class PilotFailsafeGateTest {
     fun `fly here during a pilot-reported failsafe refuses with failsafe`() {
         val pilot = adosPilot().copy(surfaceOps = setOf(PilotAction.GOTO), fcFailsafe = true, landed = false)
         val c = ctx(link = FakePilotLink(connected = true), pilot = pilot)
-        assertEquals(SkillReason.FAILSAFE, FlyHereSkill.state(c).reasonKey)
+        assertEquals(SkillReason.GOTO_FAILSAFE, FlyHereSkill.state(c).reasonKey)
     }
 
     @Test
     fun `fly here on the ground in GUIDED is refused as landed`() {
         val c = ctx(mode = FlightMode(4, "GUIDED"), fcLanded = true)
         assertFalse(FlyHereSkill.state(c).enabled)
-        assertEquals("landed", FlyHereSkill.state(c).reasonKey)
+        assertEquals(SkillReason.GOTO_LANDED, FlyHereSkill.state(c).reasonKey)
     }
 
     @Test

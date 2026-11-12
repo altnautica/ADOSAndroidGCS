@@ -37,7 +37,8 @@ class PilotStallTest {
         // One frame, then silence: the socket stays open but the pilot has stalled.
         val data = """{"owner":"ados","armed":true,"landed":false,"rth_countdown_s":8.0,"link_loss_in_s":4.0,""" +
             """"input_session":{"src":"web","owner":"web"}}"""
-        val vm = testCockpitVm(vehicle, FakeAutonomyAgent(this, data).apis)
+        val agent = FakeAutonomyAgent(this, data)
+        val vm = testCockpitVm(vehicle, agent.apis)
         backgroundScope.launch { vm.flow.collect {} }
         backgroundScope.launch { vm.pilotFresh.collect {} }
         advanceTimeBy(600)
@@ -46,6 +47,8 @@ class PilotStallTest {
         assertTrue("a frame just arrived", vm.pilotFresh.value)
         assertNotNull("the countdown shows while the pilot is live", vm.flow.value.rthCountdownS)
         assertNotNull("the link-loss countdown shows while the pilot is live", vm.flow.value.linkLossInS)
+        // A stalled pilot: the channel drops the silent link and reconnects, and no frame comes.
+        agent.pilotAnswers = false
 
         vehicle.heartbeatAt(testScheduler.currentTime + 3_000, armed = true)
         advanceTimeBy(3_000)

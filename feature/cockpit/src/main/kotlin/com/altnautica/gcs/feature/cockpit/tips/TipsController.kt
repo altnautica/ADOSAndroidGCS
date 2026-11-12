@@ -14,8 +14,9 @@ import kotlinx.coroutines.withContext
 
 /** What the flight screen reports to the tip layer: the facts the tip queue depends on. */
 data class TipFacts(
-    val armed: Boolean,
-    val airborne: Boolean,
+    /** Null while unknown: possibly airborne, so no tip shows and none is marked seen. */
+    val armed: Boolean?,
+    val airborne: Boolean?,
     val sheetOrMenuOpen: Boolean,
     val tourVisible: Boolean,
     val skillsAvailable: Boolean,

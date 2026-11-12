@@ -10,8 +10,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation3.runtime.NavKey
 import com.altnautica.gcs.core.data.home.SelectedVehicleStore
+import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.feature.configure.wizard.GroundSetupCheck
 import com.altnautica.gcs.navigation.HomeKey
 import com.altnautica.gcs.replay.ReplayLauncher
@@ -47,6 +49,7 @@ class AppViewModel @Inject constructor(
     private val replays: ReplayLauncher,
     private val selectedVehicle: SelectedVehicleStore,
     private val groundSetup: GroundSetupCheck,
+    nodeRepository: NodeRepository,
 ) : ViewModel() {
 
     private val homeOnTop = MutableStateFlow(false)
@@ -100,19 +103,24 @@ class AppViewModel @Inject constructor(
     }
 
     /**
-     * The aircraft setup offer to show, or null: the selected vehicle, while its link is open,
-     * when its flight controller never finished the ground wizard and was never offered on
-     * this device. A link that closes hides the offer until it reopens. Ground only: null
+     * The aircraft setup offer to show, or null: the selected vehicle, while it is reachable
+     * (a link open, or the node live: Home opens no link of its own), when its flight
+     * controller never finished the ground wizard and was never offered on this device.
+     * A vehicle that drops out hides the offer until it comes back. Ground only: null
      * while any open vehicle is armed.
      */
+    private val reachable: StateFlow<Set<DeviceId>> = combine(vehicles.openVehicles, nodeRepository.nodes) { open, nodes ->
+        open.keys + nodes.orEmpty().filter { it.liveness == Liveness.Live }.map { it.id }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
     val setupOffer: StateFlow<SetupOffer?> = combine(
         setupCandidates,
         offeredUids,
         anyArmed,
-        vehicles.openVehicles,
+        reachable,
         selectedVehicle.selected,
-    ) { candidates, offered, armed, open, selected ->
-        if (armed) null else candidates.firstOrNull { it.uid !in offered && it.nodeId in open && it.nodeId == selected }
+    ) { candidates, offered, armed, reach, selected ->
+        if (armed) null else candidates.firstOrNull { it.uid !in offered && it.nodeId in reach && it.nodeId == selected }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val openWizard = Channel<DeviceId>(Channel.BUFFERED)
@@ -133,8 +141,8 @@ class AppViewModel @Inject constructor(
         markOffered(offer.uid)
     }
 
-    /** The current offer while its vehicle's link is still open: a gone vehicle never spends its one offer. */
-    private fun liveOffer(): SetupOffer? = setupOffer.value?.takeIf { it.nodeId in vehicles.openVehicles.value }
+    /** The current offer while its vehicle is still reachable: a gone vehicle never spends its one offer. */
+    private fun liveOffer(): SetupOffer? = setupOffer.value?.takeIf { it.nodeId in reachable.value }
 
     private fun markOffered(uid: String) {
         setupCandidates.update { list -> list.filterNot { it.uid == uid } }

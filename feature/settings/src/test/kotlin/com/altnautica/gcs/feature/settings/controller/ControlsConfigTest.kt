@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.settings.controller
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -38,6 +39,9 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.performScrollTo
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -68,6 +72,7 @@ class ControlsConfigTest {
         override fun pressedOnScreen(control: String) = Unit
         override fun startCalibration() = Unit
         override fun closeCalibration() = Unit
+        override fun clearCalibration() = Unit
         override fun testRumble() = Unit
         override fun testLightbar() = Unit
         override fun toggleStickTest() = Unit
@@ -164,5 +169,87 @@ class ControlsConfigTest {
         assertEquals(shipped.count { it.action == "pause" }, repo.bindings.first().count { it.action == "pause" })
         scope.cancel()
         dir.deleteRecursively()
+    }
+
+    private val padInfo = com.altnautica.gcs.core.skills.input.controller.ControllerInfo(
+        deviceId = 1,
+        name = "Wireless Controller",
+        vendorId = 0x054C,
+        productId = 0x09CC,
+        family = com.altnautica.gcs.core.skills.input.controller.ControllerFamily.PlayStation,
+        batteryPct = null,
+        charging = false,
+    )
+
+    @Test
+    fun hotspotsAreFullTouchTargetsAndSpeakTheControlName() {
+        compose.setContent {
+            AdosTheme { ControlsScreen(stateFor(shipped, dirty = false), remember { mutableStateOf(pad(0)) }, spec, noActions, { it }) }
+        }
+        listOf("l1", "r1", "share", "options", "dpad_up").forEach { id ->
+            val b = compose.onNodeWithTag("hotspot-$id").fetchSemanticsNode().boundsInRoot
+            with(compose.density) {
+                assertTrue("$id width ${b.width.toDp()}", b.width.toDp() >= 47.5.dp)
+                assertTrue("$id height ${b.height.toDp()}", b.height.toDp() >= 47.5.dp)
+            }
+        }
+        val desc = compose.onNodeWithTag("hotspot-dpad_up").fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single()
+        assertTrue(desc, desc.startsWith("D-pad up: "))
+    }
+
+    @Test
+    fun tappingALabelOpensItsControl() {
+        var opened: String? = null
+        val actions = object : ControlsActions by noActions {
+            override fun openControl(control: String) {
+                opened = control
+            }
+        }
+        compose.setContent {
+            AdosTheme { ControlsScreen(stateFor(shipped, dirty = false), remember { mutableStateOf(pad(0)) }, spec, actions, { it }) }
+        }
+        compose.onNodeWithTag("label-cross").performClick()
+        assertEquals("cross", opened)
+    }
+
+    @Test
+    fun stickTestShowsTheReadoutAndAStopButton() {
+        val state = stateFor(shipped, dirty = false).copy(controller = padInfo, test = HardwareTest.Sticks)
+        compose.setContent {
+            AdosTheme { ControlsScreen(state, remember { mutableStateOf(pad(0)) }, spec, noActions, { it }) }
+        }
+        compose.onNodeWithTag("controls-stick-readout").assertExists()
+        compose.onNodeWithTag("controls-test-sticks").assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
+    }
+
+    @Test
+    fun savedCalibrationShowsDoneAndTheCalibratedBadge() {
+        val state = stateFor(shipped, dirty = false).copy(
+            controller = padInfo,
+            calibrated = true,
+            calibration = CalibrationUi(CalibrationPhase.Saved, 1f),
+        )
+        compose.setContent {
+            AdosTheme { ControlsScreen(state, remember { mutableStateOf(pad(0)) }, spec, noActions, { it }) }
+        }
+        compose.onNodeWithTag("controls-calibration-done").assertExists()
+        compose.onNodeWithTag("controls-calibrated").assertExists()
+    }
+
+    @Test
+    fun aCalibratedPadOffersClearCalibration() {
+        var cleared = false
+        val actions = object : ControlsActions by noActions {
+            override fun clearCalibration() {
+                cleared = true
+            }
+        }
+        val state = stateFor(shipped, dirty = false).copy(controller = padInfo, calibrated = true)
+        compose.setContent {
+            AdosTheme { ControlsScreen(state, remember { mutableStateOf(pad(0)) }, spec, actions, { it }) }
+        }
+        compose.onNodeWithTag("controls-calibration-clear").performScrollTo().performClick()
+        compose.waitForIdle()
+        assertTrue(cleared)
     }
 }

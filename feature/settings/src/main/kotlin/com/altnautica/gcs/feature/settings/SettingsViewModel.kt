@@ -22,6 +22,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 data class SettingsUiState(
     val loaded: Boolean = false,
@@ -31,6 +35,9 @@ data class SettingsUiState(
     val demoStaleSkill: Boolean = false,
     val endpoints: List<DirectEndpoint> = emptyList(),
 )
+
+/** Confirmations for settings actions that change nothing on this screen. */
+enum class SettingsMessage { TourReplayed, TipsReset }
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -96,11 +103,22 @@ class SettingsViewModel @Inject constructor(
 
     fun removeEndpoint(endpoint: DirectEndpoint) = launch { direct.removeEndpoint(endpoint) }
 
+    private val _messages = MutableSharedFlow<SettingsMessage>(extraBufferCapacity = 4, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** One-shot confirmations the screen shows as a snackbar. */
+    val messages: SharedFlow<SettingsMessage> = _messages.asSharedFlow()
+
     /** Clears the controller tour's seen flag: the tour shows again on the next flight screen opened on the ground. */
-    fun replayControllerTour() = launch { controls.setTourSeen(false) }
+    fun replayControllerTour() = launch {
+        controls.setTourSeen(false)
+        _messages.emit(SettingsMessage.TourReplayed)
+    }
 
     /** Forgets every seen tip, so the flight screen tips start over. */
-    fun resetTips() = launch { tips.reset() }
+    fun resetTips() = launch {
+        tips.reset()
+        _messages.emit(SettingsMessage.TipsReset)
+    }
 
     /** The cockpit spec's shared string for [key]. */
     fun specText(key: String): String = spec.setupStrings.format(key)

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">ADOS ஆண்ட்ராய்டு GCS</string>
-
-    <!-- Navigation -->
-    <string name="nav_settings">அமைப்புகள்</string>
-</resources>

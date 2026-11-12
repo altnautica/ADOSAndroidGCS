@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="link_reason_no_fc_link">No link to the flight controller</string>
+    <string name="link_reason_receive_only">This link is receive-only. Take control to send commands</string>
+    <string name="link_reason_not_authorized">This device is not authorised to control the drone</string>
+    <string name="link_reason_timeout">The flight controller did not answer in time</string>
+    <string name="link_reason_unsupported">The flight controller does not support this</string>
+    <string name="link_reason_write_failed">The request could not be sent to the flight controller</string>
+    <string name="link_reason_no_rc_input">No radio input. Turn on the transmitter and try again</string>
+    <string name="link_reason_not_waiting">The flight controller is not waiting for this step</string>
+    <string name="link_reason_failed">The flight controller reported a failure</string>
+    <string name="link_reason_cancelled">The request was cancelled</string>
+    <string name="link_reason_busy">Another transfer is in progress</string>
+    <string name="link_reason_not_paired">This drone is not paired with this device</string>
+    <string name="link_reason_pin_required">The drone asks for its pairing PIN</string>
+    <string name="link_reason_armed">The drone is armed. Disarm and try again</string>
+    <string name="link_reason_denied">The flight controller refused the request</string>
+    <string name="link_reason_temporarily_rejected">The flight controller cannot do this right now. Try again shortly</string>
+    <string name="link_reason_sticks_not_moved">Move both sticks to every corner first. Each stick channel must travel at least 200 µs</string>
+    <string name="link_reason_unknown">The flight controller did not complete the request</string>
+
+    <string name="link_mission_result_error">The flight controller reported an error</string>
+    <string name="link_mission_result_unsupported_frame">The flight controller does not support this coordinate frame</string>
+    <string name="link_mission_result_unsupported">The flight controller does not support a command in this mission</string>
+    <string name="link_mission_result_no_space">The mission is too large for the flight controller</string>
+    <string name="link_mission_result_invalid">A mission item has an invalid value</string>
+    <string name="link_mission_result_invalid_sequence">Mission items arrived out of order</string>
+    <string name="link_mission_result_denied">The flight controller refused the mission</string>
+    <string name="link_mission_result_cancelled">The transfer was cancelled</string>
+    <string name="link_mission_result_unknown">The flight controller rejected the mission</string>
+</resources>

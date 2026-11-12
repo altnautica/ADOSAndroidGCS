@@ -84,6 +84,8 @@ data class NavState(
     val obstacleRateHz: Float?,
     val minObstacleM: Float?,
     val gpsFix: Int?,
+    /** Age of the newest pose in ms (`pose_age_ms`), null while none. */
+    val poseAgeMs: Long? = null,
 )
 
 /** One planar scan in the body FRD frame; angles clockwise from forward. 0 range = no return. */

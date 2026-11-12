@@ -9,16 +9,32 @@ sealed interface ParamValidation {
 enum class ParamInvalidReason { NotANumber, NotInteger, BelowMin, AboveMax, NotAnOption, UnknownBits, ReadOnly }
 
 object ParamValidator {
-    /** Checks free-text input. Without metadata any finite number is accepted. */
-    fun validate(meta: ParamMeta?, input: String): ParamValidation {
-        val value = input.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
-            ?: return ParamValidation.Invalid(ParamInvalidReason.NotANumber)
-        return validate(meta, value)
+    /**
+     * Names treated as read-only when the metadata does not say: the flight statistics counters
+     * and the sensor identity parameters, which describe the fitted hardware.
+     */
+    private val READ_ONLY_PATTERNS = listOf(Regex("^STAT_"), Regex("^INS_\\w+_ID$"), Regex("^GND_\\w+_ID$"))
+
+    /** Documented read-only but still writable: setting `STAT_RESET` to 0 resets the flight statistics. */
+    private val WRITABLE_DESPITE_READONLY = setOf("STAT_RESET")
+
+    /** Whether [name] refuses writes, from its metadata or, without metadata, from its name. */
+    fun isReadOnly(name: String, meta: ParamMeta?): Boolean = when {
+        name in WRITABLE_DESPITE_READONLY -> false
+        meta != null -> meta.readOnly
+        else -> READ_ONLY_PATTERNS.any { it.containsMatchIn(name) }
     }
 
-    fun validate(meta: ParamMeta?, value: Double): ParamValidation {
+    /** Checks free-text input. Without metadata any finite number is accepted. */
+    fun validate(name: String, meta: ParamMeta?, input: String): ParamValidation {
+        val value = input.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
+            ?: return ParamValidation.Invalid(ParamInvalidReason.NotANumber)
+        return validate(name, meta, value)
+    }
+
+    fun validate(name: String, meta: ParamMeta?, value: Double): ParamValidation {
+        if (isReadOnly(name, meta)) return ParamValidation.Invalid(ParamInvalidReason.ReadOnly)
         if (meta == null) return ParamValidation.Valid(value)
-        if (meta.readOnly) return ParamValidation.Invalid(ParamInvalidReason.ReadOnly)
         if (meta.isInteger && value % 1.0 != 0.0) return ParamValidation.Invalid(ParamInvalidReason.NotInteger)
         when (meta.editor) {
             ParamEditorKind.Bitmask -> {

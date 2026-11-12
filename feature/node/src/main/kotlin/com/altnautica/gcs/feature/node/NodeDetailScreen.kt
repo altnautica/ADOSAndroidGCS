@@ -81,6 +81,8 @@ fun NodeDetailRoute(
     onOpenNode: (DeviceId) -> Unit,
     onPair: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Open with the unpair confirmation already showing (the Home menu's Unpair row). */
+    initialConfirmUnpair: Boolean = false,
 ) {
     val vm = hiltViewModel<NodeDetailViewModel, NodeDetailViewModel.Factory>(key = "node-${nodeId.value}") { it.create(nodeId.value) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -101,6 +103,7 @@ fun NodeDetailRoute(
         onClearForget = vm::clearForget,
         onRetryForget = vm::retryForget,
         modifier = modifier,
+        initialConfirmUnpair = initialConfirmUnpair,
     )
 }
 
@@ -120,6 +123,7 @@ fun NodeDetailScreen(
     onClearForget: () -> Unit,
     onRetryForget: () -> Unit,
     modifier: Modifier = Modifier,
+    initialConfirmUnpair: Boolean = false,
 ) {
     val ready = state as? NodeDetailState.Ready
     val paired = ready != null && ready.node.reaches.singleOrNull() != Reach.Blocked(BlockReason.NotPaired)
@@ -131,7 +135,7 @@ fun NodeDetailScreen(
     }
     val selectedIndex = items.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0)
     val menu = rememberAdosMenuState()
-    var confirmUnpair by rememberSaveable { mutableStateOf(false) }
+    var confirmUnpair by rememberSaveable { mutableStateOf(initialConfirmUnpair) }
     ConsoleScaffold(
         title = ready?.node?.name ?: nodeId.value,
         onBack = onBack,
@@ -164,6 +168,7 @@ fun NodeDetailScreen(
                             AdosMenuItem(
                                 label = stringResource(R.string.node_unpair),
                                 icon = Icons.Outlined.LinkOff,
+                                enabled = forget != ForgetState.Running,
                                 onClick = { confirmUnpair = true },
                             ),
                         ),
@@ -182,7 +187,9 @@ fun NodeDetailScreen(
                     action = EmptyStateAction(stringResource(R.string.node_back), onBack),
                     modifier = Modifier.align(Alignment.Center),
                 )
-                is NodeDetailState.Ready -> if (!paired) {
+                is NodeDetailState.Ready -> if (forget == ForgetState.Running) {
+                    LoadingState(stringResource(R.string.node_unpairing), Modifier.align(Alignment.Center))
+                } else if (!paired) {
                     EmptyState(
                         icon = Icons.Outlined.Lock,
                         title = stringResource(R.string.node_unpaired_title),

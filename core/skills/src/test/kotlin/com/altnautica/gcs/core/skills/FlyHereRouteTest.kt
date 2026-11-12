@@ -40,7 +40,7 @@ class FlyHereRouteTest {
     fun `a stale pilot outside GUIDED sends nothing, matching the offer`() = runTest {
         val link = FakePilotLink(connected = true).apply { fresh = false }
         val result = FlyHereSkill.activate(ctx(link, mode = "LOITER"), args)
-        assertEquals(CommandResult.Denied(SkillReason.FLY_HERE_NOT_GUIDED), result)
+        assertEquals(CommandResult.Denied(SkillReason.GOTO_CONTROL_MODE), result)
         assertTrue(link.actions.isEmpty())
         assertTrue(vehicle.control.sent.isEmpty())
     }
@@ -56,7 +56,7 @@ class FlyHereFcRouteTest {
 
     @Test
     fun `without the pilot route, Fly Here is offered only while the FC flies GUIDED`() {
-        assertEquals(SkillReason.FLY_HERE_NOT_GUIDED, FlyHereSkill.state(ctx("LOITER")).reasonKey)
+        assertEquals(SkillReason.GOTO_CONTROL_MODE, FlyHereSkill.state(ctx("LOITER")).reasonKey)
         assertTrue(FlyHereSkill.state(ctx("GUIDED")).enabled)
     }
 
@@ -67,6 +67,29 @@ class FlyHereFcRouteTest {
             checklistReady = true, autonomousNav = true, fcLanded = null,
         )
         assertTrue(FlyHereSkill.state(c).enabled)
+    }
+
+    @Test
+    fun `an armed drone known to be on the ground in LOITER is refused as landed, not as another controller's`() {
+        val c = SkillContext(
+            vehicle, armed = true, mode = com.altnautica.gcs.core.model.FlightMode(5, "LOITER"), linkFresh = true,
+            checklistReady = true, autonomousNav = true, fcLanded = true,
+        )
+        assertEquals(SkillReason.GOTO_LANDED, FlyHereSkill.state(c).reasonKey)
+    }
+
+    @Test
+    fun `every local refusal is one of the pilot's goto codes, read through the Fly Here prefix`() {
+        val disarmed = SkillContext(
+            vehicle, armed = false, mode = com.altnautica.gcs.core.model.FlightMode(4, "GUIDED"), linkFresh = true,
+            checklistReady = true, autonomousNav = true, fcLanded = false,
+        )
+        assertEquals(SkillReason.GOTO_NOT_ARMED, FlyHereSkill.state(disarmed).reasonKey)
+        val failsafe = SkillContext(
+            vehicle, armed = true, mode = com.altnautica.gcs.core.model.FlightMode(6, "RTL"), linkFresh = true,
+            checklistReady = true, autonomousNav = true, fcLanded = false, systemStatus = 5,
+        )
+        assertEquals(SkillReason.GOTO_FAILSAFE, FlyHereSkill.state(failsafe).reasonKey)
     }
 }
 

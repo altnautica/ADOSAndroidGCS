@@ -41,8 +41,9 @@ class GroundStationApi internal constructor(private val client: AgentClient) {
     suspend fun joinClientNetwork(body: JsonObject): AgentResult<JsonElement> =
         client.sendJson("PUT", "$BASE/network/client/join", body, JsonElement.serializer(), slow = true)
 
-    suspend fun leaveClientNetwork(): AgentResult<JsonElement> =
-        client.sendJson("DELETE", "$BASE/network/client", null, JsonElement.serializer())
+    /** Bodiless DELETE: the agent takes the armed override only as `?force=1`. */
+    suspend fun leaveClientNetwork(force: Boolean = false): AgentResult<JsonElement> =
+        client.sendJson("DELETE", "$BASE/network/client", null, JsonElement.serializer(), query = if (force) mapOf("force" to "1") else emptyMap())
 
     suspend fun role(): AgentResult<JsonObject> = client.get("$BASE/role", JsonObject.serializer())
 

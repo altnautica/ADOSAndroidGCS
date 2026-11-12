@@ -26,6 +26,8 @@ import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VehicleCommand
+import com.altnautica.gcs.feature.plan.model.Autopilot
+import com.altnautica.gcs.feature.plan.model.FenceLimits
 import com.altnautica.gcs.feature.plan.model.MissionPlan
 import com.altnautica.gcs.feature.plan.model.MissionWire
 import com.altnautica.gcs.feature.plan.model.MissionVerify
@@ -137,15 +139,21 @@ internal class PlannerVehicleController(
     private fun refreshDrone() {
         val m = mirror
         if (m == null) {
-            state.update { it.copy(drone = null) }
+            state.update { s -> s.withDrone(null) }
             return
         }
         val dronePlan = PlanIdentity.planOf(m, nextId)
         state.update { s ->
             val sameItems = dronePlan != null && dronePlan.items.map { it.command to it.position } == s.plan.items.map { it.command to it.position }
             val differs = dronePlan != null && !sameItems && !PlanIdentity.matches(m, receipt)
-            s.copy(drone = DroneMissionUi(dronePlan, m.status?.state ?: MissionState.None, differs))
+            s.withDrone(DroneMissionUi(dronePlan, m.status?.state ?: MissionState.None, differs))
         }
+    }
+
+    /** Sets [drone] and re-runs the start checks, which depend on it. */
+    private fun PlannerUiState.withDrone(drone: DroneMissionUi?): PlannerUiState {
+        val next = copy(drone = drone)
+        return next.copy(startSheet = next.startSheet?.let { refreshChecks(it, next) })
     }
 
     /** Replaces the open plan with the vehicle's mirrored plan ("Load from drone"). */
@@ -167,10 +175,24 @@ internal class PlannerVehicleController(
                 delay(1_000)
             }
         }
-        combine(t.heartbeat, t.position, t.home, t.gps, svc.firmware) { hb, pos, home, gps, fw -> Snapshot(hb?.armed, hb?.tMs, hb?.vehicleType, pos, home, gps?.fix, fw) }
+        combine(t.heartbeat, t.position, t.home, t.gps, svc.firmware) { hb, pos, home, gps, fw ->
+            Snapshot(hb?.armed, hb?.tMs, hb?.vehicleType, pos, home, gps?.fix, fw, hb?.mode?.name)
+        }
             .combine(t.vfr) { snap, vfr -> snap to vfr?.headingDeg }
+            .combine(
+                svc.params.snapshot
+                    .map { p -> FenceLimits.PARAMS.mapNotNull { name -> p.values[name]?.let { name to it.value } }.toMap() }
+                    .distinctUntilChanged(),
+            ) { pair, params -> pair to params }
             .combine(ticker) { pair, _ -> pair }
-            .map { (snap, heading) ->
+            .map { (pair, params) ->
+                val (snap, heading) = pair
+                val autopilot = when (snap.firmware) {
+                    FirmwareFamily.ArduCopter -> Autopilot.ArduCopter
+                    FirmwareFamily.ArduPlane, FirmwareFamily.ArduRover, FirmwareFamily.ArduSub -> Autopilot.ArduPilotOther
+                    FirmwareFamily.Px4 -> Autopilot.Px4
+                    FirmwareFamily.Unknown, null -> Autopilot.Unknown
+                }
                 VehicleLink.Connected(
                     armed = snap.armed,
                     linkFresh = snap.heartbeatMs != null && clock.nowMs() - snap.heartbeatMs <= PlannerViewModel.LINK_FRESH_MS,
@@ -181,6 +203,10 @@ internal class PlannerVehicleController(
                     gpsFix = snap.fix,
                     homeSlot = snap.firmware != null && snap.firmware != FirmwareFamily.Px4 && snap.firmware != FirmwareFamily.Unknown,
                     vehicleType = snap.vehicleType,
+                    autopilot = autopilot,
+                    // ArduPilot and PX4 both name their mission mode AUTO.
+                    flyingMission = snap.armed == true && snap.modeName == "AUTO",
+                    fence = FenceLimits.fromParams(params, autopilot),
                 )
             }
             .distinctUntilChanged()
@@ -197,6 +223,7 @@ internal class PlannerVehicleController(
         val home: HomePosition?,
         val fix: GpsFix?,
         val firmware: FirmwareFamily?,
+        val modeName: String?,
     )
 
     // ── Vehicle transfer ─────────────────────────────────────
@@ -209,7 +236,7 @@ internal class PlannerVehicleController(
     fun upload() {
         val svc = services ?: return
         val s = state.value
-        if (s.transferring || s.issues.any { it.kind.blocking }) return
+        if (s.transferring || s.missionInFlight || s.issues.any { it.kind.blocking }) return
         val plan = s.plan
         val homeSlot = homeSlot()
         val wire = MissionWire.toWire(plan, homeSlot)
@@ -368,7 +395,7 @@ internal class PlannerVehicleController(
         val fix = link?.gpsFix
         val checks = listOf(
             StartCheck(StartCheckKind.LinkFresh, link?.linkFresh == true),
-            StartCheck(StartCheckKind.PlanOnVehicle, s.inSyncWithVehicle && s.plan.items.isNotEmpty()),
+            StartCheck(StartCheckKind.PlanOnVehicle, s.planOnVehicle),
             StartCheck(StartCheckKind.GpsFix, fix != null && fix >= GpsFix.Fix3D),
             StartCheck(StartCheckKind.HomeSet, link?.home != null),
         )

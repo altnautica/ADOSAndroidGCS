@@ -30,6 +30,7 @@ import com.altnautica.gcs.core.skills.input.InputRouter
 import com.altnautica.gcs.core.skills.input.controller.ControllerFamily
 import com.altnautica.gcs.core.skills.input.controller.ControllerManager
 import com.altnautica.gcs.input.ControllerUiBridge
+import com.altnautica.gcs.feature.home.DisclaimerGate
 import com.altnautica.gcs.feature.settings.AppLocales
 import com.altnautica.gcs.feature.settings.AppSettingsRepository
 import com.altnautica.gcs.feature.settings.AppearanceSettings
@@ -104,7 +105,8 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalConsoleCommands provides consoleCommands, LocalControllerUi provides controllerUi) {
                 AdosTheme(themeId = appearance.theme, gloveMode = appearance.gloveMode) {
                     ProvideOverlayHost {
-                        AppRoot(pairLinks = pairLinkFlow)
+                        // Nothing, deep links included, opens until the current safety disclaimer is accepted.
+                        DisclaimerGate { AppRoot(pairLinks = pairLinkFlow) }
                     }
                 }
             }

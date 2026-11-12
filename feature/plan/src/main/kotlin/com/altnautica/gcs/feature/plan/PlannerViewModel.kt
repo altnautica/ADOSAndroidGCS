@@ -19,7 +19,10 @@ import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.GamepadAxes
 import com.altnautica.gcs.feature.plan.io.PlanDocuments
+import com.altnautica.gcs.feature.plan.io.PlanDraft
+import com.altnautica.gcs.feature.plan.io.PlanDraftStore
 import com.altnautica.gcs.feature.plan.io.PlanFileFormat
+import com.altnautica.gcs.feature.plan.io.PlanFiles
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
 import com.altnautica.gcs.feature.plan.model.FenceZone
 import com.altnautica.gcs.feature.plan.model.MissionPlan
@@ -29,10 +32,14 @@ import com.altnautica.gcs.feature.plan.model.RallyPoint
 import com.altnautica.gcs.feature.plan.survey.SurveyBuilder
 import com.altnautica.gcs.feature.plan.survey.SurveySettings
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
@@ -54,6 +61,7 @@ class PlannerViewModel @Inject constructor(
     private val plannerSettings: PlannerSettingsRepository,
     private val inputRouter: AdosInputRouter,
     mirrorSource: MissionMirrorSource,
+    private val draftStore: PlanDraftStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PlannerUiState())
@@ -84,7 +92,32 @@ class PlannerViewModel @Inject constructor(
         }
         viewModelScope.launch { offlineMaps.refresh() }
         vehicle.observeNodes(nodeSources)
+        keepDraft()
     }
+
+    /**
+     * Restores an unsaved plan left by a process death (the file pickers are a common moment
+     * for one), then keeps the draft in step with the open plan: written while it has unsaved
+     * edits, cleared once it is saved or emptied.
+     */
+    private fun keepDraft() {
+        viewModelScope.launch {
+            draftStore.read()?.let { draft ->
+                if (!_state.value.dirty && _state.value.plan.isEmpty) {
+                    runCatching { PlanFiles.parsePlan(draft.planJson, nextId) }
+                        .onSuccess { session.replacePlan(it.plan, name = draft.name, savedId = draft.savedId, dirty = true) }
+                }
+            }
+            _state.map { DraftKey(it.plan, it.name, it.savedId, it.dirty) }
+                .distinctUntilChanged()
+                .collectLatest { k ->
+                    delay(DRAFT_DEBOUNCE_MS)
+                    draftStore.write(if (k.dirty && !k.plan.isEmpty) PlanDraft(k.name, k.savedId, PlanFiles.exportPlan(k.plan)) else null)
+                }
+        }
+    }
+
+    private data class DraftKey(val plan: MissionPlan, val name: String, val savedId: String?, val dirty: Boolean)
 
     // ── Vehicle ──────────────────────────────────────────────
 
@@ -379,6 +412,8 @@ class PlannerViewModel @Inject constructor(
 
     fun messageShown() = _state.update { it.copy(message = null) }
 
+    fun dismissImportWarnings() = _state.update { it.copy(importWarnings = emptyList()) }
+
     private fun edit(transform: (MissionPlan) -> MissionPlan) = session.edit(transform)
 
     override fun onCleared() {
@@ -389,5 +424,8 @@ class PlannerViewModel @Inject constructor(
         const val LINK_FRESH_MS = 3_000L
         const val DEFAULT_FENCE_RADIUS_M = 100.0
         const val MIN_FENCE_RADIUS_M = 10.0
+
+        /** Quiet time after the last edit before the draft is written. */
+        const val DRAFT_DEBOUNCE_MS = 500L
     }
 }

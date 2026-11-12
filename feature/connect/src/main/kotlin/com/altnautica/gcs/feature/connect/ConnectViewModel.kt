@@ -12,6 +12,7 @@ import com.altnautica.gcs.core.agent.pairing.PairingService
 import com.altnautica.gcs.core.agent.wifi.GroundStationApStore
 import com.altnautica.gcs.core.agent.wifi.GroundStationCredential
 import com.altnautica.gcs.core.agent.wifi.WifiConnectionManager
+import com.altnautica.gcs.core.agent.wifi.WifiJoinState
 import com.altnautica.gcs.core.agent.wifi.WifiJoinString
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.demo.DemoSettings
@@ -65,6 +66,8 @@ data class ConnectUiState(
     /** Discovery has run [ConnectViewModel.DISCOVERY_HELP_MS] without finding any node. */
     val discoverySlow: Boolean = false,
     val busy: Boolean = false,
+    /** While [busy]: waiting for discovery to find the node (true) rather than pairing with it. */
+    val searching: Boolean = false,
     val error: ConnectError? = null,
     /** A node answered as already paired; its API key is needed to add it here. */
     val needsKeyFor: String? = null,
@@ -73,6 +76,8 @@ data class ConnectUiState(
     // Code page
     val code: String = "",
     val codeError: InputError? = null,
+    /** The code and host came from a pairing link: shown for the operator to check before Pair. */
+    val fromLink: Boolean = false,
     // Manual host page
     val host: String = "",
     val hostError: InputError? = null,
@@ -93,7 +98,7 @@ data class ConnectUiState(
     // Wi-Fi join page
     val joinText: String = "",
     val joinError: InputError? = null,
-    val wifiJoined: Boolean = false,
+    val wifiJoin: WifiJoinState = WifiJoinState.Idle,
     // Demo
     val demoEnabled: Boolean = false,
 )
@@ -136,7 +141,7 @@ class ConnectViewModel @Inject constructor(
         _state,
         discoveryFlow,
         vault.nodes,
-        combine(usb.devices, directSettings.usbBaudRate, demo.enabled, wifi.connected) { d, b, on, w -> Extra(d, b, on, w) },
+        combine(usb.devices, directSettings.usbBaudRate, demo.enabled, wifi.joinState) { d, b, on, w -> Extra(d, b, on, w) },
     ) { s, (found, late), stored, extra ->
         val keys = stored.map { it.deviceId }.toSet()
         s.copy(
@@ -145,36 +150,32 @@ class ConnectViewModel @Inject constructor(
             usbDevices = extra.usb,
             baudRate = extra.baud,
             demoEnabled = extra.demo,
-            wifiJoined = extra.wifi,
+            wifiJoin = extra.wifi,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), ConnectUiState())
 
     /** Restarts LAN discovery and its help timer. */
     fun retryDiscovery() = discoveryAttempt.update { it + 1 }
 
-    private data class Extra(val usb: List<UsbFlightController>, val baud: Int, val demo: Boolean, val wifi: Boolean)
+    private data class Extra(val usb: List<UsbFlightController>, val baud: Int, val demo: Boolean, val wifi: WifiJoinState)
 
     /**
-     * Applies a deep link (`adosgcs://pair?code=&host=`): a code starts the code flow, a host the manual one.
-     * A link opened on a cold start arrives before discovery has resolved anything, so a code without a
-     * usable host waits up to [DEEP_LINK_DISCOVERY_MS] for a node to advertise it before reporting it missing.
+     * Applies a deep link (`adosgcs://pair?code=&host=`): fills the Code page (or the manual host page) and
+     * waits for the operator's Pair tap; a link never claims on its own. A link opened on a cold start arrives
+     * before discovery has resolved anything, so Pair on a linked code without a usable host waits up to
+     * [DEEP_LINK_DISCOVERY_MS] for a node to advertise it before reporting it missing.
      */
     fun applyDeepLink(code: String?, host: String?) {
         when {
-            !code.isNullOrBlank() -> {
-                _state.update { it.copy(page = ConnectPage.Code, code = code.uppercase(), host = host.orEmpty()) }
-                val err = EndpointValidation.code(code)
-                if (err != null) return _state.update { it.copy(codeError = err) }
-                val wanted = PairingCode.normalize(code)
-                val waitForDiscovery = EndpointValidation.host(host.orEmpty()) != null
-                launchBusy {
-                    if (waitForDiscovery) {
-                        withTimeoutOrNull(DEEP_LINK_DISCOVERY_MS) {
-                            discovery.browse().first { found -> found.any { it.code == wanted } }
-                        }
-                    }
-                    resolveAndClaim()
-                }
+            !code.isNullOrBlank() -> _state.update {
+                it.copy(
+                    page = ConnectPage.Code,
+                    code = code.uppercase(),
+                    host = host.orEmpty(),
+                    fromLink = true,
+                    codeError = EndpointValidation.code(code),
+                    error = null,
+                )
             }
             !host.isNullOrBlank() -> _state.update { it.copy(page = ConnectPage.ManualHost, host = host) }
         }
@@ -205,12 +206,27 @@ class ConnectViewModel @Inject constructor(
 
     // ---- code ----------------------------------------------------------------
 
-    fun setCode(value: String) = _state.update { it.copy(code = value.uppercase(), codeError = null, error = null) }
+    /** Editing the code drops the linked host: it belonged to the linked code. */
+    fun setCode(value: String) = _state.update {
+        it.copy(code = value.uppercase(), codeError = null, error = null, host = if (it.fromLink) "" else it.host, fromLink = false)
+    }
 
     fun submitCode() {
-        val err = EndpointValidation.code(_state.value.code)
+        val s = _state.value
+        val err = EndpointValidation.code(s.code)
         if (err != null) return _state.update { it.copy(codeError = err) }
-        launchBusy { resolveAndClaim() }
+        val wanted = PairingCode.normalize(s.code)
+        val waitForDiscovery = s.fromLink && EndpointValidation.host(s.host) != null
+        launchBusy {
+            if (waitForDiscovery) {
+                _state.update { it.copy(searching = true) }
+                withTimeoutOrNull(DEEP_LINK_DISCOVERY_MS) {
+                    discovery.browse().first { found -> found.any { it.code == wanted } }
+                }
+                _state.update { it.copy(searching = false) }
+            }
+            resolveAndClaim()
+        }
     }
 
     private suspend fun resolveAndClaim() {
@@ -319,11 +335,13 @@ class ConnectViewModel @Inject constructor(
         if (raw.isEmpty()) return _state.update { it.copy(joinError = InputError.Required) }
         val credential = WifiJoinString.parse(raw) ?: GroundStationCredential(passphrase = raw).takeIf { raw.length >= MIN_WPA }
             ?: return _state.update { it.copy(joinError = InputError.KeyTooShort) }
+        if (!wifi.requestGroundStationNetwork(credential.passphrase, credential.ssidSuffix)) {
+            return _state.update { it.copy(joinError = InputError.Required) }
+        }
+        // Keep the credential only once the station actually joined.
         viewModelScope.launch {
-            apStore.store(credential)
-            if (!wifi.requestGroundStationNetwork(credential.passphrase, credential.ssidSuffix)) {
-                _state.update { it.copy(joinError = InputError.KeyTooShort) }
-            }
+            val result = wifi.joinState.first { it == WifiJoinState.Joined || it == WifiJoinState.Unavailable }
+            if (result == WifiJoinState.Joined) apStore.store(credential)
         }
     }
 

@@ -135,8 +135,10 @@ class TargetStateTest {
         val ev = FollowEvent.Reacquired(15, 0.862f, 1.8f, now - 100)
         val item = resolve(batch(det(15, 0.9f, LockState.Locked)), events = listOf(ev)).single()
         assertTrue(TargetModifier.Reacquired in item.modifiers)
-        val ctx = ApplicationProvider.getApplicationContext<Context>()
-        val toast = ctx.getString(com.altnautica.gcs.feature.cockpit.R.string.hud_toast_reacquired, 15, "0.86", "1.8")
+        val toast = com.altnautica.gcs.feature.cockpit.reacquiredText(
+            com.altnautica.gcs.feature.cockpit.testSpec.setupStrings,
+            com.altnautica.gcs.feature.cockpit.CockpitEvent.Reacquired(15, 0.862f, 1.8f),
+        )
         assertEquals("Re-acquired #15 · 0.86 · 1.8 s gap", toast)
     }
 

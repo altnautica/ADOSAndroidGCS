@@ -145,6 +145,13 @@ internal class FakeAutonomyAgent(
 ) : AutonomyFeedApi {
     var statusAnswers = true
 
+    /**
+     * False models a stalled pilot: a channel that (re)connects gets no frame. The channel
+     * drops a silent link at the spec's stale age and reconnects, and a live pilot would
+     * answer that reconnect with a fresh frame.
+     */
+    var pilotAnswers = true
+
     /** The `view` query of each status request answered or not. */
     val polls = mutableListOf<String?>()
 
@@ -157,7 +164,7 @@ internal class FakeAutonomyAgent(
 
     override fun pilotStream(outgoing: Flow<String>) = flow {
         if (radio) throw IOException("the socket cannot open over this link")
-        emit("""{"kind":"pilot","ts_ms":${scope.testScheduler.currentTime},"data":$pilotData}""")
+        if (pilotAnswers) emit("""{"kind":"pilot","ts_ms":${scope.testScheduler.currentTime},"data":$pilotData}""")
         awaitCancellation()
     }
 

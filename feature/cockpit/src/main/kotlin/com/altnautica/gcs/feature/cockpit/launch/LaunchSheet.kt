@@ -103,9 +103,28 @@ data class LaunchUi(
     val sequence: LaunchSequence?,
 )
 
+/** One after-takeoff choice and why it is not available now ([reasonKey], a spec string), null when it is. */
+internal data class LaunchAfterChoice(val after: LaunchAfter, val reasonKey: String?)
+
 /**
- * The Launch sheet: take-off altitude, the after-takeoff action (hold, a skill, start the
- * mission only when one is loaded, go to a map point once one is chosen) and the optional
+ * Every after-takeoff choice in the spec order (hold, skill, mission, go to a point); a skill
+ * needs a behaviour skill, the mission a loaded one, and go-to a picked map point.
+ */
+internal fun launchAfterChoices(ui: LaunchUi): List<LaunchAfterChoice> = LaunchAfter.entries.map { after ->
+    LaunchAfterChoice(
+        after,
+        when (after) {
+            LaunchAfter.Hold -> null
+            LaunchAfter.Skill -> "flow.launch.after.skill_none".takeIf { ui.skills.isEmpty() }
+            LaunchAfter.Mission -> "flow.launch.after.mission_none".takeIf { ui.mission != MissionState.Loaded }
+            LaunchAfter.Goto -> "flow.launch.pick_point_hint".takeIf { ui.gotoPoint == null }
+        },
+    )
+}
+
+/**
+ * The Launch sheet: take-off altitude, the after-takeoff action (all four choices in the spec
+ * order; one not available now is dimmed with its reason under the row) and the optional
  * when-done action. Holding "Hold to launch" sends the launch sequence; its progress shows
  * as a step strip.
  */
@@ -133,24 +152,18 @@ fun LaunchSheet(
                 modifier = Modifier.testTag("launch-alt"),
             )
             Text(specText("flow.launch.after"), style = MaterialTheme.typography.labelLarge)
-            val afters = buildList {
-                add(LaunchAfter.Hold)
-                if (ui.skills.isNotEmpty()) add(LaunchAfter.Skill)
-                if (ui.mission == MissionState.Loaded) add(LaunchAfter.Mission)
-                if (ui.gotoPoint != null) add(LaunchAfter.Goto)
-            }
+            val afters = launchAfterChoices(ui)
             Segments(
-                values = afters.map { it.wire },
-                labels = afters.map { specText("flow.launch.after.${it.wire}") },
+                values = afters.map { it.after.wire },
+                labels = afters.map { specText("flow.launch.after.${it.after.wire}") },
                 selected = d.after.wire,
                 enabled = true,
                 tag = "launch-after",
+                disabled = afters.filter { it.reasonKey != null }.map { it.after.wire }.toSet(),
             ) { w -> onDraft(d.copy(after = LaunchAfter.entries.first { it.wire == w })) }
-            if (ui.mission != MissionState.Loaded) {
-                Text(specText("flow.launch.mission_needs_loaded"), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
-            }
-            if (ui.gotoPoint == null) {
-                Text(specText("flow.launch.pick_point_hint"), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
+            // Each choice that is not available now says why, under the row.
+            for (reason in afters.mapNotNull { it.reasonKey }) {
+                Text(specText(reason), color = AdosTheme.colors.fgSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("launch-after-reason"))
             }
             if (d.after == LaunchAfter.Skill) {
                 Segments(

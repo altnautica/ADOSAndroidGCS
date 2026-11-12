@@ -24,7 +24,15 @@ data class SetupSnapshotState(
     val steps: Map<String, SetupStep> = emptyMap(),
     val busy: Boolean = false,
     val problem: SetupProblem? = null,
+    /**
+     * The step stream dropped: [steps] and the overview are the last known state, not live,
+     * until the next overview loads.
+     */
+    val stale: Boolean = false,
 ) {
+    /** Step actions wait: a request is in flight, or the shown state is not live. */
+    val actionsBlocked: Boolean get() = busy || stale
+
     fun step(wizard: String, step: String): SetupStep? =
         steps[key(wizard, step)] ?: overview?.wizard(wizard)?.steps?.firstOrNull { it.step == step }
 
@@ -58,6 +66,8 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
                 } catch (e: Exception) {
                     // The stream drops when the link does; the next connect resumes it.
                 }
+                // Whatever ended the stream, the step state shown is no longer live.
+                _state.update { it.copy(stale = true) }
                 delay(RECONNECT_MS)
                 refresh()
             }
@@ -71,7 +81,7 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
 
     suspend fun refresh() {
         when (val r = backend.overview()) {
-            is AgentResult.Ok -> _state.update { it.copy(overview = r.value, steps = emptyMap(), problem = null) }
+            is AgentResult.Ok -> _state.update { it.copy(overview = r.value, steps = emptyMap(), problem = null, stale = false) }
             is AgentResult.Err -> _state.update { it.copy(problem = r.error.setupProblem()) }
         }
     }
@@ -91,7 +101,15 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
 
     fun start(wizard: String) = send { backend.start(wizard).also { r -> r.getOrNull()?.wizard?.let { apply(FcSetupEvent.Wizard(0, it)) } } }
 
-    fun abort(wizard: String) = send { backend.abort(wizard).also { r -> r.getOrNull()?.wizard?.let { apply(FcSetupEvent.Wizard(0, it)) } } }
+    /** Sent at once, even while another request is in flight or the state is stale: a stop never waits. */
+    fun abort(wizard: String) {
+        scope.launch {
+            when (val r = backend.abort(wizard)) {
+                is AgentResult.Ok -> r.value.wizard?.let { apply(FcSetupEvent.Wizard(0, it)) }
+                is AgentResult.Err -> _state.update { it.copy(problem = r.error.setupProblem()) }
+            }
+        }
+    }
 
     fun runStep(wizard: String, step: String) =
         send { backend.runStep(wizard, step).also { r -> r.getOrNull()?.step?.let { apply(FcSetupEvent.Step(0, it)) } } }
@@ -104,7 +122,7 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
     }
 
     private fun send(call: suspend () -> AgentResult<*>) {
-        if (_state.value.busy) return
+        if (_state.value.actionsBlocked) return
         _state.update { it.copy(busy = true, problem = null) }
         scope.launch {
             try {

@@ -36,11 +36,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
-import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
+import com.altnautica.gcs.core.designsystem.component.StatusChip
+import com.altnautica.gcs.core.designsystem.component.StatusLevel
 import com.altnautica.gcs.core.designsystem.component.LoadingState
 import com.altnautica.gcs.core.designsystem.component.console.AdosListItem
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleTwoPane
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
@@ -49,7 +49,8 @@ import com.altnautica.gcs.feature.configure.R
 import com.altnautica.gcs.feature.configure.calibration.CalibrationRoute
 import com.altnautica.gcs.feature.configure.motor.MotorTestRoute
 import com.altnautica.gcs.feature.configure.params.ParamEditorSheet
-import com.altnautica.gcs.feature.configure.params.ParamFile
+import com.altnautica.gcs.feature.configure.params.PendingWriteSheet
+import com.altnautica.gcs.feature.configure.params.RebootBanner
 import com.altnautica.gcs.feature.configure.params.ParamRow
 import com.altnautica.gcs.feature.configure.params.ParamRowItem
 import com.altnautica.gcs.feature.configure.params.ParametersUiState
@@ -88,6 +89,8 @@ internal fun SetupPanes(
     val state by params.state.collectAsStateWithLifecycle()
     val pending by params.pendingWrite.collectAsStateWithLifecycle()
     val message by params.message.collectAsStateWithLifecycle()
+    val writing by params.writing.collectAsStateWithLifecycle()
+    val rebootPending by params.rebootPending.collectAsStateWithLifecycle()
     // Write results from the curated parameter sections; the message is consumed once shown.
     val snackbar = remember { SnackbarHostState() }
     val messageText = message?.let { paramMessageText(it, (state as? ParametersUiState.Content)?.byName.orEmpty()).first }
@@ -114,19 +117,24 @@ internal fun SetupPanes(
             },
             detail = {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    // Frame, flight-mode and failsafe writes and sensor calibrations can need a reboot: offer it here.
+                    val content = state as? ParametersUiState.Content
+                    if (rebootPending && content != null) {
+                        RebootBanner(armed = content.armed, linkFresh = content.linkFresh, onReboot = params::reboot)
+                    }
                     when (section) {
                         SetupSection.AircraftSetup -> Column(Modifier.padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
                             Text(stringResource(R.string.cfg_setup_aircraft_body), color = AdosTheme.colors.fgSecondary)
                             AdosButton(stringResource(R.string.cfg_setup_aircraft_open), onClick = onOpenAircraftSetup)
                         }
-                        SetupSection.Calibration -> CalibrationRoute(nodeId)
-                        SetupSection.FlightModes -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
+                        SetupSection.Calibration -> CalibrationRoute(nodeId, onRebootAdvised = params::markRebootNeeded)
+                        SetupSection.FlightModes -> CuratedParams(state, fcVariant, writing, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
                             SetupCatalog.flightModes(variant, mav)?.let { it.slots + it.channelParam }.orEmpty()
                         }
-                        SetupSection.Failsafe -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
+                        SetupSection.Failsafe -> CuratedParams(state, fcVariant, writing, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, mav ->
                             SetupCatalog.failsafe(variant, mav)
                         }
-                        SetupSection.Frame -> CuratedParams(state, fcVariant, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, _ ->
+                        SetupSection.Frame -> CuratedParams(state, fcVariant, writing, onRefresh = params::refresh, onWrite = params::requestWrite) { variant, _ ->
                             SetupCatalog.frame(variant)
                         }
                         SetupSection.MotorTest -> {
@@ -140,20 +148,7 @@ internal fun SetupPanes(
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
     }
     pending?.let { p ->
-        AdosConfirmSheet(
-            title = stringResource(R.string.cfg_param_armed_title),
-            message = stringResource(R.string.cfg_param_armed_message, p.name, ParamFile.formatValue(p.value)),
-            onDismiss = params::dismissPendingWrite,
-            danger = true,
-        ) {
-            HoldToConfirmButton(
-                label = stringResource(R.string.cfg_param_armed_confirm),
-                holdMs = 800,
-                danger = true,
-                onConfirmed = params::confirmPendingWrite,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        PendingWriteSheet(p, onDismiss = params::dismissPendingWrite, onConfirm = params::confirmPendingWrite)
     }
 }
 
@@ -162,6 +157,7 @@ internal fun SetupPanes(
 private fun CuratedParams(
     state: ParametersUiState,
     fcVariant: FcVariant,
+    writing: String?,
     onRefresh: () -> Unit,
     onWrite: (String, String) -> Unit,
     names: (FcVariant, Int?) -> List<String>,
@@ -186,6 +182,13 @@ private fun CuratedParams(
         is ParametersUiState.Content -> {
             val rows = names(fcVariant, state.mavType).mapNotNull { state.byName[it] }
             Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
+                writing?.let {
+                    StatusChip(
+                        level = StatusLevel.Info,
+                        label = stringResource(R.string.cfg_param_writing, it),
+                        modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1),
+                    )
+                }
                 if (rows.isEmpty()) {
                     Text(
                         stringResource(R.string.cfg_setup_none),
@@ -206,6 +209,7 @@ private fun CuratedParams(
                 editing = null
             },
             onDismiss = { editing = null },
+            writing = writing,
         )
     }
 }

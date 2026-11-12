@@ -348,13 +348,35 @@ class AdosInputRouterTest {
         r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_A, repeat = 0, gamepad = true))
         assertEquals(listOf<UiInput>(UiInput.Activate(true)), ui)
         ui.clear()
-        // Circle while Cross is held starts a chord: the held confirm must end now, not on a later Cross-up.
+        // Circle while Cross is held starts a chord: the held confirm must end now, not on a
+        // later Cross-up, and its release is cancelled so the focused control does not click.
         r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_B, repeat = 0, gamepad = true))
-        assertEquals(listOf<UiInput>(UiInput.Activate(false)), ui)
+        assertEquals(listOf<UiInput>(UiInput.Activate(pressed = false, canceled = true)), ui)
+        assertEquals(KeyEvent.FLAG_CANCELED, (ui.single() as UiInput.Activate).keyFlags)
         ui.clear()
         r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_A, repeat = 0, gamepad = true))
         r.onKey(key(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BUTTON_B, repeat = 0, gamepad = true))
         assertTrue("nothing after the chord start: no second release, no Back", ui.isEmpty())
+    }
+
+    @Test
+    fun `losing the pad under a held Cross cancels the release`() = runTest {
+        val pad = gamepadDevice()
+        every { InputDevice.getDeviceIds() } returns intArrayOf(1)
+        every { InputDevice.getDevice(any()) } returns pad
+        val r = router(capture = null)
+        val ui = collectUi(r)
+        r.onKey(key(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BUTTON_A, repeat = 0, gamepad = true, device = 1))
+        ui.clear()
+        every { InputDevice.getDeviceIds() } returns IntArray(0)
+        r.refreshDevices()
+        assertEquals(listOf<UiInput>(UiInput.Activate(pressed = false, canceled = true)), ui)
+        assertEquals(KeyEvent.FLAG_CANCELED, (ui.single() as UiInput.Activate).keyFlags)
+    }
+
+    @Test
+    fun `a plain Cross release is not cancelled`() {
+        assertEquals(0, UiInput.Activate(pressed = false).keyFlags)
     }
 
     @Test

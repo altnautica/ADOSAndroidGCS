@@ -1,14 +1,15 @@
 package com.altnautica.gcs.feature.cockpit.hud.layers
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
@@ -17,10 +18,12 @@ import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -31,7 +34,7 @@ import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
 import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
 import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
-import com.altnautica.gcs.core.designsystem.theme.AdosTheme
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 @Composable
@@ -72,12 +75,16 @@ fun LayerLevelButton(controller: LayerController, modifier: Modifier = Modifier)
     val label = levelLabel(flags.level)
     val description = specText("cockpit.layers.next", "level" to label)
     val flagsLabel = specText("cockpit.layers.flags")
-    val shape = RoundedCornerShape(8.dp)
+    // A top-bar control: the chrome control height drawn, a 48 dp touch target.
+    val c = LocalChrome.current
+    val shape = RoundedCornerShape(c.radiusSmall)
     Row(modifier.adosMenuAnchor(menu), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier
-                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                .background(AdosTheme.colors.mediaScrim, shape)
+                .minimumInteractiveComponentSize()
+                .height(c.control)
+                .clip(shape)
+                .border(c.borderWidth, c.border, shape)
                 .combinedClickable(onClick = { controller.cycleLevel(1) }, onLongClick = { menu.expanded = true })
                 .semantics { contentDescription = description }
                 .padding(horizontal = 12.dp)
@@ -85,20 +92,22 @@ fun LayerLevelButton(controller: LayerController, modifier: Modifier = Modifier)
             contentAlignment = Alignment.Center,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Layers, contentDescription = null, tint = AdosTheme.colors.mediaOn, modifier = Modifier.testTag("layer-level-icon"))
-                Text(label, color = AdosTheme.colors.mediaOn)
+                Icon(Icons.Outlined.Layers, contentDescription = null, tint = c.text, modifier = Modifier.size(c.icon).testTag("layer-level-icon"))
+                Text(label, style = c.topBarText, maxLines = 1)
             }
         }
         Box(
             Modifier
-                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                .background(AdosTheme.colors.mediaScrim, shape)
+                .minimumInteractiveComponentSize()
+                .size(c.control)
+                .clip(shape)
+                .border(c.borderWidth, c.border, shape)
                 .clickable(role = Role.DropdownList, onClickLabel = flagsLabel) { menu.expanded = true }
                 .semantics { contentDescription = flagsLabel }
                 .testTag("layer-flags"),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, tint = AdosTheme.colors.mediaOn)
+            Icon(Icons.Outlined.ArrowDropDown, contentDescription = null, tint = c.text)
         }
     }
     // An in-window menu: the activity input router and the D-pad focus trap reach it, unlike a popup window.

@@ -1,6 +1,12 @@
 package com.altnautica.gcs.feature.configure.wizard
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import com.altnautica.gcs.core.designsystem.theme.AdosTheme
+import com.altnautica.gcs.feature.configure.R
 import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
 import dagger.Module
@@ -67,4 +73,18 @@ fun AgentError.setupProblem(): SetupProblem = when (this) {
     AgentError.Unauthorized, is AgentError.PinRequired -> SetupProblem(local = SetupLocalProblem.Unauthorized)
     AgentError.FeatureAbsent, AgentError.ProfileMismatch -> SetupProblem(local = SetupLocalProblem.Unsupported)
     is AgentError.Armed -> SetupProblem(local = SetupLocalProblem.Armed)
+}
+
+/** A setup failure in operator words: the engine's spec text, or the local reason. */
+@Composable
+fun SetupProblemText(problem: SetupProblem, modifier: Modifier = Modifier) {
+    val text = problem.key?.let { LocalSetupText.current.format(it, emptyMap()) } ?: stringResource(
+        when (problem.local) {
+            SetupLocalProblem.Unauthorized -> R.string.cfg_setup_err_unauthorized
+            SetupLocalProblem.Unsupported -> R.string.cfg_setup_err_unsupported
+            SetupLocalProblem.Armed -> R.string.cfg_setup_err_armed
+            SetupLocalProblem.Unreachable, null -> R.string.cfg_setup_err_unreachable
+        },
+    )
+    Text(text, modifier, color = AdosTheme.colors.statusError)
 }

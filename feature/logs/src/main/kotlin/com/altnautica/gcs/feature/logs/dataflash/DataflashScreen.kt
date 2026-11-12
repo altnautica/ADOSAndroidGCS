@@ -27,7 +27,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.res.Resources
+import androidx.compose.ui.platform.LocalResources
 import com.altnautica.gcs.core.designsystem.component.AdosButton
+import com.altnautica.gcs.core.link.text.linkReasonRes
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.EmptyState
 import com.altnautica.gcs.core.designsystem.component.ErrorState
@@ -55,7 +58,8 @@ fun DataflashRoute(nodeId: DeviceId, onBack: () -> Unit, modifier: Modifier = Mo
         onBack = onBack,
         modifier = modifier,
         actions = {
-            IconButton(onClick = viewModel::refresh, enabled = state !is DataflashUiState.NoVehicle && state !is DataflashUiState.Listing) {
+            val canRefresh = state !is DataflashUiState.NoVehicle && state !is DataflashUiState.Listing && state !is DataflashUiState.Armed
+            IconButton(onClick = viewModel::refresh, enabled = canRefresh) {
                 Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.logs_df_refresh))
             }
         },
@@ -87,9 +91,14 @@ fun DataflashScreen(
                 title = stringResource(R.string.logs_df_no_vehicle_title),
                 message = stringResource(R.string.logs_df_no_vehicle),
             )
+            DataflashUiState.Armed -> EmptyState(
+                icon = Icons.Outlined.LinkOff,
+                title = stringResource(R.string.logs_df_armed_title),
+                message = stringResource(R.string.logs_df_armed),
+            )
             DataflashUiState.Listing -> LoadingState(stringResource(R.string.logs_df_listing))
             is DataflashUiState.ListFailed -> ErrorState(
-                reason = stringResource(R.string.logs_df_list_failed, state.reason),
+                reason = listFailedText(LocalResources.current, state.reason),
                 retryLabel = stringResource(R.string.logs_retry),
                 onRetry = onRefresh,
             )
@@ -128,7 +137,7 @@ private fun DataflashItem(row: DataflashRow, onDownload: (LogEntry) -> Unit, onC
             when (val d = row.download) {
                 EntryDownload.None, is EntryDownload.Failed ->
                     AdosButton(stringResource(R.string.logs_df_download), onClick = { onDownload(e) }, variant = AdosButtonVariant.Secondary)
-                is EntryDownload.Running ->
+                is EntryDownload.Running, EntryDownload.Queued ->
                     AdosButton(stringResource(R.string.logs_df_cancel), onClick = { onCancel(e) }, variant = AdosButtonVariant.Secondary)
                 is EntryDownload.Saved -> IconButton(onClick = { onShare(d.path) }) {
                     Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.logs_share))
@@ -140,8 +149,20 @@ private fun DataflashItem(row: DataflashRow, onDownload: (LogEntry) -> Unit, onC
                 progress = { if (d.totalBytes > 0) d.receivedBytes / d.totalBytes.toFloat() else 0f },
                 modifier = Modifier.fillMaxWidth(),
             )
-            is EntryDownload.Failed -> Text(stringResource(R.string.logs_df_failed, d.reason), color = colors.statusError, style = MaterialTheme.typography.bodySmall)
+            is EntryDownload.Failed -> Text(
+                downloadFailedText(LocalResources.current, d.reason),
+                color = colors.statusError,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            EntryDownload.Queued -> Text(stringResource(R.string.logs_df_queued), color = colors.fgSecondary, style = MaterialTheme.typography.bodySmall)
             else -> Unit
         }
     }
 }
+
+/** List failure in operator words; the link token never reaches the screen. */
+internal fun listFailedText(res: Resources, reason: String): String =
+    res.getString(R.string.logs_df_list_failed, res.getString(linkReasonRes(reason)))
+
+internal fun downloadFailedText(res: Resources, reason: String): String =
+    res.getString(R.string.logs_df_failed, res.getString(linkReasonRes(reason)))

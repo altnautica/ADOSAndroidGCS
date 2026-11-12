@@ -55,7 +55,7 @@ internal fun problemText(problem: CaptureProblem): String = when (problem) {
         PageProblem.Unauthorized -> stringResource(R.string.node_problem_unauthorized)
         is PageProblem.PinRequired -> p.message ?: stringResource(R.string.node_problem_pin)
         PageProblem.Unsupported -> stringResource(R.string.visor_problem_no_extension)
-        is PageProblem.Unreachable -> p.message ?: stringResource(R.string.node_problem_unreachable)
+        PageProblem.Unreachable -> stringResource(R.string.node_problem_unreachable)
     }
 }
 

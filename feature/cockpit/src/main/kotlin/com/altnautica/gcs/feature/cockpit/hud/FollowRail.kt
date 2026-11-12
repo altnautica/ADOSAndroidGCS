@@ -1,11 +1,11 @@
 package com.altnautica.gcs.feature.cockpit.hud
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,8 +17,9 @@ import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PersonPinCircle
 import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,8 +46,9 @@ import androidx.compose.ui.unit.sp
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.theme.GLOVE_TOUCH_SCALE
-import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
+import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 
@@ -81,6 +83,7 @@ internal fun FollowRail(
     modifier: Modifier = Modifier,
 ) {
     val c = AdosTheme.colors
+    val chrome = LocalChrome.current
     val base = when (width) {
         WidthClass.Compact, WidthClass.Medium -> 48.dp
         WidthClass.Expanded -> 56.dp
@@ -89,22 +92,22 @@ internal fun FollowRail(
     val size = if (AdosTheme.gloveMode) base * GLOVE_TOUCH_SCALE else base
     val fold = width == WidthClass.Compact && safeHeight < 360.dp
     var unfolded by remember { mutableStateOf(false) }
-    Surface(modifier, shape = RoundedCornerShape(AdosRadius.Xl), color = c.hudGlass, border = BorderStroke(1.dp, c.hudHair)) {
+    ChromePanel(modifier) {
         Column(Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             if (ui.followInstalled) {
                 if (ui.followActive) {
                     RailButton(Icons.Outlined.Close, specText("follow.tracking").uppercase() + " ×", size, c.hudTrack, true, onFollow)
                 } else {
-                    RailButton(Icons.Outlined.PersonPinCircle, specText("follow.chip"), size, c.hudInk, ui.followEnabled, onFollow)
+                    RailButton(Icons.Outlined.PersonPinCircle, specText("follow.chip"), size, chrome.text, ui.followEnabled, onFollow)
                 }
                 ReacquireToggle(ui.reacquireMode, ui.pendingMode, size, onReacquireMode)
             }
             val showExtras = !fold || unfolded
-            if (fold && !unfolded) RailButton(Icons.Outlined.MoreHoriz, specText("follow.more"), size, c.hudInk, true) { unfolded = true }
+            if (fold && !unfolded) RailButton(Icons.Outlined.MoreHoriz, specText("follow.more"), size, chrome.text, true) { unfolded = true }
             if (showExtras) {
-                ui.swapLabels?.let { (a, b) -> RailButton(Icons.Outlined.SwapVert, specText("follow.cam_swap", "from" to a, "to" to b), size, c.hudInk, true, onSwap) }
+                ui.swapLabels?.let { (a, b) -> RailButton(Icons.Outlined.SwapVert, specText("follow.cam_swap", "from" to a, "to" to b), size, chrome.text, true, onSwap) }
                 if (ui.canRecord) {
-                    RailButton(Icons.Outlined.FiberManualRecord, specText("follow.rec"), size, if (ui.recording) c.hudCrit else c.hudInk, true, onRecord)
+                    RailButton(Icons.Outlined.FiberManualRecord, specText("follow.rec"), size, if (ui.recording) c.hudCrit else chrome.text, true, onRecord)
                 }
             }
         }
@@ -113,22 +116,19 @@ internal fun FollowRail(
 
 @Composable
 private fun RailButton(icon: ImageVector, label: String, size: Dp, tint: Color, enabled: Boolean, onClick: () -> Unit) {
-    val c = AdosTheme.colors
-    Surface(
-        modifier = Modifier
+    val chrome = LocalChrome.current
+    ChromePanel(
+        Modifier
             .size(size)
             .alpha(if (enabled) 1f else 0.5f)
             .semantics { contentDescription = label }
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
-        shape = RoundedCornerShape(AdosRadius.Lg),
-        color = c.hudGlassStrong,
-        contentColor = tint,
-        border = BorderStroke(1.dp, c.hudHair),
+        shape = RoundedCornerShape(chrome.radiusSmall),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
             Spacer(Modifier.height(2.dp))
-            Text(label, style = railText(), maxLines = 1)
+            Text(label, style = railText(), color = tint, maxLines = 1)
         }
     }
 }
@@ -140,6 +140,7 @@ private fun railText() = AdosTypography.numeric.small.copy(fontSize = 9.sp, font
 @Composable
 internal fun ReacquireToggle(mode: String?, pending: String?, size: Dp, onSelect: (String) -> Unit) {
     val c = AdosTheme.colors
+    val chrome = LocalChrome.current
     val description = specText("target.reacquire_mode")
     val pendingWord = specText("setup.state.pending").lowercase()
     Column(Modifier.semantics { contentDescription = description }, verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -148,12 +149,14 @@ internal fun ReacquireToggle(mode: String?, pending: String?, size: Dp, onSelect
             val isPending = pending == value
             Box(
                 Modifier
+                    .testTag("reacquire-$value")
+                    .minimumInteractiveComponentSize()
                     .size(width = size, height = size / 2)
                     .drawBehind {
-                        val r = CornerRadius(6.dp.toPx())
+                        val r = CornerRadius(chrome.radiusSmall.toPx())
                         if (active && !isPending) drawRoundRect(c.hudPrimary.copy(alpha = 0.35f), cornerRadius = r)
                         if (isPending) {
-                            drawRoundRect(c.hudInk, cornerRadius = r, style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx()))))
+                            drawRoundRect(chrome.text, cornerRadius = r, style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx()))))
                         }
                     }
                     .semantics {
@@ -163,7 +166,7 @@ internal fun ReacquireToggle(mode: String?, pending: String?, size: Dp, onSelect
                     .clickable(role = Role.RadioButton) { if ((pending ?: mode) != value) onSelect(value) },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(label, style = railText(), color = if (active) c.hudInk else c.hudMuted, modifier = Modifier.padding(horizontal = AdosSpacing.S1))
+                Text(label, style = railText(), color = if (active) chrome.text else chrome.textDim, modifier = Modifier.padding(horizontal = AdosSpacing.S1))
             }
         }
     }

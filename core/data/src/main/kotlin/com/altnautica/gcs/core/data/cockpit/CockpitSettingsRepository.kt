@@ -40,8 +40,6 @@ data class CockpitSettings(
     val maxBrightnessDefault: Boolean = false,
     val altitudeReference: AltitudeReference = AltitudeReference.Rel,
     val density: CockpitDensity = CockpitDensity.Std,
-    /** Video share of a medium/expanded split, 0.3..0.7 (views.json `split.divider`). */
-    val splitRatio: Float = 0.5f,
     /** Telemetry side pane on expanded widths. */
     val telemetryPane: Boolean = true,
     /** Spoken flight-flow prompts: handover, return home, low battery and mission state changes. */
@@ -65,7 +63,6 @@ class CockpitSettingsRepository @Inject constructor(
             maxBrightnessDefault = p[MAX_BRIGHTNESS] ?: d.maxBrightnessDefault,
             altitudeReference = p[ALT_REF]?.let { runCatching { AltitudeReference.valueOf(it) }.getOrNull() } ?: d.altitudeReference,
             density = p[DENSITY]?.let { runCatching { CockpitDensity.valueOf(it) }.getOrNull() } ?: d.density,
-            splitRatio = (p[SPLIT] ?: d.splitRatio).coerceIn(MIN_SPLIT, MAX_SPLIT),
             telemetryPane = p[TELEMETRY_PANE] ?: d.telemetryPane,
             voicePrompts = p[VOICE_PROMPTS] ?: d.voicePrompts,
         )
@@ -89,7 +86,17 @@ class CockpitSettingsRepository @Inject constructor(
 
     suspend fun setDensity(density: CockpitDensity) = dataStore.edit { it[DENSITY] = density.name }
 
-    suspend fun setSplitRatio(ratio: Float) = dataStore.edit { it[SPLIT] = ratio.coerceIn(MIN_SPLIT, MAX_SPLIT) }
+    /** Video share of a medium/expanded split for one vehicle, 0.3..0.7 (views.json `split.divider`); half when unset. */
+    fun splitRatio(vehicleId: String): Flow<Float> =
+        dataStore.data.map { (it[splitKey(vehicleId)] ?: DEFAULT_SPLIT).coerceIn(MIN_SPLIT, MAX_SPLIT) }.distinctUntilChanged()
+
+    suspend fun setSplitRatio(vehicleId: String, ratio: Float) =
+        dataStore.edit { it[splitKey(vehicleId)] = ratio.coerceIn(MIN_SPLIT, MAX_SPLIT) }
+
+    /** The cockpit main view id last picked for one vehicle; null when unset. */
+    fun view(vehicleId: String): Flow<String?> = dataStore.data.map { it[viewKey(vehicleId)] }.distinctUntilChanged()
+
+    suspend fun setView(vehicleId: String, viewId: String) = dataStore.edit { it[viewKey(vehicleId)] = viewId }
 
     suspend fun setTelemetryPane(on: Boolean) = dataStore.edit { it[TELEMETRY_PANE] = on }
 
@@ -108,6 +115,7 @@ class CockpitSettingsRepository @Inject constructor(
     companion object {
         const val MIN_SPLIT = 0.3f
         const val MAX_SPLIT = 0.7f
+        const val DEFAULT_SPLIT = 0.5f
         const val BATTERY_LOW_MIN = 10
         const val BATTERY_LOW_MAX = 60
         const val BATTERY_CRITICAL_MIN = 5
@@ -122,10 +130,11 @@ class CockpitSettingsRepository @Inject constructor(
         private val MAX_BRIGHTNESS = booleanPreferencesKey("cockpit.maxBrightness")
         private val ALT_REF = stringPreferencesKey("cockpit.hud.altitudeReference")
         private val DENSITY = stringPreferencesKey("cockpit.density")
-        private val SPLIT = floatPreferencesKey("cockpit.splitRatio")
         private val TELEMETRY_PANE = booleanPreferencesKey("cockpit.telemetryPane")
         private val VOICE_PROMPTS = booleanPreferencesKey("cockpit.audio.voicePrompts")
         private fun layersKey(vehicleId: String) = stringPreferencesKey("cockpit.layers.$vehicleId")
+        private fun splitKey(vehicleId: String) = floatPreferencesKey("cockpit.splitRatio.$vehicleId")
+        private fun viewKey(vehicleId: String) = stringPreferencesKey("cockpit.view.$vehicleId")
         private fun minimapKey(vehicleId: String) = stringPreferencesKey("cockpit.minimap.mode.$vehicleId")
         const val MINIMAP_AUTO = "auto"
         const val MINIMAP_LOCAL = "local"

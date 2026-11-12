@@ -29,9 +29,9 @@
     <string name="plan_action_fit">Show whole plan</string>
     <string name="plan_name">Plan name</string>
 
-    <!-- Vehicle -->
-    <string name="plan_vehicle_choose">Choose vehicle</string>
-    <string name="plan_vehicle_none">No vehicle</string>
+    <!-- Drone -->
+    <string name="plan_vehicle_choose">Choose drone</string>
+    <string name="plan_vehicle_none">No drone</string>
     <string name="plan_liveness_live">Live</string>
     <string name="plan_liveness_stale">Stale</string>
     <string name="plan_liveness_offline">Offline</string>
@@ -39,20 +39,22 @@
     <string name="plan_vehicle_unsupported">No MAVLink link</string>
     <string name="plan_vehicle_live">Live</string>
     <string name="plan_vehicle_stale">Link stale</string>
-    <string name="plan_vehicle_picker_title">Plan for vehicle</string>
-    <string name="plan_vehicle_picker_empty_title">No vehicles</string>
+    <string name="plan_vehicle_picker_title">Plan for drone</string>
+    <string name="plan_vehicle_picker_empty_title">No drones</string>
     <string name="plan_vehicle_picker_empty_message">Connect a drone or flight controller from the Fleet screen to upload plans.</string>
-    <string name="plan_vehicle_picker_detach">Plan without a vehicle</string>
-    <string name="plan_vehicle_needed">Choose a vehicle to upload, download or start a mission.</string>
-    <string name="plan_vehicle_unsupported_detail">This vehicle is not reachable over MAVLink, so missions cannot be transferred from here.</string>
-    <string name="plan_vehicle_connecting_detail">Waiting for the vehicle link.</string>
-    <string name="plan_vehicle_stale_detail">No heartbeat from the vehicle for more than 3 seconds.</string>
+    <string name="plan_vehicle_picker_detach">Plan without a drone</string>
+    <string name="plan_vehicle_needed">Choose a drone to upload, download or start a mission.</string>
+    <string name="plan_vehicle_unsupported_detail">This drone is not reachable over MAVLink, so missions cannot be transferred from here.</string>
+    <string name="plan_vehicle_connecting_detail">Waiting for the drone link.</string>
+    <string name="plan_vehicle_stale_detail">No heartbeat from the drone for more than 3 seconds.</string>
 
     <!-- Transfer -->
-    <string name="plan_upload">Upload</string>
-    <string name="plan_download">Download</string>
-    <string name="plan_in_sync">On vehicle</string>
-    <string name="plan_not_in_sync">Not on vehicle</string>
+    <string name="plan_upload_to">Upload to %1$s</string>
+    <string name="plan_download_from">Download from %1$s</string>
+    <string name="plan_upload_to_drone">Upload to drone</string>
+    <string name="plan_download_from_drone">Download from drone</string>
+    <string name="plan_in_sync">On drone</string>
+    <string name="plan_not_in_sync">Not on drone</string>
     <string name="plan_transfer_mission">mission</string>
     <string name="plan_transfer_fence">fence</string>
     <string name="plan_transfer_rally">rally points</string>
@@ -72,25 +74,25 @@
     <string name="plan_transfer_download_word">Download of</string>
     <string name="plan_transfer_clear_word">Clearing of</string>
     <string name="plan_transfer_dismiss">Dismiss</string>
-    <string name="plan_error_no_link">no link to the vehicle</string>
+    <string name="plan_error_no_link">no link to the drone</string>
     <string name="plan_error_busy">another transfer is running</string>
-    <string name="plan_error_timeout">the vehicle stopped answering</string>
-    <string name="plan_error_write">%1$s</string>
-    <string name="plan_error_rejected">the vehicle rejected it (code %1$d)</string>
+    <string name="plan_error_timeout">the drone stopped answering</string>
+    <string name="plan_mission_in_flight">Pause the mission before uploading</string>
+    <string name="plan_upload_in_progress">Transfer in progress. Wait for it to finish before leaving.</string>
     <string name="plan_download_replace_title">Replace the open plan?</string>
-    <string name="plan_download_replace_message">The open plan has unsaved changes. Downloading replaces it with the vehicle\'s mission.</string>
+    <string name="plan_download_replace_message">The open plan has unsaved changes. Downloading replaces it with the drone\'s mission.</string>
     <string name="plan_download_replace_confirm">Replace</string>
     <string name="plan_cancel">Cancel</string>
 
     <!-- Start mission -->
     <string name="plan_start_mission">Start mission</string>
     <string name="plan_start_title">Start mission</string>
-    <string name="plan_start_message_disarmed">Arms the vehicle and flies the mission stored on it. The cockpit opens once it starts.</string>
-    <string name="plan_start_message_armed">Flies the mission stored on the vehicle. The cockpit opens once it starts.</string>
+    <string name="plan_start_message_disarmed">Arms the drone and flies the mission stored on it. The cockpit opens once it starts.</string>
+    <string name="plan_start_message_armed">Flies the mission stored on the drone. The cockpit opens once it starts.</string>
     <string name="plan_start_slide">Slide to start mission</string>
     <string name="plan_start_running">Starting</string>
-    <string name="plan_start_check_link">Vehicle link fresh</string>
-    <string name="plan_start_check_plan">This plan is on the vehicle</string>
+    <string name="plan_start_check_link">Drone link fresh</string>
+    <string name="plan_start_check_plan">This plan is on the drone</string>
     <string name="plan_start_check_gps">GPS 3D fix</string>
     <string name="plan_start_check_home">Home position set</string>
     <string name="plan_start_check_ok">OK</string>
@@ -99,10 +101,13 @@
     <string name="plan_start_override_summary">Start with the items above not ready</string>
     <string name="plan_start_error_arm">Arming refused: %1$s</string>
     <string name="plan_start_error_start">Mission start refused: %1$s</string>
-    <string name="plan_result_rejected">%1$s (code %2$d)</string>
-    <string name="plan_result_unsupported">not supported by this vehicle</string>
-    <string name="plan_result_timeout">no answer from the vehicle</string>
-    <string name="plan_result_denied">%1$s</string>
+    <string name="plan_result_denied">the drone refused it</string>
+    <string name="plan_result_temporarily_rejected">the drone can\'t do that right now; try again</string>
+    <string name="plan_result_failed">the drone tried and failed</string>
+    <string name="plan_result_in_progress">the drone is still working on it</string>
+    <string name="plan_result_cancelled">cancelled on the drone</string>
+    <string name="plan_result_unsupported">not supported by this drone</string>
+    <string name="plan_result_timeout">no answer from the drone</string>
     <string name="plan_result_queued">queued, not confirmed</string>
 
     <!-- Item editor -->
@@ -155,8 +160,9 @@
     <string name="plan_survey_speed">Speed</string>
     <string name="plan_survey_overlap">Front overlap</string>
     <string name="plan_survey_sidelap">Side overlap</string>
-    <string name="plan_survey_fov">Camera field of view</string>
-    <string name="plan_survey_angle">Grid angle</string>
+    <string name="plan_survey_fov">Camera field of view, across track</string>
+    <string name="plan_survey_vfov">Camera field of view, along track</string>
+    <string name="plan_survey_angle">Line bearing</string>
     <string name="plan_survey_swath">Swath width</string>
     <plurals name="plan_survey_lines">
         <item quantity="one">%1$d line</item>
@@ -218,16 +224,21 @@
         <item quantity="one">Imported %1$s with %2$d item dropped</item>
         <item quantity="other">Imported %1$s with %2$d items dropped</item>
     </plurals>
+    <string name="plan_import_warnings_title">Not everything was imported</string>
+    <string name="plan_import_warnings_message">Check the plan before uploading. These items from the file are not in it:</string>
+    <string name="plan_import_warning_jump">Item %1$d: a jump to item %2$d was dropped because that item is not in the file, so the loop is gone</string>
+    <string name="plan_import_warning_skipped">An item of type %1$s was skipped because it carried nothing the planner can fly</string>
     <string name="plan_msg_import_failed">Could not import: %1$s</string>
     <string name="plan_msg_import_not_waypoints">the file is not a QGC WPL waypoint list</string>
     <string name="plan_msg_import_not_plan">the file is not a QGroundControl plan</string>
     <string name="plan_msg_import_malformed">the file is not valid JSON</string>
     <string name="plan_msg_import_complex_geometry">a survey item has no waypoints or coordinates</string>
     <string name="plan_msg_import_complex_altitude">a survey item does not say how high to fly</string>
+    <string name="plan_msg_import_unreadable">the file could not be read</string>
     <string name="plan_msg_exported">Exported .%1$s</string>
-    <string name="plan_msg_export_failed">Could not export: %1$s</string>
+    <string name="plan_msg_export_failed">Could not export the plan. The file could not be written.</string>
     <string name="plan_msg_survey_empty">The survey outline produced no waypoints.</string>
-    <string name="plan_msg_vehicle_empty">The vehicle has no mission stored.</string>
+    <string name="plan_msg_vehicle_empty">The drone has no mission stored.</string>
     <string name="plan_msg_download_partial">Mission downloaded; the %1$s could not be read.</string>
 
     <!-- Editing guards, validation, verify and stats -->
@@ -237,9 +248,9 @@
     <string name="plan_delete_saved_title">Delete %1$s?</string>
     <string name="plan_delete_saved_message">The plan is removed from this device. This cannot be undone.</string>
     <string name="plan_delete_saved_confirm">Delete</string>
-    <string name="plan_terrain_hint">Needs terrain data on the vehicle; the profile shows the altitude above the mission\'s terrain reference, not ground clearance</string>
+    <string name="plan_terrain_hint">Needs terrain data on the drone; the profile shows the altitude above the mission\'s terrain reference, not ground clearance</string>
     <string name="plan_verifying">Verifying %1$s</string>
-    <string name="plan_error_verify">the %1$s read back from the vehicle differs from what was sent</string>
+    <string name="plan_error_verify">the %1$s read back from the drone differs from what was sent</string>
     <string name="plan_retry">Retry</string>
     <string name="plan_issues_title">Before upload</string>
     <string name="plan_issues_blocking">Fix the blocking issues to upload</string>
@@ -257,6 +268,35 @@
     <plurals name="plan_issue_inside_exclusion">
         <item quantity="one">%1$d item is inside an exclusion zone</item>
         <item quantity="other">%1$d items are inside an exclusion zone</item>
+    </plurals>
+    <string name="plan_issue_missing_takeoff">The mission needs a takeoff first: it starts in the air, or the autopilot will not start it on the ground</string>
+    <plurals name="plan_issue_alt_low">
+        <item quantity="one">%1$d item is at or below home altitude</item>
+        <item quantity="other">%1$d items are at or below home altitude</item>
+    </plurals>
+    <plurals name="plan_issue_bad_coordinates">
+        <item quantity="one">%1$d item has no valid position</item>
+        <item quantity="other">%1$d items have no valid position</item>
+    </plurals>
+    <plurals name="plan_issue_leg_fence">
+        <item quantity="one">%1$d leg crosses a fence</item>
+        <item quantity="other">%1$d legs cross a fence</item>
+    </plurals>
+    <plurals name="plan_issue_bad_jump">
+        <item quantity="one">%1$d jump has no target or never ends</item>
+        <item quantity="other">%1$d jumps have no target or never end</item>
+    </plurals>
+    <plurals name="plan_issue_outside_home_circle">
+        <item quantity="one">%1$d point is beyond the drone\'s fence radius from home</item>
+        <item quantity="other">%1$d points are beyond the drone\'s fence radius from home</item>
+    </plurals>
+    <plurals name="plan_issue_above_ceiling">
+        <item quantity="one">%1$d point is above the drone\'s fence ceiling</item>
+        <item quantity="other">%1$d points are above the drone\'s fence ceiling</item>
+    </plurals>
+    <plurals name="plan_issue_below_floor">
+        <item quantity="one">%1$d point is below the drone\'s fence floor</item>
+        <item quantity="other">%1$d points are below the drone\'s fence floor</item>
     </plurals>
     <string name="plan_item_shoot">Take a photo</string>
     <string name="plan_item_speed_type">Speed type</string>
@@ -283,7 +323,7 @@
     <string name="plan_rename_label">Plan name</string>
     <string name="plan_rename_confirm">Rename</string>
     <string name="plan_rename_action">Rename plan</string>
-    <string name="plan_vehicle_action">Choose the vehicle for this plan</string>
+    <string name="plan_vehicle_action">Choose the drone for this plan</string>
     <string name="plan_profile_expand">Expand altitude profile</string>
     <string name="plan_profile_collapse">Collapse altitude profile</string>
     <string name="plan_longpress_add_waypoint">Add waypoint here</string>
@@ -298,5 +338,4 @@
     <string name="plan_hint_menu">Menu</string>
     <string name="plan_tools_description">Editing tools</string>
     <string name="plan_drone_differs">Plan on drone differs from this device\'s plan</string>
-    <string name="plan_load_from_drone">Load from drone</string>
 </resources>

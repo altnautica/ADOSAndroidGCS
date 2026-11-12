@@ -140,16 +140,18 @@ private fun pageTitle(page: ConnectPage): Int = when (page) {
 
 @Composable
 private fun ErrorBanner(error: ConnectError) {
-    val text = when (error) {
-        ConnectError.CodeNotFound -> stringResource(R.string.connect_error_code_not_found)
-        ConnectError.AlreadyPaired -> stringResource(R.string.connect_error_already_paired)
-        ConnectError.Unauthorized -> stringResource(R.string.connect_error_unauthorized)
-        ConnectError.Unreachable -> stringResource(R.string.connect_error_unreachable)
-        ConnectError.InvalidAnswer -> stringResource(R.string.connect_error_invalid)
-        ConnectError.CredentialStoreUnavailable -> stringResource(R.string.connect_error_credential_store)
-        is ConnectError.Other -> error.message ?: stringResource(R.string.connect_error_other)
-    }
-    StatusChip(StatusLevel.Error, text, modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2))
+    StatusChip(StatusLevel.Error, stringResource(connectErrorText(error)), modifier = Modifier.padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S2))
+}
+
+/** The operator's words for [error]; an agent's own server message is never shown raw. */
+internal fun connectErrorText(error: ConnectError): Int = when (error) {
+    ConnectError.CodeNotFound -> R.string.connect_error_code_not_found
+    ConnectError.AlreadyPaired -> R.string.connect_error_already_paired
+    ConnectError.Unauthorized -> R.string.connect_error_unauthorized
+    ConnectError.Unreachable -> R.string.connect_error_unreachable
+    ConnectError.InvalidAnswer -> R.string.connect_error_invalid
+    ConnectError.CredentialStoreUnavailable -> R.string.connect_error_credential_store
+    is ConnectError.Other -> R.string.connect_error_other
 }
 
 /** Portrait start page: discovered nodes first, then every other method. */
@@ -205,7 +207,7 @@ private fun LazyListScope.discoveredItems(state: ConnectUiState, vm: ConnectView
     }
     items(state.discovered, key = { it.agent.deviceId ?: it.agent.serviceName }) { row ->
         val summary = listOfNotNull(
-            row.agent.profile,
+            row.agent.profile?.let { wire -> discoveredProfileRes(wire)?.let { stringResource(it) } ?: wire },
             row.agent.host,
             when {
                 row.haveKey -> stringResource(R.string.connect_paired_here)

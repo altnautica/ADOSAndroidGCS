@@ -9,6 +9,8 @@ import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.link.mission.MissionMirrorSource
+import com.altnautica.gcs.core.link.vehicle.VehicleRepository
+import com.altnautica.gcs.feature.home.keepLastKnown
 import com.altnautica.gcs.core.model.MissionStatus
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
@@ -64,6 +66,7 @@ class QuickMenuViewModel @Inject constructor(
     controllerManager: ControllerManager,
     cockpitSummaries: CockpitSummaryRegistry,
     missionMirror: MissionMirrorSource,
+    vehicleRepository: VehicleRepository,
 ) : ViewModel() {
 
     /** Same choice Home makes: the stored vehicle when listed, otherwise the first in row order. */
@@ -82,12 +85,13 @@ class QuickMenuViewModel @Inject constructor(
             if (node == null) {
                 flowOf(null)
             } else {
-                vitalsRepository.vitals(node).onStart { emit(NodeVitals.UNKNOWN) }.map { node.id to it }
+                val live = vitalsRepository.vitals(node).onStart { emit(NodeVitals.UNKNOWN) }
+                (if (HomeViewModel.vitalsNeedOpenLink(node)) live.keepLastKnown() else live).map { node.id to it }
             }
         }
 
-    private val vehicle: Flow<FleetCard?> = combine(selectedNode, vitals.onStart { emit(null) }) { node, v ->
-        node?.let { n -> HomeViewModel.card(n, v?.takeIf { it.first == n.id }?.second ?: NodeVitals.UNKNOWN) }
+    private val vehicle: Flow<FleetCard?> = combine(selectedNode, vitals.onStart { emit(null) }, vehicleRepository.openVehicles) { node, v, open ->
+        node?.let { n -> HomeViewModel.card(n, v?.takeIf { it.first == n.id }?.second ?: NodeVitals.UNKNOWN, linkOpen = n.id in open) }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

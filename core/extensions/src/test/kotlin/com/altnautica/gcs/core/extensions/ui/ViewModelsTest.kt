@@ -6,6 +6,7 @@ import com.altnautica.gcs.core.extensions.NODE
 import com.altnautica.gcs.core.extensions.data.ExtensionFailure
 import com.altnautica.gcs.core.extensions.data.ExtensionReach
 import com.altnautica.gcs.core.extensions.data.ExtensionsState
+import com.altnautica.gcs.core.extensions.data.WriteOutcome
 import com.altnautica.gcs.core.extensions.fixture
 import com.altnautica.gcs.core.extensions.manifest.ExtensionDetailParser
 import com.altnautica.gcs.core.extensions.manifest.ExtensionSlots
@@ -106,6 +107,34 @@ class ViewModelsTest {
         advanceUntilIdle()
         assertTrue(vm.state.value.busy.isEmpty())
         collector.cancel()
+    }
+
+    @Test
+    fun uninstallReportsTheNameAndAQuietSwitchReportsNothing() = runTest(dispatcher) {
+        val vm = NodeExtensionsViewModel(repo())
+        val collector = backgroundScope.launch { vm.state.collect {} }
+        advanceUntilIdle()
+        vm.start(NODE)
+        advanceUntilIdle()
+        vm.setEnabled(followId, false)
+        advanceUntilIdle()
+        assertEquals(null, vm.state.value.notice)
+        vm.uninstall(followId, "Follow me")
+        advanceUntilIdle()
+        assertEquals(ExtensionNotice.Uninstalled("Follow me"), vm.state.value.notice)
+        vm.clearNotice()
+        advanceUntilIdle()
+        assertEquals(null, vm.state.value.notice)
+        collector.cancel()
+    }
+
+    @Test
+    fun aFailedWriteIsAProblemNoticeAndInstallStagesHaveWords() {
+        val failed = WriteOutcome.Failed(ExtensionFailure.Network(null))
+        assertEquals(ExtensionNotice.Problem(failed), ExtensionNotice.of(failed, ExtensionNotice.Installed("x")))
+        assertEquals(ExtensionNotice.Installed("x"), ExtensionNotice.of(WriteOutcome.Done, ExtensionNotice.Installed("x")))
+        assertEquals(com.altnautica.gcs.core.extensions.R.string.extensions_stage_downloading, installStageRes("downloading"))
+        assertEquals(null, installStageRes("something_else"))
     }
 
     @Test

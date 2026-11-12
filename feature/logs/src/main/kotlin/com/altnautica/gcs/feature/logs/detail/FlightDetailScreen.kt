@@ -108,11 +108,19 @@ fun FlightDetailScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.fgSecondary,
                     )
-                    is SeriesState.Failed -> ErrorState(
-                        reason = stringResource(R.string.logs_detail_tlog_failed, series.message),
-                        retryLabel = stringResource(R.string.logs_retry),
-                        onRetry = onReload,
-                    )
+                    is SeriesState.Failed -> {
+                        ErrorState(
+                            reason = stringResource(R.string.logs_detail_tlog_failed),
+                            retryLabel = stringResource(R.string.logs_retry),
+                            onRetry = onReload,
+                        )
+                        // A damaged log is the one support needs: it stays shareable.
+                        AdosButton(
+                            label = stringResource(R.string.logs_share),
+                            onClick = { onShare(series.tlogPath) },
+                            variant = AdosButtonVariant.Secondary,
+                        )
+                    }
                     is SeriesState.Ready -> {
                         FlightTrack(series.series.track, Modifier.fillMaxWidth())
                         val noData = stringResource(R.string.logs_chart_no_data)

@@ -115,4 +115,25 @@ class NodeVitalsRepositoryTest {
         assertEquals(NodeVitals.UNKNOWN, vitals(node("usb", Reach.DirectFc)))
         verify(exactly = 0) { status.observe(any()) }
     }
+
+    @Test
+    fun `direct link values turn unknown once heartbeats stop`() = runTest {
+        val hb = MutableStateFlow<com.altnautica.gcs.core.model.HeartbeatState?>(
+            com.altnautica.gcs.core.model.HeartbeatState(true, com.altnautica.gcs.core.model.FlightMode(5, "LOITER"), 2, 3, now - 1_000),
+        )
+        val telemetry = mockk<com.altnautica.gcs.core.model.VehicleTelemetry> {
+            every { heartbeat } returns hb
+            every { battery } returns MutableStateFlow(null)
+            every { gps } returns MutableStateFlow(null)
+        }
+        val v = mockk<com.altnautica.gcs.core.model.Vehicle> { every { this@mockk.telemetry } returns telemetry }
+        every { vehicles.openVehicles } returns MutableStateFlow(mapOf(DeviceId("usb") to v))
+        val seen = mutableListOf<NodeVitals>()
+        val job = launch { repo.vitals(node("usb", Reach.DirectFc)).toList(seen) }
+        runCurrent()
+        assertEquals(listOf(NodeVitals(null, "LOITER", true)), seen)
+        advanceTimeBy(NodeVitalsRepository.MAX_HEARTBEAT_AGE_MS - 1_000 + 1)
+        assertEquals(NodeVitals.UNKNOWN, seen.last())
+        job.cancel()
+    }
 }

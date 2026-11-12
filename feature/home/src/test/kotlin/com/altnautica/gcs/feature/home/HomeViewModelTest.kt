@@ -38,6 +38,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.altnautica.gcs.core.link.vehicle.VehicleRepository
+import kotlinx.coroutines.flow.toList
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -73,13 +75,57 @@ class HomeViewModelTest {
     private fun lanNodes(unreadable: MutableStateFlow<Boolean> = MutableStateFlow(false)) =
         mockk<LanNodeSource> { every { savedNodesUnreadable } returns unreadable }
 
+    private val openVehicles = MutableStateFlow<Map<DeviceId, com.altnautica.gcs.core.model.Vehicle>>(emptyMap())
+
     private fun CoroutineScope.vm(
         nodes: List<NodeSummary>,
         vitals: NodeVitalsRepository = vitals(),
         lan: LanNodeSource = lanNodes(),
     ): HomeViewModel {
         val repo = NodeRepository(setOf(Source(MutableStateFlow(nodes))), this)
-        return HomeViewModel(repo, vitals, lan, store, demo).also { vm -> launch { vm.uiState.collect {} } }
+        val vehicles = mockk<VehicleRepository> { every { this@mockk.openVehicles } returns this@HomeViewModelTest.openVehicles }
+        return HomeViewModel(repo, vitals, lan, store, demo, vehicles).also { vm -> launch { vm.uiState.collect {} } }
+    }
+
+    @Test
+    fun aClosedDirectLinkIsNotConnecting() = runTest(dispatcher) {
+        val vm = backgroundScope.vm(listOf(node("usb", NodeProfile.Drone, listOf(Reach.DirectFc))))
+        val card = vm.loaded().vehicles.single()
+        assertTrue(card.directLinkClosed)
+        val fly = surfaces(card).single { it.surface == HomeSurface.Fly }
+        assertEquals(HeroReadiness.OpensOnFly, heroReadiness(fly, card.vitals, card.directLinkClosed))
+    }
+
+    @Test
+    fun anOpenDirectLinkReportsItsVitals() = runTest(dispatcher) {
+        openVehicles.value = mapOf(DeviceId("usb") to mockk(relaxed = true))
+        val known = NodeVitals(80, "LOITER", false, com.altnautica.gcs.core.model.GpsFix.Fix3D, 12)
+        val vm = backgroundScope.vm(listOf(node("usb", NodeProfile.Drone, listOf(Reach.DirectFc))), vitals = vitals(mapOf("usb" to known)))
+        val card = vm.uiState.first { s -> s.vehicles.any { it.vitals == known } }.vehicles.single()
+        assertFalse(card.directLinkClosed)
+        val fly = surfaces(card).single { it.surface == HomeSurface.Fly }
+        assertEquals(HeroReadiness.Ready, heroReadiness(fly, card.vitals, card.directLinkClosed))
+    }
+
+    @Test
+    fun aLanNodeNeverWaitsOnADirectLink() {
+        val card = HomeViewModel.card(node("d", NodeProfile.Drone, listOf(Reach.Lan, Reach.DirectFc)), NodeVitals.UNKNOWN, linkOpen = false)
+        assertFalse(card.directLinkClosed)
+    }
+
+    @Test
+    fun directLinkVitalsSurviveTheLinkClosing() = runTest(dispatcher) {
+        val known = NodeVitals(64, "RTL", false)
+        val seen = flowOf(NodeVitals.UNKNOWN, known, NodeVitals.UNKNOWN).keepLastKnown()
+        assertEquals(listOf(NodeVitals.UNKNOWN, known), seen.toList(mutableListOf()))
+    }
+
+    @Test
+    fun unpairIsOfferedOnlyWithAnAgentLink() {
+        val lan = HomeViewModel.card(node("d", NodeProfile.Drone, listOf(Reach.Lan)), NodeVitals.UNKNOWN, linkOpen = false)
+        val usb = HomeViewModel.card(node("u", NodeProfile.Drone, listOf(Reach.DirectFc)), NodeVitals.UNKNOWN, linkOpen = false)
+        assertEquals(listOf(VehicleMenuAction.Details, VehicleMenuAction.PlanFor, VehicleMenuAction.Unpair), vehicleMenuActions(lan))
+        assertEquals(listOf(VehicleMenuAction.Details, VehicleMenuAction.PlanFor), vehicleMenuActions(usb))
     }
 
     private suspend fun HomeViewModel.loaded(): HomeUiState = uiState.first { !it.loading }
@@ -134,7 +180,7 @@ class HomeViewModelTest {
 
     @Test
     fun staleDroneHasNoThumbnail() {
-        val card = HomeViewModel.card(node("d", NodeProfile.Drone, listOf(Reach.Lan), Liveness.Stale), NodeVitals.UNKNOWN)
+        val card = HomeViewModel.card(node("d", NodeProfile.Drone, listOf(Reach.Lan), Liveness.Stale), NodeVitals.UNKNOWN, linkOpen = false)
         assertFalse(card.showThumbnail)
         assertTrue(card.canFly)
     }

@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.component.AdosButton
@@ -36,23 +37,10 @@ import com.altnautica.gcs.core.model.CommandResult
 // ── Transfer and start ─────────────────────────────────────
 
 @Composable
-internal fun missionTypeLabel(type: MissionType) = stringResource(
-    when (type) {
-        MissionType.Mission -> R.string.plan_transfer_mission
-        MissionType.Fence -> R.string.plan_transfer_fence
-        MissionType.Rally -> R.string.plan_transfer_rally
-    },
-)
+internal fun missionTypeLabel(type: MissionType) = missionTypeText(LocalResources.current, type)
 
 @Composable
-private fun missionErrorLabel(error: MissionError) = when (error) {
-    MissionError.NoLink -> stringResource(R.string.plan_error_no_link)
-    MissionError.Busy -> stringResource(R.string.plan_error_busy)
-    MissionError.Timeout -> stringResource(R.string.plan_error_timeout)
-    is MissionError.WriteFailed -> stringResource(R.string.plan_error_write, error.reason)
-    is MissionError.Rejected -> stringResource(R.string.plan_error_rejected, error.code)
-    is MissionError.VerifyMismatch -> stringResource(R.string.plan_error_verify, missionTypeLabel(error.type))
-}
+private fun missionErrorLabel(error: MissionError) = missionErrorText(LocalResources.current, error)
 
 @Composable
 internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
@@ -68,7 +56,7 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
     }
     val canTransfer = connected != null && !state.transferring
     val issues = state.issues
-    val uploadBlocked = issues.any { it.kind.blocking }
+    val uploadBlocked = issues.any { it.kind.blocking } || state.missionInFlight
     Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         if (reason != null) Text(reason, style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
         if (connected != null) {
@@ -80,7 +68,7 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
         state.drone?.takeIf { it.differs }?.let {
             Text(stringResource(R.string.plan_drone_differs), style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
             AdosButton(
-                stringResource(R.string.plan_load_from_drone),
+                downloadLabel(LocalResources.current, state.nodeName),
                 onClick = actions.onLoadFromDrone,
                 enabled = !state.transferring,
                 variant = AdosButtonVariant.Secondary,
@@ -88,12 +76,15 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
             )
         }
         PlanIssueList(issues)
-        if (uploadBlocked && connected != null) {
+        if (state.missionInFlight) {
+            Text(stringResource(R.string.plan_mission_in_flight), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
+        } else if (uploadBlocked && connected != null) {
             Text(stringResource(R.string.plan_issues_blocking), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-            AdosButton(stringResource(R.string.plan_upload), onClick = actions.onUpload, enabled = canTransfer && !uploadBlocked, icon = Icons.Outlined.CloudUpload)
-            AdosButton(stringResource(R.string.plan_download), onClick = actions.onDownload, enabled = canTransfer, variant = AdosButtonVariant.Secondary, icon = Icons.Outlined.CloudDownload)
+            val res = LocalResources.current
+            AdosButton(uploadLabel(res, state.nodeName), onClick = actions.onUpload, enabled = canTransfer && !uploadBlocked, icon = Icons.Outlined.CloudUpload)
+            AdosButton(downloadLabel(res, state.nodeName), onClick = actions.onDownload, enabled = canTransfer, variant = AdosButtonVariant.Secondary, icon = Icons.Outlined.CloudDownload)
         }
         when (val t = state.transfer) {
             TransferState.Idle -> Unit
@@ -163,7 +154,7 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
         AdosButton(
             stringResource(R.string.plan_start_mission),
             onClick = actions.onOpenStart,
-            enabled = connected != null && connected.linkFresh && state.inSyncWithVehicle && state.plan.items.isNotEmpty() && !state.transferring,
+            enabled = connected != null && connected.linkFresh && state.planOnVehicle && !state.transferring,
             icon = Icons.Outlined.PlayArrow,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -171,14 +162,7 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
 }
 
 @Composable
-private fun commandResultLabel(result: CommandResult) = when (result) {
-    CommandResult.Accepted -> ""
-    is CommandResult.Rejected -> stringResource(R.string.plan_result_rejected, result.reason, result.code)
-    CommandResult.Unsupported -> stringResource(R.string.plan_result_unsupported)
-    CommandResult.Timeout -> stringResource(R.string.plan_result_timeout)
-    is CommandResult.Denied -> stringResource(R.string.plan_result_denied, result.reason)
-    is CommandResult.Queued -> stringResource(R.string.plan_result_queued)
-}
+private fun commandResultLabel(result: CommandResult) = commandResultText(LocalResources.current, result)
 
 @Composable
 internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerActions) {

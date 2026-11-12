@@ -8,6 +8,8 @@ import com.altnautica.gcs.core.model.Vehicle
 import com.altnautica.gcs.core.skills.binding.Ds4Bindings
 import com.altnautica.gcs.core.skills.builtin.vehicleClass
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
+import com.altnautica.gcs.core.skills.input.PadSnapshot
+import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
 import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
 import com.altnautica.gcs.feature.cockpit.StickChip
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +55,10 @@ internal class CockpitManualControl(
     boundButtons: StateFlow<Int>,
     route: StateFlow<StickRoute>,
     pilotStreaming: StateFlow<Boolean>,
+    /** The pad as the router reports it, raw axes included. */
+    pad: StateFlow<PadSnapshot>,
+    /** Calibration, dead zone and stick mode, shared with the pilot stream. */
+    conditioning: StateFlow<StickConditioning>,
 ) {
     private val stickOn = MutableStateFlow(false)
 
@@ -93,14 +99,19 @@ internal class CockpitManualControl(
         if (r == StickRoute.Pilot && pad) StickChip.Pilot(streaming) else manual
     }.stateIn(scope, SharingStarted.Eagerly, StickChip.NoGamepad)
 
-    private val manualInput: StateFlow<ManualControlInput> = combine(router.axes, router.buttons, settings, boundButtons) { axes, pressed, s, bound ->
+    /**
+     * The MANUAL_CONTROL input from the same conditioning the pilot stream uses: the pad's
+     * calibration, the radial dead zone and the operator's stick mode (Mode 1 or 2). Expo
+     * softens pitch, roll and yaw; throttle takes none and maps -1..1 onto 0..1.
+     */
+    private val manualInput: StateFlow<ManualControlInput> = combine(pad, conditioning, router.buttons, settings, boundButtons) { p, c, pressed, s, bound ->
         val e = s.expoPct / 100f
-        // Mode 2: left stick throttle/yaw, right stick pitch/roll. Throttle takes no expo.
+        val axes = c.condition(p)
         ManualControlInput(
-            pitch = applyExpo(axes.rightY, e),
-            roll = applyExpo(axes.rightX, e),
-            throttle = ((axes.leftY + 1f) / 2f).coerceIn(0f, 1f),
-            yaw = applyExpo(axes.leftX, e),
+            pitch = applyExpo(axes.pitch, e),
+            roll = applyExpo(axes.roll, e),
+            throttle = ((axes.throttle + 1f) / 2f).coerceIn(0f, 1f),
+            yaw = applyExpo(axes.yaw, e),
             buttons = Ds4Bindings.manualControlButtonMask(pressed, bound),
         )
     }.stateIn(scope, SharingStarted.Eagerly, ManualControlInput.NEUTRAL)

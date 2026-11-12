@@ -1,6 +1,8 @@
 package com.altnautica.gcs.feature.node.common
 
 import androidx.compose.foundation.BorderStroke
+import androidx.annotation.StringRes
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -39,9 +41,12 @@ import kotlinx.coroutines.delay
 /** Placeholder text for an unknown value (never zero). */
 const val DASH = "—"
 
-/** State for a page that cannot read its agent. */
+/**
+ * State for a page that cannot read its agent. With no [onRetry] (a page that polls on its own
+ * timer) an unreachable agent shows no retry action.
+ */
 @Composable
-fun ProblemState(problem: PageProblem, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+fun ProblemState(problem: PageProblem, onRetry: (() -> Unit)?, modifier: Modifier = Modifier) {
     when (problem) {
         PageProblem.NoAgentLink -> EmptyState(
             icon = Icons.Outlined.CloudOff,
@@ -67,12 +72,21 @@ fun ProblemState(problem: PageProblem, onRetry: () -> Unit, modifier: Modifier =
             message = stringResource(R.string.node_problem_unsupported_message),
             modifier = modifier,
         )
-        is PageProblem.Unreachable -> ErrorState(
-            reason = problem.message ?: stringResource(R.string.node_problem_unreachable),
-            retryLabel = stringResource(R.string.node_retry),
-            onRetry = onRetry,
-            modifier = modifier,
-        )
+        PageProblem.Unreachable -> if (onRetry != null) {
+            ErrorState(
+                reason = stringResource(R.string.node_problem_unreachable),
+                retryLabel = stringResource(R.string.node_retry),
+                onRetry = onRetry,
+                modifier = modifier,
+            )
+        } else {
+            EmptyState(
+                icon = Icons.Outlined.CloudOff,
+                title = stringResource(R.string.node_problem_unreachable_title),
+                message = stringResource(R.string.node_problem_unreachable),
+                modifier = modifier,
+            )
+        }
     }
 }
 
@@ -86,7 +100,7 @@ fun agentErrorText(error: AgentError?, message: String?): String = when (error) 
     AgentError.ProfileMismatch, AgentError.FeatureAbsent -> stringResource(R.string.node_problem_unsupported_message)
     is AgentError.RelayTicket -> error.reason ?: stringResource(R.string.node_problem_unreachable)
     is AgentError.PeerApi -> error.message ?: stringResource(R.string.node_problem_unreachable)
-    is AgentError.Network -> stringResource(R.string.node_problem_unreachable)
+    is AgentError.Network -> stringResource(if (error === NO_AGENT_LINK) R.string.node_problem_no_link_message else R.string.node_problem_unreachable)
     is AgentError.Server -> error.message ?: stringResource(R.string.node_write_failed_code, error.code)
 }
 
@@ -100,7 +114,7 @@ fun WriteStatus(state: WriteState, runner: AgentWriteRunner, modifier: Modifier 
     when (state) {
         is WriteState.ForceRequired -> AdosConfirmSheet(
             title = stringResource(R.string.node_force_title),
-            message = stringResource(R.string.node_force_message, state.label),
+            message = stringResource(R.string.node_force_message, writeText(state.label.action.noun, state.label)),
             onDismiss = runner::cancelForce,
             danger = true,
         ) {
@@ -112,25 +126,43 @@ fun WriteStatus(state: WriteState, runner: AgentWriteRunner, modifier: Modifier 
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        is WriteState.Running -> StatusChip(StatusLevel.Info, stringResource(R.string.node_write_running, state.label), modifier = modifier)
+        is WriteState.Running -> StatusChip(StatusLevel.Info, writeText(state.label.action.running, state.label), modifier = modifier)
         is WriteState.Done -> {
-            StatusChip(StatusLevel.Success, stringResource(R.string.node_write_done, state.label), modifier = modifier)
+            StatusChip(StatusLevel.Success, writeText(state.label.action.done, state.label), modifier = modifier)
             LaunchedEffect(state) {
                 delay(FEEDBACK_MS)
                 runner.dismiss()
             }
         }
-        is WriteState.Failed -> StatusChip(
-            StatusLevel.Error,
-            stringResource(R.string.node_write_failed_label, state.label, agentErrorText(state.error, state.message)),
-            modifier = modifier,
-        )
+        is WriteState.Failed -> {
+            // Tap to dismiss; it also clears itself so it does not linger across sections.
+            StatusChip(
+                StatusLevel.Error,
+                stringResource(R.string.node_write_failed_label, writeText(state.label.action.noun, state.label), agentErrorText(state.error, state.message)),
+                modifier = modifier.clickable(onClickLabel = stringResource(R.string.node_dismiss), onClick = runner::dismiss),
+            )
+            LaunchedEffect(state) {
+                delay(FAILED_FEEDBACK_MS)
+                runner.dismiss()
+            }
+        }
         WriteState.Idle -> Unit
     }
 }
 
 private const val FORCE_HOLD_MS = 800
 private const val FEEDBACK_MS = 2_500L
+private const val FAILED_FEEDBACK_MS = 10_000L
+
+/** [res] with the label's subject in words (a mesh role reads as its name, not its wire value). */
+@Composable
+fun writeText(@StringRes res: Int, label: WriteLabel): String {
+    val subject = when (label.action) {
+        WriteAction.Role -> roleLabel(label.subject)
+        else -> label.subject
+    }
+    return if (subject != null) stringResource(res, subject) else stringResource(res)
+}
 
 /** Bordered card holding one group of rows. */
 @Composable

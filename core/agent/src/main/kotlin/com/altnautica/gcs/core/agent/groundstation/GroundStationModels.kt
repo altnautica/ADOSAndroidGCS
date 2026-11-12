@@ -196,6 +196,8 @@ data class ApUpdate(
     val ssid: String? = null,
     val passphrase: String? = null,
     val channel: Int? = null,
+    /** The armed override; sent only when true. */
+    val force: Boolean? = null,
 )
 
 /**

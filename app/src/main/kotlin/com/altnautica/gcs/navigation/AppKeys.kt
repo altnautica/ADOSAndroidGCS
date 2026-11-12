@@ -27,9 +27,9 @@ data class AircraftSetupKey(val id: String, val wizard: String? = null) : NavKey
 @Serializable
 data class ParamsKey(val id: String) : NavKey
 
-/** The Vehicle surface: node detail. */
+/** The Vehicle surface: node detail; [confirmUnpair] opens it with the unpair confirm showing. */
 @Serializable
-data class NodeKey(val id: String) : NavKey
+data class NodeKey(val id: String, val confirmUnpair: Boolean = false) : NavKey
 
 @Serializable
 data object LogsKey : NavKey

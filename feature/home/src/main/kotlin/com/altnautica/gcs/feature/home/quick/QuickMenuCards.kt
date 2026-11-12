@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.console.consoleFocus
 import com.altnautica.gcs.core.designsystem.component.node.profileIcon
 import com.altnautica.gcs.core.designsystem.component.node.profileTint
+import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.designsystem.component.node.reachLabel
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
@@ -98,12 +99,15 @@ internal fun VehicleStatusCard(vehicle: FleetCard?, cockpit: CockpitSummary?) {
         iconTint = if (node != null) profileTint(node.profile) else AdosTheme.colors.fgTertiary,
     ) {
         if (vehicle == null || node == null) return@StatusCard
-        val vitals = vehicle.vitals
-        val mode = vitals.modeName ?: stringResource(R.string.home_mode_unknown)
-        val armed = vitals.armed?.let { stringResource(if (it) R.string.home_armed else R.string.home_disarmed) }
-        Line(listOfNotNull(mode, armed).joinToString(SEPARATOR))
-        val pct = vitals.batteryPct
-        Line(if (pct != null) stringResource(R.string.home_battery, pct) else stringResource(R.string.home_battery_unknown))
+        // A closed direct link with nothing reported yet has no vitals; dashes would read as "waiting".
+        if (!(vehicle.directLinkClosed && vehicle.vitals == NodeVitals.UNKNOWN)) {
+            val vitals = vehicle.vitals
+            val mode = vitals.modeName ?: stringResource(R.string.home_mode_unknown)
+            val armed = vitals.armed?.let { stringResource(if (it) R.string.home_armed else R.string.home_disarmed) }
+            Line(listOfNotNull(mode, armed).joinToString(SEPARATOR))
+            val pct = vitals.batteryPct
+            Line(if (pct != null) stringResource(R.string.home_battery, pct) else stringResource(R.string.home_battery_unknown))
+        }
         Line(stringResource(livenessLabel(node.liveness)) + SEPARATOR + stringResource(reachLabel(node.reaches.firstOrNull())))
         if (cockpit != null && cockpit.nodeId == node.id) {
             Line(stringResource(R.string.home_quick_preflight, cockpit.preflightDone, cockpit.preflightTotal))

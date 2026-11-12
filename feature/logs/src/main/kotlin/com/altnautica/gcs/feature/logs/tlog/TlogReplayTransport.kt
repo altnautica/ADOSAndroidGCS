@@ -1,5 +1,8 @@
 package com.altnautica.gcs.feature.logs.tlog
 
+import android.content.res.Resources
+import android.util.Log
+import com.altnautica.gcs.feature.logs.R
 import com.altnautica.gcs.core.flightlog.tlog.TlogReader
 import com.altnautica.gcs.core.flightlog.tlog.TlogFormatException
 import com.altnautica.gcs.core.model.MavlinkByteTransport
@@ -17,13 +20,16 @@ import java.io.InputStream
 /**
  * Plays a telemetry log back as a read-only link: frames are emitted with their recorded
  * spacing divided by [speed]. Writes are refused, so a replayed cockpit can never command.
- * [incoming] is cold; each collection replays from the start.
+ * [incoming] is cold; each collection replays from the start. A log that stops parsing ends in
+ * [TransportState.Failed] with [unreadableText], the operator's words for it.
  */
 class TlogReplayTransport(
     private val open: () -> InputStream,
+    private val unreadableText: String,
     private val speed: Float = 1f,
 ) : MavlinkByteTransport {
-    constructor(file: File, speed: Float = 1f) : this({ file.inputStream() }, speed)
+    constructor(file: File, resources: Resources, speed: Float = 1f) :
+        this({ file.inputStream() }, resources.getString(R.string.logs_replay_unreadable), speed)
 
     init {
         require(speed > 0f) { "speed must be positive" }
@@ -49,7 +55,8 @@ class TlogReplayTransport(
             }
             _state.value = TransportState.Closed(END_OF_LOG)
         } catch (e: TlogFormatException) {
-            _state.value = TransportState.Failed(e.message.orEmpty())
+            Log.w(TAG, "tlog replay stopped", e)
+            _state.value = TransportState.Failed(unreadableText)
         }
     }
 
@@ -61,6 +68,7 @@ class TlogReplayTransport(
 
     companion object {
         const val END_OF_LOG = "end of log"
+        private const val TAG = "TlogReplay"
 
         /** Long silences (link drops) are shortened so replay never stalls. */
         private const val MAX_GAP_MS = 2_000L

@@ -68,6 +68,8 @@ data class Chrome(
     val borderWidth: Dp,
     val radius: Dp,
     val radiusSmall: Dp,
+    /** The visual height of every top-bar control (`control_px`); hit areas stay at least 48 dp. */
+    val control: Dp,
     val text: Color,
     val textDim: Color,
     val ok: Color,
@@ -95,20 +97,21 @@ data class Chrome(
             val dim = color(spec.textDim, 0xA3FFFFFF)
             val type = spec.type
             return Chrome(
-                panel = color(spec.panelBg, 0x8C080A0E),
-                panelNoBlur = color(spec.panelBgNoBlur, 0xD1080A0E),
+                panel = color(spec.panelBg, 0xEB0B0D12),
+                panelNoBlur = color(spec.panelBgNoBlur, 0xF50B0D12),
                 blur = spec.panelBlurPx.dp,
-                border = color(spec.border, 0x1FFFFFFF),
+                border = color(spec.border, 0x1AFFFFFF),
                 borderWidth = spec.borderPx.dp,
                 radius = spec.radiusPx.dp,
                 radiusSmall = spec.radiusSmallPx.dp,
+                control = spec.controlPx.dp,
                 text = text,
                 textDim = dim,
                 ok = color(spec.severityOk, 0xFF00C853),
                 warning = color(spec.severityWarning, 0xFFF59E0B),
                 critical = color(spec.severityCritical, 0xFFEF4444),
                 textCritical = color(spec.textCritical, 0xFFFF8A80),
-                stopBg = color(spec.stopBg, 0xFFEF4444),
+                stopBg = color(spec.stopBg, 0xFFC81E1E),
                 stopText = color(spec.stopText, 0xFFFFFFFF),
                 severityGlyph = spec.severityIcon,
                 // Chrome text is the design-token sans with tabular figures, so changing numbers do not jitter.

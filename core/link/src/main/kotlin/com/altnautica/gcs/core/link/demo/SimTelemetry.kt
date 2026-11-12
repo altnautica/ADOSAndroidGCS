@@ -30,6 +30,9 @@ internal class SimTelemetry(
     private val headingDeg: Double get() = (Math.toDegrees(sim.yaw) + 360) % 360
     private val groundSpeed: Double get() = hypot(sim.vn, sim.ve)
 
+    /** False while the GNSS receiver has no fix: no 3D fix, no satellites, no absolute position in the EKF. */
+    @Volatile var gnssFix: Boolean = true
+
     fun heartbeat() = Heartbeat(
         type = MavType.MAV_TYPE_QUADROTOR,
         autopilot = MavAutopilot.MAV_AUTOPILOT_ARDUPILOTMEGA,
@@ -69,7 +72,7 @@ internal class SimTelemetry(
 
     fun gpsRaw() = GpsRawInt(
         timeUsec = sim.bootMs * 1000,
-        fixType = 3,
+        fixType = if (gnssFix) 3 else 1,
         lat = (physics.latDeg() * 1e7).toInt(),
         lon = (physics.lonDeg() * 1e7).toInt(),
         alt = ((sim.options.homeAltMslM + sim.alt) * 1000).toInt(),
@@ -77,7 +80,7 @@ internal class SimTelemetry(
         epv = 120,
         vel = (groundSpeed * 100).toInt(),
         cog = (headingDeg * 100).toInt(),
-        satellitesVisible = 14,
+        satellitesVisible = if (gnssFix) 14 else 0,
     )
 
     fun sysStatus() = SysStatus(
@@ -107,7 +110,13 @@ internal class SimTelemetry(
     }
 
     // A healthy EKF: every solution flag except CONST_POS_MODE (128), which means dead reckoning.
-    fun ekfStatus() = EkfStatusReport(flags = 0x37F, velocityVariance = 0.05f, posHorizVariance = 0.04f, posVertVariance = 0.03f, compassVariance = 0.02f)
+    fun ekfStatus() = EkfStatusReport(
+        flags = if (gnssFix) EKF_FLAGS else EKF_FLAGS and EKF_ABS_HORIZ.inv(),
+        velocityVariance = 0.05f,
+        posHorizVariance = 0.04f,
+        posVertVariance = 0.03f,
+        compassVariance = 0.02f,
+    )
 
     fun vibration() = Vibration(timeUsec = sim.bootMs * 1000, vibrationX = 3.1f, vibrationY = 2.8f, vibrationZ = 4.2f)
 
@@ -143,5 +152,11 @@ internal class SimTelemetry(
     private companion object {
         /** Gyro, accel, mag, baro, GPS, RC, motor outputs, AHRS, battery present/enabled/healthy. */
         const val SENSORS: Long = 0x0221802FL
+
+        /** EKF_STATUS_FLAGS of a healthy solution with GNSS. */
+        const val EKF_FLAGS = 0x37F
+
+        /** EKF_POS_HORIZ_ABS (16) and EKF_PRED_POS_HORIZ_ABS (512): absolute horizontal position, lost without GNSS. */
+        const val EKF_ABS_HORIZ = 0x210
     }
 }

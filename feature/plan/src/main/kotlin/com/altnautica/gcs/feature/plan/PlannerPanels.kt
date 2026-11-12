@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.component.AdosButton
@@ -14,7 +15,6 @@ import com.altnautica.gcs.core.designsystem.component.SectionHeader
 import com.altnautica.gcs.core.designsystem.component.SelectSettingRow
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
-import com.altnautica.gcs.feature.plan.io.PlanFormatException
 import com.altnautica.gcs.feature.plan.model.PlanCommand
 import com.altnautica.gcs.feature.plan.survey.SurveyMode
 import kotlin.math.roundToInt
@@ -108,6 +108,7 @@ private fun SurveyPanel(state: PlannerUiState, actions: PlannerActions) {
             NumberSettingRow(stringResource(R.string.plan_survey_overlap), s.overlapPct.roundToInt(), { actions.onSurveySettings(s.copy(overlapPct = it.toFloat())) }, 0..95, dec, inc, step = 5, format = pct)
             NumberSettingRow(stringResource(R.string.plan_survey_sidelap), s.sidelapPct.roundToInt(), { actions.onSurveySettings(s.copy(sidelapPct = it.toFloat())) }, 0..95, dec, inc, step = 5, format = pct)
             NumberSettingRow(stringResource(R.string.plan_survey_fov), s.cameraFovDeg.roundToInt(), { actions.onSurveySettings(s.copy(cameraFovDeg = it.toFloat())) }, 10..170, dec, inc, format = deg)
+            NumberSettingRow(stringResource(R.string.plan_survey_vfov), s.cameraVFovDeg.roundToInt(), { actions.onSurveySettings(s.copy(cameraVFovDeg = it.toFloat())) }, 10..170, dec, inc, format = deg)
             NumberSettingRow(stringResource(R.string.plan_survey_angle), s.angleDeg.roundToInt(), { actions.onSurveySettings(s.copy(angleDeg = it.toFloat())) }, 0..179, dec, inc, step = 5, format = deg)
         }
         SurveyMode.Spray -> NumberSettingRow(stringResource(R.string.plan_survey_swath), s.swathM.roundToInt(), { actions.onSurveySettings(s.copy(swathM = it.toFloat())) }, 1..50, dec, inc, format = m)
@@ -148,20 +149,11 @@ internal fun messageText(message: PlannerMessage): String = when (message) {
     } else {
         pluralStringResource(R.plurals.plan_msg_imported_warnings, message.warnings, message.name, message.warnings)
     }
-    is PlannerMessage.ImportFailed -> stringResource(
-        R.string.plan_msg_import_failed,
-        when (message.reason) {
-            PlanFormatException.Reason.NotWaypoints -> stringResource(R.string.plan_msg_import_not_waypoints)
-            PlanFormatException.Reason.NotPlan -> stringResource(R.string.plan_msg_import_not_plan)
-            PlanFormatException.Reason.Malformed -> stringResource(R.string.plan_msg_import_malformed)
-            PlanFormatException.Reason.ComplexWithoutGeometry -> stringResource(R.string.plan_msg_import_complex_geometry)
-            PlanFormatException.Reason.ComplexWithoutAltitude -> stringResource(R.string.plan_msg_import_complex_altitude)
-            null -> message.detail.orEmpty()
-        },
-    )
+    is PlannerMessage.ImportFailed -> importFailedText(LocalResources.current, message.reason)
     is PlannerMessage.Exported -> stringResource(R.string.plan_msg_exported, message.format.extension)
-    is PlannerMessage.ExportFailed -> stringResource(R.string.plan_msg_export_failed, message.detail)
+    PlannerMessage.ExportFailed -> stringResource(R.string.plan_msg_export_failed)
     PlannerMessage.SurveyEmpty -> stringResource(R.string.plan_msg_survey_empty)
     PlannerMessage.VehicleHasNoMission -> stringResource(R.string.plan_msg_vehicle_empty)
+    PlannerMessage.TransferInProgress -> stringResource(R.string.plan_upload_in_progress)
     is PlannerMessage.DownloadPartial -> stringResource(R.string.plan_msg_download_partial, missionTypeLabel(message.failed))
 }

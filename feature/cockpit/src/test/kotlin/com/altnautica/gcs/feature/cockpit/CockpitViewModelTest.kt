@@ -940,13 +940,16 @@ class CockpitViewModelTest {
         advanceTimeBy(600)
         runCurrent()
         assertEquals("goto", vm.chip.value.ruleId)
-        assertEquals("GOTO · 50 m", vm.chip.value.primary.text)
+        assertEquals("Goto · 50 m", vm.chip.value.primary.text)
         vm.viewModelScope.cancel()
     }
 
     @Test
     fun `the first pad connected in the cockpit opens the controller tour once`() = runTest(dispatcher) {
-        val vm = vm(listOf(node("drone-1")), FakeVehicle())
+        // On a vehicle known to be disarmed: an unknown arm state counts as possibly airborne.
+        val vehicle = FakeVehicle()
+        vehicle.beat(armed = false, now = testScheduler.currentTime)
+        val vm = vm(listOf(node("drone-1")), vehicle)
         runCurrent()
         assertNull(vm.tourStep.value)
         gamepad.value = true
@@ -960,6 +963,17 @@ class CockpitViewModelTest {
         gamepad.value = true
         runCurrent()
         assertNull("a seen tour does not come back", vm.tourStep.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a pad connected while the arm state is unknown opens no tour`() = runTest(dispatcher) {
+        val vm = vm(listOf(node("drone-1")), FakeVehicle())
+        runCurrent()
+        gamepad.value = true
+        advanceTimeBy(600)
+        runCurrent()
+        assertNull("no heartbeat yet: possibly airborne", vm.tourStep.value)
         vm.viewModelScope.cancel()
     }
 

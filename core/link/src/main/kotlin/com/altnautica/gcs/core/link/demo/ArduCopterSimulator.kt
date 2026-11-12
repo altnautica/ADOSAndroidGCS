@@ -242,6 +242,13 @@ class ArduCopterSimulator(
     val modeNumber: Int get() = sim.mode
     val horizontalDistanceFromHomeM: Double get() = sqrt(sim.north * sim.north + sim.east * sim.east)
 
+    /** The GNSS fix the telemetry reports; false drops it (fix type 1, no satellites, no absolute position). */
+    var gnssFix: Boolean
+        get() = telemetry.gnssFix
+        set(value) {
+            telemetry.gnssFix = value
+        }
+
     companion object {
         const val SYS_ID = 1
         const val COMP_ID = 1

@@ -3,10 +3,14 @@ package com.altnautica.gcs.feature.cockpit
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FlightTakeoff
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.SatelliteAlt
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.runtime.Composable
@@ -14,16 +18,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuState
 import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
 import com.altnautica.gcs.core.designsystem.component.overlay.rememberAdosMenuState
 import com.altnautica.gcs.core.skills.builtin.BuiltinIds
+import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
 import com.altnautica.gcs.core.skills.spec.ZoneLinkSpec
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
+import com.altnautica.gcs.feature.cockpit.chip.ChipButton
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChip
+import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipResolver
 import com.altnautica.gcs.feature.cockpit.chrome.BatteryGauge
 import com.altnautica.gcs.feature.cockpit.chrome.ChromeText
 import com.altnautica.gcs.feature.cockpit.chrome.ControllerIndicator
@@ -43,9 +51,6 @@ import com.altnautica.gcs.feature.cockpit.hud.layers.LayerLevelButton
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.tips.tipAnchor
 
-/** The Menu's order when the spec names none (`layout.json` `menu.order`). */
-private val DEFAULT_MENU_ORDER = listOf("overflow", "view", "cameras", "layers", "preflight", "modes", "controls", "extension_panels", "setup", "settings", "exit")
-
 /** The flight screen's top bar and its Menu (the items the top bar had no room for, then the spec's `menu.order`). */
 @Composable
 internal fun FlightTopBar(
@@ -59,13 +64,18 @@ internal fun FlightTopBar(
     val chip by vm.chip.collectAsStateWithLifecycle()
     val band by vm.band.collectAsStateWithLifecycle()
     val reserve by vm.batteryReserve.collectAsStateWithLifecycle()
-    val video by vm.video.collectAsStateWithLifecycle()
+    val reducedRate by vm.autonomy.feed.reducedRate.collectAsStateWithLifecycle()
     val menu = rememberAdosMenuState()
+    val linkMenu = rememberAdosMenuState()
     LaunchedEffect(menu.expanded) { onMenuOpen(menu.expanded) }
     val topBarZone = remember(vm) { vm.cockpitSpec.layout.zones.firstOrNull { it.id == "top_bar" } }
     val linkSpec = topBarZone?.link
     val linkText = linkText(band, linkSpec)
-    val controllerText = controllerText(band.stick)
+    val strings = LocalCockpitStrings.current
+    // The 2 Hz fallback is named on the link cell itself, so every view shows it.
+    val linkDetail = linkCellText(strings, linkText, reducedRate)
+    val openLink = { linkMenu.expanded = true }
+    val linkLabel = strings.format("cockpit.menu.link_named", mapOf("label" to linkText))
     TopBar(
         overflow = overflow,
         overflowOrder = remember(vm) { TopBarItem.order(topBarZone?.overflow?.toMenuOrder.orEmpty()) },
@@ -88,53 +98,82 @@ internal fun FlightTopBar(
                 reserveShortKey = topBarZone?.battery?.timeToReserve?.short ?: "battery.to_reserve_short",
             )
         },
-        linkIcon = { LinkIcon(linkIconHealth(band.link, band.linkAgeDeciS, linkSpec), linkText) },
-        linkDetail = { if (band.link != LinkHealth.None) ChromeText(linkText, dim = true) },
+        linkIcon = {
+            LinkCellTarget(linkLabel, openLink, Modifier.adosMenuAnchor(linkMenu).testTag(LINK_CELL_TAG)) {
+                LinkIcon(linkIconHealth(band.link, band.linkAgeDeciS, linkSpec), linkText)
+            }
+        },
+        linkDetail = {
+            if (band.link != LinkHealth.None || reducedRate) {
+                LinkCellTarget(linkLabel, openLink, Modifier.adosMenuAnchor(linkMenu)) { ChromeText(linkDetail, dim = true) }
+            }
+        },
         navSource = { NavChipSlot(vm, width) },
         controller = { ControllerCell(band.stick, vm::toggleStickControl) },
         layers = { LayerLevelButton(vm.autonomy.layers, Modifier.tipAnchor("layer_button")) },
         menu = { MenuButton(onClick = { menu.expanded = true }, modifier = Modifier.adosMenuAnchor(menu)) },
         stop = { StopButton(onClick = { vm.activate(BuiltinIds.KILL) }, modifier = Modifier.tipAnchor("stop")) },
     )
-    val moved = overflow.moved
+    AdosMenu(linkMenu, linkRows(strings, linkText, band.rssiDbm, band.lqPct, reducedRate).map { AdosMenuItem(it, enabled = false) {} })
+    if (menu.expanded) FlightMenu(vm, band, overflow.moved, linkDetail, menu, onExit, onOpenLink = openLink)
+}
+
+/** The Menu's rows, built only while it is open. */
+@Composable
+private fun FlightMenu(
+    vm: CockpitViewModel,
+    band: BandState,
+    moved: Set<TopBarItem>,
+    cellText: String,
+    menu: AdosMenuState,
+    onExit: () -> Unit,
+    onOpenLink: () -> Unit,
+) {
+    val video by vm.video.collectAsStateWithLifecycle()
+    val pilot by vm.pilotState.collectAsStateWithLifecycle()
+    val fresh by vm.pilotFresh.collectAsStateWithLifecycle()
     val nav by vm.autonomy.navChip.collectAsStateWithLifecycle()
     val layerFlags by vm.autonomy.layers.flags.collectAsStateWithLifecycle()
     val strings = LocalCockpitStrings.current
     val navText = com.altnautica.gcs.feature.cockpit.autonomy.TargetText(strings)
-    val menuOrder = vm.cockpitSpec.layout.menu?.order.orEmpty().ifEmpty { DEFAULT_MENU_ORDER }
+    val controllerText = controllerText(band.stick)
+    val live = video.streams.filter { it.live }
+    val setupNeeded = fresh && FlightStateChipResolver.setupNeeded(pilot)
+    val order = vm.cockpitSpec.layout.menu?.order.orEmpty().ifEmpty { DEFAULT_MENU_ORDER }
+    fun f(key: String, vararg args: Pair<String, String>) = strings.format(key, args.toMap())
     val items = buildList {
         band.nodeName?.let { name ->
-            add(AdosMenuItem(name + (band.reach?.let { " · " + reachText(it) } ?: ""), enabled = false) {})
+            add(AdosMenuItem(name + (band.reach?.let { " · " + reachText(strings, it) } ?: ""), enabled = false) {})
         }
-        for (entry in menuOrder) when (entry) {
-            // Only the items the top bar actually had no room for.
+        for (entry in menuEntries(order, live.size, band.preflightTotal, setupNeeded)) when (entry) {
+            // Only the items the top bar actually had no room for; the layer button has its own row.
             "overflow" -> {
                 if (TopBarItem.Controller in moved) {
-                    add(AdosMenuItem(stringResource(R.string.cockpit_menu_controller, controllerText), enabled = band.stick is StickChip.Available) { vm.toggleStickControl() })
+                    add(AdosMenuItem(f("cockpit.menu.controller_named", "name" to controllerText), enabled = band.stick is StickChip.Available) { vm.toggleStickControl() })
                 }
                 if (TopBarItem.NavSource in moved) nav?.let { add(AdosMenuItem(navText.navLabel(it), Icons.Outlined.SatelliteAlt, enabled = false) {}) }
                 if ((TopBarItem.LinkDetail in moved || TopBarItem.LinkIcon in moved) && band.link != LinkHealth.None) {
-                    add(AdosMenuItem(stringResource(R.string.cockpit_menu_link, listOfNotNull(linkText, radioText(band)).joinToString(" · ")), enabled = false) {})
-                }
-                if (TopBarItem.Layers in moved) {
-                    add(AdosMenuItem(com.altnautica.gcs.feature.cockpit.hud.layers.layerButtonText(layerFlags.level)) { vm.autonomy.layers.cycleLevel(1) })
+                    // Where the link cell has moved into the Menu, its row opens the same link popover.
+                    add(AdosMenuItem(menuLinkRow(strings, cellText, band.rssiDbm, band.lqPct)) { onOpenLink() })
                 }
             }
-            "view" -> add(AdosMenuItem(strings.format("cockpit.menu.view"), Icons.Outlined.GridView) { vm.nextView() })
-            "cameras" -> {
-                val live = video.streams.filter { it.live }
-                if (live.size > 1) for (s in live) {
-                    add(AdosMenuItem(stringResource(R.string.cockpit_menu_camera, s.role), Icons.Outlined.Videocam, enabled = s.id != video.selectedStreamId) { vm.selectStream(s.id) })
-                }
+            "view" -> add(AdosMenuItem(f("cockpit.menu.view"), Icons.Outlined.GridView) { vm.nextView() })
+            "cameras" -> for (s in live) {
+                add(AdosMenuItem(f("cockpit.menu.camera_named", "name" to s.role), Icons.Outlined.Videocam, enabled = s.id != video.selectedStreamId) { vm.selectStream(s.id) })
             }
-            "preflight" -> if (band.preflightTotal > 0) {
-                add(AdosMenuItem(strings.format("cockpit.menu.preflight") + " · ${band.preflightPassed}/${band.preflightTotal}", Icons.Outlined.Checklist) { vm.setPreflight(true) })
-            }
-            "modes" -> add(AdosMenuItem(strings.format("cockpit.menu.modes"), Icons.Outlined.FlightTakeoff) { vm.openModeSheet() })
-            "settings" -> add(AdosMenuItem(strings.format("cockpit.menu.settings"), Icons.Outlined.Tune) { vm.setQuickSettings(true) })
-            "exit" -> add(AdosMenuItem(stringResource(R.string.cockpit_menu_home), Icons.AutoMirrored.Outlined.ArrowBack) { onExit() })
-            // Layers live on the top bar's layer button; controls and extension panels sit in quick settings.
-            else -> Unit
+            "layers" -> add(AdosMenuItem(com.altnautica.gcs.feature.cockpit.hud.layers.layerButtonText(layerFlags.level), Icons.Outlined.Layers) { vm.autonomy.layers.cycleLevel(1) })
+            "preflight" -> add(
+                AdosMenuItem(f("cockpit.menu.preflight_count", "n" to band.preflightPassed.toString(), "total" to band.preflightTotal.toString()), Icons.Outlined.Checklist) {
+                    vm.setPreflight(true)
+                },
+            )
+            "modes" -> add(AdosMenuItem(f("cockpit.menu.modes"), Icons.Outlined.FlightTakeoff) { vm.openModeSheet() })
+            "controls" -> add(AdosMenuItem(f("cockpit.menu.controls"), Icons.Outlined.SportsEsports) { vm.openControls() })
+            // Extension panels are hosted in quick settings.
+            "extension_panels" -> add(AdosMenuItem(f("cockpit.menu.extension_panels"), Icons.Outlined.Extension) { vm.setQuickSettings(true) })
+            "setup" -> add(AdosMenuItem(f("cockpit.menu.setup"), Icons.Outlined.Build) { vm.onChipButton(ChipButton.SetUpAircraft) })
+            "settings" -> add(AdosMenuItem(f("cockpit.menu.settings"), Icons.Outlined.Tune) { vm.setQuickSettings(true) })
+            "exit" -> add(AdosMenuItem(f("cockpit.menu.home"), Icons.AutoMirrored.Outlined.ArrowBack) { onExit() })
         }
     }
     AdosMenu(menu, items)
@@ -149,13 +188,6 @@ private fun linkText(band: BandState, spec: ZoneLinkSpec?): String {
         age != null -> specText(spec?.text ?: "cockpit.link.age", "s" to linkAgeSeconds(age))
         else -> "—"
     }
-}
-
-/** Radio figures for the Menu's link row, beside the age: RSSI and link quality when the radio reports them. */
-private fun radioText(band: BandState): String? = when {
-    band.rssiDbm != null -> "${band.rssiDbm} dBm" + (band.lqPct?.let { " · $it%" } ?: "")
-    band.lqPct != null -> "LQ ${band.lqPct}%"
-    else -> null
 }
 
 /** The top-bar controller cell: pad battery or why the sticks are blocked, and "No controller" before any pad is seen. */
@@ -174,20 +206,20 @@ private fun controllerText(stick: StickChip): String {
     val pct = com.altnautica.gcs.core.designsystem.component.console.LocalControllerUi.current.batteryPct
     return when (stick) {
         StickChip.NoGamepad -> specText("controls.no_controller")
-        StickChip.LinkBlocked -> stringResource(R.string.cockpit_stick_blocked)
-        is StickChip.ModeBlocked -> stringResource(R.string.cockpit_stick_mode_blocked, stick.mode.uppercase())
+        StickChip.LinkBlocked -> specText("cockpit.sticks.blocked")
+        is StickChip.ModeBlocked -> specText("cockpit.sticks.mode_blocked", "mode" to stick.mode.uppercase())
         is StickChip.Available, is StickChip.Pilot -> pct?.let { "$it%" } ?: "—"
     }
 }
 
-@Composable
-private fun reachText(badge: ReachBadge): String = stringResource(
+/** How the cockpit reaches the vehicle, in the spec's words (`cockpit.reach.*`). */
+internal fun reachText(strings: SetupStringsSpec, badge: ReachBadge): String = strings.format(
     when (badge) {
-        ReachBadge.Direct -> R.string.cockpit_reach_direct
-        ReachBadge.Lan -> R.string.cockpit_reach_lan
-        ReachBadge.ViaGround -> R.string.cockpit_reach_via_ground
-        ReachBadge.Cloud -> R.string.cockpit_reach_cloud
-        ReachBadge.PhoneRadio -> R.string.cockpit_reach_phone_radio
-        ReachBadge.Blocked -> R.string.cockpit_reach_blocked
+        ReachBadge.Direct -> "cockpit.reach.direct"
+        ReachBadge.Lan -> "cockpit.reach.lan"
+        ReachBadge.ViaGround -> "cockpit.reach.via_ground"
+        ReachBadge.Cloud -> "cockpit.reach.cloud"
+        ReachBadge.PhoneRadio -> "cockpit.reach.phone_radio"
+        ReachBadge.Blocked -> "cockpit.reach.blocked"
     },
 )

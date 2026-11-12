@@ -14,7 +14,14 @@ import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -88,31 +95,48 @@ private fun SettingsScreen(state: SettingsUiState, vm: SettingsViewModel, links:
         onBackCompleted = { opened = null },
     )
 
-    val title = if (inPortraitDetail) stringResource(selected.titleRes) else stringResource(R.string.settings_title)
-    ConsoleScaffold(
-        title = title,
-        onBack = if (inPortraitDetail) ({ opened = null }) else onBack,
-        modifier = modifier,
-        hints = listOf(
-            Hint(ConsoleButton.Confirm, stringResource(R.string.settings_hint_select)),
-            Hint(ConsoleButton.Back, stringResource(R.string.settings_nav_back)),
-        ),
-    ) { padding ->
-        if (!state.loaded) {
-            LoadingState(stringResource(R.string.settings_loading), Modifier.padding(padding))
-            return@ConsoleScaffold
+    val snackbar = remember { SnackbarHostState() }
+    val resources = LocalResources.current
+    LaunchedEffect(vm) {
+        vm.messages.collect { m ->
+            snackbar.showSnackbar(resources.getString(settingsMessageText(m)))
         }
-        ConsoleTwoPane(
-            list = { CategoryList(selected.takeIf { landscape }, onOpen = { opened = it }) },
-            detail = {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = AdosSpacing.S8)) {
-                    categoryContent(selected, state, vm, links)
-                }
-            },
-            showDetailInPortrait = opened != null,
-            modifier = Modifier.padding(padding),
-        )
     }
+
+    val title = if (inPortraitDetail) stringResource(selected.titleRes) else stringResource(R.string.settings_title)
+    Box(modifier.fillMaxSize()) {
+        ConsoleScaffold(
+            title = title,
+            onBack = if (inPortraitDetail) ({ opened = null }) else onBack,
+            modifier = Modifier.fillMaxSize(),
+            hints = listOf(
+                Hint(ConsoleButton.Confirm, stringResource(R.string.settings_hint_select)),
+                Hint(ConsoleButton.Back, stringResource(R.string.settings_nav_back)),
+            ),
+        ) { padding ->
+            if (!state.loaded) {
+                LoadingState(stringResource(R.string.settings_loading), Modifier.padding(padding))
+                return@ConsoleScaffold
+            }
+            ConsoleTwoPane(
+                list = { CategoryList(selected.takeIf { landscape }, onOpen = { opened = it }) },
+                detail = {
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = AdosSpacing.S8)) {
+                        categoryContent(selected, state, vm, links)
+                    }
+                },
+                showDetailInPortrait = opened != null,
+                modifier = Modifier.padding(padding),
+            )
+        }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = AdosSpacing.S10))
+    }
+}
+
+/** The confirmation text for [message]; the spec has no key for these yet. */
+internal fun settingsMessageText(message: SettingsMessage): Int = when (message) {
+    SettingsMessage.TourReplayed -> R.string.settings_tour_replay_done
+    SettingsMessage.TipsReset -> R.string.settings_tips_reset_done
 }
 
 @Composable

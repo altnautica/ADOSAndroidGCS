@@ -41,4 +41,15 @@
     <string name="extensions_confirm_hold">Hold to approve</string>
     <string name="extensions_confirm_decline">Decline</string>
     <string name="extensions_no_parameters">This extension has no parameters.</string>
+    <string name="extensions_uninstall_confirm_title">Uninstall this extension?</string>
+    <string name="extensions_uninstall_confirm_message">Remove %1$s from this drone? Extension data on this drone will be cleared.</string>
+    <string name="extensions_installed">%1$s installed</string>
+    <string name="extensions_uninstalled">%1$s uninstalled</string>
+    <string name="extensions_stage_commanded">Starting</string>
+    <string name="extensions_stage_downloading">Downloading</string>
+    <string name="extensions_stage_verifying">Verifying</string>
+    <string name="extensions_stage_installing">Installing</string>
+    <string name="extensions_stage_completed">Finishing</string>
+    <string name="extensions_stage_failed">Failed</string>
+    <string name="extensions_stage_cancelled">Cancelled</string>
 </resources>

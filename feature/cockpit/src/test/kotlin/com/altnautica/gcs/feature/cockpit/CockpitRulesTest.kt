@@ -33,7 +33,7 @@ class CockpitRulesTest {
 
     private fun light(owner: PilotOwner, mission: MissionState? = null, mode: String = "GUIDED", failsafe: Boolean = false, lowBattery: Boolean = false): LightbarState {
         val p = pilotState(owner, fcModeName = mode, mission = mission)
-        return lightbarState(ControllerContext.of(p, armed = p.armed, modeName = null, pickerOpen = false, lowBattery = lowBattery, failsafe = failsafe))
+        return lightbarState(ControllerContext.of(p, armed = p.armed == true, modeName = null, pickerOpen = false, lowBattery = lowBattery, failsafe = failsafe))
     }
 
     @Test
@@ -62,15 +62,15 @@ class CockpitRulesTest {
     fun `chip text follows the flight-state rules, first match wins`() {
         val now = 10_000L
         val pilot = chips.resolve(pilotState(PilotOwner.Pilot, receivedAtMs = now), ChipContext(now))
-        assertEquals("PILOT · NORMAL", pilot.primary.text)
-        assertTrue(pilot.secondary.any { it.text == "ADOS PILOT" })
+        assertEquals("Pilot · NORMAL", pilot.primary.text)
+        assertTrue(pilot.secondary.any { it.text == "ADOS Pilot" })
 
         val stale = chips.resolve(pilotState(PilotOwner.Pilot, receivedAtMs = now - 2_500), ChipContext(now))
         assertEquals("LINK", stale.primary.text)
         assertTrue(stale.dim)
 
         val standby = chips.resolve(pilotState(PilotOwner.FcMode, fcModeName = "Loiter", receivedAtMs = now), ChipContext(now))
-        assertEquals("FC · LOITER · ADOS STANDING BY", standby.primary.text)
+        assertEquals("FC · LOITER · ADOS standing by", standby.primary.text)
         assertEquals(ChipButton.TakeControl, standby.button)
 
         val manual = chips.resolve(pilotState(PilotOwner.FcMode, fcModeName = "LOITER", controlMode = ControlMode.FcManual, receivedAtMs = now), ChipContext(now))
@@ -80,7 +80,7 @@ class CockpitRulesTest {
         assertEquals("RTH · 42 m", rth.primary.text)
 
         val paused = chips.resolve(pilotState(PilotOwner.MissionFc, fcModeName = "AUTO", mission = MissionState.Paused, receivedAtMs = now), ChipContext(now))
-        assertEquals("MISSION PAUSED · WP 2/6", paused.primary.text)
+        assertEquals("Mission paused · WP 2/6", paused.primary.text)
         assertEquals(ChipButton.Resume, paused.button)
     }
 

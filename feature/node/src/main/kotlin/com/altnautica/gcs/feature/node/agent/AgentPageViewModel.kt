@@ -11,12 +11,16 @@ import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.feature.node.common.AgentWriteRunner
 import com.altnautica.gcs.feature.node.common.NodeClients
 import com.altnautica.gcs.feature.node.common.PageProblem
+import com.altnautica.gcs.feature.node.common.NO_AGENT_LINK
+import com.altnautica.gcs.feature.node.common.WriteAction
+import com.altnautica.gcs.feature.node.common.WriteLabel
 import com.altnautica.gcs.feature.node.common.WriteState
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +40,8 @@ sealed interface AgentConfigState {
 
 sealed interface LiveState {
     data object Loading : LiveState
-    data class Ready(val value: JsonElement) : LiveState
+    /** [stale]: the latest poll failed and [value] is the last good reading. */
+    data class Ready(val value: JsonElement, val stale: Boolean = false) : LiveState
 
     /** The agent does not serve this readout (feature absent or other profile). */
     data object Absent : LiveState
@@ -96,12 +101,19 @@ class AgentPageViewModel @AssistedInject constructor(
         }
     }
 
-    /** Loads the live readouts of a section when it opens. */
+    /** Polls the live readouts of a section every [LIVE_POLL_MS] while it is open. */
     fun openSection(section: AgentSection) {
-        section.live.filter { it != SectionLive.None }.forEach(::loadLive)
+        closeSection()
+        section.live.filter { it != SectionLive.None }.forEach { loadLive(it, poll = true) }
     }
 
-    fun refreshLive(kind: SectionLive) = loadLive(kind)
+    /** Stops the open section's live polls. */
+    fun closeSection() {
+        liveJobs.values.forEach { it.cancel() }
+        liveJobs.clear()
+    }
+
+    fun refreshLive(kind: SectionLive) = loadLive(kind, poll = liveJobs[kind]?.isActive == true)
 
     /** Validates [input] against the schema, then writes it. */
     fun write(key: String, input: String) {
@@ -111,8 +123,8 @@ class AgentPageViewModel @AssistedInject constructor(
             is ConfigValueCodec.Parsed.Invalid -> _state.update { it.copy(fieldErrors = it.fieldErrors + (key to parsed.reason)) }
             is ConfigValueCodec.Parsed.Ok -> {
                 _state.update { it.copy(fieldErrors = it.fieldErrors - key) }
-                writes.run(label = leaf.title, onDone = ::reloadConfigQuietly) { force ->
-                    val client = clients.clientFor(node()) ?: return@run AgentResult.Err(com.altnautica.gcs.core.agent.http.AgentError.Unauthorized)
+                writes.run(label = WriteLabel(WriteAction.Setting, leaf.title), onDone = ::reloadConfigQuietly) { force ->
+                    val client = clients.clientFor(node()) ?: return@run AgentResult.Err(NO_AGENT_LINK)
                     client.putConfig(key, parsed.value, force)
                 }
             }
@@ -121,9 +133,10 @@ class AgentPageViewModel @AssistedInject constructor(
 
     fun writeBool(key: String, value: Boolean) = write(key, value.toString())
 
+    /** Restarts a service; the page asks first (see the restart confirm). */
     fun restartService(name: String) {
-        writes.run(label = name, onDone = { loadLive(SectionLive.Services) }) { force ->
-            val client = clients.clientFor(node()) ?: return@run AgentResult.Err(com.altnautica.gcs.core.agent.http.AgentError.Unauthorized)
+        writes.run(label = WriteLabel(WriteAction.RestartService, name), onDone = { refreshLive(SectionLive.Services) }) { force ->
+            val client = clients.clientFor(node()) ?: return@run AgentResult.Err(NO_AGENT_LINK)
             client.restartService(name, force)
         }
     }
@@ -152,32 +165,28 @@ class AgentPageViewModel @AssistedInject constructor(
         }
     }
 
-    private fun loadLive(kind: SectionLive) {
+    private fun loadLive(kind: SectionLive, poll: Boolean = false) {
         if (kind == SectionLive.None) return
         liveJobs[kind]?.cancel()
         liveJobs[kind] = viewModelScope.launch {
             _state.update { it.copy(live = it.live + (kind to LiveState.Loading)) }
-            val client = clients.clientFor(node())
-            val result: LiveState = if (client == null) {
-                LiveState.Failed(PageProblem.NoAgentLink)
-            } else {
-                val r: AgentResult<JsonElement> = when (kind) {
-                    SectionLive.SystemResources -> client.system().widen()
-                    SectionLive.Battery -> client.requestJson("GET", "api/v1/battery")
-                    SectionLive.WfbLink -> client.wfb().widen()
-                    SectionLive.CameraRoster -> client.requestJson("GET", "api/video/roster")
-                    SectionLive.Services -> client.services()
-                    SectionLive.None -> error("unreachable")
-                }
-                when (r) {
-                    is AgentResult.Ok -> LiveState.Ready(r.value)
-                    is AgentResult.Err -> when (val p = PageProblem.from(r.error)) {
-                        PageProblem.Unsupported -> LiveState.Absent
-                        else -> LiveState.Failed(p)
-                    }
-                }
-            }
-            _state.update { it.copy(live = it.live + (kind to result)) }
+            do {
+                val result = liveAfter(_state.value.live[kind], fetchLive(kind))
+                _state.update { it.copy(live = it.live + (kind to result)) }
+                if (poll) delay(LIVE_POLL_MS)
+            } while (poll && result != LiveState.Absent)
+        }
+    }
+
+    private suspend fun fetchLive(kind: SectionLive): AgentResult<JsonElement>? {
+        val client = clients.clientFor(node()) ?: return null
+        return when (kind) {
+            SectionLive.SystemResources -> client.system().widen()
+            SectionLive.Battery -> client.requestJson("GET", "api/v1/battery")
+            SectionLive.WfbLink -> client.wfb().widen()
+            SectionLive.CameraRoster -> client.requestJson("GET", "api/video/roster")
+            SectionLive.Services -> client.services()
+            SectionLive.None -> error("unreachable")
         }
     }
 
@@ -189,6 +198,18 @@ class AgentPageViewModel @AssistedInject constructor(
     }
 
     companion object {
+        const val LIVE_POLL_MS = 3_000L
+
+        /** The next live state after a read; a failed poll keeps the last good reading, marked stale. */
+        internal fun liveAfter(last: LiveState?, r: AgentResult<JsonElement>?): LiveState = when (r) {
+            null -> if (last is LiveState.Ready) last.copy(stale = true) else LiveState.Failed(PageProblem.NoAgentLink)
+            is AgentResult.Ok -> LiveState.Ready(r.value)
+            is AgentResult.Err -> when (val p = PageProblem.from(r.error)) {
+                PageProblem.Unsupported -> LiveState.Absent
+                else -> if (last is LiveState.Ready) last.copy(stale = true) else LiveState.Failed(p)
+            }
+        }
+
         /** Value shown for a config key: the current config value at that dotted path. */
         fun valueAt(config: JsonObject, key: String): JsonElement? {
             var cur: JsonElement = config

@@ -34,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
@@ -59,6 +60,10 @@ class ConnectViewModelTest {
         paired = false, profile = "drone", role = null, code = "ABCD2345", host = "192.168.1.50", port = 8080, lastSeenMs = 0,
     )
 
+    private val joinState = MutableStateFlow(com.altnautica.gcs.core.agent.wifi.WifiJoinState.Idle)
+    private val wifiManager = mockk<WifiConnectionManager>(relaxed = true) { every { joinState } returns this@ConnectViewModelTest.joinState }
+    private val apStoreMock = mockk<GroundStationApStore>(relaxed = true)
+
     private fun vm(found: kotlinx.coroutines.flow.Flow<List<DiscoveredAgent>> = flowOf(listOf(agent))) = ConnectViewModel(
         discovery = mockk<LanDiscovery> { every { browse() } returns found },
         pairing = pairing,
@@ -66,8 +71,8 @@ class ConnectViewModelTest {
         directSettings = direct,
         directSource = mockk<DirectLinkSource>(relaxed = true),
         usb = mockk<UsbFlightControllers>(relaxed = true) { every { devices } returns MutableStateFlow(emptyList()) },
-        wifi = mockk<WifiConnectionManager>(relaxed = true) { every { connected } returns MutableStateFlow(false) },
-        apStore = mockk<GroundStationApStore>(relaxed = true),
+        wifi = wifiManager,
+        apStore = apStoreMock,
         demo = demo,
     )
 
@@ -236,6 +241,15 @@ class ConnectViewModelTest {
         backgroundScope.launch { vm.state.collect {} }
         // The code is not advertised here, so the deep link's host is claimed directly.
         vm.applyDeepLink("ABCD2345", "192.168.1.50")
+        // The link only fills the page: nothing is claimed until the operator taps Pair.
+        runCurrent()
+        assertEquals(ConnectPage.Code, vm.state.value.page)
+        assertEquals("192.168.1.50", vm.state.value.host)
+        assertTrue(vm.state.value.fromLink)
+        assertNull(vm.state.value.connected)
+        coVerify(exactly = 0) { pairing.claim(any(), any()) }
+        vm.submitCode()
+        runCurrent()
         assertEquals(DeviceId("drone-1"), vm.state.value.connected)
     }
 
@@ -251,7 +265,9 @@ class ConnectViewModelTest {
 
         // Cold start: the link arrives before NSD has resolved the node.
         vm.applyDeepLink("ABCD2345", null)
+        vm.submitCode()
         advanceTimeBy(3_000)
+        assertTrue(vm.state.value.searching)
         assertNull(vm.state.value.error)
         assertNull(vm.state.value.connected)
 
@@ -268,11 +284,46 @@ class ConnectViewModelTest {
         backgroundScope.launch { vm.state.collect {} }
 
         vm.applyDeepLink("ABCD2345", null)
+        vm.submitCode()
         advanceTimeBy(ConnectViewModel.DEEP_LINK_DISCOVERY_MS - 1)
         assertNull(vm.state.value.error)
         advanceTimeBy(2)
         runCurrent()
         assertEquals(ConnectError.CodeNotFound, vm.state.value.error)
         coVerify(exactly = 0) { pairing.claim(any(), any()) }
+    }
+
+    @Test
+    fun theWifiCredentialIsKeptOnlyOnceTheStationJoined() = runTest(dispatcher) {
+        every { wifiManager.requestGroundStationNetwork(any(), any()) } answers {
+            joinState.value = com.altnautica.gcs.core.agent.wifi.WifiJoinState.Requesting
+            true
+        }
+        val vm = vm()
+        backgroundScope.launch { vm.state.collect {} }
+        vm.setJoinText("secretpass")
+        vm.joinGroundStationWifi()
+        runCurrent()
+        assertEquals(com.altnautica.gcs.core.agent.wifi.WifiJoinState.Requesting, vm.state.value.wifiJoin)
+        coVerify(exactly = 0) { apStoreMock.store(any()) }
+
+        joinState.value = com.altnautica.gcs.core.agent.wifi.WifiJoinState.Unavailable
+        runCurrent()
+        assertEquals(com.altnautica.gcs.core.agent.wifi.WifiJoinState.Unavailable, vm.state.value.wifiJoin)
+        coVerify(exactly = 0) { apStoreMock.store(any()) }
+
+        vm.joinGroundStationWifi()
+        joinState.value = com.altnautica.gcs.core.agent.wifi.WifiJoinState.Joined
+        runCurrent()
+        coVerify(exactly = 1) { apStoreMock.store(any()) }
+    }
+
+    @Test
+    fun busyTextAndDiscoveredProfileHaveWords() {
+        assertEquals(R.string.connect_busy_searching, busyTextRes(ConnectUiState(busy = true, searching = true)))
+        assertEquals(R.string.connect_busy_pairing, busyTextRes(ConnectUiState(busy = true, page = ConnectPage.Code)))
+        assertEquals(R.string.connect_busy_connecting, busyTextRes(ConnectUiState(busy = true, page = ConnectPage.Network)))
+        assertEquals(com.altnautica.gcs.core.designsystem.R.string.profile_ground_station, discoveredProfileRes("ground_station"))
+        assertNull(discoveredProfileRes("toaster"))
     }
 }

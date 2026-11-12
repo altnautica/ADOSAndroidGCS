@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="logs_surface_title">Logs</string>
+    <string name="logs_surface_title">Flight logs</string>
     <string name="logs_tab_flights">Flights</string>
     <string name="logs_tab_dataflash">Dataflash</string>
     <string name="logs_hint_open">Open</string>
@@ -10,16 +10,16 @@
     <string name="logs_pick_flight">Pick a flight from the list to see its charts and track.</string>
     <string name="logs_flight_not_found">It was deleted from this device. Pick another flight from the list.</string>
     <string name="logs_df_download_from">Download from %1$s</string>
-    <string name="logs_df_download_none">Download from vehicle</string>
-    <string name="logs_df_no_selection">Select a vehicle on Home to download its flight-controller logs.</string>
+    <string name="logs_df_download_none">Download from drone</string>
+    <string name="logs_df_no_selection">Select a drone on Home to download its flight-controller logs.</string>
     <string name="logs_df_files_empty_title">No downloaded logs</string>
     <string name="logs_df_files_empty">Flight-controller logs you download are kept here to share.</string>
     <string name="logs_df_delete_title">Delete this log file?</string>
     <string name="logs_df_delete_message">%1$s is removed from this device. The copy on the flight controller is kept.</string>
     <string name="logs_loading">Loading flight history</string>
     <string name="logs_empty_title">No flights yet</string>
-    <string name="logs_empty_message">Flights are recorded automatically from arm to disarm while a vehicle is connected.</string>
-    <string name="logs_error">Flight history could not be read: %1$s</string>
+    <string name="logs_empty_message">Flights are recorded automatically from arm to disarm while a drone is connected.</string>
+    <string name="logs_error">Flight history could not be read from this device\'s storage.</string>
     <string name="logs_retry">Retry</string>
     <string name="logs_duration">%1$d min %2$02d s</string>
     <string name="logs_max_alt">Max alt %1$.0f m</string>
@@ -37,12 +37,13 @@
     <string name="logs_detail_not_found">This flight no longer exists.</string>
     <string name="logs_detail_no_tlog">No telemetry log was recorded for this flight, so there is no track or chart.</string>
     <string name="logs_detail_loading_tlog">Reading telemetry log</string>
-    <string name="logs_detail_tlog_failed">The telemetry log could not be read: %1$s</string>
+    <string name="logs_detail_tlog_failed">The telemetry log could not be read. The file may be damaged or incomplete.</string>
     <string name="logs_chart_altitude">Altitude (m)</string>
     <string name="logs_chart_speed">Ground speed (m/s)</string>
     <string name="logs_chart_battery">Battery (%)</string>
     <string name="logs_chart_no_data">No samples</string>
     <string name="logs_replay">Replay in cockpit</string>
+    <string name="logs_replay_unreadable">This flight log could not be read; the replay stopped</string>
     <string name="logs_df_title">Flight-controller logs</string>
     <string name="logs_df_refresh">Refresh log list</string>
     <string name="logs_df_no_vehicle_title">No flight controller</string>
@@ -54,6 +55,10 @@
     <string name="logs_df_entry">Log %1$d</string>
     <string name="logs_df_download">Download</string>
     <string name="logs_df_cancel">Stop</string>
-    <string name="logs_df_failed">Download stopped: %1$s. Download again to resume.</string>
+    <string name="logs_df_queued">Waiting for the download ahead of it</string>
+    <string name="logs_df_armed_title">Drone is armed</string>
+    <string name="logs_df_armed">Disarm to list or download flight-controller logs.</string>
+    <string name="logs_df_failed">Download stopped. %1$s. Download again to resume.</string>
     <string name="logs_share_chooser">Share log file</string>
+    <string name="logs_share_missing">This log file is no longer on the device</string>
 </resources>

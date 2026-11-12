@@ -10,8 +10,12 @@ data class FlightModeParams(val slots: List<String>, val channelParam: String)
  * controller actually reports, so one list can cover several firmware versions.
  */
 object SetupCatalog {
-    private val PLANE_TYPES = setOf(1, 16, 19, 20, 21, 22, 23, 24, 25)
+    /** MAV_TYPE values flown as fixed wing (VTOLs included). */
+    internal val PLANE_TYPES = setOf(1, 16, 19, 20, 21, 22, 23, 24, 25)
     private val ROVER_TYPES = setOf(10, 11)
+
+    /** MAV_TYPE values lifted by rotors: coaxial, helicopter, tri, quad, hexa, octo, dodeca, deca. */
+    internal val COPTER_TYPES = setOf(2, 3, 4, 13, 14, 15, 29, 35)
 
     fun flightModes(variant: FcVariant, mavType: Int?): FlightModeParams? = when (variant) {
         FcVariant.MavlinkPx4 -> FlightModeParams((1..6).map { "COM_FLTMODE$it" }, "RC_MAP_FLTMODE")

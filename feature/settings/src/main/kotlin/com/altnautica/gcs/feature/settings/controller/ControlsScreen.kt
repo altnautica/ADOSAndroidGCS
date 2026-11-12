@@ -1,5 +1,9 @@
 package com.altnautica.gcs.feature.settings.controller
 
+import androidx.annotation.StringRes
+import com.altnautica.gcs.core.designsystem.component.StatusChip
+import com.altnautica.gcs.core.designsystem.component.StatusLevel
+import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +67,7 @@ interface ControlsActions {
     fun pressedOnScreen(control: String)
     fun startCalibration()
     fun closeCalibration()
+    fun clearCalibration()
     fun testRumble()
     fun testLightbar()
     fun toggleStickTest()
@@ -83,6 +88,36 @@ internal fun hotspotLabels(rows: List<ControlBindingSpec>, label: (String) -> St
         val primary = list.firstOrNull { it.with.isEmpty() && (it.gesture == Gesture.TAP || it.gesture == Gesture.ANALOG) } ?: list.first()
         label(primary.action)
     }
+
+/** The operator-facing name of a controller control id (`dpad_up` → "D-pad up"); null for an unknown id. */
+@StringRes
+internal fun controlName(id: String): Int? = when (id) {
+    "stick_l" -> R.string.controls_control_stick_l
+    "stick_r" -> R.string.controls_control_stick_r
+    "l1" -> R.string.controls_control_l1
+    "r1" -> R.string.controls_control_r1
+    "l2" -> R.string.controls_control_l2
+    "r2" -> R.string.controls_control_r2
+    "l3" -> R.string.controls_control_l3
+    "r3" -> R.string.controls_control_r3
+    "dpad_up" -> R.string.controls_control_dpad_up
+    "dpad_down" -> R.string.controls_control_dpad_down
+    "dpad_left" -> R.string.controls_control_dpad_left
+    "dpad_right" -> R.string.controls_control_dpad_right
+    "cross" -> R.string.controls_control_cross
+    "circle" -> R.string.controls_control_circle
+    "square" -> R.string.controls_control_square
+    "triangle" -> R.string.controls_control_triangle
+    "share" -> R.string.controls_control_share
+    "options" -> R.string.controls_control_options
+    "ps" -> R.string.controls_control_ps
+    "touchpad" -> R.string.controls_control_touchpad
+    "lightbar" -> R.string.controls_control_lightbar
+    else -> null
+}
+
+@Composable
+private fun controlNameText(id: String): String = controlName(id)?.let { stringResource(it) } ?: id
 
 /**
  * Settings › Controls: the controller drawing with live input and a label per control,
@@ -128,10 +163,11 @@ fun ControlsScreen(
             triggerPressed = ds4.stream.triggerPressedThreshold,
             deadzone = state.deadzone,
             labels = hotspotLabels(state.rows, actionLabel),
+            names = hotspots.hotspots.keys.associateWith { controlNameText(it) },
             conflicts = state.conflictControls,
             locked = lockedControls,
-            pressedLabel = "pressed",
-            conflictLabel = "conflict",
+            pressedLabel = stringResource(R.string.controls_state_pressed),
+            conflictLabel = stringResource(R.string.controls_state_conflict),
             onHotspot = { id -> if (state.press != null) actions.pressedOnScreen(id) else actions.openControl(id) },
             modifier = Modifier.widthIn(max = 800.dp).align(Alignment.CenterHorizontally),
         )
@@ -160,7 +196,7 @@ fun ControlsScreen(
             AdosButton(t("controls.import"), onClick = actions::importFile, variant = AdosButtonVariant.Secondary, modifier = Modifier.testTag("controls-import"))
         }
         SticksCard(state, ::t, actions, ds4.conditioning.deadzoneMin, ds4.conditioning.deadzoneMax)
-        TestRow(state, ::t, actions)
+        TestRow(state, input, ::t, actions)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
             Text(t("flow.on_screen_sticks"), modifier = Modifier.weight(1f))
             Switch(checked = state.onScreenSticks, onCheckedChange = actions::setOnScreenSticks, modifier = Modifier.testTag("controls-on-screen-sticks"))
@@ -212,14 +248,34 @@ private fun SticksCard(state: ControlsUiState, t: (String) -> String, actions: C
         Modifier.fillMaxWidth().background(AdosTheme.colors.bgSurface, RoundedCornerShape(AdosRadius.Lg)).padding(AdosSpacing.S3),
         verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
     ) {
-        Text(t("controls.calibrate.title"), style = MaterialTheme.typography.titleSmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+            Text(t("controls.calibrate.title"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            if (state.calibrated) {
+                StatusChip(StatusLevel.Success, stringResource(R.string.controls_calibrated), Modifier.testTag("controls-calibrated"))
+            }
+        }
         val cal = state.calibration
-        if (cal == null) {
-            AdosButton(t("controls.calibrate.title"), onClick = actions::startCalibration, enabled = state.controller != null, modifier = Modifier.testTag("controls-calibrate"))
-        } else {
-            Text(t("controls.calibrate.body"))
-            androidx.compose.material3.LinearProgressIndicator(progress = { cal.coverage }, modifier = Modifier.fillMaxWidth())
-            AdosButton(stringResource(R.string.controls_cancel), onClick = actions::closeCalibration, variant = AdosButtonVariant.Secondary)
+        when {
+            cal == null -> FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                AdosButton(t("controls.calibrate.title"), onClick = actions::startCalibration, enabled = state.controller != null, modifier = Modifier.testTag("controls-calibrate"))
+                if (state.calibrated) {
+                    AdosButton(
+                        stringResource(R.string.controls_calibration_clear),
+                        onClick = actions::clearCalibration,
+                        variant = AdosButtonVariant.Secondary,
+                        modifier = Modifier.testTag("controls-calibration-clear"),
+                    )
+                }
+            }
+            cal.phase == CalibrationPhase.Saved -> {
+                Text(stringResource(R.string.controls_calibrated), modifier = Modifier.testTag("controls-calibration-saved"))
+                AdosButton(stringResource(R.string.controls_calibration_done), onClick = actions::closeCalibration, modifier = Modifier.testTag("controls-calibration-done"))
+            }
+            else -> {
+                Text(t("controls.calibrate.body"))
+                androidx.compose.material3.LinearProgressIndicator(progress = { cal.coverage }, modifier = Modifier.fillMaxWidth())
+                AdosButton(stringResource(R.string.controls_cancel), onClick = actions::closeCalibration, variant = AdosButtonVariant.Secondary)
+            }
         }
         Text(t("controls.deadzone") + " · " + "%.2f".format(state.deadzone))
         Slider(value = state.deadzone, onValueChange = actions::setDeadzone, valueRange = min..max, modifier = Modifier.testTag("controls-deadzone"))
@@ -227,14 +283,44 @@ private fun SticksCard(state: ControlsUiState, t: (String) -> String, actions: C
 }
 
 @Composable
-private fun TestRow(state: ControlsUiState, t: (String) -> String, actions: ControlsActions) {
-    Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {
-        AdosButton(t("controls.test.rumble"), onClick = actions::testRumble, enabled = state.controller != null && state.capabilities.rumble, variant = AdosButtonVariant.Secondary)
-        Column {
-            AdosButton(t("controls.test.lightbar"), onClick = actions::testLightbar, enabled = state.controller != null && state.capabilities.lightbar, variant = AdosButtonVariant.Secondary)
-            if (!state.capabilities.lightbar) Text(t("controls.test.lightbar_unavailable"), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+private fun TestRow(state: ControlsUiState, input: State<PadSnapshot>, t: (String) -> String, actions: ControlsActions) {
+    val running = stringResource(R.string.controls_test_running)
+    Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {
+            AdosButton(
+                if (state.test == HardwareTest.Rumble) running else t("controls.test.rumble"),
+                onClick = actions::testRumble,
+                enabled = state.controller != null && state.capabilities.rumble && state.test != HardwareTest.Rumble,
+                variant = AdosButtonVariant.Secondary,
+                modifier = Modifier.testTag("controls-test-rumble"),
+            )
+            Column {
+                AdosButton(
+                    if (state.test == HardwareTest.Lightbar) running else t("controls.test.lightbar"),
+                    onClick = actions::testLightbar,
+                    enabled = state.controller != null && state.capabilities.lightbar && state.test != HardwareTest.Lightbar,
+                    variant = AdosButtonVariant.Secondary,
+                    modifier = Modifier.testTag("controls-test-lightbar"),
+                )
+                if (!state.capabilities.lightbar) Text(t("controls.test.lightbar_unavailable"), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+            }
+            val sticks = state.test == HardwareTest.Sticks
+            AdosButton(
+                if (sticks) stringResource(R.string.controls_test_sticks_stop) else t("controls.test.sticks"),
+                onClick = actions::toggleStickTest,
+                enabled = state.controller != null,
+                variant = if (sticks) AdosButtonVariant.Primary else AdosButtonVariant.Secondary,
+                modifier = Modifier.testTag("controls-test-sticks").semantics { selected = sticks },
+            )
         }
-        AdosButton(t("controls.test.sticks"), onClick = actions::toggleStickTest, enabled = state.controller != null, variant = AdosButtonVariant.Secondary)
+        if (state.test == HardwareTest.Sticks) {
+            val a = input.value.axes
+            Text(
+                stringResource(R.string.controls_test_readout, a.leftX, a.leftY, a.rightX, a.rightY, a.leftTrigger, a.rightTrigger),
+                style = AdosTypography.numeric.small,
+                modifier = Modifier.testTag("controls-stick-readout"),
+            )
+        }
     }
 }
 
@@ -249,7 +335,7 @@ private fun BindingSheet(
     actionLabel: (String) -> String,
     spec: CockpitSpecRepository,
 ) {
-    AdosSheet(onDismiss = actions::closeControl, title = control.uppercase()) {
+    AdosSheet(onDismiss = actions::closeControl, title = controlNameText(control)) {
         Column(Modifier.testTag("binding-sheet"), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
             for (gesture in gesturesFor(control)) {
                 val row = state.rows.firstOrNull { it.control == control && it.gesture == gesture && it.with.isEmpty() }

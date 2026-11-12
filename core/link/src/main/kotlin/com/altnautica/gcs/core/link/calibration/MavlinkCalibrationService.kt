@@ -30,8 +30,10 @@ import kotlinx.coroutines.launch
  * - accelerometer: p5=1, then the autopilot drives the six poses with
  *   `COMMAND_LONG(MAV_CMD_ACCELCAL_VEHICLE_POS)` sent to the GCS; the operator's
  *   confirmation is echoed back with the same command;
- * - compass: `MAV_CMD_DO_START_MAG_CAL`, `MAG_CAL_PROGRESS`/`MAG_CAL_REPORT`,
- *   then accept or cancel;
+ * - compass: ArduPilot runs `MAV_CMD_DO_START_MAG_CAL`, `MAG_CAL_PROGRESS`/`MAG_CAL_REPORT`,
+ *   then accept or cancel; PX4 runs p2=1 and reports through `[cal]` status texts;
+ * - ESC (p7=1), CompassMot (p6=1, ArduPilot only) and airspeed (p6=2) follow the gyro
+ *   pattern: the ACK on ArduPilot, the `[cal]` texts on PX4;
  * - radio: `RC_CHANNELS` min/max capture written to `RCn_MIN/MAX/TRIM`.
  *
  * PX4 reports its own calibration steps through `[cal]` status texts, which
@@ -74,6 +76,16 @@ class MavlinkCalibrationService(
 
     private fun isPx4(): Boolean = link.target.value?.family == FirmwareFamily.Px4
 
+    override suspend fun startEsc(): CommandResult = simple(CalibrationKind.Esc, 0f, 0f, 0f, 0f, 0f, 0f, 1f)
+
+    override suspend fun startCompassMot(): CommandResult {
+        // p6=1 is ArduCopter's CompassMot slot; other firmware would accept it and do nothing recognisable.
+        if (link.target.value?.family != FirmwareFamily.ArduCopter) return CommandResult.Unsupported
+        return simple(CalibrationKind.CompassMot, 0f, 0f, 0f, 0f, 0f, 1f)
+    }
+
+    override suspend fun startAirspeed(): CommandResult = simple(CalibrationKind.Airspeed, 0f, 0f, 0f, 0f, 0f, 2f)
+
     override suspend fun startAccel(): CommandResult {
         begin(CalibrationKind.Accel)
         val r = commands.long(MavCmd.MAV_CMD_PREFLIGHT_CALIBRATION, 0f, 0f, 0f, 0f, 1f)
@@ -88,6 +100,8 @@ class MavlinkCalibrationService(
     }
 
     override suspend fun startCompass(): CommandResult {
+        // PX4 has no onboard MAG_CAL protocol: its compass calibration is p2=1 with `[cal]` texts.
+        if (isPx4()) return simple(CalibrationKind.Compass, 0f, 1f)
         compassProgress.clear()
         compassReports.clear()
         compassMask = 0
@@ -124,17 +138,23 @@ class MavlinkCalibrationService(
     }
 
     override suspend fun saveRadio(): CommandResult {
-        val channels = radio.values.toList()
-        if (channels.isEmpty()) return CommandResult.Rejected(-1, "noRcInput")
-        val throttle = params.snapshot.value.values["RCMAP_THROTTLE"]?.value?.toInt() ?: DEFAULT_THROTTLE_CHANNEL
+        val all = radio.values.toList()
+        if (all.isEmpty()) return CommandResult.Rejected(-1, "noRcInput")
+        val values = params.snapshot.value.values
+        val sticks = listOf("RCMAP_ROLL" to 1, "RCMAP_PITCH" to 2, "RCMAP_THROTTLE" to 3, "RCMAP_YAW" to 4)
+            .map { (name, default) -> values[name]?.value?.toInt() ?: default }
+        // Keep the screen in the Radio state: the operator moves the sticks further and saves again.
+        val channels = radioChannelsToWrite(all, sticks) ?: return CommandResult.Rejected(-1, "sticksNotMoved")
+        val throttle = sticks[2]
         for (c in channels) {
             val trim = if (c.channel == throttle) c.min else c.current.coerceIn(c.min, c.max)
             for ((suffix, v) in listOf("MIN" to c.min, "MAX" to c.max, "TRIM" to trim)) {
                 when (val r = params.set("RC${c.channel}_$suffix", v.toDouble())) {
                     is ParamSetResult.Confirmed -> Unit
                     else -> {
-                        fail(CalibrationKind.Radio, r.toString())
-                        return CommandResult.Rejected(-1, "RC${c.channel}_$suffix")
+                        val reason = paramWriteReason(r)
+                        fail(CalibrationKind.Radio, reason)
+                        return CommandResult.Rejected(-1, reason)
                     }
                 }
             }
@@ -258,11 +278,33 @@ class MavlinkCalibrationService(
         is CommandResult.Denied -> reason
         CommandResult.Timeout -> "timeout"
         CommandResult.Unsupported -> "unsupported"
-        else -> toString()
+        else -> "failed"
     }
 
-    private companion object {
-        const val UINT16_MAX = 0xFFFF
-        const val DEFAULT_THROTTLE_CHANNEL = 3
+    internal companion object {
+        private const val UINT16_MAX = 0xFFFF
+
+        /** A channel that moved less than this (µs) was not touched by the operator and is left alone. */
+        const val MIN_MOVED_US = 50
+
+        /** Every stick channel must span at least this (µs) before a radio calibration is saved. */
+        const val MIN_STICK_SPAN_US = 200
+
+        /**
+         * The channels a radio calibration writes: only those the operator moved. Null when any
+         * stick channel ([sticks], from RCMAP) spans under [MIN_STICK_SPAN_US], so nothing is written.
+         */
+        fun radioChannelsToWrite(channels: List<RcChannelRange>, sticks: List<Int>): List<RcChannelRange>? {
+            val byChannel = channels.associateBy { it.channel }
+            if (sticks.any { ch -> byChannel[ch]?.let { it.max - it.min >= MIN_STICK_SPAN_US } != true }) return null
+            return channels.filter { it.max - it.min >= MIN_MOVED_US }
+        }
+
+        /** A reason token (see `linkReasonRes`) for a radio-calibration parameter write that did not confirm. */
+        fun paramWriteReason(r: ParamSetResult): String = when (r) {
+            ParamSetResult.Timeout -> "timeout"
+            is ParamSetResult.Failed -> r.reason
+            else -> "writeFailed"
+        }
     }
 }

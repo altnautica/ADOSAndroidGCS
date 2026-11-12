@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Demo flight states the demo drone's pilot can be pinned to (Settings › Connections). -->
+    <string name="demo_scenario_readiness_blocked">Not ready: no position</string>
+    <string name="demo_scenario_mission_active">Mission: flying</string>
+    <string name="demo_scenario_mission_paused">Mission: paused</string>
+    <string name="demo_scenario_mission_complete">Mission: complete</string>
+    <string name="demo_scenario_fc_failsafe_rtl">Flight controller failsafe: RTL</string>
+    <string name="demo_scenario_pilot_stalled">Pilot stops responding</string>
+    <string name="demo_scenario_link_loss">Control link lost</string>
+    <string name="demo_scenario_no_gnss">No GNSS</string>
+    <string name="demo_scenario_status_texts">Flight controller warnings</string>
+    <string name="demo_scenario_follow">Follow skill flying</string>
+    <string name="demo_scenario_fly_here">Fly Here offered</string>
+    <string name="demo_scenario_hold_controller_lost">Hold: controller lost</string>
+    <string name="demo_scenario_hold_link_loss">Hold: link lost</string>
+    <string name="demo_scenario_hold_obstacle_close">Hold: obstacle close</string>
+    <string name="demo_scenario_hold_lease_revoked">Hold: control taken back</string>
+    <string name="demo_scenario_hold_blocked">Hold: path blocked</string>
+    <string name="demo_scenario_goto_bad_args">Fly Here refused: invalid point</string>
+    <string name="demo_scenario_goto_not_armed">Fly Here refused: not armed</string>
+    <string name="demo_scenario_goto_landed">Fly Here refused: landed</string>
+    <string name="demo_scenario_goto_tuning">Fly Here refused: tuning</string>
+    <string name="demo_scenario_goto_no_home">Fly Here refused: no home</string>
+    <string name="demo_scenario_goto_launching">Fly Here refused: taking off</string>
+    <string name="demo_scenario_goto_control_mode">Fly Here refused: flight controller in control</string>
+    <string name="demo_scenario_goto_failsafe">Fly Here refused: failsafe</string>
+</resources>

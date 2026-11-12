@@ -45,7 +45,8 @@
     <string name="cfg_param_modified">Modified</string>
     <string name="cfg_param_no_docs">No parameter documentation is bundled for this flight controller.</string>
     <string name="cfg_param_count">%1$d of %2$d parameters</string>
-    <string name="cfg_param_write">Write to vehicle</string>
+    <string name="cfg_param_write">Write to flight controller</string>
+    <string name="cfg_param_writing">Writing %1$s…</string>
     <string name="cfg_param_value">Value %1$s</string>
     <string name="cfg_param_min">min %1$s</string>
     <string name="cfg_param_max">max %1$s</string>
@@ -61,6 +62,8 @@
     <string name="cfg_param_armed_title">Change a parameter while armed?</string>
     <string name="cfg_param_armed_message">The vehicle is armed. Writing %1$s = %2$s changes its behaviour in flight.</string>
     <string name="cfg_param_armed_confirm">Hold to write</string>
+    <string name="cfg_param_unknown_title">Arm state unknown</string>
+    <string name="cfg_param_unknown_message">No recent heartbeat from the drone, so treat it as armed. Writing %1$s = %2$s may change its behaviour in flight.</string>
     <string name="cfg_param_saved">%1$s set to %2$s</string>
     <string name="cfg_param_saved_reboot">%1$s set to %2$s. Reboot to apply.</string>
     <string name="cfg_param_clamped">%1$s: asked %2$s, the vehicle kept %3$s</string>
@@ -73,8 +76,18 @@
     <string name="cfg_import_title">Load parameter file</string>
     <string name="cfg_import_summary">%1$d values differ from the vehicle. %2$d names in the file do not exist on it and are skipped.</string>
     <string name="cfg_import_progress">Written %1$d of %2$d, %3$d failed</string>
-    <string name="cfg_import_apply">Write changes</string>
+    <plurals name="cfg_import_apply">
+        <item quantity="one">Write %1$d to flight controller</item>
+        <item quantity="other">Write %1$d to flight controller</item>
+    </plurals>
+    <plurals name="cfg_import_confirm_title">
+        <item quantity="one">Write %1$d parameter to the flight controller?</item>
+        <item quantity="other">Write %1$d parameters to the flight controller?</item>
+    </plurals>
+    <string name="cfg_import_confirm_message">The flight controller uses the new values as soon as each one is written.</string>
+    <string name="cfg_import_confirm">Write</string>
     <string name="cfg_import_disarm_first">Disarm to apply a parameter file</string>
+    <string name="cfg_import_stopped">Stopped: %1$d of %2$d values written before the review closed</string>
 
     <!-- Calibration -->
     <string name="cfg_cal_title">Calibration</string>
@@ -83,6 +96,13 @@
     <string name="cfg_cal_accel">Accelerometer</string>
     <string name="cfg_cal_compass">Compass</string>
     <string name="cfg_cal_radio">Radio</string>
+    <string name="cfg_cal_esc">ESC</string>
+    <string name="cfg_cal_compassmot">Compass-motor</string>
+    <string name="cfg_cal_airspeed">Airspeed</string>
+    <string name="cfg_cal_start">Start calibration</string>
+    <string name="cfg_cal_esc_precaution">Remove every propeller first. The flight controller sets the ESC throttle range: when it asks, unplug the battery, plug it back in and wait for the ESC tones.</string>
+    <string name="cfg_cal_compassmot_precaution">Propellers stay on, so tie the vehicle down and keep clear. Raise the throttle slowly to full and back while the flight controller measures motor interference on the compass.</string>
+    <string name="cfg_cal_airspeed_precaution">Cover the pitot tube so no air flows over it, and keep the vehicle still.</string>
     <string name="cfg_cal_idle">Choose a calibration. The vehicle must be disarmed.</string>
     <string name="cfg_cal_running">%1$s calibration running</string>
     <string name="cfg_cal_keep_still">Keep the vehicle still and level.</string>
@@ -128,8 +148,7 @@
     <string name="cfg_param_save_qgc">QGroundControl format</string>
     <string name="cfg_param_save_ardupilot">ArduPilot .param</string>
     <string name="cfg_param_file_saved">Parameter file saved</string>
-    <string name="cfg_param_file_write_failed">Could not save the file: %1$s</string>
-    <string name="cfg_param_file_write_failed_unknown">Could not save the file</string>
+    <string name="cfg_param_file_write_failed">Could not save the file</string>
     <string name="cfg_import_not_on_vehicle">Not on this vehicle</string>
     <string name="cfg_import_selected">%1$d of %2$d selected</string>
     <string name="cfg_reboot_pending">Some changes apply after a reboot</string>

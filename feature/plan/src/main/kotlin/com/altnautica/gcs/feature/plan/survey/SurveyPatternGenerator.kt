@@ -11,12 +11,18 @@ import kotlin.math.tan
 /** Coordinate pair for survey and spray polygon vertices. */
 data class SurveyLatLng(val lat: Double, val lon: Double)
 
+/**
+ * @property cameraFovDeg field of view across track (the sensor's long side); sets line spacing.
+ * @property cameraVFovDeg field of view along track (the short side); sets the photo interval.
+ * @property angle compass bearing of the survey lines: 0° runs them north–south, 90° east–west.
+ */
 data class SurveyConfig(
     val polygon: List<SurveyLatLng>,
     val altitude: Float = 50f,
     val overlapPercent: Float = 70f,
     val sidelapPercent: Float = 60f,
     val cameraFovDeg: Float = 73f,
+    val cameraVFovDeg: Float = 58f,
     val speed: Float = 5f,
     val angle: Float = 0f,
 )
@@ -44,129 +50,57 @@ private const val EARTH_RADIUS_M = 6_371_000.0
 /**
  * Generates an aerial survey grid (boustrophedon pattern) for a given polygon.
  *
- * Algorithm:
- * 1. Compute sensor footprint from altitude and camera FOV.
- * 2. Derive line spacing (sidelap) and photo interval (forward overlap).
- * 3. Rotate polygon so grid lines align with the requested angle.
- * 4. Generate horizontal sweep lines across the rotated bounding box.
- * 5. Clip each line to the rotated polygon boundary (ray-cast).
- * 6. Alternate line direction for efficient boustrophedon traversal.
- * 7. Rotate waypoints back to real-world coordinates.
- * 8. Compute stats: total distance, flight time, coverage area.
+ * 1. Footprint across track from the horizontal FOV, along track from the vertical FOV.
+ * 2. Line spacing from the side overlap, photo interval from the forward overlap.
+ * 3. Rotate the polygon so lines at the requested bearing lie along the local x axis.
+ * 4. Centre the lines across the rotated height and clip each to every inside span.
+ * 5. Alternate direction per line, then rotate the passes back to latitude/longitude.
  */
 fun generateSurveyGrid(config: SurveyConfig): SurveyResult {
     require(config.polygon.size >= 3) { "Polygon must have at least 3 vertices" }
 
-    // Sensor footprint (assume square sensor)
-    val fovRad = config.cameraFovDeg * PI / 180.0
-    val footprintWidth = (2.0 * config.altitude * tan(fovRad / 2.0)).toFloat()
+    val footprintAcross = footprintM(config.altitude, config.cameraFovDeg)
+    val footprintAlong = footprintM(config.altitude, config.cameraVFovDeg)
+    val lineSpacing = footprintAcross * (1f - config.sidelapPercent / 100f)
+    val photoInterval = footprintAlong * (1f - config.overlapPercent / 100f)
 
-    // Spacing and photo interval
-    val lineSpacing = footprintWidth * (1f - config.sidelapPercent / 100f)
-    val photoInterval = footprintWidth * (1f - config.overlapPercent / 100f)
-
-    // Reference point for local meter projection (centroid)
+    // Local metre frame around the centroid.
     val refLat = config.polygon.map { it.lat }.average()
     val refLon = config.polygon.map { it.lon }.average()
     val metersPerDegLon = METERS_PER_DEG_LAT * cos(Math.toRadians(refLat))
-
-    // Convert polygon to local meter coordinates relative to centroid
     val polyM = config.polygon.map { pt ->
-        doubleArrayOf(
-            (pt.lon - refLon) * metersPerDegLon,
-            (pt.lat - refLat) * METERS_PER_DEG_LAT,
-        )
+        doubleArrayOf((pt.lon - refLon) * metersPerDegLon, (pt.lat - refLat) * METERS_PER_DEG_LAT)
     }
 
-    // Rotate polygon so grid lines run horizontally (angle=0 in rotated frame)
-    val angleRad = -config.angle * PI / 180.0
+    // Lines at compass bearing B run (90 - B)° counter-clockwise from east; rotating by -(90 - B) lays them along x.
+    val angleRad = -(90.0 - config.angle) * PI / 180.0
     val cosA = cos(angleRad)
     val sinA = sin(angleRad)
+    val rotated = polyM.map { pt -> doubleArrayOf(pt[0] * cosA - pt[1] * sinA, pt[0] * sinA + pt[1] * cosA) }
 
-    val rotated = polyM.map { pt ->
-        doubleArrayOf(
-            pt[0] * cosA - pt[1] * sinA,
-            pt[0] * sinA + pt[1] * cosA,
-        )
-    }
-
-    // Bounding box in rotated frame
-    val minX = rotated.minOf { it[0] }
-    val maxX = rotated.maxOf { it[0] }
-    val minY = rotated.minOf { it[1] }
-    val maxY = rotated.maxOf { it[1] }
-
-    // Generate horizontal sweep lines
-    val surveyWaypoints = mutableListOf<SurveyWaypoint>()
-    var lineIndex = 0
-    var y = minY + lineSpacing / 2.0
-
-    while (y <= maxY) {
-        val intersections = clipHorizontalLine(y, minX, maxX, rotated)
-        if (intersections != null) {
-            val (xStart, xEnd) = intersections
-            // Alternate direction for boustrophedon
-            val x1 = if (lineIndex % 2 == 0) xStart else xEnd
-            val x2 = if (lineIndex % 2 == 0) xEnd else xStart
-
-            // Rotate back to meter coords, then to lat/lon
-            val wp1 = rotateBack(x1, y, cosA, sinA, refLat, refLon, metersPerDegLon)
-            val wp2 = rotateBack(x2, y, cosA, sinA, refLat, refLon, metersPerDegLon)
-
-            surveyWaypoints.add(
-                SurveyWaypoint(wp1.first, wp1.second, config.altitude, config.speed, isCameraTrigger = true)
-            )
-            surveyWaypoints.add(
-                SurveyWaypoint(wp2.first, wp2.second, config.altitude, config.speed, isCameraTrigger = true)
-            )
-            lineIndex++
+    val ys = SweepLines.offsets(rotated.minOf { it[1] }, rotated.maxOf { it[1] }, lineSpacing.toDouble())
+    val passes = SweepLines.passes(rotated, ys)
+    val surveyWaypoints = passes.flatMap { pass ->
+        listOf(pass.fromX, pass.toX).map { x ->
+            val (lat, lon) = rotateBack(x, pass.y, cosA, sinA, refLat, refLon, metersPerDegLon)
+            SurveyWaypoint(lat, lon, config.altitude, config.speed, isCameraTrigger = true)
         }
-        y += lineSpacing
     }
 
-    // Compute stats
     val totalDistanceM = computeTotalDistance(surveyWaypoints)
     val estimatedTimeSec = if (config.speed > 0f) (totalDistanceM / config.speed).toInt() else 0
-    val coverageHa = polygonAreaHectares(config.polygon)
-
     return SurveyResult(
         waypoints = surveyWaypoints,
         photoIntervalM = photoInterval,
         estimatedFlightTimeSec = estimatedTimeSec,
         totalDistanceM = totalDistanceM,
-        lineCount = lineIndex,
-        coverageHectares = coverageHa,
+        lineCount = passes.map { it.y }.distinct().size,
+        coverageHectares = polygonAreaHectares(config.polygon),
     )
 }
 
-/**
- * Clip a horizontal line (constant y) to a polygon in meter coordinates.
- * Returns the min/max x range inside the polygon, or null if no intersection.
- */
-private fun clipHorizontalLine(
-    y: Double,
-    rangeXMin: Double,
-    rangeXMax: Double,
-    polygon: List<DoubleArray>,
-): Pair<Double, Double>? {
-    val intersections = mutableListOf<Double>()
-    val n = polygon.size
-    for (i in 0 until n) {
-        val a = polygon[i]
-        val b = polygon[(i + 1) % n]
-        val ay = a[1]
-        val by = b[1]
-        if ((ay <= y && by > y) || (by <= y && ay > y)) {
-            val t = (y - ay) / (by - ay)
-            val x = a[0] + t * (b[0] - a[0])
-            if (x in rangeXMin..rangeXMax) {
-                intersections.add(x)
-            }
-        }
-    }
-    if (intersections.size < 2) return null
-    return Pair(intersections.min(), intersections.max())
-}
+/** Ground footprint of a [fovDeg] field of view from [altitude] metres. */
+private fun footprintM(altitude: Float, fovDeg: Float): Float = (2.0 * altitude * tan(fovDeg * PI / 360.0)).toFloat()
 
 /** Rotate point back from grid-aligned frame to meter frame, then convert to lat/lon. */
 private fun rotateBack(

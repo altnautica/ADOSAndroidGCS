@@ -25,6 +25,16 @@ object BackStackOps {
         while (stack.size > 1) stack.removeAt(stack.lastIndex)
     }
 
+    /**
+     * Leaves the Connect surface after a pairing. With a flight screen anywhere on the
+     * stack only the surfaces above it close, so a pair link never drops a cockpit;
+     * otherwise everything closes back to Home.
+     */
+    fun afterConnect(stack: MutableList<NavKey>) {
+        val cockpit = stack.indexOfLast { it is CockpitKey }
+        if (cockpit < 0) goHome(stack) else while (stack.size > cockpit + 1) stack.removeAt(stack.lastIndex)
+    }
+
     /** Pops back to [key] when it is already on the stack, otherwise pushes it. */
     fun navigateTo(stack: MutableList<NavKey>, key: NavKey) {
         if (key in stack) {

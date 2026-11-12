@@ -15,6 +15,9 @@ import com.altnautica.gcs.core.skills.builtin.VehicleClass
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.GamepadAxes
 import com.altnautica.gcs.core.skills.input.GamepadButton
+import com.altnautica.gcs.core.skills.input.PadSnapshot
+import com.altnautica.gcs.core.skills.controls.StickMode
+import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
 import com.altnautica.gcs.feature.cockpit.FakeVehicle
 import com.altnautica.gcs.feature.cockpit.StickChip
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
@@ -54,7 +57,7 @@ class CockpitManualControlTest {
         val control: CockpitManualControl,
         val vehicle: FakeVehicle,
         val gamepad: MutableStateFlow<Boolean>,
-        val axes: MutableStateFlow<GamepadAxes>,
+        val pad: MutableStateFlow<PadSnapshot>,
         val buttons: MutableStateFlow<Int>,
         val settings: MutableStateFlow<ControllerSettings>,
         val streamer: RecordingStreamer,
@@ -66,13 +69,22 @@ class CockpitManualControlTest {
         telemetry.heartbeat.value = HeartbeatState(armed, FlightMode(0, mode), vehicleType = type, autopilot = 3, tMs = 0)
     }
 
-    private fun CoroutineScope.rig(mode: String = "LOITER", settings: ControllerSettings = ControllerSettings()): Rig {
+    /** A DualShock 4 whose raw sticks read [axes]. */
+    private fun Rig.sticks(axes: GamepadAxes) {
+        pad.value = PadSnapshot(1, 0x054c, 0x09cc, axes, axes, 0, 0L, emptyList())
+    }
+
+    private fun CoroutineScope.rig(
+        mode: String = "LOITER",
+        settings: ControllerSettings = ControllerSettings(),
+        conditioning: StickConditioning = StickConditioning(),
+    ): Rig {
         val gamepad = MutableStateFlow(true)
-        val axes = MutableStateFlow(GamepadAxes.Neutral)
+        val pad = MutableStateFlow(PadSnapshot.Neutral)
         val buttons = MutableStateFlow(0)
         val router = mockk<AdosInputRouter>(relaxed = true) {
             every { gamepadConnected } returns gamepad
-            every { this@mockk.axes } returns axes
+            every { snapshot } returns pad
             every { this@mockk.buttons } returns buttons
         }
         val vehicle = FakeVehicle().apply { beat(mode) }
@@ -89,10 +101,12 @@ class CockpitManualControlTest {
             boundButtons = MutableStateFlow(Ds4Bindings.boundButtonMask(testSpec.ds4, testSpec.ds4.bindings)),
             route = route,
             pilotStreaming = MutableStateFlow(false),
+            pad = pad,
+            conditioning = MutableStateFlow(conditioning),
         )
         val off = mutableListOf<StickOff>()
         launch { control.off.collect { off += it } }
-        return Rig(control, vehicle, gamepad, axes, buttons, settingsFlow, streamer, off, route)
+        return Rig(control, vehicle, gamepad, pad, buttons, settingsFlow, streamer, off, route)
     }
 
     @Test
@@ -212,17 +226,39 @@ class CockpitManualControlTest {
 
     @Test
     fun `expo softens pitch, roll and yaw but not throttle`() = runTest(UnconfinedTestDispatcher()) {
-        val r = backgroundScope.rig(settings = ControllerSettings(expoPct = 60))
-        r.axes.value = GamepadAxes(leftX = 0.5f, leftY = 0.5f, rightX = 0.5f, rightY = -1f)
+        val r = backgroundScope.rig(settings = ControllerSettings(expoPct = 60), conditioning = StickConditioning(deadzone = 0f))
+        // Each stick inside the unit circle: the conditioning clamps a stick radially, so a
+        // reading past the circle (0.5, -1) would no longer be 0.5 on its X axis.
+        r.sticks(GamepadAxes(leftX = 0.5f, leftY = 0.5f, rightX = 0.5f, rightY = -0.5f))
         runCurrent()
         r.control.toggle()
         runCurrent()
         val input = r.streamer.input!!.value
-        // 0.4 * 0.5 + 0.6 * 0.125 = 0.275; full deflection stays full.
+        // 0.4 * 0.5 + 0.6 * 0.125 = 0.275; throttle stays linear.
         assertEquals(0.275f, input.roll, 1e-5f)
         assertEquals(0.275f, input.yaw, 1e-5f)
-        assertEquals(-1f, input.pitch, 1e-5f)
+        assertEquals(-0.275f, input.pitch, 1e-5f)
         assertEquals(0.75f, input.throttle, 1e-5f)
+        // Full deflection stays full.
+        r.sticks(GamepadAxes(leftX = 0.5f, leftY = 0.5f, rightX = 0f, rightY = -1f))
+        runCurrent()
+        assertEquals(-1f, r.streamer.input!!.value.pitch, 1e-5f)
+    }
+
+    @Test
+    fun `the flight controller's sticks follow the operator's stick mode and dead zone`() = runTest(UnconfinedTestDispatcher()) {
+        val r = backgroundScope.rig(conditioning = StickConditioning(mode = StickMode.Mode1, deadzone = 0.1f))
+        runCurrent()
+        r.control.toggle()
+        runCurrent()
+        // Mode 1: the left stick's Y is pitch and the right stick's Y is throttle.
+        r.sticks(GamepadAxes(leftX = 0f, leftY = 0.05f, rightX = 0f, rightY = 1f))
+        runCurrent()
+        val input = r.streamer.input!!.value
+        assertEquals("a left-stick nudge inside the dead zone sends no pitch", 0f, input.pitch, 1e-5f)
+        assertEquals("the right stick full up is full throttle", 1f, input.throttle, 1e-5f)
+        assertEquals(0f, input.roll, 1e-5f)
+        assertEquals(0f, input.yaw, 1e-5f)
     }
 
     @Test

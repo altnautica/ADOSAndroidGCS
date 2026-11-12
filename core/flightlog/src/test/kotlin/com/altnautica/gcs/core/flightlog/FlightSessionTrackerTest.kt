@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -77,22 +78,26 @@ private class Daos {
             sessions += session.copy(id = sessions.size + 1L)
             return sessions.size.toLong()
         }
-        override fun getAll(): Flow<List<FlightSessionEntity>> = emptyFlow()
+        override fun getAll(): Flow<List<FlightSessionEntity>> = flowOf(sessions.toList())
         override suspend fun getById(id: Long) = sessions.firstOrNull { it.id == id }
         override suspend fun delete(session: FlightSessionEntity) = Unit
-        override suspend fun update(session: FlightSessionEntity) = Unit
+        override suspend fun update(session: FlightSessionEntity) {
+            sessions.replaceAll { if (it.id == session.id) session else it }
+        }
     }
 
     val fileDao = object : TlogFileDao {
         override suspend fun insert(file: TlogFileEntity): Long {
-            files += file
+            files += file.copy(id = files.size + 1L)
             return files.size.toLong()
         }
-        override fun observeAll(): Flow<List<TlogFileEntity>> = emptyFlow()
+        override fun observeAll(): Flow<List<TlogFileEntity>> = flowOf(files.toList())
         override fun observeForSession(sessionId: Long): Flow<List<TlogFileEntity>> = emptyFlow()
         override suspend fun listForSession(sessionId: Long) = files.filter { it.sessionId == sessionId }
         override suspend fun getById(id: Long): TlogFileEntity? = null
-        override suspend fun updateSize(id: Long, sizeBytes: Long) = Unit
+        override suspend fun updateSize(id: Long, sizeBytes: Long) {
+            files.replaceAll { if (it.id == id) it.copy(sizeBytes = sizeBytes) else it }
+        }
         override suspend fun delete(id: Long) = Unit
     }
 }
@@ -165,5 +170,40 @@ class FlightSessionTrackerTest {
         val record = TlogEncoding.record(42L, frameOf(bytes))
         assertArrayEquals(bytes, record.copyOfRange(8, record.size))
         assertEquals(42L, java.nio.ByteBuffer.wrap(record, 0, 8).long)
+    }
+
+    @Test
+    fun `flights left open by a crash are closed and stray tlogs are indexed`() = runTest {
+        val dir = tmp.newFolder("tlogs")
+        val recorder = TlogRecorder({ dir }, StandardTestDispatcher(testScheduler))
+        val daos = Daos()
+        // A session opened at arm whose disarm update never ran.
+        val openFile = java.io.File(dir, "2026-01-02_10-00-00_open.tlog").apply { writeBytes(ByteArray(64)) }
+        openFile.setLastModified(1_000_000_000_000L + 90_000L)
+        daos.sessionDao.insert(FlightSessionEntity(startTime = 1_000_000_000_000L, tlogPath = openFile.absolutePath))
+        daos.fileDao.insert(
+            TlogFileEntity(sessionId = 1, path = openFile.absolutePath, kind = com.altnautica.gcs.core.database.LogFileKind.Tlog, sizeBytes = 0, createdAtMs = 1_000_000_000_000L),
+        )
+        // A recording the index never heard of.
+        val stray = java.io.File(dir, "2026-01-03_11-30-00_stray.tlog").apply { writeBytes(ByteArray(32)) }
+
+        val tracker = FlightSessionTracker(recorder, daos.sessionDao, daos.fileDao)
+        tracker.track(DeviceId("drone-1"), FakeTelemetry(), null, backgroundScope)
+        runCurrent()
+
+        val closed = daos.sessions.first()
+        assertEquals(1_000_000_000_000L + 90_000L, closed.endTime)
+        assertEquals(90, closed.durationSeconds)
+        assertEquals("interrupted", closed.notes)
+        assertEquals(64L, daos.files.first().sizeBytes)
+
+        assertEquals(2, daos.sessions.size)
+        val indexed = daos.sessions[1]
+        assertEquals(stray.absolutePath, indexed.tlogPath)
+        assertEquals("interrupted", indexed.notes)
+        assertTrue(indexed.endTime > 0)
+        val strayFile = daos.files.single { it.path == stray.absolutePath }
+        assertEquals(indexed.id, strayFile.sessionId)
+        assertEquals(32L, strayFile.sizeBytes)
     }
 }

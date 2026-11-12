@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.Flow
+import com.altnautica.gcs.core.skills.hud.PillLinkLoss
+import com.altnautica.gcs.core.skills.hud.PillNavSource
 
 /**
  * The status pill's flows: its spec inputs beyond alerts and readiness ([facts]: the pilot,
@@ -33,18 +36,36 @@ internal class CockpitPill(
     warningTexts: StateFlow<List<ReceivedText>>,
     tick500: StateFlow<Long>,
     pill: StatusPill,
-    /** Whether the vehicle is armed: from the pilot when it reports, else the heartbeat; null when unknown. */
+    /** True once the vehicle link has carried a heartbeat. */
+    heartbeatSeen: Flow<Boolean>,
+    /** The autonomy nav-source chip, null without one. */
+    navSource: Flow<PillNavSource?>,
+    /** Whether the vehicle is armed: from the pilot while its frame is fresh, else the heartbeat; null when unknown. */
     armed: () -> Boolean?,
 ) {
-    val facts: StateFlow<PillFacts> = combine(pilot.link, pilot.linked, pilot.state, preflight, tick500) { link, linked, p, pre, _ ->
+    /**
+     * True until either a pilot frame or an FC heartbeat has arrived: nothing is known yet, so
+     * the pill reads the neutral no-link text rather than all systems OK.
+     */
+    val waiting: StateFlow<Boolean> = combine(pilot.state, heartbeatSeen) { p, hb -> p == null && !hb }
+        .distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), true)
+
+    val facts: StateFlow<PillFacts> = combine(
+        combine(pilot.link, pilot.linked) { link, linked -> link to linked },
+        pilot.state, preflight, navSource, tick500,
+    ) { (link, linked), p, pre, nav, _ ->
         val now = clock.nowMs()
         val fresh = pilotFresh(p?.receivedAtMs, now)
+        val arm = armed()
         PillFacts(
             pilotRule = link != null,
             pilotAgeMs = p?.let { now - it.receivedAtMs },
             agentReachable = link == null || linked || fresh,
             controllerLost = StatusPill.controllerLost(p),
-            preflightFailing = if (preflightShown(armed())) pre.failing.map { it.item } else emptyList(),
+            preflightFailing = if (preflightShown(arm)) pre.failing.map { it.item } else emptyList(),
+            linkLoss = if (fresh) PillLinkLoss.of(p) else null,
+            armUnknown = arm == null,
+            navSource = nav,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), PillFacts())
 

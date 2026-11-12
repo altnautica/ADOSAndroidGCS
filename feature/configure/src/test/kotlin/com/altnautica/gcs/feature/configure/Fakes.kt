@@ -22,6 +22,9 @@ class FakeParamService(values: Map<String, Double> = emptyMap(), complete: Boole
     val writes = mutableListOf<Pair<String, Double>>()
     var refreshes = 0
     var nextSet: ((String, Double) -> ParamSetResult)? = null
+
+    /** When set, every write suspends until it completes (an echo still on its way). */
+    var setGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
     var refreshResult: ParamLoadResult = ParamLoadResult.Complete(values.size)
 
     override val snapshot = MutableStateFlow(
@@ -36,6 +39,7 @@ class FakeParamService(values: Map<String, Double> = emptyMap(), complete: Boole
 
     override suspend fun set(name: String, value: Double): ParamSetResult {
         writes += name to value
+        setGate?.await()
         nextSet?.let { return it(name, value) }
         val current = snapshot.value.values[name] ?: return ParamSetResult.UnknownParam
         val updated = current.copy(value = value)
@@ -70,6 +74,9 @@ class FakeCalibrationService : CalibrationService {
     override suspend fun startCompass() = call("compass")
     override suspend fun acceptCompass() = call("acceptCompass")
     override suspend fun cancelCompass() = call("cancelCompass")
+    override suspend fun startEsc() = call("esc")
+    override suspend fun startCompassMot() = call("compassMot")
+    override suspend fun startAirspeed() = call("airspeed")
     override fun startRadio() {
         calls += "radio"
     }

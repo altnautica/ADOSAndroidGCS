@@ -3,7 +3,11 @@ package com.altnautica.gcs.core.link.calibration
 import com.altnautica.gcs.core.model.CommandResult
 import kotlinx.coroutines.flow.StateFlow
 
-enum class CalibrationKind { Gyro, Level, Accel, Compass, Radio }
+/**
+ * [Esc] sets the ESC throttle endpoints, [CompassMot] measures motor interference on the
+ * compass (ArduPilot), [Airspeed] zeroes the airspeed sensor.
+ */
+enum class CalibrationKind { Gyro, Level, Accel, Compass, Radio, Esc, CompassMot, Airspeed }
 
 /** Vehicle orientations requested by the six-position accelerometer calibration (ACCELCAL_VEHICLE_POS). */
 enum class AccelPose(val wire: Int) {
@@ -64,6 +68,15 @@ interface CalibrationService {
     suspend fun startCompass(): CommandResult
     suspend fun acceptCompass(): CommandResult
     suspend fun cancelCompass(): CommandResult
+
+    /** ESC throttle calibration (`MAV_CMD_PREFLIGHT_CALIBRATION` p7=1). Propellers off. */
+    suspend fun startEsc(): CommandResult
+
+    /** Compass-motor interference calibration (p6=1); ArduPilot only, refused elsewhere without sending. */
+    suspend fun startCompassMot(): CommandResult
+
+    /** Airspeed sensor zero (p6=2). Cover the pitot tube. */
+    suspend fun startAirspeed(): CommandResult
 
     fun startRadio()
 

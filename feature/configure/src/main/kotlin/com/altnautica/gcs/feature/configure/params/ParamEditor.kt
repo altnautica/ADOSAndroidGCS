@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -56,15 +58,15 @@ fun ParamRow.displayValue(): String {
 
 /** Sheet editor for portrait, where the list has the whole screen. */
 @Composable
-fun ParamEditorSheet(row: ParamRow, onSubmit: (String) -> Unit, onDismiss: () -> Unit) {
+fun ParamEditorSheet(row: ParamRow, onSubmit: (String) -> Unit, onDismiss: () -> Unit, writing: String? = null) {
     AdosSheet(onDismiss = onDismiss) {
-        ParamEditorContent(row, onSubmit, Modifier.padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S4))
+        ParamEditorContent(row, onSubmit, Modifier.padding(horizontal = AdosSpacing.S6, vertical = AdosSpacing.S4), writing)
     }
 }
 
 /** Editor body choosing the widget from the parameter's documentation; hosted by a sheet or a pane. */
 @Composable
-fun ParamEditorContent(row: ParamRow, onSubmit: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ParamEditorContent(row: ParamRow, onSubmit: (String) -> Unit, modifier: Modifier = Modifier, writing: String? = null) {
     val colors = AdosTheme.colors
     val meta = row.meta
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
@@ -74,27 +76,27 @@ fun ParamEditorContent(row: ParamRow, onSubmit: (String) -> Unit, modifier: Modi
             if (it.description.isNotBlank()) Text(it.description, style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
             if (it.rebootRequired) Text(stringResource(R.string.cfg_param_reboot), style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
         }
-        if (meta?.readOnly == true) {
+        if (ParamValidator.isReadOnly(row.name, meta)) {
             Text(stringResource(R.string.cfg_param_read_only), color = colors.fgTertiary)
             return@Column
         }
         when (meta?.editor) {
-            ParamEditorKind.Bitmask -> BitmaskEditor(row.value, meta, onSubmit)
+            ParamEditorKind.Bitmask -> BitmaskEditor(row.value, meta, writing, onSubmit)
             // A documented value list wins over a range: free entry only when no values are given.
             ParamEditorKind.Enum -> if (meta.options.isNotEmpty()) {
-                EnumEditor(row.value, meta, onSubmit)
+                EnumEditor(row.value, meta, writing, onSubmit)
             } else {
-                NumberEditor(row, meta, onSubmit)
+                NumberEditor(row, meta, writing, onSubmit)
             }
-            else -> NumberEditor(row, meta, onSubmit)
+            else -> NumberEditor(row, meta, writing, onSubmit)
         }
     }
 }
 
 @Composable
-private fun NumberEditor(row: ParamRow, meta: ParamMeta?, onSubmit: (String) -> Unit) {
+internal fun NumberEditor(row: ParamRow, meta: ParamMeta?, writing: String?, onSubmit: (String) -> Unit) {
     var text by remember(row.name) { mutableStateOf(ParamFile.formatValue(row.value)) }
-    val validation = ParamValidator.validate(meta, text)
+    val validation = ParamValidator.validate(row.name, meta, text)
     val error = (validation as? ParamValidation.Invalid)?.reason
     val hint = listOfNotNull(
         meta?.min?.let { stringResource(R.string.cfg_param_min, ParamFile.formatValue(it)) },
@@ -115,16 +117,18 @@ private fun NumberEditor(row: ParamRow, meta: ParamMeta?, onSubmit: (String) -> 
         options.forEach { o ->
             Text(
                 "${ParamFile.formatValue(o.value)} — ${o.label}",
-                modifier = Modifier.fillMaxWidth().clickable { text = ParamFile.formatValue(o.value) }.padding(vertical = AdosSpacing.S1),
+                modifier = Modifier.fillMaxWidth().clickable { text = ParamFile.formatValue(o.value) }
+                    .heightIn(min = AdosTheme.touchMin).wrapContentHeight(Alignment.CenterVertically)
+                    .testTag("param-suggestion"),
                 style = MaterialTheme.typography.bodySmall,
             )
         }
     }
-    AdosButton(stringResource(R.string.cfg_param_write), onClick = { onSubmit(text) }, enabled = error == null)
+    WriteButton(writing, onClick = { onSubmit(text) }, enabled = error == null)
 }
 
 @Composable
-private fun EnumEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> Unit) {
+private fun EnumEditor(value: Double, meta: ParamMeta, writing: String?, onSubmit: (String) -> Unit) {
     var selected by remember(meta.name, value) { mutableDoubleStateOf(value) }
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
         meta.options.forEach { o ->
@@ -137,15 +141,11 @@ private fun EnumEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> Uni
             }
         }
     }
-    AdosButton(
-        stringResource(R.string.cfg_param_write),
-        onClick = { onSubmit(ParamFile.formatValue(selected)) },
-        enabled = !ParamFile.sameValue(selected, value),
-    )
+    WriteButton(writing, onClick = { onSubmit(ParamFile.formatValue(selected)) }, enabled = !ParamFile.sameValue(selected, value))
 }
 
 @Composable
-private fun BitmaskEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> Unit) {
+private fun BitmaskEditor(value: Double, meta: ParamMeta, writing: String?, onSubmit: (String) -> Unit) {
     var current by remember(meta.name, value) { mutableDoubleStateOf(value) }
     Text(stringResource(R.string.cfg_param_value, ParamFile.formatValue(current)), color = AdosTheme.colors.fgSecondary)
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
@@ -160,7 +160,17 @@ private fun BitmaskEditor(value: Double, meta: ParamMeta, onSubmit: (String) -> 
             }
         }
     }
-    val invalid = ParamValidator.validate(meta, current) as? ParamValidation.Invalid
+    val invalid = ParamValidator.validate(meta.name, meta, current) as? ParamValidation.Invalid
     invalid?.let { Text(invalidReasonText(it.reason, meta), color = AdosTheme.colors.statusError) }
-    AdosButton(stringResource(R.string.cfg_param_write), onClick = { onSubmit(ParamFile.formatValue(current)) }, enabled = invalid == null)
+    WriteButton(writing, onClick = { onSubmit(ParamFile.formatValue(current)) }, enabled = invalid == null)
+}
+
+/** The write action; while a write waits for the flight controller's echo it names it and stays disabled. */
+@Composable
+private fun WriteButton(writing: String?, onClick: () -> Unit, enabled: Boolean) {
+    AdosButton(
+        if (writing != null) stringResource(R.string.cfg_param_writing, writing) else stringResource(R.string.cfg_param_write),
+        onClick = onClick,
+        enabled = enabled && writing == null,
+    )
 }

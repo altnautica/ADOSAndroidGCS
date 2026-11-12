@@ -49,6 +49,12 @@ class PillCasesTest {
                 val o = it.jsonObject
                 o["id"].str()!! to o["label"].str()!!
             }
+            val nav = (i["nav_source"] as? kotlinx.serialization.json.JsonObject)?.let { o ->
+                PillNavSource(
+                    PillNavSource.Kind.entries.single { it.wire == o["kind"].str() },
+                    PillNavSource.Tone.entries.single { it.wire == o["tone"].str() },
+                )
+            }
             val s = pill.summary(
                 pill.alerts(
                     alerts, readiness, prearm, storage, fc,
@@ -58,6 +64,9 @@ class PillCasesTest {
                     controllerLost = i["controller_lost"].bool() ?: false,
                     preflightFailing = preflight,
                     failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str()),
+                    // An explicit null is unknown; an absent key is not known to this surface.
+                    armUnknown = "armed" in i && i["armed"] is JsonNull,
+                    navSource = nav,
                 ),
                 emptySet(),
             )
@@ -107,5 +116,21 @@ class PillCasesTest {
     fun `without a critical percent the storage item only warns`() {
         val phone = StatusPill(SpecText(testSpec.setupStrings), testSpec.layout.statusPill!!.storageWarnPct!!, storageCritPct = null)
         assertEquals(PillSeverity.Warning, phone.alerts(emptyList(), emptyList(), null, 99.0).single().severity)
+    }
+
+    @Test
+    fun `the shared file covers an unknown arm state and the nav source item`() {
+        val names = goldenCases("pill-cases.json").map { it.name }
+        assertTrue(names.toString(), "arm_unknown_hides_preflight_items" in names)
+        assertTrue(names.toString(), names.count { it.startsWith("nav_source_") } >= 4)
+    }
+
+    @Test
+    fun `a controller lost with the arm state unknown counts as possibly airborne`() {
+        val held = adosPilot().copy(holdReason = "controller-lost")
+        assertTrue(StatusPill.controllerLost(held.copy(armed = null, landed = null)))
+        assertTrue(StatusPill.controllerLost(held.copy(armed = true, landed = false)))
+        assertEquals(false, StatusPill.controllerLost(held.copy(armed = false, landed = true)))
+        assertEquals(false, StatusPill.controllerLost(held.copy(armed = true, landed = true)))
     }
 }

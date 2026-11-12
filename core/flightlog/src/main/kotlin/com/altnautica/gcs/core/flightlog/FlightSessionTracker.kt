@@ -23,6 +23,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.atan2
@@ -34,13 +40,16 @@ import kotlin.math.sqrt
 /**
  * Tracks flight sessions by observing a vehicle's armed state.
  *
- * On arm: opens a tlog recording fed with every frame the vehicle's link
- * receives, and begins tracking max altitude, speed, distance from home, and
- * total path distance.
+ * On arm: opens a tlog recording fed with every frame the vehicle's link receives, inserts
+ * the session (open, `endTime = 0`) and its log file into the index, and begins tracking max
+ * altitude, speed, distance from home, and total path distance.
  *
- * On disarm, or when the tracking job ends while armed: closes the tlog (after
- * its queued frames are written), finalizes the session stats, and inserts the
- * completed session with its log file.
+ * On disarm, or when the tracking job ends while armed: closes the tlog (after its queued
+ * frames are written) and updates the session row with its final stats and the file size.
+ *
+ * A process death mid-flight skips that update. Before the first session, the tracker closes
+ * any session left open and indexes any `.tlog` file the index does not know, each as an
+ * interrupted flight, so Logs shows the recording and Delete can remove it.
  */
 @Singleton
 class FlightSessionTracker @Inject constructor(
@@ -53,7 +62,14 @@ class FlightSessionTracker @Inject constructor(
         const val TAG = "FlightSessionTracker"
         const val EARTH_RADIUS_M = 6371000.0
         const val MAX_SEGMENT_M = 1000.0
+        const val INTERRUPTED = "interrupted"
+
+        /** The timestamp that starts every tlog file name ([TlogRecorder]). */
+        const val FILE_STAMP = "yyyy-MM-dd_HH-mm-ss"
     }
+
+    private val reconcileLock = Mutex()
+    private var reconciled = false
 
     private sealed interface Sample {
         data class Position(val fix: PositionFix) : Sample
@@ -61,7 +77,7 @@ class FlightSessionTracker @Inject constructor(
     }
 
     /** Accumulated stats for one armed period. Only touched by its own collector. */
-    private class Session(val startTime: Long, val batteryStart: Int) {
+    private class Session(val startTime: Long, val batteryStart: Int, val sessionId: Long?, val fileId: Long?) {
         var maxAltitude = 0f
         var maxSpeed = 0f
         var maxDistance = 0f
@@ -78,6 +94,7 @@ class FlightSessionTracker @Inject constructor(
      */
     fun track(vehicleId: DeviceId, telemetry: VehicleTelemetry, frames: Flow<MavlinkFrame>?, scope: CoroutineScope): Job =
         scope.launch {
+            reconcileOnce()
             telemetry.heartbeat
                 .filterNotNull()
                 .map { it.armed }
@@ -90,11 +107,11 @@ class FlightSessionTracker @Inject constructor(
     /** Runs for one armed period; cancelled by the next disarm. */
     private suspend fun runSession(vehicleId: DeviceId, telemetry: VehicleTelemetry, frames: Flow<MavlinkFrame>?) = coroutineScope {
         Log.i(TAG, "${vehicleId.value} armed, starting flight session")
-        val session = Session(
-            startTime = System.currentTimeMillis(),
-            batteryStart = telemetry.battery.value?.remainingPct ?: -1,
-        )
+        val startTime = System.currentTimeMillis()
+        val batteryStart = telemetry.battery.value?.remainingPct ?: -1
         val recording = frames?.let { tlogRecorder.start(vehicleId.value) }
+        val (sessionId, fileId) = open(vehicleId, startTime, batteryStart, recording?.file)
+        val session = Session(startTime, batteryStart, sessionId, fileId)
         val tap = if (recording != null && frames != null) {
             launch(start = CoroutineStart.UNDISPATCHED) { frames.collect(recording::record) }
         } else {
@@ -145,6 +162,30 @@ class FlightSessionTracker @Inject constructor(
         }
     }
 
+    /** Inserts the open session and its log file at arm; null ids when the index could not be written. */
+    private suspend fun open(vehicleId: DeviceId, startTime: Long, batteryStart: Int, tlog: File?): Pair<Long?, Long?> = try {
+        val tlogPath = tlog?.absolutePath.orEmpty()
+        val sessionId = flightSessionDao.insert(
+            FlightSessionEntity(startTime = startTime, batteryStart = batteryStart, tlogPath = tlogPath),
+        )
+        val fileId = tlog?.let {
+            tlogFileDao.insert(
+                TlogFileEntity(
+                    sessionId = sessionId,
+                    path = tlogPath,
+                    kind = LogFileKind.Tlog,
+                    sizeBytes = 0,
+                    createdAtMs = startTime,
+                    deviceId = vehicleId.value,
+                ),
+            )
+        }
+        sessionId to fileId
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to open flight session: ${e.message}", e)
+        null to null
+    }
+
     private suspend fun finish(vehicleId: DeviceId, session: Session, telemetry: VehicleTelemetry, tlogPath: String) {
         Log.i(TAG, "${vehicleId.value} ending flight session")
 
@@ -165,25 +206,70 @@ class FlightSessionTracker @Inject constructor(
         )
 
         try {
-            val sessionId = flightSessionDao.insert(entity)
-            if (tlogPath.isNotEmpty()) {
-                val file = java.io.File(tlogPath)
-                tlogFileDao.insert(
-                    TlogFileEntity(
-                        sessionId = sessionId,
-                        path = tlogPath,
-                        kind = LogFileKind.Tlog,
-                        sizeBytes = if (file.exists()) file.length() else 0,
-                        createdAtMs = session.startTime,
-                        deviceId = vehicleId.value,
-                    ),
-                )
+            if (session.sessionId != null) {
+                flightSessionDao.update(entity.copy(id = session.sessionId))
+            } else {
+                // The insert at arm failed: try once more now.
+                flightSessionDao.insert(entity)
+            }
+            if (session.fileId != null && tlogPath.isNotEmpty()) {
+                val file = File(tlogPath)
+                tlogFileDao.updateSize(session.fileId, if (file.exists()) file.length() else 0)
             }
             Log.i(TAG, "Flight session saved: ${durationSec}s, maxAlt=${session.maxAltitude}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save flight session: ${e.message}", e)
         }
     }
+
+    private suspend fun reconcileOnce() = reconcileLock.withLock {
+        if (reconciled) return@withLock
+        reconciled = true
+        try {
+            reconcile()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to reconcile interrupted flights: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Closes sessions a process death left open (at their tlog's last write) and indexes every
+     * `.tlog` file the index does not know as an interrupted flight. Runs before any session
+     * of this process starts, so no file is still being recorded.
+     */
+    private suspend fun reconcile() {
+        val indexed = tlogFileDao.observeAll().firstOrNull().orEmpty()
+        flightSessionDao.getAll().firstOrNull().orEmpty().filter { it.endTime == 0L }.forEach { open ->
+            val file = File(open.tlogPath)
+            val end = if (open.tlogPath.isNotEmpty() && file.exists()) file.lastModified() else open.startTime
+            flightSessionDao.update(open.copy(endTime = end, durationSeconds = ((end - open.startTime) / 1000).toInt(), notes = INTERRUPTED))
+            indexed.filter { it.sessionId == open.id }.forEach { tlogFileDao.updateSize(it.id, File(it.path).length()) }
+        }
+        val known = indexed.map { it.path }.toSet()
+        tlogRecorder.tlogDir.listFiles { f -> f.isFile && f.extension == "tlog" }.orEmpty()
+            .filter { it.absolutePath !in known }
+            .forEach { file ->
+                val end = file.lastModified()
+                val start = startOf(file) ?: end
+                val sessionId = flightSessionDao.insert(
+                    FlightSessionEntity(
+                        startTime = start,
+                        endTime = end,
+                        durationSeconds = ((end - start) / 1000).toInt().coerceAtLeast(0),
+                        tlogPath = file.absolutePath,
+                        notes = INTERRUPTED,
+                    ),
+                )
+                tlogFileDao.insert(
+                    TlogFileEntity(sessionId = sessionId, path = file.absolutePath, kind = LogFileKind.Tlog, sizeBytes = file.length(), createdAtMs = start),
+                )
+                Log.i(TAG, "Indexed interrupted flight ${file.name}")
+            }
+    }
+
+    /** The recording start encoded at the front of a tlog file name, or null. */
+    private fun startOf(file: File): Long? =
+        runCatching { SimpleDateFormat(FILE_STAMP, Locale.US).parse(file.name.take(FILE_STAMP.length))?.time }.getOrNull()
 
     private fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val dLat = Math.toRadians(lat2 - lat1)

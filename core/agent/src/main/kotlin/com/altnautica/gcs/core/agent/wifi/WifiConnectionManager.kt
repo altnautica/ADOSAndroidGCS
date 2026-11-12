@@ -25,6 +25,16 @@ import javax.inject.Singleton
  * required argument, supplied from operator input or from the WPA join string
  * the node's on-box panel renders as a QR code.
  */
+/** Progress of the latest ground-station Wi-Fi join request. */
+enum class WifiJoinState {
+    Idle,
+    /** Filed with the system; it may still show its own confirm dialog. */
+    Requesting,
+    Joined,
+    /** Declined, wrong passphrase, or no such network in range. */
+    Unavailable,
+}
+
 @Singleton
 class WifiConnectionManager @Inject constructor(
     @ApplicationContext private val context: Context
@@ -45,6 +55,9 @@ class WifiConnectionManager @Inject constructor(
 
     private val _connected = MutableStateFlow(false)
     val connected: StateFlow<Boolean> = _connected.asStateFlow()
+
+    private val _joinState = MutableStateFlow(WifiJoinState.Idle)
+    val joinState: StateFlow<WifiJoinState> = _joinState.asStateFlow()
 
     private val _ssid = MutableStateFlow<String?>(null)
     val ssid: StateFlow<String?> = _ssid.asStateFlow()
@@ -81,6 +94,7 @@ class WifiConnectionManager @Inject constructor(
             return false
         }
         releaseNetwork()
+        _joinState.value = WifiJoinState.Requesting
 
         val ssidPattern = "$GS_SSID_PREFIX$ssidSuffix"
 
@@ -101,6 +115,7 @@ class WifiConnectionManager @Inject constructor(
                 // Pin all socket traffic to this network so API calls go to the AP
                 connectivityManager.bindProcessToNetwork(network)
                 _connected.value = true
+                _joinState.value = WifiJoinState.Joined
                 _ssid.value = ssidPattern
             }
 
@@ -112,11 +127,13 @@ class WifiConnectionManager @Inject constructor(
                 }
                 _connected.value = false
                 _ssid.value = null
+                _joinState.value = WifiJoinState.Idle
             }
 
             override fun onUnavailable() {
                 Log.w(TAG, "Ground station network unavailable")
                 _connected.value = false
+                _joinState.value = WifiJoinState.Unavailable
             }
         }
 
@@ -146,5 +163,6 @@ class WifiConnectionManager @Inject constructor(
 
         _connected.value = false
         _ssid.value = null
+        _joinState.value = WifiJoinState.Idle
     }
 }

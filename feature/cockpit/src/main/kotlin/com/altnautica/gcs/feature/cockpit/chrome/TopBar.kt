@@ -7,13 +7,14 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -25,13 +26,13 @@ import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.SignalCellularAlt
 import androidx.compose.material.icons.outlined.SignalCellularConnectedNoInternet0Bar
 import androidx.compose.material3.Icon
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.State
 import androidx.compose.ui.draw.clip
@@ -43,7 +44,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -57,7 +57,7 @@ import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
 import com.altnautica.gcs.feature.cockpit.alerts.alertTitle
 import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
-import com.altnautica.gcs.feature.cockpit.alerts.fcStateDetailRes
+import com.altnautica.gcs.feature.cockpit.alerts.alertDetail
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
 
@@ -244,16 +244,24 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
     }
     val ok = ui.severity == StatusSeverity.Ok
     val text = when {
+        ui.waiting -> specText("cockpit.link.never")
         ui.count == 0 -> specText("cockpit.status.ok")
         ui.count == 1 -> ui.top?.let { statusItemTitle(it) } ?: specText("cockpit.status.one")
         else -> specText("cockpit.status.many", "n" to ui.count.toString())
     }
+    // Outlined, no fill: a hairline when all is well, the severity hue at half strength otherwise.
+    // The dot carries the severity colour; the text is the chrome text when ok, else the
+    // severity's text variant, which keeps contrast over bright video.
+    // Before anything is known the dot and text are neutral, never the ok hue.
+    val mark = if (ui.waiting) c.textDim else severityMarkColor(ui.severity)
+    val shape = RoundedCornerShape(c.radiusSmall)
     Row(
         modifier
-            .heightIn(min = 32.dp)
+            .minimumInteractiveComponentSize()
+            .height(c.control)
             .widthIn(max = 260.dp)
-            .clip(RoundedCornerShape(c.radiusSmall))
-            .drawBehind { drawRect(tint.copy(alpha = if (ok) 0.14f else 0.22f * (flash?.value ?: 1f) + 0.06f)) }
+            .clip(shape)
+            .border(c.borderWidth, if (ok) c.border else mark.copy(alpha = 0.5f), shape)
             .clickable(role = Role.Button, onClickLabel = specText("cockpit.alerts.title"), onClick = onOpen)
             .semantics { liveRegion = LiveRegionMode.Polite }
             .testTag("status-pill")
@@ -261,8 +269,22 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.size(8.dp).graphicsLayer { alpha = flash?.value ?: 1f }.background(tint, CircleShape))
-        Text(text, style = c.chipText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.size(STATUS_DOT).graphicsLayer { alpha = flash?.value ?: 1f }.background(mark, CircleShape).testTag("status-pill-dot"))
+        Text(text, style = c.chipText.copy(color = if (ui.waiting) c.textDim else if (ok) c.text else tint), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The status dot beside a pill or chip text. */
+val STATUS_DOT = 6.dp
+
+/** A severity's colour for marks (dots, outlines): the raw hue, which needs no text contrast. */
+@Composable
+internal fun severityMarkColor(s: StatusSeverity): Color {
+    val c = LocalChrome.current
+    return when (s) {
+        StatusSeverity.Ok -> c.ok
+        StatusSeverity.Warning -> c.warning
+        StatusSeverity.Critical -> c.critical
     }
 }
 
@@ -282,7 +304,7 @@ internal fun severityColor(s: StatusSeverity): Color {
 fun statusItemTitle(item: StatusItem): String {
     item.alert?.let { a ->
         val title = alertTitle(a.id)
-        val detail = a.detail?.let { d -> fcStateDetailRes(d)?.let { stringResource(it) } ?: d }
+        val detail = alertDetail(a.detail)
         return if (detail != null) "$title · $detail" else title
     }
     if (item.specKey == StatusModel.PREFLIGHT_FAILING_KEY && item.check != null) {
@@ -392,7 +414,8 @@ fun ControllerIndicator(text: String, active: Boolean, onClick: (() -> Unit)?, m
     val c = LocalChrome.current
     Row(
         modifier
-            .heightIn(min = 32.dp)
+            .let { if (onClick != null) it.minimumInteractiveComponentSize() else it }
+            .height(c.control)
             .clip(RoundedCornerShape(c.radiusSmall))
             .let { if (onClick != null) it.clickable(role = Role.Button, onClick = onClick) else it }
             .padding(horizontal = 4.dp)
@@ -405,13 +428,14 @@ fun ControllerIndicator(text: String, active: Boolean, onClick: (() -> Unit)?, m
     }
 }
 
-/** A square top-bar icon button (48 dp touch target). */
+/** A square top-bar icon button: the chrome control height drawn, a 48 dp touch target. */
 @Composable
 fun ChromeIconButton(icon: ImageVector, description: String, onClick: () -> Unit, modifier: Modifier = Modifier, tint: Color? = null) {
     val c = LocalChrome.current
     Box(
         modifier
-            .size(40.dp)
+            .minimumInteractiveComponentSize()
+            .size(c.control)
             .clip(RoundedCornerShape(c.radiusSmall))
             .clickable(role = Role.Button, onClickLabel = description, onClick = onClick)
             .semantics { contentDescription = description },
@@ -433,7 +457,9 @@ fun StopButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val label = specText("cockpit.stop")
     Box(
         modifier
-            .defaultMinSize(minWidth = 72.dp, minHeight = 36.dp)
+            .minimumInteractiveComponentSize()
+            .defaultMinSize(minWidth = 72.dp)
+            .height(c.control)
             .clip(RoundedCornerShape(c.radiusSmall))
             .background(c.stopBg)
             .clickable(role = Role.Button, onClickLabel = label, onClick = onClick)

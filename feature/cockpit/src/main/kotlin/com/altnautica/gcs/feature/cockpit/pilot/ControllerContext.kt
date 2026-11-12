@@ -43,12 +43,13 @@ data class ControllerContext(
 
         /**
          * The context from the pilot state (preferred) and the flight controller's
-         * [armed] flag and [modeName]. Without a pilot, a disarmed vehicle counts as on
-         * the ground and an armed one as airborne.
+         * [armed] flag (null while unknown) and [modeName]. Without a pilot, a disarmed
+         * vehicle counts as on the ground, an armed one as airborne, and an unknown arm
+         * state as possibly airborne (armed, not landed).
          */
         fun of(
             pilot: PilotState?,
-            armed: Boolean,
+            armed: Boolean?,
             modeName: String?,
             pickerOpen: Boolean,
             lowBattery: Boolean,
@@ -58,8 +59,9 @@ data class ControllerContext(
             val vtol = pilot?.vehicleClass == PilotVehicleClass.Vtol
             return ControllerContext(
                 pilot = pilot,
-                armed = pilot?.armed ?: armed,
-                landed = pilot?.landed ?: !armed,
+                // An arm state neither the pilot nor the heartbeat knows is possibly airborne.
+                armed = pilot?.armed ?: armed ?: true,
+                landed = pilot?.landed ?: armed?.let { !it } ?: false,
                 rthActive = mode in RTH_MODES,
                 vtol = vtol,
                 hover = vtol && (mode?.startsWith("Q") == true || pilot?.fcMode == PLANE_GUIDED),

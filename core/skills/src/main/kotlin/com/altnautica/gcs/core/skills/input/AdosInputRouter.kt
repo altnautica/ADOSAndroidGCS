@@ -446,8 +446,8 @@ class AdosInputRouter @Inject constructor(
     }
 
     private fun releaseAll() {
-        // A held confirm press must not stay down in the UI once its pad is gone.
-        if (_buttons.value and (1 shl GamepadButton.A) != 0 && uiMode()) _uiInput.tryEmit(UiInput.Activate(false))
+        // A held confirm press must not stay down in the UI once its pad is gone, nor click there.
+        if (_buttons.value and (1 shl GamepadButton.A) != 0 && uiMode()) _uiInput.tryEmit(UiInput.Activate(pressed = false, canceled = true))
         for (b in 0..GamepadButton.LAST) setButton(b, false)
         chordMask = 0
     }

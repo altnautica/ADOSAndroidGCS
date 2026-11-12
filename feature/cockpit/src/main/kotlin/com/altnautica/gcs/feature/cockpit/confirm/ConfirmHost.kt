@@ -38,6 +38,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ConfirmGesture
+import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.builtin.TakeoffAltitude
 import com.altnautica.gcs.feature.cockpit.flow.specText
@@ -70,10 +71,12 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
     // The emergency stop reads the same on every surface: "Emergency stop", one hold button
     // (`stop.hold_label`) that counts down the hold still needed while it is held.
     val isStop = skill.id == com.altnautica.gcs.core.skills.builtin.BuiltinIds.KILL
+    val isFlyHere = skill.id == FlyHereSkill.id
     val holdingS = (state.guardCountdown() as? GuardCountdown.Holding)?.seconds
     val holdLabel = when {
         holdingS != null -> specText("hold.keep_holding", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(holdingS))
         isStop -> specText("stop.hold_label")
+        isFlyHere -> specText("map.fly_here.hold")
         else -> specText("confirm.hold", "s" to com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry.oneDecimal(policy.holdMs / 1000f))
     }
     AdosConfirmSheet(
@@ -83,6 +86,8 @@ fun ConfirmHost(state: ConfirmUiState?, actions: ConfirmActions) {
         danger = policy.danger,
     ) {
         state.altitudeM?.let { alt -> AltitudeStepper(alt, actions::setAltitude) }
+        // Fly Here shows what it will fly: the point, how far and how high.
+        if (isFlyHere) FlyHereConfirmBody(state.request.args)
 
         if (state.failingChecks.isNotEmpty()) {
             Text(specText("confirm.checklist_failing"), style = MaterialTheme.typography.labelLarge, color = AdosTheme.colors.statusWarning)

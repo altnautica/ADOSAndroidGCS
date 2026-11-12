@@ -151,8 +151,10 @@ data class PilotState(
     val avoid: AvoidMode?,
     val fcMode: Int?,
     val fcModeName: String?,
-    val armed: Boolean,
-    val landed: Boolean,
+    /** Null while the pilot has no flight-controller link: the arm state is unknown. */
+    val armed: Boolean?,
+    /** Null while the pilot has no flight-controller link: on the ground or not is unknown. */
+    val landed: Boolean?,
     val inputSrc: String?,
     val inputAgeMs: Long?,
     val holdReason: String?,
@@ -191,6 +193,15 @@ data class PilotState(
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
+
+    /** True while the arm or landed state is unknown (no FC link): the drone may be airborne. */
+    val armStateUnknown: Boolean get() = armed == null || landed == null
+
+    /** Not known to be disarmed or on the ground: armed and flying, or an unknown arm state. */
+    val possiblyAirborne: Boolean get() = armed != false && landed != true
+
+    /** Known to be armed and off the ground. */
+    val knownAirborne: Boolean get() = armed == true && landed == false
 
     companion object {
         /** The chip dims and reads LINK when the pilot state is older than this. */

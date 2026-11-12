@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.model.Skill
+import com.altnautica.gcs.core.skills.SkillNotice
 import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.core.skills.builtinLabelRes
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
@@ -142,6 +143,26 @@ fun reasonTextOf(strings: SetupStringsSpec, reasonKey: String): String {
     reasonKeyText(strings, reasonKey)?.let { return it }
     val spec = SpecText(strings)
     return if (spec.knowsRefusal(reasonKey)) spec.refusalText(reasonKey) else reasonKey
+}
+
+/** Notice reasons worded with the notice's own args. */
+private val SPEC_NOTICE_KEYS = mapOf(
+    SkillReason.NO_RESPONSE to "skill.did_not_respond",
+    SkillReason.PLUGIN_STOPPED to "skill.plugin_stopped",
+)
+
+/**
+ * A skill notice's snackbar text: its reason, then its detail. A detail with its own spec
+ * text (a refusal the pilot or a gate answered with) says why on its own and shows alone;
+ * the generic reason ("Command rejected") stays only before a detail without one.
+ */
+fun noticeTextOf(strings: SetupStringsSpec, notice: SkillNotice): String {
+    val reason = SPEC_NOTICE_KEYS[notice.reasonKey]?.let { strings.format(it, notice.args) }
+        ?: notice.reasonKey?.let { reasonTextOf(strings, it) }
+    val message = notice.message ?: return reason.orEmpty()
+    val detail = reasonTextOf(strings, message)
+    if (reasonKeyText(strings, message) != null || SpecText(strings).knowsRefusal(message)) return detail
+    return listOfNotNull(reason, detail).distinct().joinToString(" · ")
 }
 
 @Composable

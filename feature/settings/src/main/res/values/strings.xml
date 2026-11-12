@@ -40,9 +40,10 @@
     <string name="settings_telemetry_pane">Telemetry pane</string>
     <string name="settings_telemetry_pane_summary">Show the telemetry side pane on wide screens</string>
 
-    <string name="settings_controller">Controller</string>
-    <string name="settings_bindings">Controller and bindings</string>
-    <string name="settings_bindings_summary">Status, button maps, Skill Bar bindings and input test</string>
+    <string name="settings_controller">Controls</string>
+    <string name="settings_controls_summary">Button maps, calibration and input test; controller status and pairing</string>
+    <string name="settings_tour_replay_done">The controller tour shows again the next time you open the flight screen</string>
+    <string name="settings_tips_reset_done">Tips reset; they show again on the flight screen</string>
 
     <string name="settings_maps">Maps</string>
     <string name="settings_offline_maps">Offline maps</string>
@@ -55,7 +56,7 @@
     <string name="settings_phone_radio_summary">Radio adapter, receive keys and link statistics</string>
     <string name="settings_demo">Demo drone</string>
     <string name="settings_demo_summary">Show a simulated drone in the fleet</string>
-    <string name="settings_demo_stale_skill">Demo pod: stale skill state</string>
+    <string name="settings_demo_stale_skill">Demo: Record skill goes stale</string>
     <string name="settings_demo_scenario">Demo flight state</string>
     <string name="settings_demo_scenario_summary">Pins the demo drone\'s pilot to a state it cannot reach by flying alone</string>
     <string name="settings_demo_scenario_live">Live</string>
@@ -71,14 +72,11 @@
     <string name="settings_licences">Open source licences</string>
     <string name="settings_licences_summary">Third-party components in this app</string>
     <string name="settings_licences_missing">The licence notices are missing from this build.</string>
+    <string name="settings_licences_read">Read %1$s</string>
+    <string name="settings_licences_source_offer">This app is free software under the GNU General Public License v3.0. Its complete corresponding source code, including the GPL and LGPL components listed below and the scripts that build them, is published at https://github.com/altnautica/ADOSAndroidGCS for the version you have installed.</string>
 
     <!-- Controller surface -->
-    <string name="settings_controller_title">Controller</string>
-    <string name="settings_controller_tab_status">Status</string>
-    <string name="settings_controller_tab_buttons">Buttons</string>
-    <string name="settings_controller_tab_test">Test</string>
     <string name="settings_controller_hint_tabs">Tabs</string>
-    <string name="settings_controller_hint_hold_leave">Hold to leave</string>
 
     <string name="settings_controller_model_ds4">DualShock 4</string>
     <string name="settings_controller_family_playstation">Shape-button controller</string>
@@ -100,8 +98,6 @@
     <string name="settings_controller_lightbar">Light bar status colours</string>
     <string name="settings_controller_lightbar_summary">Colour the light bar by arming and alert state</string>
     <string name="settings_controller_sticks">Sticks</string>
-    <string name="settings_controller_dead_zone">Stick dead zone</string>
-    <string name="settings_controller_dead_zone_summary">Added to the controller\'s own dead zone</string>
     <string name="settings_controller_expo">Stick expo</string>
     <string name="settings_controller_expo_summary">Softens pitch, roll and yaw around centre</string>
     <string name="settings_controller_percent">%1$d %%</string>
@@ -111,89 +107,4 @@
     <string name="settings_controller_all_modes_none">None. Stick control works only in altitude- or position-holding modes.</string>
     <string name="settings_controller_vehicle_unlisted">Vehicle not listed</string>
     <string name="settings_controller_remove">Remove</string>
-
-    <string name="settings_controller_input_dpad">D-pad</string>
-    <string name="settings_controller_input_dpad_up">D-pad ↑</string>
-    <string name="settings_controller_input_dpad_down">D-pad ↓</string>
-    <string name="settings_controller_input_dpad_left">D-pad ←</string>
-    <string name="settings_controller_input_dpad_right">D-pad →</string>
-    <string name="settings_controller_input_dpad_left_right">D-pad ← →</string>
-    <string name="settings_controller_input_left_stick">Left stick</string>
-    <string name="settings_controller_input_right_stick">Right stick</string>
-    <string name="settings_controller_input_touchpad">Touchpad</string>
-    <string name="settings_controller_input_none">—</string>
-    <string name="settings_controller_map_ui">Everywhere outside the cockpit</string>
-    <string name="settings_controller_map_cockpit">Cockpit (default bindings)</string>
-    <string name="settings_controller_map_planner">Planner map</string>
-    <string name="settings_controller_ui_focus">Move focus; repeats while held</string>
-    <string name="settings_controller_ui_activate">Activate the focused control; hold for hold-to-confirm controls</string>
-    <string name="settings_controller_ui_back">Back: close the top overlay, else leave the screen</string>
-    <string name="settings_controller_ui_details">Details (Home: vehicle details)</string>
-    <string name="settings_controller_ui_more">More: the screen\'s context menu</string>
-    <string name="settings_controller_ui_tabs">Previous or next tab (Home: vehicle)</string>
-    <string name="settings_controller_ui_pages">Previous or next page (planner: zoom)</string>
-    <string name="settings_controller_ui_menu">Tap: screen menu · hold: Quick menu</string>
-    <string name="settings_controller_ui_home">Tap: Quick menu · hold: Home</string>
-    <string name="settings_controller_ui_nothing">Nothing</string>
-    <string name="settings_controller_cockpit_arm">Arm; disarm when armed</string>
-    <string name="settings_controller_cockpit_pause">Pause</string>
-    <string name="settings_controller_cockpit_land">Land</string>
-    <string name="settings_controller_cockpit_rtl">Return to launch</string>
-    <string name="settings_controller_cockpit_takeoff">Take off; D-pad ↑ ↓ on the sheet changes altitude by 1 m</string>
-    <string name="settings_controller_cockpit_loiter">Loiter mode</string>
-    <string name="settings_controller_cockpit_swap">Swap video and map</string>
-    <string name="settings_controller_cockpit_back">Cancel the confirm sheet, close the overlay, or leave the cockpit</string>
-    <string name="settings_controller_cockpit_stick">Together: stick control on or off</string>
-    <string name="settings_controller_cockpit_stream">Cycle video stream</string>
-    <string name="settings_controller_cockpit_modes">Flight mode picker</string>
-    <string name="settings_controller_cockpit_drawer">Skill drawer</string>
-    <string name="settings_controller_cockpit_menu">Tap: cockpit quick settings · hold: Quick menu</string>
-    <string name="settings_controller_cockpit_record">Start or stop recording</string>
-    <string name="settings_controller_cockpit_left_stick">Throttle up and down, yaw left and right (Mode 2)</string>
-    <string name="settings_controller_cockpit_right_stick">Pitch up and down, roll left and right</string>
-    <string name="settings_controller_cockpit_kill">Kill has no controller button; it is guarded on screen</string>
-    <string name="settings_controller_cockpit_note">Sticks fly only with stick control on and an altitude- or position-holding mode, unless the vehicle allows all modes. With a confirm sheet open, hold the button that opened it to confirm; Details overrides a failing checklist; Back cancels.</string>
-    <string name="settings_controller_tier_arm">Slide · hold 1.5 s</string>
-    <string name="settings_controller_tier_tap">Tap</string>
-    <string name="settings_controller_tier_hold">Hold</string>
-    <string name="settings_controller_tier_guarded">Guarded</string>
-    <string name="settings_controller_planner_pan">Pan the map</string>
-    <string name="settings_controller_planner_zoom">Zoom out or in</string>
-    <string name="settings_controller_planner_place">Place or select at the crosshair</string>
-    <string name="settings_controller_planner_actions">Item actions</string>
-    <string name="settings_controller_planner_grab">Hold to grab and move the selected item</string>
-    <string name="settings_controller_planner_waypoints">Previous or next waypoint</string>
-    <string name="settings_controller_planner_back">Deselect, then back</string>
-    <string name="settings_controller_planner_panes">Into the tool rail or the inspector</string>
-
-    <string name="settings_bindings_title">Skill Bar bindings</string>
-    <string name="settings_bindings_hint">Each Skill Bar slot holds one skill, a keyboard chord and a controller button. Cockpit controls (Back, Details, Share, Options, L3, R3, D-pad, Home; Escape, digits, P, backtick) cannot be bound.</string>
-    <string name="settings_bindings_loading">Loading bindings…</string>
-    <string name="settings_bindings_reset">Reset</string>
-    <string name="settings_bindings_slot">Slot %1$d</string>
-    <string name="settings_bindings_empty">Empty</string>
-    <string name="settings_bindings_set_key">Set key</string>
-    <string name="settings_bindings_set_button">Set button</string>
-    <string name="settings_bindings_change_button">Change button</string>
-    <string name="settings_bindings_button_index">Button %1$d</string>
-    <string name="settings_bindings_press_key">Press a key…</string>
-    <string name="settings_bindings_press_button">Press a button…</string>
-    <string name="settings_bindings_clear">Clear</string>
-    <string name="settings_bindings_reserved">That input is reserved by the cockpit</string>
-    <string name="settings_bindings_out_of_range">That controller button cannot be bound</string>
-
-    <string name="settings_controller_test_no_controller">Connect a controller to see its input here.</string>
-    <string name="settings_controller_test_left_trigger">L2</string>
-    <string name="settings_controller_test_right_trigger">R2</string>
-    <string name="settings_controller_test_xy">%1$+.2f, %2$+.2f</string>
-    <string name="settings_controller_test_value">%1$.2f</string>
-    <string name="settings_controller_test_hold_leave">Hold for 1 s to leave</string>
-    <string name="settings_controller_test_done">Done</string>
-    <string name="settings_controller_test_hardware">Hardware</string>
-    <string name="settings_controller_test_rumble">Test rumble</string>
-    <string name="settings_controller_test_lightbar">Cycle light bar</string>
-    <string name="settings_controller_test_unsupported">Not supported on this device</string>
-    <string name="settings_controller_test_ranges">Motion ranges</string>
-    <string name="settings_controller_test_ranges_none">No axes reported.</string>
-    <string name="settings_controller_test_range">%1$.2f … %2$.2f · flat %3$.2f</string>
 </resources>

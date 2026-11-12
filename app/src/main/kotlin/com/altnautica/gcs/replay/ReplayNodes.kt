@@ -1,5 +1,6 @@
 package com.altnautica.gcs.replay
 
+import android.content.Context
 import com.altnautica.gcs.core.link.vehicle.ReplayVehicles
 import com.altnautica.gcs.core.model.BlockReason
 import com.altnautica.gcs.core.model.DeviceId
@@ -10,6 +11,7 @@ import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.feature.logs.tlog.TlogReplayTransport
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,14 +49,17 @@ class ReplayNodeSource @Inject constructor(private val replays: ReplayVehicles) 
 
 /** Opens and closes log replays for the cockpit. */
 @Singleton
-class ReplayLauncher @Inject constructor(private val replays: ReplayVehicles) {
+class ReplayLauncher @Inject constructor(
+    private val replays: ReplayVehicles,
+    @param:ApplicationContext private val context: Context,
+) {
 
     /** Starts replaying the telemetry log at [tlogPath]; returns the replay node id. */
     suspend fun open(tlogPath: String): DeviceId {
         val file = File(tlogPath)
         val id = DeviceId(ReplayNodeSource.PREFIX + file.nameWithoutExtension)
         replays.close(id)
-        replays.open(id, TlogReplayTransport(file))
+        replays.open(id, TlogReplayTransport(file, context.resources))
         return id
     }
 

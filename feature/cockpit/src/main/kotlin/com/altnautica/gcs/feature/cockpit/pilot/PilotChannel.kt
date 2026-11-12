@@ -47,7 +47,8 @@ internal interface StickSink {
  * The pilot channel of one vehicle over `/api/v1/pilot/stream`: reconnects with
  * backoff, numbers stick sessions and frames, sends a 1 Hz heartbeat while no stick
  * input streams, and publishes the pilot state and action results it receives.
- * [connected] is true while server frames arrive (a frame at least every [STALE_MS]).
+ * [connected] is true while server frames arrive: a gap of the spec's `stale_after_ms`
+ * ([PilotState.STALE_MS]) or more drops the link.
  */
 internal class PilotChannel(
     private val scope: CoroutineScope,
@@ -148,7 +149,7 @@ internal class PilotChannel(
     internal fun watchdog() {
         if (!_connected.value) return
         val now = clock.nowMs()
-        if (now - lastFrameMs > STALE_MS) {
+        if (now - lastFrameMs >= PilotState.STALE_MS) {
             _connected.value = false
             connection?.cancel()
             return
@@ -202,7 +203,6 @@ internal class PilotChannel(
     companion object {
         const val TICK_MS = 250L
         const val HB_MS = 1_000L
-        const val STALE_MS = 3_000L
 
         /** How long an action waits for the pilot's `action_result`. */
         const val ACTION_ANSWER_MS = 3_000L

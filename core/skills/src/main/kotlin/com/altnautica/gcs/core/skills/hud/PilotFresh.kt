@@ -11,3 +11,9 @@ import com.altnautica.gcs.core.model.PilotState
  */
 fun pilotFresh(frameAtMs: Long?, nowMs: Long, staleAfterMs: Long = PilotState.STALE_MS): Boolean =
     frameAtMs != null && nowMs - frameAtMs < staleAfterMs
+
+/**
+ * [pilot] while its frame is fresh at [nowMs] ([pilotFresh]), else null: an old frame never
+ * decides armed or landed over the flight controller's heartbeat.
+ */
+fun freshPilot(pilot: PilotState?, nowMs: Long): PilotState? = pilot?.takeIf { pilotFresh(it.receivedAtMs, nowMs) }

@@ -45,7 +45,7 @@ fun FlightList(
     when {
         state == FlightHistoryUiState.Loading -> LoadingState(stringResource(R.string.logs_loading), modifier)
         state is FlightHistoryUiState.Error -> ErrorState(
-            reason = stringResource(R.string.logs_error, state.message),
+            reason = stringResource(R.string.logs_error),
             retryLabel = stringResource(R.string.logs_retry),
             onRetry = onRetry,
             modifier = modifier,

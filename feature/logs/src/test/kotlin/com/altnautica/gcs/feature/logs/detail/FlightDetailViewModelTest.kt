@@ -69,6 +69,6 @@ class FlightDetailViewModelTest {
         assertEquals(1, ready.series.groundspeedMs.size)
 
         val bad = vm { throw IOException("gone") }.state.value as FlightDetailUiState.Content
-        assertTrue((bad.series as SeriesState.Failed).message.contains("gone"))
+        assertEquals(SeriesState.Failed("/x.tlog"), bad.series)
     }
 }

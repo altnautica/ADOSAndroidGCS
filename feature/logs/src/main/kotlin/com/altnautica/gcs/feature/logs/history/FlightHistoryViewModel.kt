@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.logs.history
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.database.FlightSessionDao
@@ -28,7 +29,8 @@ data class FlightRow(val session: FlightSessionEntity, val hasTlog: Boolean)
 sealed interface FlightHistoryUiState {
     data object Loading : FlightHistoryUiState
     data object Empty : FlightHistoryUiState
-    data class Error(val message: String) : FlightHistoryUiState
+    /** The history store could not be read; the exception text goes to the log only. */
+    data object Error : FlightHistoryUiState
     data class Content(val flights: List<FlightRow>, val dataflashLogs: List<TlogFileEntity>) : FlightHistoryUiState
 }
 
@@ -55,7 +57,10 @@ class FlightHistoryViewModel internal constructor(
                     dataflash,
                 )
             }
-        }.catch<FlightHistoryUiState> { emit(FlightHistoryUiState.Error(it.message.orEmpty())) }
+        }.catch<FlightHistoryUiState> {
+            Log.w(TAG, "flight history read failed", it)
+            emit(FlightHistoryUiState.Error)
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FlightHistoryUiState.Loading)
 
     fun retry() {
@@ -83,5 +88,9 @@ class FlightHistoryViewModel internal constructor(
                 files.delete(file.id)
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "FlightHistory"
     }
 }

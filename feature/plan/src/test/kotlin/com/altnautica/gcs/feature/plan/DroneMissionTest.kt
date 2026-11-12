@@ -34,12 +34,12 @@ class DroneMissionTest {
         MirrorItem(seq = seq, command = 16, frame = 6, x = (lat * 1e7).toInt(), y = (lon * 1e7).toInt(), z = 20f)
 
     /** An ArduPilot mirror: home slot plus two waypoints. */
-    private fun mirror(id: Long = 0, uploads: Long = 1) = MissionMirror(
+    private fun mirror(id: Long = 0, uploads: Long = 1, state: String = "loaded") = MissionMirror(
         rev = 1,
         count = 3,
         homeSlot = true,
         uploadsSeen = uploads,
-        mission = MissionStatusWire(state = "loaded", seq = 0, total = 3, id = id),
+        mission = MissionStatusWire(state = state, seq = 0, total = 3, id = id),
         items = listOf(wp(0, 12.0, 77.0), wp(1, 12.001, 77.001), wp(2, 12.002, 77.002)),
     )
 
@@ -94,6 +94,86 @@ class DroneMissionTest {
             h.mirror.value = mirror(id = 9)
             runCurrent()
             assertFalse(vm.state.value.drone!!.differs)
+        }
+    }
+
+    @Test
+    fun `another client's upload fails the plan-on-drone start check`() = runTest {
+        h.withViewModel { vm ->
+            h.connect(vm)
+            vm.onMapTap(GeoPoint(13.0, 78.0))
+            h.mission.opaqueId = 9
+            vm.upload()
+            runCurrent()
+            vm.openStartMission()
+            assertTrue(vm.state.value.startSheet!!.checks.single { it.kind == StartCheckKind.PlanOnVehicle }.ok)
+
+            // Another client puts plan 7 on the drone while the sheet is open.
+            h.mirror.value = mirror(id = 7)
+            runCurrent()
+            assertTrue(vm.state.value.inSyncWithVehicle)
+            assertFalse(vm.state.value.planOnVehicle)
+            assertFalse(vm.state.value.startSheet!!.checks.single { it.kind == StartCheckKind.PlanOnVehicle }.ok)
+            assertFalse(vm.state.value.startSheet!!.canSlide)
+        }
+    }
+
+    @Test
+    fun `upload is refused while the drone flies its mission`() = runTest {
+        h.withViewModel { vm ->
+            h.connect(vm)
+            vm.onMapTap(GeoPoint(13.0, 78.0))
+            h.mirror.value = mirror(id = 7, state = "active")
+            runCurrent()
+            assertTrue(vm.state.value.missionInFlight)
+            vm.upload()
+            vm.retryUpload()
+            runCurrent()
+            assertTrue(h.mission.uploads.isEmpty())
+            assertEquals(TransferState.Idle, vm.state.value.transfer)
+        }
+    }
+
+    @Test
+    fun `upload is refused while the drone's own heartbeat says it flies a mission`() = runTest {
+        h.withViewModel { vm ->
+            h.connect(vm)
+            vm.onMapTap(GeoPoint(12.001, 77.001))
+            h.heartbeat.value = com.altnautica.gcs.core.model.HeartbeatState(
+                true, com.altnautica.gcs.core.model.FlightMode(3, "AUTO"), vehicleType = 2, autopilot = 3, tMs = h.now,
+            )
+            runCurrent()
+            assertTrue(vm.state.value.missionInFlight)
+            vm.upload()
+            runCurrent()
+            assertTrue(h.mission.uploads.isEmpty())
+
+            h.heartbeat.value = com.altnautica.gcs.core.model.HeartbeatState(
+                true, com.altnautica.gcs.core.model.FlightMode(5, "LOITER"), vehicleType = 2, autopilot = 3, tMs = h.now,
+            )
+            runCurrent()
+            assertFalse(vm.state.value.missionInFlight)
+        }
+    }
+
+    @Test
+    fun `the drone's fence parameters block points outside its limits`() = runTest {
+        h.withViewModel { vm ->
+            h.connect(vm)
+            vm.onMapTap(GeoPoint(12.0, 77.0)) // the first tap becomes the takeoff
+            vm.onMapTap(GeoPoint(12.01, 77.0)) // a waypoint about 1.1 km north of the drone's home
+            runCurrent()
+            val kinds = { vm.state.value.issues.map { it.kind } }
+            assertFalse(com.altnautica.gcs.feature.plan.model.PlanIssueKind.OutsideHomeCircleFence in kinds())
+            // Circle (2) and ceiling (1) enforced; the floor bit is clear so FENCE_ALT_MIN is ignored.
+            h.params("FENCE_ENABLE" to 1.0, "FENCE_TYPE" to 3.0, "FENCE_RADIUS" to 500.0, "FENCE_ALT_MAX" to 10.0, "FENCE_ALT_MIN" to 50.0)
+            runCurrent()
+            assertTrue(com.altnautica.gcs.feature.plan.model.PlanIssueKind.OutsideHomeCircleFence in kinds())
+            assertTrue(com.altnautica.gcs.feature.plan.model.PlanIssueKind.AboveFenceCeiling in kinds())
+            assertFalse(com.altnautica.gcs.feature.plan.model.PlanIssueKind.BelowFenceFloor in kinds())
+            vm.upload()
+            runCurrent()
+            assertTrue(h.mission.uploads.isEmpty())
         }
     }
 }

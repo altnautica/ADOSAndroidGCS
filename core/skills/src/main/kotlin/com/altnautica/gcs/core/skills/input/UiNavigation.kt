@@ -51,10 +51,11 @@ internal fun uiInputsForButton(button: Int, pressed: Boolean, heldMs: Long): Lis
 /**
  * The release a held button's delivered press needs when a chord takes it over: the
  * chord swallows the real release, so a held confirm (Cross) or More hold (Square)
- * ends here instead. Buttons that act only on release need nothing.
+ * ends here instead. The confirm release is cancelled, so the focused control does not
+ * click. Buttons that act only on release need nothing.
  */
 internal fun uiReleaseForChord(button: Int): List<UiInput> = when (button) {
-    GamepadButton.A -> listOf(UiInput.Activate(false))
+    GamepadButton.A -> listOf(UiInput.Activate(pressed = false, canceled = true))
     GamepadButton.X -> command(UiCommand.MoreUp)
     else -> emptyList()
 }

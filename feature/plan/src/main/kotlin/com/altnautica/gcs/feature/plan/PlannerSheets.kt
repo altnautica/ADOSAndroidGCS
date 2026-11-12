@@ -62,7 +62,7 @@ internal fun VehiclePickerSheet(state: PlannerUiState, onPick: (DeviceId?) -> Un
                     Liveness.Offline -> StatusLevel.Neutral to stringResource(R.string.plan_liveness_offline)
                 }
                 Row(
-                    Modifier.fillMaxWidth().clickable { onPick(node.id) }.padding(vertical = AdosSpacing.S2),
+                    Modifier.fillMaxWidth().heightIn(min = AdosTheme.touchMin).clickable { onPick(node.id) }.padding(vertical = AdosSpacing.S2),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(node.name, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = colors.fgPrimary)

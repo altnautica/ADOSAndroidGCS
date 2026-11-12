@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.BatteryStd
 import androidx.compose.material.icons.outlined.BatteryUnknown
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.NearMe
@@ -58,6 +59,7 @@ import com.altnautica.gcs.core.designsystem.component.node.profileLabel
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.NodeProfile
 import kotlinx.coroutines.Dispatchers
@@ -104,18 +106,24 @@ internal fun BoxScope.HeroBackground(card: FleetCard?, thumbnails: (DeviceId) ->
     }
 }
 
-/** Latest video still, decoded off the main thread; keeps the last frame while the next one loads. */
+/**
+ * Latest video still, decoded off the main thread; keeps the last frame while the next one
+ * decodes, and drops it when the agent reports no frame, so a stopped video never reads as live.
+ */
 @Composable
 private fun rememberThumbnail(id: DeviceId, thumbnails: (DeviceId) -> Flow<ByteArray?>): ImageBitmap? {
     val flow = remember(id) { thumbnails(id) }
     val bytes by flow.collectAsStateWithLifecycle(initialValue = null)
     val bitmap by produceState<ImageBitmap?>(initialValue = null, bytes) {
-        val data = bytes ?: return@produceState
-        withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(data, 0, data.size)?.asImageBitmap() }
-            ?.let { value = it }
+        val data = bytes
+        value = nextThumbnail(value, data) { withContext(Dispatchers.Default) { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() } }
     }
     return bitmap
 }
+
+/** No frame clears the still; a frame that does not decode keeps the previous one. */
+internal suspend fun <T : Any> nextThumbnail(current: T?, bytes: ByteArray?, decode: suspend (ByteArray) -> T?): T? =
+    if (bytes == null) null else decode(bytes) ?: current
 
 /** Name, reaches, vitals and readiness of the selected vehicle. */
 @Composable
@@ -144,13 +152,14 @@ internal fun HeroInfo(card: FleetCard, fly: SurfaceCard?, modifier: Modifier = M
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
         ) {
-            VitalsChips(card)
+            // A closed direct link with nothing reported yet has no vitals: dash chips would read as "waiting".
+            if (!(card.directLinkClosed && card.vitals == NodeVitals.UNKNOWN)) VitalsChips(card)
             LivenessChip(node.liveness)
         }
         node.carriedDroneId?.let {
             Text(stringResource(R.string.home_carries, it.value), style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
         }
-        if (fly != null) Readiness(heroReadiness(fly, card.vitals))
+        if (fly != null) Readiness(heroReadiness(fly, card.vitals, linkClosed = card.directLinkClosed))
     }
 }
 
@@ -184,11 +193,11 @@ private fun GpsChip(fix: GpsFix?, satellites: Int?) {
         null -> null
         GpsFix.NoGps -> null
         GpsFix.NoFix -> stringResource(R.string.home_gps_fix, "—")
-        GpsFix.Fix2D -> "2D"
-        GpsFix.Fix3D -> "3D"
-        GpsFix.DGps -> "DGPS"
-        GpsFix.RtkFloat -> "RTK float"
-        GpsFix.RtkFixed -> "RTK"
+        GpsFix.Fix2D -> stringResource(R.string.home_gps_fix_2d)
+        GpsFix.Fix3D -> stringResource(R.string.home_gps_fix_3d)
+        GpsFix.DGps -> stringResource(R.string.home_gps_fix_dgps)
+        GpsFix.RtkFloat -> stringResource(R.string.home_gps_fix_rtk_float)
+        GpsFix.RtkFixed -> stringResource(R.string.home_gps_fix_rtk_fixed)
     }
     val label = when {
         fix == null -> stringResource(R.string.home_gps_unknown)
@@ -215,6 +224,7 @@ private fun Readiness(readiness: HeroReadiness) {
     val label = when (readiness) {
         HeroReadiness.Ready -> stringResource(R.string.home_ready)
         HeroReadiness.Connecting -> stringResource(R.string.home_connecting)
+        HeroReadiness.OpensOnFly -> stringResource(R.string.home_opens_on_fly)
         is HeroReadiness.Blocked -> stringResource(readiness.reason)
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
@@ -222,12 +232,13 @@ private fun Readiness(readiness: HeroReadiness) {
             when (readiness) {
                 HeroReadiness.Ready -> Icons.Outlined.CheckCircle
                 HeroReadiness.Connecting -> Icons.Outlined.HourglassEmpty
+                HeroReadiness.OpensOnFly -> Icons.Outlined.Link
                 is HeroReadiness.Blocked -> Icons.Outlined.WarningAmber
             },
             contentDescription = null,
             tint = when (readiness) {
                 HeroReadiness.Ready -> colors.statusSuccess
-                HeroReadiness.Connecting -> colors.fgSecondary
+                HeroReadiness.Connecting, HeroReadiness.OpensOnFly -> colors.fgSecondary
                 is HeroReadiness.Blocked -> colors.statusWarning
             },
         )

@@ -1,6 +1,15 @@
 package com.altnautica.gcs.feature.cockpit.modes
 
+import android.view.KeyCharacterMap
+import android.view.KeyEvent as NativeKeyEvent
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.performKeyPress
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -55,12 +64,36 @@ class ModeSheetFcModesTest {
         ),
     )
 
-    private fun show(linked: Boolean) = compose.setContent {
+    @OptIn(ExperimentalComposeUiApi::class)
+    private fun show(linked: Boolean, keyboard: Boolean = false) = compose.setContent {
+        if (keyboard) LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
         AdosTheme {
             CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) {
                 ModeSheet(ui(linked), testSpec.flightState.modeSheet, actions, testSpec.layout.holdsMs)
             }
         }
+    }
+
+    private fun centre(action: Int, flags: Int = 0) =
+        KeyEvent(NativeKeyEvent(0L, 0L, action, NativeKeyEvent.KEYCODE_DPAD_CENTER, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, flags))
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `a cancelled Cross release on an FC mode tile asks for nothing`() {
+        show(linked = true, keyboard = true)
+        compose.onNodeWithTag(TAG_FC_MODES).performScrollTo().performClick()
+        val tile = compose.onNodeWithText("RTL").performScrollTo()
+        tile.requestFocus()
+        // Cross down on the tile, then a chord takes Cross over: the bridge ends the press cancelled.
+        tile.performKeyPress(centre(NativeKeyEvent.ACTION_DOWN))
+        tile.performKeyPress(centre(NativeKeyEvent.ACTION_UP, NativeKeyEvent.FLAG_CANCELED))
+        compose.waitForIdle()
+        assertEquals(emptyList<String>(), picked)
+        // A plain release on the same tile still asks for its mode.
+        tile.performKeyPress(centre(NativeKeyEvent.ACTION_DOWN))
+        tile.performKeyPress(centre(NativeKeyEvent.ACTION_UP))
+        compose.waitForIdle()
+        assertEquals(listOf("RTL"), picked)
     }
 
     @Test

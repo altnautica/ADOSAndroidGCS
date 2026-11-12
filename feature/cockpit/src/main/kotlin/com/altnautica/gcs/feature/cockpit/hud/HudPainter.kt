@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.cockpit.hud
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
@@ -13,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
 import com.altnautica.gcs.core.model.VehicleTelemetry
@@ -32,12 +34,21 @@ private const val DASH = "—"
 /** MAV_TYPE_FIXED_WING. */
 private const val MAV_TYPE_FIXED_WING = 1
 
+/** How far above the reticle the heading readout's bottom edge sits. */
+internal val HEADING_READOUT_LIFT = 64.dp
+
+/** The heading readout's height with its plate. */
+internal val HEADING_READOUT_HEIGHT = 20.dp
+
 /** Draws the instruments from the current telemetry values. Allocation-light: one instance per theme. */
 internal class HudPainter(
     private val measurer: TextMeasurer,
     private val colors: AdosColorRoles,
     small: TextStyle,
     medium: TextStyle,
+    /** The plate under the heading readout: the chrome panel tint at the small chrome radius. */
+    private val plate: Color = Color(0xEB0B0D12),
+    private val plateRadius: Dp = 4.dp,
 ) {
     private val smallStyle = small.copy(color = colors.hudInk)
     private val mediumStyle = medium.copy(color = colors.hudInk)
@@ -207,7 +218,16 @@ internal class HudPainter(
         drawCircle(colors.hudInk, 1.8.dp.toPx(), Offset(cx, cy))
         // Heading: a small caret and the degrees, above the reticle.
         val label = measurer.measure(heading?.let { "%03d°".format(HudMath.wrap360(it).roundToInt() % 360) } ?: DASH, if (fresh) smallStyle else dimSmall)
-        val top = cy - 64.dp.toPx()
+        val top = cy - HEADING_READOUT_LIFT.toPx()
+        // On a panel plate, so the degrees read over any picture, however bright.
+        val padX = 5.dp.toPx()
+        val padY = 1.dp.toPx()
+        drawRoundRect(
+            plate,
+            Offset(cx - label.size.width / 2f - padX, top - label.size.height - padY),
+            Size(label.size.width + padX * 2, label.size.height + padY * 2),
+            androidx.compose.ui.geometry.CornerRadius(plateRadius.toPx()),
+        )
         drawText(label, topLeft = Offset(cx - label.size.width / 2f, top - label.size.height))
         path.reset()
         path.moveTo(cx, top + 6.dp.toPx())

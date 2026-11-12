@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.pilot.PilotWire
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
+import com.altnautica.gcs.feature.cockpit.autonomy.pillSource
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.agent.video.StreamCatalog
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
@@ -48,13 +49,18 @@ import com.altnautica.gcs.core.skills.ConfirmResult
 import com.altnautica.gcs.core.skills.MonotonicClock
 import com.altnautica.gcs.core.skills.SkillActivator
 import com.altnautica.gcs.core.skills.SkillConfirmer
+import com.altnautica.gcs.core.skills.NoticeLevel
 import com.altnautica.gcs.core.skills.SkillNotice
 import com.altnautica.gcs.core.skills.SkillSessionFactory
 import com.altnautica.gcs.core.skills.binding.BindingStore
 import com.altnautica.gcs.core.skills.binding.Ds4Bindings
 import com.altnautica.gcs.core.skills.binding.Loadout
 import com.altnautica.gcs.core.skills.builtin.BuiltinIds
+import com.altnautica.gcs.core.skills.builtin.FlyHereAltitude
 import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
+import com.altnautica.gcs.core.skills.hud.FlyHereFc
+import com.altnautica.gcs.core.skills.hud.FlyHereReason
+import com.altnautica.gcs.core.skills.hud.flyHereOffered
 import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
@@ -82,6 +88,7 @@ import com.altnautica.gcs.feature.cockpit.chip.ChipButton
 import com.altnautica.gcs.feature.cockpit.chip.ChipContext
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipResolver
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipUi
+import com.altnautica.gcs.feature.cockpit.confirm.ARG_FLY_HERE_DISTANCE_M
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmController
 import com.altnautica.gcs.feature.cockpit.flow.FlowUi
 import com.altnautica.gcs.feature.cockpit.hud.layers.ArRules
@@ -133,6 +140,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
 import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.freshPilot
 import com.altnautica.gcs.core.skills.hud.pilotFresh as isPilotFresh
 import com.altnautica.gcs.core.skills.hud.aglMark
 import dagger.assisted.Assisted
@@ -156,6 +164,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -259,7 +269,15 @@ class CockpitViewModel @AssistedInject constructor(
 
     fun setDensity(density: CockpitDensity) = viewModelScope.launch { settingsRepo.setDensity(density) }
 
-    fun setSplitRatio(ratio: Float) = viewModelScope.launch { settingsRepo.setSplitRatio(ratio) }
+    /** The split view's video share for the flown vehicle, stored per vehicle. */
+    val splitRatio: StateFlow<Float> = vehicleNodeId.flatMapLatest { id ->
+        id?.let { settingsRepo.splitRatio(it.value) } ?: flowOf(CockpitSettingsRepository.DEFAULT_SPLIT)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, CockpitSettingsRepository.DEFAULT_SPLIT)
+
+    fun setSplitRatio(ratio: Float) {
+        val id = vehicleNodeId.value ?: return
+        viewModelScope.launch { settingsRepo.setSplitRatio(id.value, ratio) }
+    }
 
     fun setTelemetryPane(on: Boolean) = viewModelScope.launch { settingsRepo.setTelemetryPane(on) }
 
@@ -305,6 +323,9 @@ class CockpitViewModel @AssistedInject constructor(
     fun cycleStream(delta: Int) = videoCtl.cycleStream(delta)
     fun selectStreamIndex(index: Int) = videoCtl.selectStreamIndex(index)
     fun togglePip() = videoCtl.togglePip()
+
+    /** Dials the failed video again (the placeholder's Retry). */
+    fun retryVideo() = videoCtl.retry()
     fun swapPip() = videoCtl.swapPip()
 
     /** True when the current feed can record. */
@@ -399,9 +420,12 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
-    /** True while armed and not landed: from the pilot when it reports, else from the heartbeat. */
+    /**
+     * Possibly in the air: from the pilot while its frame is fresh, else the heartbeat. An
+     * unknown arm state counts as airborne.
+     */
     private fun airborne(): Boolean =
-        pilot.state.value?.let { it.armed && !it.landed } ?: (vehicle.value?.telemetry?.heartbeat?.value?.armed == true)
+        freshPilot(pilot.state.value, clock.nowMs())?.possiblyAirborne ?: (vehicle.value?.telemetry?.heartbeat?.value?.armed != false)
 
     /** Next card; past the last one the tour is marked seen. */
     fun nextTourStep() {
@@ -564,7 +588,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     private val sticks = CockpitStickController(
         viewModelScope, clock, vehicle, nodeFlows.vehicleServices, router, controllerSettings, controllerManager,
-        boundButtons, pilot.route, streamer.streaming,
+        boundButtons, pilot.route, streamer.streaming, conditioning,
     )
 
     fun toggleStickControl() = sticks.toggle()
@@ -669,20 +693,63 @@ class CockpitViewModel @AssistedInject constructor(
     /**
      * A long-press on the map. On the ground it picks the Launch sheet's go-to point and
      * opens the sheet on that option; in the air it flies there at the current height above
-     * home: through the pilot's goto action when the agent offers it, else the fly-here skill
-     * (behind its hold confirm).
+     * home, held to the agent's 2..120 m: through the pilot's goto action when the agent
+     * offers it, else the fly-here skill (behind its hold confirm). Without a position it
+     * says Fly Here needs one; when Fly Here is not offered it says why and opens no confirm.
      */
     fun pickMapPoint(point: GeoPoint) {
         if (airborne()) {
-            val alt = telemetry.value?.position?.value?.altRelM ?: return
+            flyHereRefusal()?.let { reason ->
+                ownNotices.tryEmit(SkillNotice(FlyHereSkill.id, NoticeLevel.Warning, null, specStrings.format(reason.refusalKey)))
+                return
+            }
+            // Height above home from the global position, else (no GNSS) from the local frame.
+            val rel = telemetry.value?.let { t -> t.position.value?.altRelM ?: t.localPosition.value?.let { -it.downM } }
+            if (rel == null) {
+                // Without a position there is no height to fly at: say so instead of doing nothing.
+                ownNotices.tryEmit(SkillNotice(FlyHereSkill.id, NoticeLevel.Warning, null, specStrings.format("map.fly_here.needs_position")))
+                return
+            }
+            // The agent's bounds: never lower than 2 m (a hover near the ground) nor above 120 m.
+            val alt = rel.coerceIn(FlyHereAltitude.MIN_M, FlyHereAltitude.MAX_M)
             // One entry, behind fly-here's hold confirm and gates: the skill sends the pilot's
-            // goto only while the pilot owns the vehicle, the FC's guided goto otherwise.
-            activate(FlyHereSkill.id, mapOf(SkillArgs.LAT to point.latDeg, SkillArgs.LON to point.lonDeg, SkillArgs.ALTITUDE_M to alt))
+            // goto only while the pilot owns the vehicle, the FC's guided goto otherwise. The
+            // distance is for the confirm, which shows how far the point is.
+            val dist = vehicleGeo(telemetry.value)?.let { flatDistanceM(it, point) }
+            activate(
+                FlyHereSkill.id,
+                mapOf(SkillArgs.LAT to point.latDeg, SkillArgs.LON to point.lonDeg, SkillArgs.ALTITUDE_M to alt, ARG_FLY_HERE_DISTANCE_M to dist),
+            )
             return
         }
         launchPoint.value = point
         launchDraft.update { it.copy(after = LaunchAfter.Goto) }
         overlays.launch.value = true
+    }
+
+    /** Why Fly Here is not offered now (the shared offer's reason), or null when it is or no reason is known. */
+    private fun flyHereRefusal(): FlyHereReason? {
+        val p = pilot.state.value
+        val t = telemetry.value
+        val fc = t?.heartbeat?.value?.let { hb ->
+            FlyHereFc(guided = hb.mode.name.equals("GUIDED", ignoreCase = true), armed = hb.armed, landed = t.onGround.value == true)
+        }
+        val offer = flyHereOffered(p, p?.let { clock.nowMs() - it.receivedAtMs } ?: Long.MAX_VALUE, fc)
+        return offer.reason.takeIf { offer.route == null }
+    }
+
+    /**
+     * A long-press on the local-frame minimap at [northM], [eastM] (metres from the FC's
+     * origin): placed on the globe through that origin, then handled as any map point
+     * ([pickMapPoint]). Without an anchored origin it says Fly Here needs a position.
+     */
+    fun pickLocalPoint(northM: Float, eastM: Float) {
+        val origin = localOrigin(telemetry.value)
+        if (origin == null) {
+            ownNotices.tryEmit(SkillNotice(FlyHereSkill.id, NoticeLevel.Warning, null, specStrings.format("map.fly_here.needs_position")))
+            return
+        }
+        pickMapPoint(localToGlobal(origin, northM, eastM))
     }
 
     /** [point] in the pilot's local frame at [altM] above it: from the vehicle's local position, else from home. */
@@ -778,9 +845,26 @@ class CockpitViewModel @AssistedInject constructor(
     private val _view = MutableStateFlow(CockpitView.Pilot)
     val view: StateFlow<CockpitView> = _view.asStateFlow()
 
+    /** Shows [v] and stores it for the flown vehicle, so its cockpit reopens on the same view. */
     fun setView(v: CockpitView) {
+        showView(v)
+        val id = vehicleNodeId.value ?: return
+        viewModelScope.launch { settingsRepo.setView(id.value, v.id) }
+    }
+
+    private fun showView(v: CockpitView) {
         _view.value = v
         autonomy.layers.setView(v.id)
+    }
+
+    init {
+        // Each vehicle reopens on the view it was last flown with.
+        viewModelScope.launch {
+            vehicleNodeId.filterNotNull().distinctUntilChanged().collect { id ->
+                val stored = settingsRepo.view(id.value).first()
+                CockpitView.entries.firstOrNull { it.id == stored }?.let(::showView)
+            }
+        }
     }
 
     fun nextView() = setView(CockpitView.entries[(_view.value.ordinal + 1) % CockpitView.entries.size])
@@ -799,12 +883,19 @@ class CockpitViewModel @AssistedInject constructor(
 
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
 
-    private val pill = CockpitPill(viewModelScope, clock, pilot, preflight, alerts, criticalText, fcTexts.warnings, tick500, statusPill) {
-        pilot.state.value?.armed ?: vehicle.value?.telemetry?.heartbeat?.value?.armed
+    private val pill = CockpitPill(
+        viewModelScope, clock, pilot, preflight, alerts, criticalText, fcTexts.warnings, tick500, statusPill,
+        heartbeatSeen = telemetry.flatMapLatest { it?.heartbeat ?: flowOf(null) }.map { it != null },
+        navSource = autonomy.navChip.map { it?.pillSource() },
+    ) {
+        freshPilot(pilot.state.value, clock.nowMs())?.armed ?: vehicle.value?.telemetry?.heartbeat?.value?.armed
     }
 
     /** The status pill's items: alerts, pilot readiness, failing checks, storage, FC texts and the FC failsafe. */
     val statusItems: StateFlow<List<StatusItem>> = pill.items
+
+    /** True until a pilot frame or a heartbeat arrives: the pill reads no link, not all systems OK. */
+    val statusWaiting: StateFlow<Boolean> = pill.waiting
 
     /**
      * The bottom row. AGL comes from the follow feed while it is fresh, else from the agent's
@@ -898,6 +989,11 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
+    /** The Menu's Controls: leaves for the controller settings. */
+    fun openControls() {
+        _events.tryEmit(CockpitEvent.OpenControls)
+    }
+
     /**
      * True while the newest pilot frame is younger than the spec's `stale_after_ms`; re-checked
      * on the 2 Hz tick, so everything derived from a stalled pilot hides instead of freezing.
@@ -926,15 +1022,17 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Controller feedback ----------------------------------------------------------
 
+    // Only a fresh pilot frame decides armed and landed; an old one falls back to the heartbeat.
     private val controllerContext: StateFlow<ControllerContext> = combine(
         pilot.state,
         band,
         overlays.picker,
         alerts,
-    ) { p, b, pickerOpen, a ->
+        tick500,
+    ) { p, b, pickerOpen, a, _ ->
         ControllerContext.of(
-            pilot = p,
-            armed = b.armed == true,
+            pilot = freshPilot(p, clock.nowMs()),
+            armed = b.armed,
             modeName = b.modeName,
             pickerOpen = pickerOpen,
             lowBattery = (b.batteryPct ?: 100) <= settings.value.batteryBands.criticalPct,
@@ -1197,15 +1295,12 @@ class CockpitViewModel @AssistedInject constructor(
     private fun homeDistanceM(map: MinimapState): Float? {
         val v = map.vehicle?.position ?: return null
         val h = map.home ?: return null
-        val dLat = Math.toRadians(v.latDeg - h.latDeg)
-        val dLon = Math.toRadians(v.lonDeg - h.lonDeg) * cos(Math.toRadians(h.latDeg))
-        return (hypot(dLat, dLon) * EARTH_RADIUS_M).toFloat()
+        return flatDistanceM(v.latDeg, v.lonDeg, h.latDeg, h.lonDeg)
     }
 
     companion object {
         private const val TAG = "Cockpit"
         private const val CONTROLLER_TICK_MS = 20L
-        private const val EARTH_RADIUS_M = 6_371_000.0
 
         /** Activation argument: the skill was confirmed by a completed controller hold. */
         const val ARG_HELD = "heldConfirm"
@@ -1215,6 +1310,47 @@ class CockpitViewModel @AssistedInject constructor(
 
         private val SAFETY_BUILTINS = setOf(BuiltinIds.PAUSE, BuiltinIds.RTH, BuiltinIds.KILL)
     }
+}
+
+/**
+ * The FC's local-frame origin on the globe: the position fix less the local offset when
+ * both report, else home once the FC has anchored its frame (`GPS_GLOBAL_ORIGIN`); null
+ * when neither holds.
+ */
+internal fun localOrigin(t: VehicleTelemetry?): GeoPoint? {
+    if (t == null) return null
+    val fix = t.position.value
+    val local = t.localPosition.value
+    if (fix != null && local != null) return localToGlobal(GeoPoint(fix.latDeg, fix.lonDeg), -local.northM, -local.eastM)
+    val home = t.home.value
+    return if (home != null && t.ekfOriginSet.value) GeoPoint(home.latDeg, home.lonDeg) else null
+}
+
+/** [origin] moved [northM] north and [eastM] east (flat earth; a minimap spans metres). */
+internal fun localToGlobal(origin: GeoPoint, northM: Float, eastM: Float): GeoPoint = GeoPoint(
+    origin.latDeg + northM / METRES_PER_DEG,
+    origin.lonDeg + eastM / (METRES_PER_DEG * cos(Math.toRadians(origin.latDeg))),
+)
+
+private const val METRES_PER_DEG = 111_319.49
+
+private const val EARTH_RADIUS_M = 6_371_000.0
+
+/** Ground metres between two points (flat earth at the second's latitude; the cockpit's distances are short). */
+internal fun flatDistanceM(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Float {
+    val dLat = Math.toRadians(aLat - bLat)
+    val dLon = Math.toRadians(aLon - bLon) * cos(Math.toRadians(bLat))
+    return (hypot(dLat, dLon) * EARTH_RADIUS_M).toFloat()
+}
+
+internal fun flatDistanceM(a: GeoPoint, b: GeoPoint): Float = flatDistanceM(a.latDeg, a.lonDeg, b.latDeg, b.lonDeg)
+
+/** The drone on the globe: its position fix, else its local position placed through the FC origin; null when neither. */
+internal fun vehicleGeo(t: VehicleTelemetry?): GeoPoint? {
+    if (t == null) return null
+    t.position.value?.let { return GeoPoint(it.latDeg, it.lonDeg) }
+    val local = t.localPosition.value ?: return null
+    return localOrigin(t)?.let { localToGlobal(it, local.northM, local.eastM) }
 }
 
 /** Horizontal metres from the vehicle's local position to [goal] (NED); null when either is unknown. */

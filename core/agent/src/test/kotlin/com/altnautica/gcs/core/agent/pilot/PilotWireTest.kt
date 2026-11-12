@@ -37,8 +37,8 @@ class PilotWireTest {
         assertEquals(AvoidMode.Brake, s.avoid)
         assertEquals(4, s.fcMode)
         assertEquals("GUIDED", s.fcModeName)
-        assertTrue(s.armed)
-        assertFalse(s.landed)
+        assertEquals(true, s.armed)
+        assertEquals(false, s.landed)
         assertEquals("mc", s.inputSrc)
         assertEquals(40L, s.inputAgeMs)
         assertNull(s.holdReason)
@@ -165,6 +165,21 @@ class PilotWireTest {
         assertTrue(s.gate!!.pending)
         assertEquals(0.5f, s.gate!!.progress, 0f)
         assertEquals("hold", s.sequence!!.after)
+    }
+
+    @Test
+    fun `a null or absent arm state stays unknown and reads as possibly airborne`() {
+        for (text in listOf("""{"owner":"idle","armed":null,"landed":null}""", """{"owner":"idle"}""")) {
+            val s = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(text) as JsonObject, 0L))
+            assertNull(text, s.armed)
+            assertNull(text, s.landed)
+            assertTrue(text, s.armStateUnknown)
+            assertTrue(text, s.possiblyAirborne)
+            assertFalse(text, s.knownAirborne)
+        }
+        val ground = checkNotNull(PilotWire.parseState(Json.parseToJsonElement("""{"owner":"idle","armed":false,"landed":true}""") as JsonObject, 0L))
+        assertFalse(ground.armStateUnknown)
+        assertFalse(ground.possiblyAirborne)
     }
 
     @Test

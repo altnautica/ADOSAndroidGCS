@@ -53,4 +53,18 @@ class BackStackOpsTest {
         BackStackOps.pop(stack)
         assertEquals(listOf<NavKey>(HomeKey), stack)
     }
+
+    @Test
+    fun afterConnectKeepsAFlightScreenBelowConnect() {
+        val stack = mutableListOf<NavKey>(HomeKey, CockpitKey("a"), ConnectKey("123456", null))
+        BackStackOps.afterConnect(stack)
+        assertEquals(listOf(HomeKey, CockpitKey("a")), stack)
+    }
+
+    @Test
+    fun afterConnectWithoutAFlightScreenGoesHome() {
+        val stack = mutableListOf<NavKey>(HomeKey, SettingsKey, ConnectKey())
+        BackStackOps.afterConnect(stack)
+        assertEquals(listOf<NavKey>(HomeKey), stack)
+    }
 }

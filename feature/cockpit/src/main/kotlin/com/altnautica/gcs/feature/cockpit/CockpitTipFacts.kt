@@ -8,20 +8,20 @@ import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.feature.cockpit.tips.TipFacts
 
-/** The flight facts the tip queue gates on. */
-internal data class FlightTipFacts(val armed: Boolean, val airborne: Boolean, val gotoOffered: Boolean)
+/** The flight facts the tip queue gates on; a null arm or airborne fact is unknown. */
+internal data class FlightTipFacts(val armed: Boolean?, val airborne: Boolean?, val gotoOffered: Boolean)
 
 /**
  * Armed, airborne and the fly-here offer for the tips. The pilot is trusted only while its
  * frames are fresh ([pilotFresh]); otherwise the heartbeat's [bandArmed] decides: a known arm
- * dismisses the tip for good, and an unknown arm state counts as possibly airborne, so no tip
- * shows and none is marked seen.
+ * dismisses the tip for good, and an unknown arm state (null) counts as possibly airborne, so
+ * no tip shows and none is marked seen.
  */
 internal fun flightTipFacts(pilot: PilotState?, pilotFresh: Boolean, bandArmed: Boolean?): FlightTipFacts {
     val live = pilot?.takeIf { pilotFresh }
     return FlightTipFacts(
-        armed = live?.armed ?: (bandArmed == true),
-        airborne = live?.let { it.armed && !it.landed } ?: (bandArmed != false),
+        armed = if (live != null) live.armed else bandArmed,
+        airborne = if (live != null) (if (live.armStateUnknown) null else live.knownAirborne) else bandArmed,
         gotoOffered = live != null && PilotAction.GOTO in live.surfaceOps,
     )
 }

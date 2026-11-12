@@ -24,28 +24,50 @@ import com.altnautica.gcs.feature.node.common.NodeCard
 import com.altnautica.gcs.feature.node.common.ProblemState
 import com.altnautica.gcs.feature.node.common.fmt
 import com.altnautica.gcs.feature.node.common.fmtInt
+import com.altnautica.gcs.feature.node.common.pollStale
+import com.altnautica.gcs.feature.node.common.roleLabel
+import com.altnautica.gcs.feature.node.common.uplinkLabel
+import com.altnautica.gcs.feature.node.common.videoStateLabel
+import com.altnautica.gcs.core.designsystem.component.StatusChip
+import com.altnautica.gcs.core.designsystem.component.StatusLevel
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
 
 /** [extra] adds profile-specific cards after the identity and agent cards (the Visor rows). */
 @Composable
 fun OverviewTab(nodeId: String, modifier: Modifier = Modifier, extra: (@Composable () -> Unit)? = null) {
     val vm = hiltViewModel<OverviewViewModel, OverviewViewModel.Factory>(key = "overview-$nodeId") { it.create(nodeId) }
     val state by vm.state.collectAsStateWithLifecycle()
-    OverviewContent(state, modifier, extra)
+    OverviewContent(state, modifier, extra, onRetryStation = vm::retryStation)
 }
 
 @Composable
-fun OverviewContent(state: OverviewUiState, modifier: Modifier = Modifier, extra: (@Composable () -> Unit)? = null) {
+fun OverviewContent(
+    state: OverviewUiState,
+    modifier: Modifier = Modifier,
+    extra: (@Composable () -> Unit)? = null,
+    onRetryStation: (() -> Unit)? = null,
+    clock: () -> Long = SystemClock::elapsedRealtime,
+) {
     val node = state.node ?: return LoadingState(stringResource(R.string.node_loading), modifier)
+    // Ticks every second so the poll age counts up and a silent agent turns stale on screen.
+    val now by produceState(clock()) {
+        while (true) {
+            delay(1_000)
+            value = clock()
+        }
+    }
+    val stale = state.agent?.let { pollStale(it.lastOkMs, now) } == true
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(AdosSpacing.S4),
         verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
     ) {
         item { IdentityCard(node, state.agent) }
-        state.agent?.let { poll -> item { AgentCard(poll) } }
+        state.agent?.let { poll -> item { AgentCard(poll, now, stale) } }
         extra?.let { content -> item { content() } }
-        state.agent?.status?.let { status -> item { FlightCard(status) } }
-        state.station?.let { load -> item { StationCards(load) } }
+        state.agent?.status?.let { status -> item { FlightCard(status, stale) } }
+        state.station?.let { load -> item { StationCards(load, onRetryStation) } }
         state.vehicle?.let { v -> item { VehicleCard(v) } }
     }
 }
@@ -69,15 +91,19 @@ private fun fcLabel(variant: FcVariant, agentVariant: String?): String? = when (
 }
 
 @Composable
-private fun AgentCard(poll: NodePoll) {
+private fun AgentCard(poll: NodePoll, now: Long, stale: Boolean) {
     val status = poll.status
     NodeCard(stringResource(R.string.overview_agent)) {
         if (status == null) {
             KeyValueRow(stringResource(R.string.overview_last_status), null)
             return@NodeCard
         }
-        val ageS = poll.lastOkMs?.let { (SystemClock.elapsedRealtime() - it) / 1000 }
+        val ageS = poll.lastOkMs?.let { (now - it).coerceAtLeast(0) / 1000 }
         KeyValueRow(stringResource(R.string.overview_last_status), ageS?.let { stringResource(R.string.overview_seconds_ago, it) })
+        if (stale) {
+            StatusChip(StatusLevel.Warning, stringResource(R.string.node_stale))
+            return@NodeCard
+        }
         KeyValueRow(stringResource(R.string.overview_uptime), status.uptimeSeconds?.let { uptime(it.toLong()) })
         KeyValueRow(
             stringResource(R.string.overview_fc_link),
@@ -86,7 +112,7 @@ private fun AgentCard(poll: NodePoll) {
         KeyValueRow(stringResource(R.string.overview_fc_port), fcPortLabel(status.fcPort, status.fcBaud))
         KeyValueRow(stringResource(R.string.overview_fc_firmware), status.fcFirmware)
         KeyValueRow(stringResource(R.string.overview_heartbeat_age), status.heartbeatAgeS.fmt(1, " s"))
-        KeyValueRow(stringResource(R.string.overview_video), status.video?.state)
+        KeyValueRow(stringResource(R.string.overview_video), videoStateLabel(status.video?.state))
         KeyValueRow(stringResource(R.string.overview_streams), status.video?.streams?.size?.toString())
         KeyValueRow(
             stringResource(R.string.overview_recording),
@@ -96,9 +122,13 @@ private fun AgentCard(poll: NodePoll) {
 }
 
 @Composable
-private fun FlightCard(status: StatusFull) {
+private fun FlightCard(status: StatusFull, stale: Boolean) {
     val t = status.telemetry ?: return
     NodeCard(stringResource(R.string.overview_flight)) {
+        if (stale) {
+            StatusChip(StatusLevel.Warning, stringResource(R.string.node_stale))
+            return@NodeCard
+        }
         KeyValueRow(stringResource(R.string.overview_armed), t.armed?.let { stringResource(if (it) R.string.overview_yes else R.string.overview_no) })
         KeyValueRow(stringResource(R.string.overview_mode), t.mode?.takeIf { it.isNotBlank() })
         KeyValueRow(stringResource(R.string.overview_battery), t.battery?.remaining?.takeIf { it >= 0 }.fmtInt(" %"))
@@ -110,21 +140,22 @@ private fun FlightCard(status: StatusFull) {
 }
 
 @Composable
-private fun StationCards(load: StationLoad) {
+private fun StationCards(load: StationLoad, onRetry: (() -> Unit)?) {
     when (load) {
         StationLoad.Loading -> LoadingState(stringResource(R.string.node_loading))
-        is StationLoad.Failed -> ProblemState(load.problem, onRetry = {})
+        is StationLoad.Failed -> ProblemState(load.problem, onRetry = onRetry)
         is StationLoad.Ready -> {
             val s = load.status
+            if (load.stale) StatusChip(StatusLevel.Warning, stringResource(R.string.node_stale))
             NodeCard(stringResource(R.string.overview_station)) {
-                KeyValueRow(stringResource(R.string.overview_role), s.role.current)
+                KeyValueRow(stringResource(R.string.overview_role), roleLabel(s.role.current))
                 KeyValueRow(stringResource(R.string.overview_paired_drone), s.pairedDrone.deviceId)
                 KeyValueRow(stringResource(R.string.overview_rssi), s.link.rssiDbm.fmtInt(" dBm"))
                 KeyValueRow(stringResource(R.string.overview_bitrate), s.link.bitrateMbps?.toDouble().fmt(1, " Mb/s"))
                 KeyValueRow(stringResource(R.string.overview_channel), s.link.channel?.toString())
                 KeyValueRow(stringResource(R.string.overview_clients), s.gcs.clients.size.toString())
                 KeyValueRow(stringResource(R.string.overview_pic), s.gcs.picId)
-                KeyValueRow(stringResource(R.string.overview_uplink), s.network.uplinkType)
+                KeyValueRow(stringResource(R.string.overview_uplink), uplinkLabel(s.network.uplinkType))
                 KeyValueRow(stringResource(R.string.overview_ap), s.network.apSsid)
                 KeyValueRow(
                     stringResource(R.string.overview_recording),

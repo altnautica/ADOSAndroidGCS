@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.plan
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,6 +88,7 @@ internal fun PlanTitleChip(
                 dirty = state.dirty,
                 modifier = Modifier
                     .widthIn(max = 240.dp)
+                    .heightIn(min = AdosTheme.touchMin)
                     .consoleFocus(shape)
                     .clickable(onClickLabel = stringResource(R.string.plan_rename_action), onClick = onRename)
                     .padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S2),

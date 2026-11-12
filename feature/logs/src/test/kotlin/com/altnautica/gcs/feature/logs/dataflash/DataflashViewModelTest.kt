@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -98,5 +99,67 @@ class DataflashViewModelTest {
         service.result = LogListResult.Failed("timeout")
         vm.refresh()
         assertEquals(DataflashUiState.ListFailed("timeout"), vm.state.value)
+    }
+
+    @Test
+    fun downloadsRunOneAtATime() = runTest(dispatcher) {
+        val started = mutableListOf<Int>()
+        val streams = mapOf(1 to MutableSharedFlow<LogDownloadProgress>(), 2 to MutableSharedFlow<LogDownloadProgress>())
+        val queued = object : LogService {
+            override suspend fun list() = LogListResult.Success(listOf(LogEntry(1, 100, 0), LogEntry(2, 200, 0)))
+            override fun download(entry: LogEntry, destination: File): Flow<LogDownloadProgress> {
+                started += entry.id
+                // Like the real service, the stream ends after Done or Failed.
+                return streams.getValue(entry.id).transformWhile { p ->
+                    emit(p)
+                    p !is LogDownloadProgress.Done && p !is LogDownloadProgress.Failed
+                }
+            }
+            override suspend fun eraseAll() = true
+        }
+        serviceFlow.value = queued
+        val vm = vm()
+        val (second, first) = (vm.state.value as DataflashUiState.Content).rows.map { it.entry }
+        vm.download(first)
+        vm.download(second)
+        assertEquals(listOf(1), started)
+        assertEquals(EntryDownload.Queued, (vm.state.value as DataflashUiState.Content).rows.first().download)
+
+        val file = File(dir, "fc-log1.bin").apply { writeBytes(ByteArray(100)) }
+        streams.getValue(1).emit(LogDownloadProgress.Done(file))
+        assertEquals(listOf(1, 2), started)
+    }
+
+    @Test
+    fun armedVehicleIsRefusedAndStopsTransfers() = runTest(dispatcher) {
+        val armed = MutableStateFlow(false)
+        serviceFlow.value = service
+        val vm = DataflashViewModel(DeviceId("fc"), serviceFlow, dao, dir, armed) { 42L }
+        val entry = (vm.state.value as DataflashUiState.Content).rows.first().entry
+        vm.download(entry)
+        progress.emit(LogDownloadProgress.Running(10, 200))
+
+        armed.value = true
+        assertEquals(DataflashUiState.Armed, vm.state.value)
+        assertTrue(cancelled)
+        vm.download(entry)
+        vm.refresh()
+        assertEquals(DataflashUiState.Armed, vm.state.value)
+
+        armed.value = false
+        assertEquals(EntryDownload.None, (vm.state.value as DataflashUiState.Content).rows.first().download)
+    }
+
+    @Test
+    fun ulogDownloadsAreSavedAsUlg() = runTest(dispatcher) {
+        serviceFlow.value = service
+        val vm = vm()
+        val entry = (vm.state.value as DataflashUiState.Content).rows.last().entry
+        vm.download(entry)
+        val file = File(dir, "fc-log1.bin").apply { writeBytes(byteArrayOf(0x55, 0x4C, 0x6F, 0x67, 0x01, 0x12, 0x35, 0x01)) }
+        progress.emit(LogDownloadProgress.Done(file))
+
+        assertTrue(rows.value.single().path.endsWith("fc-log1.ulg"))
+        assertTrue(File(dir, "fc-log1.ulg").exists())
     }
 }

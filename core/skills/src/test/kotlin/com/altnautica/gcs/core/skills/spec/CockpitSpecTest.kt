@@ -54,6 +54,13 @@ class CockpitSpecTest {
     }
 
     @Test
+    fun `chrome tokens carry the control height and the fallback defaults are the shipped tokens`() {
+        assertEquals(36f, testSpec.tokens.chrome.controlPx)
+        // A surface without chrome tokens draws exactly what tokens.json ships.
+        assertEquals(testSpec.tokens.chrome, com.altnautica.gcs.core.skills.spec.ChromeTokensSpec())
+    }
+
+    @Test
     fun `the built-in table is exactly the cockpit standard`() {
         val ids = testSpec.builtins.builtins.map { it.id }
         assertEquals(listOf("arm", "disarm", "takeoff", "land", "rth", "pause", "resume", "take_control", "kill"), ids)

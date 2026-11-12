@@ -199,12 +199,53 @@ class PlannerViewModelTest {
     }
 
     @Test
+    fun `import warnings are kept for the sheet until dismissed`() = runTest {
+        withViewModel { vm ->
+            val text = """
+                {"fileType": "Plan", "mission": {"plannedHomePosition": [12.0, 77.0, 900], "items": [
+                  {"type": "SimpleItem", "command": 22, "frame": 3, "doJumpId": 1, "params": [0, 0, 0, 0, 12.0, 77.0, 15]},
+                  {"type": "SimpleItem", "command": 177, "frame": 2, "doJumpId": 2, "params": [42, 1, 0, 0, 0, 0, 0]}
+                ]}}
+            """.trimIndent()
+            vm.importText("loop.plan", text)
+
+            assertEquals(listOf<com.altnautica.gcs.feature.plan.model.PlanWarning>(com.altnautica.gcs.feature.plan.model.PlanWarning.DroppedJump(2, 42)), vm.state.value.importWarnings)
+            vm.dismissImportWarnings()
+            assertTrue(vm.state.value.importWarnings.isEmpty())
+        }
+    }
+
+    @Test
+    fun `an unsaved plan survives the view model and is cleared once saved`() = runTest {
+        withViewModel { vm ->
+            vm.onMapTap(a)
+            vm.onMapTap(b)
+            testScheduler.advanceTimeBy(PlannerViewModel.DRAFT_DEBOUNCE_MS + 1)
+            runCurrent()
+        }
+        assertTrue(h.drafts.draft != null)
+
+        // A new view model after process death restores the draft as unsaved.
+        withViewModel { vm ->
+            runCurrent()
+            assertEquals(listOf(a, b), vm.state.value.plan.items.map { it.position })
+            assertTrue(vm.state.value.dirty)
+
+            vm.save("field")
+            runCurrent()
+            testScheduler.advanceTimeBy(PlannerViewModel.DRAFT_DEBOUNCE_MS + 1)
+            runCurrent()
+        }
+        assertEquals(null, h.drafts.draft)
+    }
+
+    @Test
     fun `broken files report why`() = runTest {
         withViewModel { vm ->
             vm.importText("x.plan", "{\"fileType\":\"Nope\"}")
 
             assertEquals(
-                PlannerMessage.ImportFailed(com.altnautica.gcs.feature.plan.io.PlanFormatException.Reason.NotPlan, "NotPlan"),
+                PlannerMessage.ImportFailed(com.altnautica.gcs.feature.plan.io.PlanFormatException.Reason.NotPlan),
                 vm.state.value.message,
             )
         }
@@ -320,6 +361,30 @@ class PlannerViewModelTest {
             assertEquals(TransferState.Idle, vm.state.value.transfer)
             assertNull(vm.state.value.vehiclePlan)
             assertTrue(mission.uploads.isEmpty())
+        }
+    }
+
+    @Test
+    fun `leaving during a transfer is refused with a message`() = runTest {
+        withViewModel { vm ->
+            connect(vm)
+            vm.onMapTap(a)
+            vm.onMapTap(b)
+            vm.save("p")
+            runCurrent()
+            val gate = CompletableDeferred<Unit>()
+            mission.gate = gate
+            vm.upload()
+            assertTrue(vm.state.value.transferring)
+
+            vm.requestDiscard(DiscardAction.Leave)
+            assertFalse(vm.state.value.leaveApproved)
+            assertEquals(PlannerMessage.TransferInProgress, vm.state.value.message)
+
+            gate.complete(Unit)
+            runCurrent()
+            vm.requestDiscard(DiscardAction.Leave)
+            assertTrue(vm.state.value.leaveApproved || vm.state.value.pendingDiscard == DiscardAction.Leave)
         }
     }
 

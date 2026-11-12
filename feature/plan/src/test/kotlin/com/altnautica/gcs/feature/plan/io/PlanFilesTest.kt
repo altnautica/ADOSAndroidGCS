@@ -180,4 +180,15 @@ class PlanFilesTest {
         assertEquals(PlanFileFormat.Waypoints, PlanFileFormat.fromFileName("a.b.waypoints"))
         assertEquals(null, PlanFileFormat.fromFileName("notes.txt"))
     }
+
+    @Test
+    fun `the plan header names the planned vehicle's firmware and type`() {
+        fun header(text: String): Pair<Int, Int> {
+            val mission = kotlinx.serialization.json.Json.parseToJsonElement(text).let { it as kotlinx.serialization.json.JsonObject }["mission"] as kotlinx.serialization.json.JsonObject
+            fun int(key: String) = (mission[key] as kotlinx.serialization.json.JsonPrimitive).content.toInt()
+            return int("firmwareType") to int("vehicleType")
+        }
+        assertEquals(12 to 1, header(PlanFiles.exportPlan(plan(), com.altnautica.gcs.feature.plan.model.Autopilot.Px4, mavType = 1)))
+        assertEquals(3 to 2, header(PlanFiles.exportPlan(plan())))
+    }
 }

@@ -138,6 +138,7 @@ fun PlanRoute(
             onStart = viewModel::startMission,
             onDismissStart = viewModel::dismissStartMission,
             onMessageShown = viewModel::messageShown,
+            onDismissImportWarnings = viewModel::dismissImportWarnings,
             onStickNavigationSuppressed = viewModel::setStickNavigationSuppressed,
         )
     }
@@ -209,6 +210,7 @@ class PlannerActions(
     val onStart: () -> Unit,
     val onDismissStart: () -> Unit,
     val onMessageShown: () -> Unit,
+    val onDismissImportWarnings: () -> Unit,
     /** While the map has controller focus the left stick pans instead of moving focus. */
     val onStickNavigationSuppressed: (Boolean) -> Unit,
 )

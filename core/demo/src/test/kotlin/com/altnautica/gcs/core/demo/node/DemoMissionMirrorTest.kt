@@ -13,6 +13,7 @@ class DemoMissionMirrorTest {
         override var armed = false
         override var altitudeM = 0.0
         override var mode = 0
+        override var gnssFix = true
         override fun command(command: Int, p1: Float, p2: Float, p7: Float) = Unit
     }
 

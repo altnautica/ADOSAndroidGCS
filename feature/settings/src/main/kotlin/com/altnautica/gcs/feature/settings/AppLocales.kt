@@ -19,8 +19,11 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object AppLocales {
 
-    /** The shipped translations; an empty tag follows the system language. */
-    val SUPPORTED: List<String> = listOf("", "en", "hi", "bn", "mr", "ta", "te", "kn", "pa")
+    /**
+     * The shipped translations; an empty tag follows the system language. Matches the
+     * app's `locales_config.xml`: a language is listed only once the whole app is translated.
+     */
+    val SUPPORTED: List<String> = listOf("", "en")
 
     private const val PREFS = "app_locale"
     private const val KEY = "tag"

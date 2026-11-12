@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -55,15 +54,15 @@ internal fun RightColumn(
             Shutter(
                 video = video,
                 recording = recording,
-                label = stringResource(if (video) R.string.grid_record else R.string.grid_shutter),
+                label = specText(if (video) "cockpit.camera.record_video" else "cockpit.camera.take_photo"),
                 size = sizes.shutter,
                 onClick = { if (video) vm.toggleRecording() else vm.capturePhoto() },
             )
             PhotoVideoSwitch(
                 video = video,
                 videoEnabled = canRecord,
-                photoLabel = stringResource(R.string.grid_mode_photo),
-                videoLabel = stringResource(R.string.grid_mode_video),
+                photoLabel = specText("cockpit.camera.photo_mode"),
+                videoLabel = specText("cockpit.camera.video_mode"),
                 onVideo = { videoMode = it },
                 width = sizes.shutter,
                 height = sizes.modeSwitch,

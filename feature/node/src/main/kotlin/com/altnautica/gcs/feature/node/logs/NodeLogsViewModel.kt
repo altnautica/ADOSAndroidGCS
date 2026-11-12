@@ -24,6 +24,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 
 data class LogEntry(val seq: Long?, val timestamp: String?, val level: String, val logger: String, val message: String)
 
@@ -33,13 +38,14 @@ data class NodeLogsUiState(
     val level: LogLevel = LogLevel.All,
     val service: String = "",
     val entries: List<LogEntry> = emptyList(),
-    val total: Int = 0,
+    /** The last page came back full, so the agent may hold older entries. */
+    val hasMore: Boolean = false,
     val loading: Boolean = true,
     val problem: PageProblem? = null,
     /** The agent's log store is off or unreachable (`warning` in a 200 answer). */
     val storeWarning: String? = null,
 ) {
-    val canLoadMore: Boolean get() = !loading && entries.size < total
+    val canLoadMore: Boolean get() = !loading && hasMore
 }
 
 /** Agent logs for one node: `GET /api/logs?level=&service=&limit=&offset=`, newest first. */
@@ -104,8 +110,8 @@ class NodeLogsViewModel @AssistedInject constructor(
                     val page = parse(body)
                     _state.update {
                         it.copy(
-                            entries = if (reset) page else it.entries + page,
-                            total = body.int("total") ?: page.size,
+                            entries = if (reset) page else append(it.entries, page),
+                            hasMore = page.size >= PAGE,
                             loading = false,
                             storeWarning = body.str("warning"),
                         )
@@ -118,6 +124,30 @@ class NodeLogsViewModel @AssistedInject constructor(
 
     companion object {
         const val PAGE = 100
+
+        /** Appends an older page, dropping rows already shown (the window can shift while new rows arrive). */
+        fun append(shown: List<LogEntry>, page: List<LogEntry>): List<LogEntry> {
+            val seen = shown.mapNotNullTo(HashSet()) { it.seq }
+            return shown + page.filter { it.seq == null || it.seq !in seen }
+        }
+
+        private val CLOCK = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
+        private val DATED = DateTimeFormatter.ofPattern("MMM d HH:mm:ss")
+
+        /**
+         * The agent's RFC 3339 timestamp in [zone]: a clock time for today, with the date
+         * otherwise. An unparseable value is shown as sent.
+         */
+        fun logTime(timestamp: String?, zone: ZoneId, now: Instant): String? {
+            if (timestamp.isNullOrBlank()) return null
+            val at = try {
+                OffsetDateTime.parse(timestamp).atZoneSameInstant(zone)
+            } catch (_: DateTimeParseException) {
+                return timestamp
+            }
+            val today = now.atZone(zone).toLocalDate()
+            return at.format(if (at.toLocalDate() == today) CLOCK else DATED)
+        }
 
         fun parse(body: JsonObject): List<LogEntry> = body.arr("entries")?.objects().orEmpty().map { e ->
             LogEntry(

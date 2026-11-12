@@ -95,7 +95,7 @@ fun PlannerScreen(
     val current by rememberUpdatedState(state)
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
-        isBackEnabled = state.selection != null || state.dirty,
+        isBackEnabled = state.selection != null || state.dirty || state.transferring,
         onBackCompleted = { if (current.selection != null) actions.onSelect(null) else actions.onLeave() },
     )
     ConsoleCommandHandler { command ->
@@ -194,6 +194,7 @@ fun PlannerScreen(
     }
     DiscardConfirmSheet(state, actions)
     DeleteSavedConfirmSheet(state, actions)
+    ImportWarningsSheet(state, actions)
     state.startSheet?.let { StartMissionSheetView(it, actions) }
     if (state.confirmReplaceWithDownload) {
         AdosDialog(

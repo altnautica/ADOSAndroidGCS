@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleButton
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommand
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommandHandler
@@ -41,7 +40,6 @@ import com.altnautica.gcs.core.designsystem.component.console.ConsoleScaffold
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleTwoPane
 import com.altnautica.gcs.core.designsystem.component.console.Hint
 import com.altnautica.gcs.core.designsystem.component.console.isLandscape
-import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenu
 import com.altnautica.gcs.core.designsystem.component.overlay.AdosMenuItem
 import com.altnautica.gcs.core.designsystem.component.overlay.adosMenuAnchor
@@ -76,6 +74,7 @@ fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
     val message by viewModel.message.collectAsStateWithLifecycle()
     val review by viewModel.importReview.collectAsStateWithLifecycle()
     val rebootPending by viewModel.rebootPending.collectAsStateWithLifecycle()
+    val writing by viewModel.writing.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -155,6 +154,7 @@ fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
                         onFilter = viewModel::setFilter,
                         onRefresh = viewModel::refresh,
                         onDismissMessage = viewModel::consumeMessage,
+                        writing = writing,
                     )
                 },
                 detail = {
@@ -167,6 +167,7 @@ fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
                             row = selected,
                             onSubmit = { viewModel.requestWrite(selected.name, it) },
                             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(AdosSpacing.S4),
+                            writing = writing,
                         )
                     }
                 },
@@ -189,28 +190,17 @@ fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
                 selectedName = null
             },
             onDismiss = { selectedName = null },
+            writing = writing,
         )
     }
     pending?.let { p ->
-        AdosConfirmSheet(
-            title = stringResource(R.string.cfg_param_armed_title),
-            message = stringResource(R.string.cfg_param_armed_message, p.name, ParamFile.formatValue(p.value)),
-            onDismiss = viewModel::dismissPendingWrite,
-            danger = true,
-        ) {
-            HoldToConfirmButton(
-                label = stringResource(R.string.cfg_param_armed_confirm),
-                holdMs = 800,
-                danger = true,
-                onConfirmed = viewModel::confirmPendingWrite,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+        PendingWriteSheet(p, onDismiss = viewModel::dismissPendingWrite, onConfirm = viewModel::confirmPendingWrite)
     }
     review?.let {
         ImportReviewSheet(
             it,
             armed = content?.armed == true,
+            metaFor = { name -> content?.byName?.get(name)?.meta },
             onToggle = viewModel::toggleImportRow,
             onApply = viewModel::applyImport,
             onDismiss = viewModel::dismissImport,

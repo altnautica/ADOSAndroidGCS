@@ -19,6 +19,23 @@ data class NavChip(
     val activeSet: Int = 1,
 )
 
+/** The status pill's view of this chip: its source kind and tone. */
+fun NavChip.pillSource(): com.altnautica.gcs.core.skills.hud.PillNavSource = com.altnautica.gcs.core.skills.hud.PillNavSource(
+    kind = when (label) {
+        NavLabel.Gps -> com.altnautica.gcs.core.skills.hud.PillNavSource.Kind.Gps
+        NavLabel.ExtNav -> com.altnautica.gcs.core.skills.hud.PillNavSource.Kind.Ext
+        NavLabel.Flow -> com.altnautica.gcs.core.skills.hud.PillNavSource.Kind.Flow
+        NavLabel.DeadReckoning -> com.altnautica.gcs.core.skills.hud.PillNavSource.Kind.Dr
+        NavLabel.Stale -> com.altnautica.gcs.core.skills.hud.PillNavSource.Kind.Stale
+    },
+    tone = when (tone) {
+        NavTone.Good -> com.altnautica.gcs.core.skills.hud.PillNavSource.Tone.Good
+        NavTone.Warn -> com.altnautica.gcs.core.skills.hud.PillNavSource.Tone.Warn
+        NavTone.Crit -> com.altnautica.gcs.core.skills.hud.PillNavSource.Tone.Crit
+        NavTone.Muted -> com.altnautica.gcs.core.skills.hud.PillNavSource.Tone.Muted
+    },
+)
+
 /** Inputs for [NavSource.resolve]. Fix type is MAVLink `GPS_FIX_TYPE` (0-6). */
 data class NavInputs(
     val ekfFlags: Int?,

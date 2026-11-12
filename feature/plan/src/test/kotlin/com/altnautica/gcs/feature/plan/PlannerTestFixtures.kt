@@ -150,6 +150,17 @@ internal class PlannerHarness {
     val servicesFlow = MutableStateFlow<VehicleServices?>(null)
     val dao = FakeDao()
     val prefs = MemoryPreferences()
+    val drafts = MemoryDraftStore()
+    val paramSnapshot = MutableStateFlow(com.altnautica.gcs.core.link.param.ParamSnapshot.EMPTY)
+
+    /** Sets the vehicle's loaded parameters. */
+    fun params(vararg values: Pair<String, Double>) {
+        paramSnapshot.value = com.altnautica.gcs.core.link.param.ParamSnapshot(
+            values.size,
+            values.size,
+            values.withIndex().associate { (i, v) -> v.first to com.altnautica.gcs.core.link.param.ParamValue(v.first, v.second, 9, i) },
+        )
+    }
 
     private val telemetry = mockk<VehicleTelemetry>().also {
         every { it.heartbeat } returns heartbeat
@@ -170,7 +181,9 @@ internal class PlannerHarness {
         override val vehicle = this@PlannerHarness.vehicle
         override val firmware: StateFlow<FirmwareFamily?> = this@PlannerHarness.firmware
         override val mission: MissionService = this@PlannerHarness.mission
-        override val params = mockk<com.altnautica.gcs.core.link.param.ParamService>()
+        override val params = mockk<com.altnautica.gcs.core.link.param.ParamService>().also {
+            every { it.snapshot } returns this@PlannerHarness.paramSnapshot
+        }
         override val calibration = mockk<com.altnautica.gcs.core.link.calibration.CalibrationService>()
         override val logs = mockk<com.altnautica.gcs.core.link.log.LogService>()
         override val manualControl = mockk<com.altnautica.gcs.core.link.manual.ManualControlStreamer>()
@@ -193,6 +206,7 @@ internal class PlannerHarness {
         plannerSettings = PlannerSettingsRepository(prefs),
         inputRouter = mockk(relaxed = true),
         mirrorSource = { mirror },
+        draftStore = drafts,
     )
 
     suspend fun withViewModel(block: suspend (PlannerViewModel) -> Unit) {
@@ -211,5 +225,16 @@ internal class PlannerHarness {
         gps.value = GpsState(GpsFix.Fix3D, 12, 0.8f, now)
         servicesFlow.value = services
         vm.selectVehicle(node)
+    }
+}
+
+/** In-memory draft store: what a process death would leave on disk. */
+internal class MemoryDraftStore : com.altnautica.gcs.feature.plan.io.PlanDraftStore {
+    var draft: com.altnautica.gcs.feature.plan.io.PlanDraft? = null
+
+    override suspend fun read() = draft
+
+    override suspend fun write(draft: com.altnautica.gcs.feature.plan.io.PlanDraft?) {
+        this.draft = draft
     }
 }

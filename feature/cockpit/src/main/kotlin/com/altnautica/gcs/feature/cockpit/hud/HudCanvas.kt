@@ -72,7 +72,10 @@ fun HudCanvas(
     val measurer = rememberTextMeasurer(cacheSize = TEXT_CACHE_SIZE)
     val small = AdosTypography.numeric.small
     val medium = AdosTypography.numeric.medium
-    val painter = remember(measurer, colors, small, medium) { HudPainter(measurer, colors, small, medium) }
+    val chrome = com.altnautica.gcs.feature.cockpit.chrome.LocalChrome.current
+    val painter = remember(measurer, colors, small, medium, chrome) {
+        HudPainter(measurer, colors, small, medium, plate = chrome.panelNoBlur, plateRadius = chrome.radiusSmall)
+    }
     val summary = specText("cockpit.hud.aria")
     Spacer(
         modifier

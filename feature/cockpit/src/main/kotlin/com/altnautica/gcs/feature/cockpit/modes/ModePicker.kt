@@ -1,7 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.modes
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import com.altnautica.gcs.feature.cockpit.chrome.padClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -18,7 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -31,7 +30,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ConfirmGesture
 import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.skills.builtin.modeChangeConfirm
-import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonText
 
 /**
@@ -66,7 +65,7 @@ fun FcModeGrid(state: ModePickerUi, onPick: (String) -> Unit, modifier: Modifier
     Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         when {
             state.reasonKey != null -> Text(reasonText(state.reasonKey), style = MaterialTheme.typography.bodyMedium, color = colors.statusWarning)
-            state.choices.isEmpty() -> Text(stringResource(R.string.cockpit_mode_picker_empty), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
+            state.choices.isEmpty() -> Text(specText("flow.mode.empty"), style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
         }
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -86,10 +85,10 @@ fun FcModeGrid(state: ModePickerUi, onPick: (String) -> Unit, modifier: Modifier
 private fun ModeTile(choice: ModeChoice, enabled: Boolean, onClick: () -> Unit) {
     val colors = AdosTheme.colors
     val tier = when (choice.gesture) {
-        ConfirmGesture.Tap -> stringResource(R.string.cockpit_mode_tier_tap)
-        ConfirmGesture.Hold -> stringResource(R.string.cockpit_mode_tier_hold)
-        ConfirmGesture.Slide -> stringResource(R.string.cockpit_mode_tier_slide)
-        ConfirmGesture.Guarded -> stringResource(R.string.cockpit_mode_tier_hold)
+        ConfirmGesture.Tap -> specText("flow.mode.tier.tap")
+        ConfirmGesture.Hold -> specText("setup.confirm.hold")
+        ConfirmGesture.Slide -> specText("confirm.slide")
+        ConfirmGesture.Guarded -> specText("setup.confirm.hold")
     }
     Surface(
         modifier = Modifier
@@ -97,7 +96,7 @@ private fun ModeTile(choice: ModeChoice, enabled: Boolean, onClick: () -> Unit) 
             .defaultMinSize(minHeight = AdosTheme.touchMin)
             .alpha(if (enabled) 1f else 0.5f)
             .semantics { selected = choice.current }
-            .clickable(enabled = enabled && !choice.current, role = Role.Button, onClick = onClick),
+            .padClickable(enabled = enabled && !choice.current, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(AdosRadius.Lg),
         color = if (choice.current) colors.accentPrimary.copy(alpha = 0.16f) else colors.bgRaised,
         border = BorderStroke(if (choice.current) 2.dp else 1.dp, if (choice.current) colors.accentPrimary else colors.borderDefault),
@@ -105,14 +104,14 @@ private fun ModeTile(choice: ModeChoice, enabled: Boolean, onClick: () -> Unit) 
         Column(Modifier.padding(horizontal = AdosSpacing.S3, vertical = AdosSpacing.S2), horizontalAlignment = Alignment.Start) {
             Text(choice.name, style = AdosTypography.numeric.medium, maxLines = 1)
             Text(
-                if (choice.current) stringResource(R.string.cockpit_mode_current) else tier,
+                if (choice.current) specText("flow.mode.current") else tier,
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.fgSecondary,
                 maxLines = 1,
             )
             if (choice.endsStick) {
                 Text(
-                    stringResource(R.string.cockpit_mode_ends_stick),
+                    specText("flow.mode.ends_stick"),
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.statusWarning,
                     maxLines = 2,

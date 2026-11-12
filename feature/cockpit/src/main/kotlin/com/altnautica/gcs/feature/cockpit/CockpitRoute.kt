@@ -29,10 +29,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,18 +51,25 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
 import com.altnautica.gcs.core.model.DeviceId
-import com.altnautica.gcs.core.skills.SkillReason
 import com.altnautica.gcs.feature.cockpit.skillbar.widthClassFor
+import com.altnautica.gcs.feature.cockpit.skillbar.noticeTextOf
 import com.altnautica.gcs.feature.cockpit.skillbar.reasonTextOf
 
 /**
  * Full-screen cockpit for [nodeId]; a ground station's cockpit flies its carried
  * drone. Keeps the screen on, honours the max-brightness toggle, takes hardware
  * input while visible, and asks before leaving while the vehicle is armed.
- * [onSetUpAircraft] opens aircraft setup for the flown vehicle (the chip's "Set up aircraft").
+ * [onSetUpAircraft] opens aircraft setup for the flown vehicle (the chip's and the Menu's
+ * "Set up aircraft"); [onOpenControls] the controller settings (the Menu's Controls).
  */
 @Composable
-fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceId) -> Unit, modifier: Modifier = Modifier) {
+fun CockpitRoute(
+    nodeId: DeviceId,
+    onExit: () -> Unit,
+    onSetUpAircraft: (DeviceId) -> Unit,
+    onOpenControls: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val vm = hiltViewModel<CockpitViewModel, CockpitViewModel.Factory>(
         key = "cockpit:${nodeId.value}",
         creationCallback = { factory -> factory.create(nodeId.value) },
@@ -77,7 +82,6 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
     var pendingLeave by remember { mutableStateOf<(() -> Unit)?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val toastScope = androidx.compose.runtime.rememberCoroutineScope()
-    val resources = LocalResources.current
 
     fun guardLeave(proceed: () -> Unit) {
         if (vm.vehicle.value?.telemetry?.heartbeat?.value?.armed == true) pendingLeave = proceed else proceed()
@@ -119,39 +123,24 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
                 CockpitEvent.ChecklistOverridden -> snackbar.showSnackbar(vm.specStrings.format("cockpit.toast.checklist_overridden"))
                 is CockpitEvent.TargetRefused ->
                     snackbar.showSnackbar(reasonTextOf(vm.specStrings, event.reasonKey))
-                is CockpitEvent.Reacquired -> snackbar.showSnackbar(
-                    resources.getString(
-                        R.string.hud_toast_reacquired,
-                        event.trackId,
-                        String.format(java.util.Locale.ROOT, "%.2f", event.similarity),
-                        String.format(java.util.Locale.ROOT, "%.1f", event.gapS),
-                    ),
-                )
-                CockpitEvent.ReacquireModeNotApplied -> snackbar.showSnackbar(resources.getString(R.string.hud_rail_mode_not_applied))
-                CockpitEvent.MinimapLocal -> snackbar.showSnackbar(resources.getString(R.string.hud_map_toast_local))
-                CockpitEvent.PilotUnavailable -> snackbar.showSnackbar(resources.getString(R.string.cockpit_pilot_unavailable))
+                is CockpitEvent.Reacquired -> snackbar.showSnackbar(reacquiredText(vm.specStrings, event))
+                CockpitEvent.ReacquireModeNotApplied -> snackbar.showSnackbar(vm.specStrings.format("follow.reacquire_not_applied"))
+                CockpitEvent.MinimapLocal -> snackbar.showSnackbar(vm.specStrings.format("minimap.toast_local"))
+                CockpitEvent.PilotUnavailable -> snackbar.showSnackbar(vm.specStrings.format("cockpit.pilot.unavailable"))
                 is CockpitEvent.PilotRefused -> snackbar.showSnackbar(
-                    event.reason?.takeIf { it.isNotBlank() }?.let { resources.getString(R.string.cockpit_pilot_refused, it) }
-                        ?: resources.getString(R.string.cockpit_pilot_refused_no_reason),
+                    event.reason?.takeIf { it.isNotBlank() }?.let { vm.specStrings.format("cockpit.pilot.refused", mapOf("reason" to it)) }
+                        ?: vm.specStrings.format("cockpit.pilot.refused_no_reason"),
                 )
-                CockpitEvent.PilotNoAnswer -> snackbar.showSnackbar(resources.getString(R.string.cockpit_pilot_no_answer))
+                CockpitEvent.PilotNoAnswer -> snackbar.showSnackbar(vm.specStrings.format("cockpit.pilot.no_answer"))
                 CockpitEvent.SetUpAircraft -> (vm.extensionNodeId.value ?: nodeId).let(onSetUpAircraft)
+                CockpitEvent.OpenControls -> onOpenControls()
             }
         }
     }
     LaunchedEffect(vm) {
         vm.notices.collect { notice ->
-            val spec = vm.specStrings
-            val specKey = SPEC_NOTICE_KEYS[notice.reasonKey]
-            val reason = when {
-                specKey != null -> spec.format(specKey, notice.args)
-                else -> notice.reasonKey?.let { key -> reasonTextOf(spec, key) }
-            }
-            val detail = notice.message?.let { m -> reasonTextOf(spec, m) }
-            val text = listOfNotNull(reason, detail).distinct().joinToString(" · ")
-            if (text.isNotEmpty()) {
-                snackbar.showSnackbar(text)
-            }
+            val text = noticeTextOf(vm.specStrings, notice)
+            if (text.isNotEmpty()) snackbar.showSnackbar(text)
         }
     }
 
@@ -166,15 +155,15 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
             when (status) {
                 CockpitStatus.UnknownNode -> EmptyState(
                     icon = Icons.Outlined.LinkOff,
-                    title = stringResource(R.string.cockpit_unknown_node_title),
-                    message = stringResource(R.string.cockpit_unknown_node_message),
-                    action = EmptyStateAction(stringResource(R.string.cockpit_exit), onExit),
+                    title = vm.specStrings.format("cockpit.unknown_node.title"),
+                    message = vm.specStrings.format("cockpit.unknown_node.message"),
+                    action = EmptyStateAction(vm.specStrings.format("cockpit.exit_cockpit"), onExit),
                 )
                 CockpitStatus.NoCarriedDrone -> EmptyState(
                     icon = Icons.Outlined.FlightTakeoff,
-                    title = stringResource(R.string.cockpit_no_carried_title),
-                    message = stringResource(R.string.cockpit_no_carried_message),
-                    action = EmptyStateAction(stringResource(R.string.cockpit_exit), onExit),
+                    title = vm.specStrings.format("cockpit.no_carried.title"),
+                    message = vm.specStrings.format("cockpit.no_carried.message"),
+                    action = EmptyStateAction(vm.specStrings.format("cockpit.exit_cockpit"), onExit),
                 )
                 CockpitStatus.Connecting, CockpitStatus.Ready -> CockpitScreen(
                     vm = vm,
@@ -201,12 +190,6 @@ fun CockpitRoute(nodeId: DeviceId, onExit: () -> Unit, onSetUpAircraft: (DeviceI
         }
     }
 }
-
-/** Skill notices whose text comes from the cockpit spec strings, filled from the notice args. */
-private val SPEC_NOTICE_KEYS = mapOf(
-    SkillReason.NO_RESPONSE to "skill.did_not_respond",
-    SkillReason.PLUGIN_STOPPED to "skill.plugin_stopped",
-)
 
 /** Calls [onLost] whenever the cockpit window loses input focus. */
 @Composable

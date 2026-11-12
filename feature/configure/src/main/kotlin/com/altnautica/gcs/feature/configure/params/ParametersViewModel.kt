@@ -19,6 +19,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -67,6 +68,11 @@ class ParametersViewModel internal constructor(
     private val _message = MutableStateFlow<ParamMessage?>(null)
     val message: StateFlow<ParamMessage?> = _message.asStateFlow()
 
+    private val _writing = MutableStateFlow<String?>(null)
+
+    /** The parameter whose write is waiting for the flight controller's echo, or null. */
+    val writing: StateFlow<String?> = _writing.asStateFlow()
+
     private val _import = MutableStateFlow<ImportReview?>(null)
     val importReview: StateFlow<ImportReview?> = _import.asStateFlow()
 
@@ -75,6 +81,7 @@ class ParametersViewModel internal constructor(
     /** A confirmed write needs a flight-controller reboot before it takes effect. */
     val rebootPending: StateFlow<Boolean> = _rebootPending.asStateFlow()
     private var rebooting = false
+    private var applyJob: Job? = null
 
     private val heartbeat: Flow<HeartbeatState?> = target.flatMapLatest { it?.vehicle?.telemetry?.heartbeat ?: flowOf(null) }
 
@@ -158,14 +165,22 @@ class ParametersViewModel internal constructor(
         }
     }
 
-    /** Validates editor input; an armed vehicle parks the write until [confirmPendingWrite]. */
+    /**
+     * Validates editor input. An armed vehicle, or one whose arm state is unknown (stale link),
+     * parks the write until [confirmPendingWrite]. A write already in flight ignores a second one.
+     */
     fun requestWrite(name: String, input: String) {
+        if (_writing.value != null) return
         val meta = metadata.value?.get(name)
-        when (val v = ParamValidator.validate(meta, input)) {
+        when (val v = ParamValidator.validate(name, meta, input)) {
             is ParamValidation.Invalid -> _message.value = ParamMessage.Invalid(name, v.reason)
             is ParamValidation.Valid -> {
-                val isArmed = (state.value as? ParametersUiState.Content)?.armed == true
-                if (isArmed) _pending.value = PendingWrite(name, v.value) else write(name, v.value)
+                val content = state.value as? ParametersUiState.Content
+                when {
+                    content?.armed == true -> _pending.value = PendingWrite(name, v.value)
+                    content != null && !content.linkFresh -> _pending.value = PendingWrite(name, v.value, armUnknown = true)
+                    else -> write(name, v.value)
+                }
             }
         }
     }
@@ -185,7 +200,14 @@ class ParametersViewModel internal constructor(
     }
 
     private fun write(name: String, value: Double) {
-        viewModelScope.launch { _message.value = writeOne(name, value) }
+        _writing.value = name
+        viewModelScope.launch {
+            try {
+                _message.value = writeOne(name, value)
+            } finally {
+                _writing.value = null
+            }
+        }
     }
 
     private suspend fun writeOne(name: String, value: Double): ParamMessage {
@@ -199,6 +221,11 @@ class ParametersViewModel internal constructor(
         }
         if (result is ParamMessage.Saved && result.rebootRequired) _rebootPending.value = true
         return result
+    }
+
+    /** A change made outside the parameter list (a calibration) applies after a reboot. */
+    fun markRebootNeeded() {
+        _rebootPending.value = true
     }
 
     /**
@@ -220,7 +247,7 @@ class ParametersViewModel internal constructor(
 
     /** Reports the outcome of writing a parameter file chosen by the operator. */
     fun fileWritten(result: Result<Unit>) {
-        _message.value = result.fold({ ParamMessage.FileSaved }, { ParamMessage.FileWriteFailed(it.message) })
+        _message.value = result.fold({ ParamMessage.FileSaved }, { ParamMessage.FileWriteFailed })
     }
 
     /** A chosen parameter file could not be read. */
@@ -244,16 +271,30 @@ class ParametersViewModel internal constructor(
             return
         }
         val current = target.value?.params?.snapshot?.value?.values?.mapValues { it.value.value } ?: emptyMap()
-        _import.value = ImportReview(ParamFile.compare(current, entries))
+        val comparison = ParamFile.compare(current, entries)
+        // A file row gets the same checks as a single edit; a refused row starts unticked and stays so.
+        val meta = metadata.value
+        val invalid = comparison.changed.mapNotNull { d ->
+            (ParamValidator.validate(d.name, meta?.get(d.name), d.fromFile) as? ParamValidation.Invalid)?.let { d.name to it.reason }
+        }.toMap()
+        _import.value = ImportReview(comparison, invalid = invalid)
     }
 
+    /**
+     * Closes the review. A running apply is cancelled, so no further value is sent, and the
+     * count confirmed so far is reported.
+     */
     fun dismissImport() {
+        val review = _import.value
+        applyJob?.cancel()
+        applyJob = null
         _import.value = null
+        if (review != null && review.running) _message.value = ParamMessage.ImportStopped(review.applied, review.selected.size)
     }
 
-    /** Includes or leaves out one changed row of the reviewed file; ignored while applying. */
+    /** Includes or leaves out one changed row of the reviewed file; ignored while applying and for refused rows. */
     fun toggleImportRow(name: String) = _import.update { r ->
-        if (r == null || r.running) r else r.copy(deselected = if (name in r.deselected) r.deselected - name else r.deselected + name)
+        if (r == null || r.running || name in r.invalid) r else r.copy(deselected = if (name in r.deselected) r.deselected - name else r.deselected + name)
     }
 
     /**
@@ -264,7 +305,7 @@ class ParametersViewModel internal constructor(
     fun applyImport() {
         val review = _import.value ?: return
         if (review.running || isArmed()) return
-        viewModelScope.launch {
+        applyJob = viewModelScope.launch {
             _import.update { it?.copy(running = true, applied = 0, failed = emptyList()) }
             for (diff in review.selected) {
                 if (isArmed()) break
@@ -274,6 +315,7 @@ class ParametersViewModel internal constructor(
                 }
             }
             _import.update { it?.copy(running = false) }
+            applyJob = null
         }
     }
 

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
@@ -47,13 +48,15 @@ import com.altnautica.gcs.core.designsystem.component.node.profileTint
 import com.altnautica.gcs.core.designsystem.theme.AdosFonts
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
+import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.designsystem.R as DesignR
 
-private val TopStripHeight = 40.dp
+/** Tall enough for the Quick menu button's full touch target. */
+private val TopStripHeight = AdosSize.TouchMin
 private val TileSize = 56.dp
 private val LivenessDot = 12.dp
 
@@ -147,14 +150,15 @@ private fun VehicleTile(card: FleetCard, selected: Boolean, onClick: () -> Unit)
         node.name,
         liveness,
     )
+    val shape = RoundedCornerShape(AdosRadius.Md)
     Box(Modifier.size(TileSize)) {
         Box(
             Modifier
                 .size(TileSize)
-                .consoleFocus(CircleShape)
-                .clip(CircleShape)
+                .consoleFocus(shape)
+                .clip(shape)
                 .background(colors.bgRaised)
-                .border(if (selected) 2.dp else 1.dp, if (selected) colors.accentPrimary else colors.borderDefault, CircleShape)
+                .border(if (selected) 2.dp else 1.dp, if (selected) colors.accentPrimary else colors.borderDefault, shape)
                 .clickable(role = Role.Button, onClick = onClick)
                 .semantics { contentDescription = spoken },
             contentAlignment = Alignment.Center,
@@ -219,6 +223,9 @@ internal fun SurfaceRow(
     }
 }
 
+/** Columns of the portrait launch grid: three, so all seven cards fit above the hint bar on a phone. */
+internal const val PORTRAIT_GRID_COLUMNS = 3
+
 /** Portrait launch grid. */
 @Composable
 internal fun SurfaceGrid(
@@ -229,7 +236,7 @@ internal fun SurfaceGrid(
     modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(160.dp),
+        columns = GridCells.Fixed(PORTRAIT_GRID_COLUMNS),
         modifier = modifier.fillMaxWidth().focusRestorer().focusGroup(),
         contentPadding = PaddingValues(AdosSpacing.S4),
         horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3),

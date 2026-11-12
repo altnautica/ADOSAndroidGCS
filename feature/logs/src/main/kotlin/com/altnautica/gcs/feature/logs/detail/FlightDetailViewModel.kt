@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.logs.detail
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.database.FlightSessionDao
@@ -24,7 +25,11 @@ import java.io.InputStream
 sealed interface SeriesState {
     data object Loading : SeriesState
     data object NoLog : SeriesState
-    data class Failed(val message: String) : SeriesState
+    /**
+     * The telemetry log at [tlogPath] could not be read; it can still be shared. The
+     * exception text goes to the log only.
+     */
+    data class Failed(val tlogPath: String) : SeriesState
     data class Ready(val series: FlightSeries, val tlogPath: String) : SeriesState
 }
 
@@ -84,9 +89,16 @@ class FlightDetailViewModel internal constructor(
                 session,
                 series.fold(
                     onSuccess = { SeriesState.Ready(it, path) },
-                    onFailure = { SeriesState.Failed(it.message ?: it.javaClass.simpleName) },
+                    onFailure = {
+                        Log.w(TAG, "telemetry log read failed: $path", it)
+                        SeriesState.Failed(path)
+                    },
                 ),
             )
         }
+    }
+
+    private companion object {
+        const val TAG = "FlightDetail"
     }
 }

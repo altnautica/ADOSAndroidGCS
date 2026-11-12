@@ -1,7 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.hud.layers
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,7 +9,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Switch
@@ -26,8 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.cockpit.CockpitViewModel
+import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
+import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -83,81 +82,82 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
             delay(STATUS_POLL_MS)
         }
     }
-    val c = AdosTheme.colors
-    Column(
-        modifier
-            .background(c.mediaScrim, RoundedCornerShape(12.dp))
-            .verticalScroll(rememberScrollState())
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(specText("vision.title"), color = c.mediaOn)
+    val chrome = LocalChrome.current
+    ChromePanel(modifier) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(chrome.pad),
+            verticalArrangement = Arrangement.spacedBy(chrome.gap),
+        ) {
+            Text(specText("vision.title"), color = chrome.text)
 
-        Text(specText("vision.detections"), color = c.mediaOn)
-        val items = batches[cameraId]?.items.orEmpty()
-        if (items.isEmpty()) Text(specText("vision.no_detections"), color = c.mediaOn.copy(alpha = 0.7f))
-        for (d in items.sortedByDescending { it.confidence }.take(MAX_ROWS)) {
-            val pct = Math.round(d.confidence * 100)
-            val row = d.trackId?.let { specText("vision.detection_row_track", "id" to it.toString(), "label" to d.classLabel, "pct" to pct.toString()) }
-                ?: specText("vision.detection_row", "label" to d.classLabel, "pct" to pct.toString())
-            Text(row, color = c.mediaOn)
-        }
+            Text(specText("vision.detections"), color = chrome.text)
+            val items = batches[cameraId]?.items.orEmpty()
+            if (items.isEmpty()) Text(specText("vision.no_detections"), color = chrome.textDim)
+            for (d in items.sortedByDescending { it.confidence }.take(MAX_ROWS)) {
+                val pct = Math.round(d.confidence * 100)
+                val row = d.trackId?.let { specText("vision.detection_row_track", "id" to it.toString(), "label" to d.classLabel, "pct" to pct.toString()) }
+                    ?: specText("vision.detection_row", "label" to d.classLabel, "pct" to pct.toString())
+                Text(row, color = chrome.text)
+            }
 
-        Text(specText("vision.detector_model"), color = c.mediaOn)
-        val s = status
-        if (s == null) {
-            if (unreachable) Text(specText("vision.engine_unreachable"), color = c.mediaOn.copy(alpha = 0.7f))
-        } else {
-            for (m in s.models.filter { it.kind == DETECTION_KIND }) {
-                val text = if (m.loaded) specText("vision.model_active", "model" to m.id) else specText("vision.model_switch", "model" to m.id)
+            Text(specText("vision.detector_model"), color = chrome.text)
+            val s = status
+            if (s == null) {
+                if (unreachable) Text(specText("vision.engine_unreachable"), color = chrome.textDim)
+            } else {
+                for (m in s.models.filter { it.kind == DETECTION_KIND }) {
+                    val text = if (m.loaded) specText("vision.model_active", "model" to m.id) else specText("vision.model_switch", "model" to m.id)
+                    Text(
+                        text,
+                        color = chrome.text,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .combinedClickable(
+                                // Switching restarts the engine, so it is a ground-only action.
+                                enabled = !m.loaded && !layers.armed(),
+                                onClick = {},
+                                onLongClick = { layers.nodeId?.let { id -> scope.launch { layers.engine.setDetector(id, m.id) } } },
+                            )
+                            .padding(vertical = 12.dp),
+                    )
+                }
+            }
+
+            val forced = layers.spec.forced(view)
+            for (id in listOf(LayerSpec.DEPTH, LayerSpec.SURFACES)) {
+                val sw = layerSwitch(id, flags, forced)
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text(layerLabel(id), color = chrome.text)
+                        if (sw.forced) Text(specText("vision.layer_forced"), color = chrome.textDim)
+                    }
+                    Switch(checked = sw.checked, enabled = sw.enabled, onCheckedChange = { layers.toggle(id) })
+                }
+            }
+            Text(specText("vision.depth_style"), color = chrome.text)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(depth.style == CellStyle.Solid, { layers.setDepthOptions(depth.copy(style = CellStyle.Solid)) }, { Text(specText("vision.depth_style.solid")) })
+                FilterChip(depth.style == CellStyle.Outline, { layers.setDepthOptions(depth.copy(style = CellStyle.Outline)) }, { Text(specText("vision.depth_style.outline")) })
+            }
+            Text(specText("vision.depth_range"), color = chrome.text)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (r in DEPTH_RANGES) {
+                    val label = r?.let { specText("cockpit.unit.m", "n" to it.toInt().toString()) } ?: specText("vision.off")
+                    FilterChip(depth.rangeM == r, { layers.setDepthOptions(depth.copy(rangeM = r)) }, { Text(label) })
+                }
+            }
+
+            Text(specText("vision.engine"), color = chrome.text)
+            s?.let { st ->
+                val fps = st.models.firstOrNull { it.loaded && it.kind == DETECTION_KIND }?.fps
                 Text(
-                    text,
-                    color = c.mediaOn,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .combinedClickable(
-                            // Switching restarts the engine, so it is a ground-only action.
-                            enabled = !m.loaded && !layers.armed(),
-                            onClick = {},
-                            onLongClick = { layers.nodeId?.let { id -> scope.launch { layers.engine.setDetector(id, m.id) } } },
-                        )
-                        .padding(vertical = 12.dp),
+                    if (fps != null) specText("vision.health_rate", "state" to st.state, "fps" to String.format(java.util.Locale.ROOT, "%.1f", fps)) else st.state,
+                    color = chrome.text,
                 )
             }
-        }
-
-        val forced = layers.spec.forced(view)
-        for (id in listOf(LayerSpec.DEPTH, LayerSpec.SURFACES)) {
-            val sw = layerSwitch(id, flags, forced)
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)) {
-                Column(Modifier.weight(1f)) {
-                    Text(layerLabel(id), color = c.mediaOn)
-                    if (sw.forced) Text(specText("vision.layer_forced"), color = c.mediaOn.copy(alpha = 0.7f))
-                }
-                Switch(checked = sw.checked, enabled = sw.enabled, onCheckedChange = { layers.toggle(id) })
-            }
-        }
-        Text(specText("vision.depth_style"), color = c.mediaOn)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(depth.style == CellStyle.Solid, { layers.setDepthOptions(depth.copy(style = CellStyle.Solid)) }, { Text(specText("vision.depth_style.solid")) })
-            FilterChip(depth.style == CellStyle.Outline, { layers.setDepthOptions(depth.copy(style = CellStyle.Outline)) }, { Text(specText("vision.depth_style.outline")) })
-        }
-        Text(specText("vision.depth_range"), color = c.mediaOn)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (r in DEPTH_RANGES) {
-                val label = r?.let { specText("cockpit.unit.m", "n" to it.toInt().toString()) } ?: specText("vision.off")
-                FilterChip(depth.rangeM == r, { layers.setDepthOptions(depth.copy(rangeM = r)) }, { Text(label) })
-            }
-        }
-
-        Text(specText("vision.engine"), color = c.mediaOn)
-        s?.let { st ->
-            val fps = st.models.firstOrNull { it.loaded && it.kind == DETECTION_KIND }?.fps
-            Text(
-                if (fps != null) specText("vision.health_rate", "state" to st.state, "fps" to String.format(java.util.Locale.ROOT, "%.1f", fps)) else st.state,
-                color = c.mediaOn,
-            )
         }
     }
 }

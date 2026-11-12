@@ -16,7 +16,11 @@ data class SurveySettings(
     val speedMs: Float = 5f,
     val overlapPct: Float = 70f,
     val sidelapPct: Float = 60f,
+    /** Across-track field of view (the sensor's long side). */
     val cameraFovDeg: Float = 73f,
+    /** Along-track field of view (the short side); 58° pairs with 73° on a 4:3 sensor. */
+    val cameraVFovDeg: Float = 58f,
+    /** Compass bearing of the survey lines: 0° north–south, 90° east–west. */
     val angleDeg: Float = 0f,
     val swathM: Float = 5f,
 )
@@ -52,6 +56,7 @@ object SurveyBuilder {
                 overlapPercent = s.overlapPct,
                 sidelapPercent = s.sidelapPct,
                 cameraFovDeg = s.cameraFovDeg,
+                cameraVFovDeg = s.cameraVFovDeg,
                 speed = s.speedMs,
                 angle = s.angleDeg,
             ),

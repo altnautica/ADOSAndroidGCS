@@ -14,6 +14,7 @@ import com.altnautica.gcs.feature.node.NodeTab
 import com.altnautica.gcs.feature.node.common.NodeApis
 import com.altnautica.gcs.feature.node.common.PageProblem
 import com.altnautica.gcs.feature.node.groundstation.Load
+import com.altnautica.gcs.feature.node.groundstation.afterFailure
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -226,13 +227,9 @@ class VisorViewModel @AssistedInject constructor(
         }
     }
 
-    private fun failCapture(problem: PageProblem) = _state.update { s ->
-        if (s.capture is Load.Ready) s else s.copy(capture = Load.Failed(problem))
-    }
+    private fun failCapture(problem: PageProblem) = _state.update { s -> s.copy(capture = s.capture.afterFailure(problem)) }
 
-    private fun failSessions(problem: PageProblem) = _state.update { s ->
-        if (s.sessions is Load.Ready) s else s.copy(sessions = Load.Failed(problem))
-    }
+    private fun failSessions(problem: PageProblem) = _state.update { s -> s.copy(sessions = s.sessions.afterFailure(problem)) }
 
     private companion object {
         const val CAPTURE_POLL_MS = 1_000L

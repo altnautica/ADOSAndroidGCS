@@ -27,6 +27,7 @@ import com.altnautica.gcs.core.designsystem.component.overlay.AdosSheet
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
+import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
@@ -104,6 +105,7 @@ private fun NavSourceSheet(chip: NavChip, inputs: NavInputs?, text: TargetText, 
                     ),
                     style = mono,
                 )
+                nav.poseAgeMs?.let { Text(navPoseAgeText(LocalCockpitStrings.current, it), style = mono) }
             }
             Text(
                 specText(
@@ -142,3 +144,6 @@ private fun flagWords(flags: Int?): String {
     ).filter { flags and it.first != 0 }.map { specText(it.second).uppercase() }
     return if (words.isEmpty()) "—" else words.joinToString(" · ")
 }
+
+/** The nav-source popover's pose-age row (`nav_source.pose_age`). */
+internal fun navPoseAgeText(strings: SetupStringsSpec, ms: Long): String = strings.format("nav_source.pose_age", mapOf("ms" to ms.toString()))

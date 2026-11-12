@@ -51,10 +51,12 @@ import kotlinx.coroutines.flow.Flow
  * Console Home: the app root. Picks a vehicle and launches the surfaces that act on it.
  * With [setupOfferNodeId] set and that node selected, an inline banner offers aircraft
  * setup for it: Open calls [onOpenSetupOffer], Later calls [onSetupOfferLater].
+ * [onUnpair] opens the node's Vehicle surface with its unpair confirmation already showing.
  */
 @Composable
 fun HomeRoute(
     onOpenSurface: (surface: HomeSurface, nodeId: DeviceId?) -> Unit,
+    onUnpair: (nodeId: DeviceId) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenController: () -> Unit,
     onOpenQuickMenu: () -> Unit,
@@ -72,6 +74,7 @@ fun HomeRoute(
         onEnableDemo = viewModel::enableDemo,
         onRetrySavedNodes = viewModel::retrySavedNodes,
         onOpenSurface = onOpenSurface,
+        onUnpair = onUnpair,
         onAddVehicle = onAddVehicle,
         onOpenController = onOpenController,
         onOpenQuickMenu = onOpenQuickMenu,
@@ -90,6 +93,7 @@ internal fun HomeScreen(
     onEnableDemo: () -> Unit,
     onRetrySavedNodes: () -> Unit,
     onOpenSurface: (HomeSurface, DeviceId?) -> Unit,
+    onUnpair: (DeviceId) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenController: () -> Unit,
     onOpenQuickMenu: () -> Unit,
@@ -161,7 +165,8 @@ internal fun HomeScreen(
         Column(modifier.fillMaxSize().background(AdosTheme.colors.bgCanvas).windowInsetsPadding(WindowInsets.safeDrawing)) {
             topStrip()
             setupOffer()
-            vehicleRow()
+            // With no vehicles the hero carries both add actions; the row would only repeat one.
+            if (state.vehicles.isNotEmpty()) vehicleRow()
             Box(Modifier.fillMaxWidth().weight(0.4f)) {
                 HeroBackground(selected, thumbnails)
                 hero(Modifier)
@@ -171,7 +176,7 @@ internal fun HomeScreen(
         }
     }
 
-    VehicleMenu(vehicleMenu, selected, onOpenSurface)
+    VehicleMenu(vehicleMenu, selected, onOpenSurface, onUnpair)
     HomeMenu(homeMenu, state.demoEnabled, onAddVehicle, onEnableDemo, onOpenController, onOpenSettings = { open(HomeSurface.Settings) })
 }
 
@@ -228,17 +233,35 @@ private fun homeHints(): List<Hint> {
     )
 }
 
+/** What the More menu offers for the selected vehicle, in order. */
+internal enum class VehicleMenuAction { Details, PlanFor, Unpair }
+
+/** Unpair is offered only for a node with an agent link, the only kind that can be unpaired. */
+internal fun vehicleMenuActions(card: FleetCard): List<VehicleMenuAction> = buildList {
+    add(VehicleMenuAction.Details)
+    add(VehicleMenuAction.PlanFor)
+    if (card.hasAgentLink) add(VehicleMenuAction.Unpair)
+}
+
 /** The More menu: actions on the selected vehicle. */
 @Composable
-private fun VehicleMenu(state: AdosMenuState, selected: FleetCard?, onOpenSurface: (HomeSurface, DeviceId?) -> Unit) {
+private fun VehicleMenu(
+    state: AdosMenuState,
+    selected: FleetCard?,
+    onOpenSurface: (HomeSurface, DeviceId?) -> Unit,
+    onUnpair: (DeviceId) -> Unit,
+) {
     val card = selected ?: return
     val id = card.node.id
-    val items = buildList {
-        add(AdosMenuItem(stringResource(R.string.home_menu_vehicle_details), Icons.Outlined.Info) { onOpenSurface(HomeSurface.Vehicle, id) })
-        add(AdosMenuItem(stringResource(R.string.home_menu_plan_for), Icons.Outlined.Map) { onOpenSurface(HomeSurface.Plan, id) })
-        // Unpairing is confirmed on the Vehicle surface, which owns the agent session.
-        if (card.hasAgentLink) {
-            add(AdosMenuItem(stringResource(R.string.home_menu_unpair), Icons.Outlined.LinkOff) { onOpenSurface(HomeSurface.Vehicle, id) })
+    val items = vehicleMenuActions(card).map { action ->
+        when (action) {
+            VehicleMenuAction.Details ->
+                AdosMenuItem(stringResource(R.string.home_menu_vehicle_details), Icons.Outlined.Info) { onOpenSurface(HomeSurface.Vehicle, id) }
+            VehicleMenuAction.PlanFor ->
+                AdosMenuItem(stringResource(R.string.home_menu_plan_for), Icons.Outlined.Map) { onOpenSurface(HomeSurface.Plan, id) }
+            // Unpairing is confirmed on the Vehicle surface, which owns the agent session; it opens with the confirm showing.
+            VehicleMenuAction.Unpair ->
+                AdosMenuItem(stringResource(R.string.home_menu_unpair), Icons.Outlined.LinkOff) { onUnpair(id) }
         }
     }
     AdosMenu(state, items)

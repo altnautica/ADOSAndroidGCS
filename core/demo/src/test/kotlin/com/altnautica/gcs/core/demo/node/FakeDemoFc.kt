@@ -7,6 +7,7 @@ internal class FakeDemoFc : DemoFc {
     override var armed = false
     override var altitudeM = 0.0
     override var mode = STABILIZE
+    override var gnssFix = true
     val sent = mutableListOf<Int>()
 
     override fun command(command: Int, p1: Float, p2: Float, p7: Float) {
@@ -22,6 +23,7 @@ internal class FakeDemoFc : DemoFc {
     companion object {
         const val STABILIZE = 0
         const val GUIDED = 4
+        const val AUTO = 3
         const val LOITER = 5
         const val LAND_MODE = 9
         const val ARM_DISARM = 400

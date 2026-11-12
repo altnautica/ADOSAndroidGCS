@@ -99,13 +99,13 @@ fun AircraftSetupScreen(
                     title = stringResource(R.string.cfg_setup_direct_title),
                     message = stringResource(R.string.cfg_setup_direct_message),
                 )
-                state.setup.overview == null && state.setup.problem != null -> ProblemText(state.setup.problem, Modifier.align(Alignment.Center))
+                state.setup.overview == null && state.setup.problem != null -> SetupProblemText(state.setup.problem, Modifier.align(Alignment.Center))
                 state.setup.overview == null -> LoadingState(stringResource(R.string.cfg_surface_loading), Modifier.align(Alignment.Center))
                 else -> Column(
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(AdosSpacing.S4).widthIn(max = 720.dp),
                     verticalArrangement = Arrangement.spacedBy(AdosSpacing.S4),
                 ) {
-                    state.setup.problem?.let { ProblemText(it) }
+                    state.setup.problem?.let { SetupProblemText(it) }
                     if (state.focus == null) {
                         WizardList(state, onOpen, onStart, onRunStep, onRevert)
                     } else {
@@ -142,13 +142,12 @@ private fun WizardPane(
             Snapshots(state, onRevert)
         }
         step != null -> {
-            WizardStepView(step, busy = state.setup.busy, onAction = { a, args -> onAction(step, a, args) })
+            WizardStepView(step, busy = state.setup.actionsBlocked, onAction = { a, args -> onAction(step, a, args) })
             if (wizard?.state == SetupWizardState.Running || step.state == SetupStepState.Running) {
                 AdosButton(
                     LocalSetupText.current.format(KEY_ACTION_ABORT, emptyMap()),
                     onClick = onAbort,
                     variant = AdosButtonVariant.Danger,
-                    enabled = !state.setup.busy,
                 )
             }
         }
@@ -157,7 +156,7 @@ private fun WizardPane(
             AdosButton(
                 stringResource(R.string.cfg_setup_start),
                 onClick = { onStart(focus.wizard) },
-                enabled = wizard?.available == true && !state.setup.busy,
+                enabled = wizard?.available == true && !state.setup.actionsBlocked,
             )
         }
     }
@@ -184,7 +183,7 @@ private fun WizardList(
             AdosButton(
                 stringResource(if (resumable) R.string.cfg_setup_continue else R.string.cfg_setup_start),
                 onClick = { if (resumable) onOpen(id, null) else onStart(id) },
-                enabled = wizard.available && !state.setup.busy,
+                enabled = wizard.available && !state.setup.actionsBlocked,
             )
             if (wizard.completed) {
                 AdosButton(stringResource(R.string.cfg_setup_view_results), onClick = { onOpen(id, null) }, variant = AdosButtonVariant.Secondary)
@@ -200,7 +199,7 @@ private fun WizardList(
                     stringResource(R.string.cfg_setup_run_step),
                     onClick = { onRunStep(id, s.step) },
                     variant = AdosButtonVariant.Secondary,
-                    enabled = wizard.available && !state.setup.busy && overview.running == null,
+                    enabled = wizard.available && !state.setup.actionsBlocked && overview.running == null,
                 )
             }
         }
@@ -220,24 +219,11 @@ private fun Snapshots(state: WizardUiState, onRevert: (String) -> Unit) {
                 label = LocalSetupText.current.format(KEY_ACTION_REVERT, emptyMap()),
                 holdMs = SETUP_HOLD_MS,
                 onConfirmed = { onRevert(snap.file) },
-                enabled = !state.setup.busy,
+                enabled = !state.setup.actionsBlocked,
                 danger = true,
             )
         }
     }
-}
-
-@Composable
-private fun ProblemText(problem: SetupProblem, modifier: Modifier = Modifier) {
-    val text = problem.key?.let { LocalSetupText.current.format(it, emptyMap()) } ?: stringResource(
-        when (problem.local) {
-            SetupLocalProblem.Unauthorized -> R.string.cfg_setup_err_unauthorized
-            SetupLocalProblem.Unsupported -> R.string.cfg_setup_err_unsupported
-            SetupLocalProblem.Armed -> R.string.cfg_setup_err_armed
-            SetupLocalProblem.Unreachable, null -> R.string.cfg_setup_err_unreachable
-        },
-    )
-    Text(text, modifier, color = AdosTheme.colors.statusError)
 }
 
 @Composable

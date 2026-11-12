@@ -44,21 +44,22 @@ class TelemetrySnapshotSource @Inject constructor(
     /** Run [command] through the agent's command route. */
     suspend fun run(node: DeviceId, command: VehicleCommand): CommandResult {
         val (cmd, args) = SnapshotMapping.commandOf(command) ?: return CommandResult.Unsupported
-        val client = clients.forNode(node) ?: return CommandResult.Denied("not paired")
+        val client = clients.forNode(node) ?: return CommandResult.Denied("notPaired")
         return when (val r = client.command(cmd, args)) {
             is AgentResult.Ok ->
                 if (r.value.accepted) {
                     CommandResult.Accepted
                 } else {
-                    CommandResult.Rejected(r.value.ack?.result ?: -1, r.value.message ?: r.value.ack?.resultName ?: "rejected")
+                    CommandResult.Rejected(r.value.ack?.result ?: -1, r.value.message ?: "rejected")
                 }
             is AgentResult.Err -> when (val e = r.error) {
                 is AgentError.Network -> CommandResult.Timeout
-                is AgentError.Unauthorized -> CommandResult.Denied("not authorized")
-                is AgentError.PinRequired -> CommandResult.Denied("PIN required")
+                is AgentError.Unauthorized -> CommandResult.Denied("notAuthorized")
+                is AgentError.PinRequired -> CommandResult.Denied("pinRequired")
                 is AgentError.FeatureAbsent -> CommandResult.Unsupported
-                is AgentError.Server -> CommandResult.Rejected(e.code, e.message ?: "agent error")
-                else -> CommandResult.Rejected(-1, e.toString())
+                is AgentError.Armed -> CommandResult.Denied("armed")
+                is AgentError.Server -> CommandResult.Rejected(e.code, e.message ?: "failed")
+                else -> CommandResult.Rejected(-1, "failed")
             }
         }
     }

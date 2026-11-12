@@ -4,6 +4,7 @@ import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.model.Vehicle
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
 import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.controller.ControllerManager
@@ -35,8 +36,11 @@ internal class CockpitStickController(
     boundButtons: StateFlow<Int>,
     route: StateFlow<StickRoute>,
     pilotStreaming: StateFlow<Boolean>,
+    conditioning: StateFlow<StickConditioning>,
 ) {
-    private val manual = CockpitManualControl(scope, vehicle, vehicleServices, router, settingsRepository.settings, boundButtons, route, pilotStreaming)
+    private val manual = CockpitManualControl(
+        scope, vehicle, vehicleServices, router, settingsRepository.settings, boundButtons, route, pilotStreaming, router.snapshot, conditioning,
+    )
 
     val stick: StateFlow<StickChip> = manual.stick
 

@@ -104,11 +104,6 @@ class ControlsRepository(
         return SaveResult.Saved
     }
 
-    /** Back to the shipped binding map. */
-    suspend fun resetBindings() {
-        dataStore.edit { it.remove(BINDINGS) }
-    }
-
     suspend fun setStickMode(mode: StickMode) {
         dataStore.edit { it[STICK_MODE] = mode.wire }
     }

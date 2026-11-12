@@ -61,7 +61,7 @@ class FlightStateChipResolver(
 
     fun resolve(pilot: PilotState?, ctx: ChipContext): FlightStateChipUi {
         if (pilot == null) return noPilot(ctx)
-        val stale = ctx.nowMs - pilot.receivedAtMs > spec.staleAfterMs
+        val stale = ctx.nowMs - pilot.receivedAtMs >= spec.staleAfterMs
         val rule = spec.rules.firstOrNull { matches(it.match, pilot, ctx, stale) }
             ?: return FlightStateChipUi(
                 ruleId = RULE_NONE,
@@ -140,7 +140,7 @@ class FlightStateChipResolver(
 
     /** The rule's button; the setup link shows only while the setup-needed readiness item is unmet. */
     private fun button(id: String?, p: PilotState): ChipButton? = when (id) {
-        "setup_link_when_setup_needed" -> ChipButton.SetUpAircraft.takeIf { p.readiness.any { it.id == SETUP_NEEDED && !it.ok } }
+        "setup_link_when_setup_needed" -> ChipButton.SetUpAircraft.takeIf { setupNeeded(p) }
         "resume" -> ChipButton.Resume
         "abort" -> ChipButton.Abort
         "take_control" -> ChipButton.TakeControl
@@ -192,6 +192,9 @@ class FlightStateChipResolver(
         const val RULE_NONE = "none"
         private const val FC_KEY = "fc"
         private const val SETUP_NEEDED = "setup_needed"
+
+        /** The pilot reports the aircraft still needs setup (its `setup_needed` readiness item is unmet). */
+        fun setupNeeded(p: PilotState?): Boolean = p?.readiness?.any { it.id == SETUP_NEEDED && !it.ok } == true
         private const val DEFAULT_SKILL_LABEL = "SKILL"
         private const val DEFAULT_MODE_DETAIL = "ACTIVE"
         private const val NO_VALUE = "—"
@@ -235,6 +238,6 @@ class FlightStateChipResolver(
 
         /** True when the pilot state is older than the chip's staleness limit. */
         fun isStale(pilot: PilotState?, nowMs: Long, staleAfterMs: Long = PilotState.STALE_MS): Boolean =
-            pilot != null && nowMs - pilot.receivedAtMs > staleAfterMs
+            pilot != null && nowMs - pilot.receivedAtMs >= staleAfterMs
     }
 }

@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
@@ -44,6 +47,21 @@ internal fun DeleteSavedConfirmSheet(state: PlannerUiState, actions: PlannerActi
             onConfirm = actions.onConfirmDeleteSaved,
             onCancel = actions.onCancelDeleteSaved,
         )
+    }
+}
+
+/** Lists what the last import dropped or skipped, one line per warning with its row number. */
+@Composable
+internal fun ImportWarningsSheet(state: PlannerUiState, actions: PlannerActions) {
+    if (state.importWarnings.isEmpty()) return
+    val res = LocalResources.current
+    AdosConfirmSheet(
+        title = stringResource(R.string.plan_import_warnings_title),
+        message = stringResource(R.string.plan_import_warnings_message),
+        onDismiss = actions.onDismissImportWarnings,
+    ) {
+        state.importWarnings.forEach { Text(importWarningText(res, it), style = MaterialTheme.typography.bodyMedium) }
+        AdosButton(stringResource(R.string.plan_transfer_dismiss), onClick = actions.onDismissImportWarnings, modifier = Modifier.fillMaxWidth())
     }
 }
 

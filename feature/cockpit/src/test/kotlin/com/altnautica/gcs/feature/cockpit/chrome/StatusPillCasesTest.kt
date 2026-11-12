@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import com.altnautica.gcs.core.skills.hud.PillFailsafe
+import com.altnautica.gcs.core.skills.hud.PillNavSource
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.StatusPill
 import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
@@ -91,6 +92,14 @@ class StatusPillCasesTest {
                 agentReachable = i["agent_reachable"].bool() ?: true,
                 controllerLost = i["controller_lost"].bool() ?: false,
                 preflightFailing = preflight.filterNotNull(),
+                // An explicit null arm state is unknown; an absent one is not part of the case.
+                armUnknown = i.containsKey("armed") && i["armed"] is JsonNull,
+                navSource = (i["nav_source"] as? JsonObject)?.let { n ->
+                    PillNavSource(
+                        PillNavSource.Kind.entries.first { it.wire == n["kind"].str() },
+                        PillNavSource.Tone.entries.first { it.wire == n["tone"].str() },
+                    )
+                },
             )
             val failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str())
             val storage = (i["storage_pct"] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.doubleOrNull

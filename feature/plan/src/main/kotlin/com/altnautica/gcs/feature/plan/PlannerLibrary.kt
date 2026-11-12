@@ -1,12 +1,14 @@
 package com.altnautica.gcs.feature.plan
 
 import android.net.Uri
+import android.util.Log
 import com.altnautica.gcs.core.database.SavedPlanDao
 import com.altnautica.gcs.core.database.SavedPlanEntity
 import com.altnautica.gcs.feature.plan.io.PlanDocuments
 import com.altnautica.gcs.feature.plan.io.PlanFileFormat
 import com.altnautica.gcs.feature.plan.io.PlanFiles
 import com.altnautica.gcs.feature.plan.io.PlanFormatException
+import com.altnautica.gcs.feature.plan.model.Autopilot
 import com.altnautica.gcs.feature.plan.model.MissionPlan
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +38,11 @@ internal class PlannerLibrary(
 
     /** Runs [action] now, or asks first while the plan has unsaved edits. */
     fun requestDiscard(action: DiscardAction) {
+        // Leaving cancels the transfer mid-list (mission updated, fence or rally stale): refuse it.
+        if (action == DiscardAction.Leave && state.value.transferring) {
+            state.update { it.copy(message = PlannerMessage.TransferInProgress) }
+            return
+        }
         if (state.value.dirty) state.update { it.copy(pendingDiscard = action) } else perform(action)
     }
 
@@ -91,7 +98,7 @@ internal class PlannerLibrary(
         scope.launch {
             val entity = savedPlans.getById(id) ?: return@launch
             val imported = runCatching { PlanFiles.parsePlan(entity.planJson, nextId) }.getOrElse { e ->
-                state.update { it.copy(message = PlannerMessage.ImportFailed((e as? PlanFormatException)?.reason, e.message)) }
+                state.update { it.copy(message = importFailed(e)) }
                 return@launch
             }
             session.replacePlan(imported.plan, name = entity.name, savedId = entity.id)
@@ -120,7 +127,7 @@ internal class PlannerLibrary(
     fun importDocument(uri: Uri) {
         scope.launch {
             val doc = runCatching { documents.read(uri) }.getOrElse { e ->
-                state.update { it.copy(message = PlannerMessage.ImportFailed(null, e.message)) }
+                state.update { it.copy(message = importFailed(e)) }
                 return@launch
             }
             importText(doc.name, doc.text)
@@ -140,14 +147,17 @@ internal class PlannerLibrary(
         result.onSuccess { imported ->
             val name = fileName.substringBeforeLast('.').ifBlank { fileName }
             session.replacePlan(imported.plan, name = name, savedId = null, dirty = true)
-            state.update { it.copy(message = PlannerMessage.Imported(name, imported.warnings.size)) }
+            state.update { it.copy(message = PlannerMessage.Imported(name, imported.warnings.size), importWarnings = imported.warnings) }
         }.onFailure { e ->
-            state.update { it.copy(message = PlannerMessage.ImportFailed((e as? PlanFormatException)?.reason, e.message)) }
+            state.update { it.copy(message = importFailed(e)) }
         }
     }
 
     fun exportText(format: PlanFileFormat): String = when (format) {
-        PlanFileFormat.QgcPlan -> PlanFiles.exportPlan(planWithHome())
+        PlanFileFormat.QgcPlan -> {
+            val vehicle = state.value.link as? VehicleLink.Connected
+            PlanFiles.exportPlan(planWithHome(), vehicle?.autopilot ?: Autopilot.Unknown, vehicle?.vehicleType)
+        }
         PlanFileFormat.Waypoints -> PlanFiles.exportWaypoints(planWithHome())
     }
 
@@ -156,7 +166,20 @@ internal class PlannerLibrary(
         scope.launch {
             runCatching { documents.write(uri, text) }
                 .onSuccess { state.update { it.copy(message = PlannerMessage.Exported(format)) } }
-                .onFailure { e -> state.update { it.copy(message = PlannerMessage.ExportFailed(e.message ?: e.javaClass.simpleName)) } }
+                .onFailure { e ->
+                    Log.w(TAG, "plan export failed", e)
+                    state.update { it.copy(message = PlannerMessage.ExportFailed) }
+                }
         }
+    }
+
+    /** Operator text comes from the reason only; the exception text goes to the log. */
+    private fun importFailed(e: Throwable): PlannerMessage {
+        Log.w(TAG, "plan import failed", e)
+        return PlannerMessage.ImportFailed((e as? PlanFormatException)?.reason)
+    }
+
+    private companion object {
+        const val TAG = "PlannerLibrary"
     }
 }

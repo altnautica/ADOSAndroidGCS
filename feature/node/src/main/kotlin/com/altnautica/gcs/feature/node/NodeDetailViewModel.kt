@@ -121,15 +121,17 @@ class NodeDetailViewModel @AssistedInject constructor(
     /** The step that last ended on [ForgetState.CredentialStoreUnavailable], for [retryForget]. */
     private var lastStep: (() -> Unit)? = null
 
-    /** Releases the node on the agent, then drops its key here. */
+    /** Releases the node on the agent, then drops its key here. Ignored while one is running. */
     fun unpair() {
+        if (_forget.value == ForgetState.Running) return
         lastStep = ::unpair
         _forget.value = ForgetState.Running
         viewModelScope.launch { _forget.value = pairing.unpair(id).toForgetState() }
     }
 
-    /** Drops the key without contacting the node (it was unpaired elsewhere or is gone). */
+    /** Drops the key without contacting the node (it was unpaired elsewhere or is gone). Ignored while one is running. */
     fun forgetLocally() {
+        if (_forget.value == ForgetState.Running) return
         lastStep = ::forgetLocally
         _forget.value = ForgetState.Running
         viewModelScope.launch { _forget.value = pairing.forget(id).toForgetState() }

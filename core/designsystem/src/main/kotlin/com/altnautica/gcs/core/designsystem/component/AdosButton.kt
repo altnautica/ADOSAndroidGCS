@@ -38,6 +38,9 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
+import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 
 enum class AdosButtonVariant { Primary, Secondary, Danger }
 
@@ -121,19 +124,51 @@ fun StatusLevel.defaultIcon(): ImageVector = when (this) {
     StatusLevel.Neutral -> Icons.Outlined.RadioButtonUnchecked
 }
 
-@Composable
-private fun StatusLevel.tint(): Color {
-    val c = AdosTheme.colors
-    return when (this) {
-        StatusLevel.Success -> c.statusSuccess
-        StatusLevel.Warning -> c.statusWarning
-        StatusLevel.Error -> c.statusError
-        StatusLevel.Info -> c.statusInfo
-        StatusLevel.Neutral -> c.fgSecondary
-    }
+internal fun StatusLevel.tint(c: AdosColorRoles): Color = when (this) {
+    StatusLevel.Success -> c.statusSuccess
+    StatusLevel.Warning -> c.statusWarning
+    StatusLevel.Error -> c.statusError
+    StatusLevel.Info -> c.statusInfo
+    StatusLevel.Neutral -> c.fgSecondary
 }
 
-/** Status pill that always pairs an icon with a text label, so state never relies on colour alone. */
+/** Colours of an outlined status chip: no fill, a hairline in the state hue, text in a readable variant of it. */
+data class StatusChipColors(val container: Color, val border: Color, val icon: Color, val text: Color)
+
+/** Minimum contrast for chip text (WCAG AA for small text). */
+const val STATUS_CHIP_TEXT_MIN_CONTRAST = 4.5f
+
+fun statusChipColors(level: StatusLevel, roles: AdosColorRoles): StatusChipColors {
+    val tint = level.tint(roles)
+    return StatusChipColors(
+        container = Color.Transparent,
+        border = tint.copy(alpha = 0.4f),
+        icon = tint,
+        text = readableOn(tint, listOf(roles.bgCanvas, roles.bgSurface, roles.bgRaised), roles.fgPrimary),
+    )
+}
+
+/**
+ * A state hue used as small text keeps its hue only while it reads at 4.5:1 on every background
+ * it can sit on; below that it is blended toward the theme's primary text colour until it does.
+ */
+internal fun readableOn(hue: Color, backgrounds: List<Color>, fallback: Color): Color {
+    var step = 0
+    var candidate = hue
+    while (step < 10 && backgrounds.any { contrastRatio(candidate, it) < STATUS_CHIP_TEXT_MIN_CONTRAST }) {
+        step++
+        candidate = lerp(hue, fallback, step / 10f)
+    }
+    return candidate
+}
+
+fun contrastRatio(a: Color, b: Color): Float {
+    val la = a.luminance()
+    val lb = b.luminance()
+    return (maxOf(la, lb) + 0.05f) / (minOf(la, lb) + 0.05f)
+}
+
+/** Status chip that always pairs an icon with a text label, so state never relies on colour alone. */
 @Composable
 fun StatusChip(
     level: StatusLevel,
@@ -141,21 +176,21 @@ fun StatusChip(
     modifier: Modifier = Modifier,
     icon: ImageVector = level.defaultIcon(),
 ) {
-    val tint = level.tint()
+    val colors = statusChipColors(level, AdosTheme.colors)
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(AdosRadius.Md),
-        color = tint.copy(alpha = 0.14f),
-        contentColor = AdosTheme.colors.fgPrimary,
-        border = BorderStroke(1.dp, tint.copy(alpha = 0.5f)),
+        shape = RoundedCornerShape(AdosRadius.Sm),
+        color = colors.container,
+        contentColor = colors.text,
+        border = BorderStroke(1.dp, colors.border),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = AdosSpacing.S2, vertical = AdosSpacing.S1),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(AdosSize.IconSm))
+            Icon(icon, contentDescription = null, tint = colors.icon, modifier = Modifier.size(AdosSize.IconSm))
             Spacer(Modifier.width(AdosSpacing.S1))
-            Text(label, style = MaterialTheme.typography.labelMedium)
+            Text(label, style = MaterialTheme.typography.labelMedium, color = colors.text)
         }
     }
 }

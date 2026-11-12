@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.cockpit.pilot
 
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -71,5 +72,16 @@ class PilotChannelTest {
         }
         assertTrue("keepalives keep the socket up", ch.connected.value)
         assertFalse("a pilot state older than its stale window is not fresh", ch.stateFresh)
+    }
+
+    @Test
+    fun `a silence of the spec stale age drops the link, one just under it does not`() = runTest {
+        val ch = channel()
+        advanceTimeBy(PilotState.STALE_MS - 1)
+        ch.watchdog()
+        assertTrue("1999 ms of silence is still a live link", ch.connected.value)
+        advanceTimeBy(1)
+        ch.watchdog()
+        assertFalse("2000 ms of silence is a lost link", ch.connected.value)
     }
 }

@@ -22,8 +22,8 @@ class FlyHereCasesTest {
         Json.parseToJsonElement(File("../../core/skills/src/test/resources/fixtures/fly-here-cases.json").readText()).jsonArray.map { it.jsonObject }
 
     @Test
-    fun `every fly here case offers the expected route`() {
-        assertEquals(18, cases.size)
+    fun `every fly here case offers the expected route and reason`() {
+        assertEquals(22, cases.size)
         for (c in cases) {
             val name = c["name"]!!.jsonPrimitive.content
             val input = c["input"]!!.jsonObject
@@ -31,9 +31,10 @@ class FlyHereCasesTest {
             val fc = (input["fc"] as? JsonObject)?.let {
                 FlyHereFc(it["guided"]!!.jsonPrimitive.boolean, it["armed"]!!.jsonPrimitive.boolean, it["landed"]!!.jsonPrimitive.boolean)
             }
-            val route = flyHereOffered(pilot, (input["pilot_age_ms"] as? JsonPrimitive)?.longOrNull ?: Long.MAX_VALUE, fc)
-            val expected = (c["expected"]!!.jsonObject["route"] as? JsonPrimitive)?.contentOrNull
-            assertEquals(name, expected, route?.wire)
+            val offer = flyHereOffered(pilot, (input["pilot_age_ms"] as? JsonPrimitive)?.longOrNull ?: Long.MAX_VALUE, fc)
+            val expected = c["expected"]!!.jsonObject
+            assertEquals(name, (expected["route"] as? JsonPrimitive)?.contentOrNull, offer.route?.wire)
+            assertEquals("$name reason", (expected["reason"] as? JsonPrimitive)?.contentOrNull, offer.reason?.wire)
         }
     }
 }

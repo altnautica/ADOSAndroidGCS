@@ -23,6 +23,32 @@ data class PillFailsafe(val active: Boolean, val cause: String?) {
     }
 }
 
+/** The pilot counting down to its link-loss [action] (`link_loss_in_s`, `link_loss_action`). */
+data class PillLinkLoss(val inS: Float, val action: String?) {
+    companion object {
+        /** The countdown a pilot state reports, or null with none running. */
+        fun of(p: PilotState?): PillLinkLoss? =
+            p?.linkLossInS?.let { PillLinkLoss(it, p.linkLossAction ?: p.banner?.args?.get("action")) }
+    }
+}
+
+/**
+ * The resolved navigation source as the nav-source chip shows it: its [kind] and [tone]. A
+ * warn or crit tone raises one `nav_source_degraded` item (`alert.nav_source_degraded`).
+ */
+data class PillNavSource(val kind: Kind, val tone: Tone) {
+    /** The source kind; [textKey] is its `nav_source.*` word, null for a stale source. */
+    enum class Kind(val wire: String, val textKey: String?) {
+        Gps("gps", "nav_source.gps"),
+        Ext("ext", "nav_source.ext_nav"),
+        Flow("flow", "nav_source.flow"),
+        Dr("dr", "nav_source.dr"),
+        Stale("stale", null),
+    }
+
+    enum class Tone(val wire: String) { Good("good"), Warn("warn"), Crit("crit"), Muted("muted") }
+}
+
 enum class PillSource(val wire: String) {
     PilotReadiness("pilot_readiness"),
     FcPrearm("fc_prearm"),
@@ -70,8 +96,12 @@ class StatusPill(
      * spec's stale age (or null) the pill shows one `pilot_not_answering` warning and drops the
      * readiness, FC status-text and controller items that came from that stale frame.
      * [agentReachable] false is a critical link item; [controllerLost] (see [controllerLost])
-     * a warning; each [preflightFailing] item (`id` to its label, passed only on the ground) a warning.
-     * An active [failsafe] from a fresh pilot state is one critical `failsafe` item.
+     * a warning; each [preflightFailing] item (`id` to its label, passed only on the ground) a
+     * warning, none while [armUnknown] (the arm state is unknown, so the drone may be airborne).
+     * A degraded [navSource] (warn or crit tone) is one `nav_source_degraded` item of that severity.
+     * An active [failsafe] from a fresh pilot state is one critical `failsafe` item, and a
+     * running [linkLoss] countdown from one a critical `link_loss` item worded as the
+     * `pilot.banner.link_loss` banner, so the pill never reads all well while the banner counts.
      *
      * [linkFcStatus] are FC texts the surface hears on its own vehicle link rather than from the
      * pilot: graded like [fcStatus] but kept while the pilot state is stale.
@@ -88,7 +118,10 @@ class StatusPill(
         controllerLost: Boolean = false,
         preflightFailing: List<Pair<String, String>> = emptyList(),
         failsafe: PillFailsafe = PillFailsafe.None,
+        linkLoss: PillLinkLoss? = null,
         linkFcStatus: List<PillFcStatus> = emptyList(),
+        armUnknown: Boolean = false,
+        navSource: PillNavSource? = null,
     ): List<PillAlert> {
         val out = mutableListOf<PillAlert>()
         for (a in alerts) {
@@ -105,8 +138,9 @@ class StatusPill(
         val pilotStale = pilotRule && (pilotAgeMs == null || pilotAgeMs >= staleAfterMs)
         if (pilotStale) {
             out += PillAlert("pilot_not_answering", PillSource.Pilot, PillSeverity.Warning, text.text("alert.pilot_not_answering"))
-        } else if (failsafe.active) {
-            out += PillAlert("failsafe", PillSource.Pilot, PillSeverity.Critical, failsafeText(failsafe.cause))
+        } else {
+            if (failsafe.active) out += PillAlert("failsafe", PillSource.Pilot, PillSeverity.Critical, failsafeText(failsafe.cause))
+            if (linkLoss != null) out += PillAlert("link_loss", PillSource.Pilot, PillSeverity.Critical, linkLossText(linkLoss))
         }
         for (r in if (pilotStale) emptyList() else readiness) {
             if (r.ok) continue
@@ -117,8 +151,18 @@ class StatusPill(
         if (controllerLost && !pilotStale) {
             out += PillAlert("controller_lost", PillSource.Controller, PillSeverity.Warning, text.text("alert.controller_lost"))
         }
-        for ((id, label) in preflightFailing) {
+        // Pre-flight items are a ground surface: hidden while the arm state is unknown.
+        for ((id, label) in if (armUnknown) emptyList() else preflightFailing) {
             out += PillAlert("preflight:$id", PillSource.Preflight, PillSeverity.Warning, text.text("alert.preflight_failing", mapOf("item" to label)))
+        }
+        val navKey = navSource?.kind?.textKey
+        if (navSource != null && navKey != null && (navSource.tone == PillNavSource.Tone.Warn || navSource.tone == PillNavSource.Tone.Crit)) {
+            out += PillAlert(
+                "nav_source_degraded",
+                PillSource.NavSource,
+                if (navSource.tone == PillNavSource.Tone.Crit) PillSeverity.Critical else PillSeverity.Warning,
+                text.text("alert.nav_source_degraded", mapOf("source" to text.text(navKey))),
+            )
         }
         if (!prearm.isNullOrEmpty()) {
             val t = prearm.last().replace(PREARM, "")
@@ -155,6 +199,12 @@ class StatusPill(
         return text.text("alert.failsafe", mapOf("cause" to if (text.has(key)) text.text(key) else c))
     }
 
+    /** `Link lost: <action> in <s> s`, the seconds rounded up as the banner shows them. */
+    fun linkLossText(l: PillLinkLoss): String = text.text(
+        "pilot.banner.link_loss",
+        mapOf("action" to text.linkLossActionText(l.action), "in_s" to kotlin.math.ceil(l.inS.toDouble()).toInt()),
+    )
+
     /** The pill's face for the active [alerts] and the acknowledged ids. */
     fun summary(alerts: List<PillAlert>, acked: Set<String>): PillSummary {
         val count = alerts.size
@@ -174,9 +224,12 @@ class StatusPill(
     companion object {
         private val PREARM = Regex("""^(PreArm|Arm):\s*""")
 
-        /** The pilot holds for a lost controller while armed and airborne (`status_pill.controller_rule`). */
+        /**
+         * The pilot holds for a lost controller while armed and airborne (`status_pill.controller_rule`).
+         * An unknown arm state is possibly airborne.
+         */
         fun controllerLost(p: PilotState?): Boolean =
-            p != null && p.holdReason == "controller-lost" && p.armed && !p.landed
+            p != null && p.holdReason == "controller-lost" && p.possiblyAirborne
 
         /** The pill source of an alert id. */
         fun alertSource(id: String): PillSource = when {

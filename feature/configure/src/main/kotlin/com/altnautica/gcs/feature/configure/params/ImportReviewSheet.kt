@@ -11,6 +11,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.altnautica.gcs.core.designsystem.component.overlay.AdosConfirmSheet
 import com.altnautica.gcs.core.designsystem.component.AdosButton
 import com.altnautica.gcs.core.designsystem.component.AdosButtonVariant
 import com.altnautica.gcs.core.designsystem.component.SectionHeader
@@ -22,18 +28,38 @@ import com.altnautica.gcs.feature.configure.R
 
 /**
  * Review of a loaded parameter file: every changed value as a row the operator can untick,
- * the names the vehicle does not have, and Apply for the ticked rows. Apply is refused
- * while armed.
+ * the names the vehicle does not have, and Apply for the ticked rows. A row the single-edit
+ * checks refuse stays unticked with the reason. Apply is refused while armed; closing while
+ * it runs stops it.
  */
 @Composable
 internal fun ImportReviewSheet(
     review: ImportReview,
     armed: Boolean,
+    metaFor: (String) -> ParamMeta?,
     onToggle: (String) -> Unit,
     onApply: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = AdosTheme.colors
+    var confirming by remember { mutableStateOf(false) }
+    if (confirming) {
+        val n = review.selected.size
+        AdosConfirmSheet(
+            title = pluralStringResource(R.plurals.cfg_import_confirm_title, n, n),
+            message = stringResource(R.string.cfg_import_confirm_message),
+            onDismiss = { confirming = false },
+        ) {
+            AdosButton(
+                stringResource(R.string.cfg_import_confirm),
+                onClick = {
+                    confirming = false
+                    onApply()
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
     val changed = review.comparison.changed
     AdosSheet(onDismiss = onDismiss, title = stringResource(R.string.cfg_import_title)) {
         Column(Modifier.fillMaxWidth().padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
@@ -47,19 +73,21 @@ internal fun ImportReviewSheet(
                 color = colors.fgTertiary,
             )
             changed.forEach { d ->
-                val checked = d.name !in review.deselected
+                val refused = review.invalid[d.name]
+                val checked = refused == null && d.name !in review.deselected
+                val note = when {
+                    refused != null -> invalidReasonText(refused, metaFor(d.name)) to colors.statusWarning
+                    d.name in review.failed -> stringResource(R.string.cfg_param_write_failed, d.name) to colors.statusError
+                    else -> null
+                }
                 AdosListItem(
                     headline = d.name,
                     supporting = "${ParamFile.formatValue(d.current)} → ${ParamFile.formatValue(d.fromFile)}",
                     onClick = { onToggle(d.name) },
-                    enabled = !review.running,
+                    enabled = !review.running && refused == null,
                     // The row is the one toggle target; the box only shows the state.
                     leading = { Checkbox(checked = checked, onCheckedChange = null) },
-                    trailing = if (d.name in review.failed) {
-                        { Text(stringResource(R.string.cfg_param_write_failed, d.name), color = colors.statusError, style = MaterialTheme.typography.labelSmall) }
-                    } else {
-                        null
-                    },
+                    trailing = note?.let { (text, color) -> @Composable { Text(text, color = color, style = MaterialTheme.typography.labelSmall) } },
                 )
             }
             if (review.comparison.unknownNames.isNotEmpty()) {
@@ -76,8 +104,8 @@ internal fun ImportReviewSheet(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                 AdosButton(
-                    stringResource(R.string.cfg_import_apply),
-                    onClick = onApply,
+                    pluralStringResource(R.plurals.cfg_import_apply, review.selected.size, review.selected.size),
+                    onClick = { confirming = true },
                     enabled = !armed && !review.running && review.selected.isNotEmpty(),
                 )
                 AdosButton(stringResource(R.string.cfg_close), onClick = onDismiss, variant = AdosButtonVariant.Secondary)

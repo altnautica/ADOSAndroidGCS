@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -69,7 +71,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
-/** A round flight-screen button on a blurred panel; [active] fills it with the accent. */
+/** A flight-screen button on a blurred panel (the small chrome radius); [active] fills it with the accent. */
 @Composable
 fun RoundButton(
     icon: ImageVector,
@@ -84,7 +86,7 @@ fun RoundButton(
     shortLabel: String? = null,
 ) {
     val c = LocalChrome.current
-    ChromePanel(modifier.size(size), shape = CircleShape, tint = active) {
+    ChromePanel(modifier.size(size), shape = RoundedCornerShape(c.radiusSmall), tint = active) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -133,12 +135,24 @@ fun Shutter(video: Boolean, recording: Boolean, label: String, size: Dp, onClick
     }
 }
 
-/** Photo/video switch: two icons in one pill; the current mode is filled. */
+/**
+ * Photo/video switch: one toggle the width of the shutter and at least 48 dp tall, drawn as
+ * two icons with the current mode filled; a tap switches mode (to video only when the
+ * vehicle can record).
+ */
 @Composable
 fun PhotoVideoSwitch(video: Boolean, videoEnabled: Boolean, photoLabel: String, videoLabel: String, onVideo: (Boolean) -> Unit, width: Dp, height: Dp) {
     val c = LocalChrome.current
-    ChromePanel(Modifier.size(width, height), shape = RoundedCornerShape(height / 2)) {
-        Row(Modifier.fillMaxSize().padding(3.dp)) {
+    val shape = RoundedCornerShape(c.radiusSmall)
+    ChromePanel(Modifier.size(width, height), shape = shape) {
+        Row(
+            Modifier
+                .fillMaxSize()
+                .toggleable(value = video, enabled = video || videoEnabled, role = Role.Switch) { onVideo(it) }
+                .semantics { contentDescription = videoLabel; stateDescription = if (video) videoLabel else photoLabel }
+                .testTag("grid-mode-switch")
+                .padding(3.dp),
+        ) {
             for (isVideo in listOf(false, true)) {
                 val selected = isVideo == video
                 val enabled = !isVideo || videoEnabled
@@ -146,10 +160,8 @@ fun PhotoVideoSwitch(video: Boolean, videoEnabled: Boolean, photoLabel: String, 
                     Modifier
                         .weight(1f)
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(height / 2))
+                        .clip(RoundedCornerShape(c.radiusSmall))
                         .background(if (selected) c.text.copy(alpha = 0.9f) else Color.Transparent)
-                        .combinedClickable(enabled = enabled, role = Role.RadioButton, onClickLabel = if (isVideo) videoLabel else photoLabel) { onVideo(isVideo) }
-                        .semantics { contentDescription = if (isVideo) videoLabel else photoLabel }
                         .testTag(if (isVideo) "grid-mode-video" else "grid-mode-photo"),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -173,7 +185,7 @@ fun PhotoVideoSwitch(video: Boolean, videoEnabled: Boolean, photoLabel: String, 
 @Composable
 fun ZoomPill(inLabel: String, outLabel: String, onIn: () -> Unit, onOut: () -> Unit, onLongPress: (() -> Unit)?, width: Dp, height: Dp) {
     val c = LocalChrome.current
-    ChromePanel(Modifier.size(width, height), shape = RoundedCornerShape(width / 2)) {
+    ChromePanel(Modifier.size(width, height), shape = RoundedCornerShape(c.radiusSmall)) {
         Column(Modifier.fillMaxSize()) {
             for ((icon, label, action, tag) in listOf(
                 Quad(Icons.Outlined.Add, inLabel, onIn, "grid-zoom-in"),
@@ -194,6 +206,9 @@ fun ZoomPill(inLabel: String, outLabel: String, onIn: () -> Unit, onOut: () -> U
         }
     }
 }
+
+/** The card dots' spacing, each one's square touch target. */
+val CARD_DOT_PITCH = 48.dp
 
 private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
@@ -288,7 +303,15 @@ private data class Cell(val tag: String, val key: String, val value: Float?, val
  * horizontal swipe or a tap on its dots, both through [onStep]. The dots show the page.
  */
 @Composable
-fun SwitchCard(page: CardPage, label: String, onStep: (Int) -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.(CardPage) -> Unit) {
+fun SwitchCard(
+    page: CardPage,
+    label: String,
+    onStep: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    /** False while the page draws its own header (the local minimap), so the two never stack. */
+    showTitle: Boolean = true,
+    content: @Composable BoxScope.(CardPage) -> Unit,
+) {
     val c = LocalChrome.current
     var drag by remember { mutableFloatStateOf(0f) }
     val threshold = with(LocalDensity.current) { 40.dp.toPx() }
@@ -307,16 +330,24 @@ fun SwitchCard(page: CardPage, label: String, onStep: (Int) -> Unit, modifier: M
             .testTag("grid-card"),
     ) {
         content(page)
-        Text(
-            label,
-            style = c.labelText.copy(color = c.text),
-            modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(c.panelNoBlur, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
-        )
+        if (showTitle) {
+            Text(
+                label,
+                style = c.labelText.copy(color = c.text),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .background(c.panelNoBlur, RoundedCornerShape(c.radiusSmall))
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                    .testTag("grid-card-title"),
+            )
+        }
+        // A 48 dp pitch: each dot's touch target is 48 dp square, so neighbours never share one.
         Row(Modifier.align(Alignment.BottomCenter), verticalAlignment = Alignment.CenterVertically) {
             for (p in CardPage.entries) {
                 Box(
                     Modifier
-                        .size(16.dp)
+                        .size(CARD_DOT_PITCH)
                         .clickable { if (p != page) onStep(p.ordinal - page.ordinal) }
                         .testTag("card-dot-${p.name}"),
                     contentAlignment = Alignment.Center,

@@ -70,4 +70,20 @@ class NodeDetailForgetTest {
         coVerify(exactly = 2) { pairing.unpair(id) }
         coVerify(exactly = 0) { pairing.forget(any()) }
     }
+
+    @Test
+    fun aSecondUnpairWhileOneIsRunningIsIgnored() = runTest(dispatcher) {
+        val gate = kotlinx.coroutines.CompletableDeferred<PairingOutcome<Unit>>()
+        coEvery { pairing.unpair(id) } coAnswers { gate.await() }
+        val vm = vm()
+
+        vm.unpair()
+        assertEquals(ForgetState.Running, vm.forget.value)
+        vm.unpair()
+        vm.forgetLocally()
+        gate.complete(PairingOutcome.Success(Unit))
+        assertEquals(ForgetState.Done, vm.forget.value)
+        coVerify(exactly = 1) { pairing.unpair(id) }
+        coVerify(exactly = 0) { pairing.forget(any()) }
+    }
 }

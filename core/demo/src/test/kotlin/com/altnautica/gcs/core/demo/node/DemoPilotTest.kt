@@ -170,19 +170,59 @@ class DemoPilotTest {
     }
 
     @Test
-    fun `the live frame names the link-loss action, offers no goto and reports height above ground`() {
+    fun `the live frame names the link-loss action, offers goto in ADOS control and reports height above ground`() {
         val ground = state()
         assertEquals("rth", ground.str("link_loss_action"))
         assertTrue(ground["link_loss_in_s"] is JsonNull)
-        assertTrue(ground.strings("surface_ops").isEmpty())
+        assertEquals(listOf("goto"), ground.strings("surface_ops"))
         assertTrue(ground["statustext"]!!.jsonArray.isEmpty())
         assertEquals(0.0, ground["agl_m"]!!.jsonPrimitive.double, 0.0)
-        assertEquals("unknown_action", action("goto", GOTO_ARGS).str("err"))
+        assertEquals("not_armed", action("goto", GOTO_ARGS).str("err"))
+        action("arm")
+        assertEquals("landed", action("goto", GOTO_ARGS).str("err"))
 
         action("takeoff", """{"alt_m":1.5}""")
         fly(1_000)
         assertEquals(1.5, state()["agl_m"]!!.jsonPrimitive.double, 1e-9)
         assertEquals(1.5, pilot.view().heightM, 1e-9)
+    }
+
+    @Test
+    fun `unpinned, the pilot flies a surface's goto in the air and refuses it outside ADOS control`() {
+        action("takeoff", """{"alt_m":1.5}""")
+        fly(1_000)
+        assertEquals("bad_args", action("goto", """{"lon":77.6,"alt_m":10}""").str("err"))
+        assertTrue(action("goto", GOTO_ARGS)["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("goto", state().str("owner"))
+
+        action("control_mode:fc_manual")
+        assertTrue(state().strings("surface_ops").isEmpty())
+        assertEquals("control_mode", action("goto", GOTO_ARGS).str("err"))
+    }
+
+    @Test
+    fun `the transition log runs outside the pilot's lock, so another thread never waits on it`() {
+        val answered = java.util.concurrent.atomic.AtomicBoolean(false)
+        val answeredInTime = java.util.concurrent.atomic.AtomicBoolean(false)
+        lateinit var p: DemoPilot
+        p = DemoPilot(FakeDemoFc(), onTransition = {
+            val other = Thread {
+                p.handle("""{"op":"action","name":"profile:sport","src":"android"}""")
+                answered.set(true)
+            }
+            other.start()
+            other.join(2_000)
+            answeredInTime.set(answered.get())
+        }, scenarios = DemoScenarioStore()) { 1_000L }
+        p.frame()
+        assertTrue(answeredInTime.get())
+    }
+
+    @Test
+    fun `every scenario has its own operator label`() {
+        val labels = DemoScenario.entries.map { it.label }
+        assertTrue(labels.all { it != 0 })
+        assertEquals(labels.size, labels.toSet().size)
     }
 
     @Test
@@ -330,24 +370,26 @@ class DemoPilotTest {
     }
 
     @Test
-    fun `the no-GNSS pin keeps position from the EKF origin and fails the GNSS item`() {
+    fun `the no-GNSS pin keeps position from the EKF origin and only the pilot's own readiness ids`() {
         scenarios.pin(DemoScenario.NoGnss)
         val s = state()
         val position = s.readiness("position")
         assertTrue(position["ok"]!!.jsonPrimitive.boolean)
         assertTrue(position.str("msg")!!.contains("EKF origin"))
-        val gps = s.readiness("gps")
-        assertFalse(gps["ok"]!!.jsonPrimitive.boolean)
-        assertEquals("warn", gps.str("severity"))
+        val ids = s["readiness"]!!.jsonArray.map { it.jsonObject.str("id") }
+        assertEquals(listOf("fc_profile", "position"), ids)
+        assertFalse(fc.gnssFix)
     }
 
     @Test
-    fun `the status text pin reports eight or more warnings, one long`() {
+    fun `the status text pin reports eight or more distinct non-PreArm warnings, one long`() {
         scenarios.pin(DemoScenario.StatusTexts)
         val texts = state()["statustext"]!!.jsonArray.map { it.jsonObject }
-        assertTrue(texts.size >= 8)
         assertTrue(texts.all { it["severity"]!!.jsonPrimitive.int == 4 })
         assertTrue(texts.any { it.str("text")!!.length > 100 })
+        // The pill keeps one PreArm text at a time, so only the others count towards the eight.
+        val listed = texts.map { it.str("text")!! }.filterNot { it.startsWith("PreArm") }.toSet()
+        assertTrue(listed.toString(), listed.size >= 8)
     }
 
     @Test
@@ -364,7 +406,7 @@ class DemoPilotTest {
     }
 
     @Test
-    fun `each goto refusal pin offers goto and refuses it with its code`() {
+    fun `each goto refusal pin refuses goto with its code, offering it only in ADOS control`() {
         val refusing = DemoScenario.entries.filter { it.gotoRefusal != null }
         assertEquals(
             setOf("bad_args", "not_armed", "landed", "tuning", "no_home", "launching", "control_mode", "failsafe"),
@@ -373,7 +415,8 @@ class DemoPilotTest {
         for (scenario in refusing) {
             scenarios.pin(scenario)
             val s = state()
-            assertEquals(scenario.name, listOf("goto"), s.strings("surface_ops"))
+            val offered = if (scenario.gotoRefusal == "control_mode") emptyList() else listOf("goto")
+            assertEquals(scenario.name, offered, s.strings("surface_ops"))
             assertEquals(scenario.name, scenario.gotoRefusal, action("goto", GOTO_ARGS).str("err"))
             when (scenario.gotoRefusal) {
                 "not_armed" -> assertEquals(false, s["armed"]!!.jsonPrimitive.boolean)
@@ -387,10 +430,10 @@ class DemoPilotTest {
     }
 
     @Test
-    fun `hold pins use the pilot's hold reason wire strings`() {
+    fun `hold pins use the pilot's hold reason wire strings and its banners`() {
         val holds = DemoScenario.entries.filter { it.holdReason != null }
         assertEquals(
-            listOf("controller-lost", "link-loss", "obstacle-close", "lease-revoked", "lease-busy", "blocked"),
+            listOf("controller-lost", "link-loss", "obstacle-close", "lease-revoked", "blocked"),
             holds.map { it.holdReason },
         )
         for (scenario in holds) {
@@ -399,6 +442,8 @@ class DemoPilotTest {
             assertEquals(scenario.name, scenario.holdReason, s.str("hold_reason"))
             assertEquals(scenario.name, "pilot", s.str("owner"))
         }
+        scenarios.pin(DemoScenario.HoldLinkLoss)
+        assertEquals("pilot.banner.link_loss", state().obj("banner").str("text_key"))
     }
 
     @Test

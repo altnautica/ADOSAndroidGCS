@@ -27,6 +27,7 @@ import com.altnautica.gcs.feature.logs.R
 import com.altnautica.gcs.feature.logs.dataflash.DataflashFilesTab
 import com.altnautica.gcs.feature.logs.dataflash.DataflashTargetViewModel
 import com.altnautica.gcs.feature.logs.detail.FlightDetailPane
+import com.altnautica.gcs.feature.logs.share.ShareOutcome
 import com.altnautica.gcs.feature.logs.share.shareLogFile
 import java.io.File
 
@@ -100,7 +101,7 @@ fun LogsRoute(
                     files = content?.dataflashLogs.orEmpty(),
                     target = target,
                     onDownload = onOpenDataflash,
-                    onShareFile = { shareLogFile(context, File(it.path)) },
+                    onShareFile = { if (shareLogFile(context, File(it.path)) == ShareOutcome.Missing) viewModel.deleteLogFile(it) },
                     onDeleteFile = viewModel::deleteLogFile,
                 )
             }

@@ -8,8 +8,12 @@ data class TipsState(val seen: List<String> = emptyList(), val openCount: Int = 
 
 /** What is on screen now. */
 data class TipsContext(
-    val armed: Boolean,
-    val airborne: Boolean,
+    /**
+     * Null while unknown: possibly airborne, so no tip shows and a shown tip hides without
+     * being marked seen (a null fact never meets a `show_only_when` condition).
+     */
+    val armed: Boolean?,
+    val airborne: Boolean?,
     val flightScreen: Boolean,
     val sheetOrMenuOpen: Boolean,
     val tourVisible: Boolean,
@@ -90,7 +94,7 @@ class TipsEngine(spec: TipsSpec) {
         if (shown != null) {
             val tip = tips.firstOrNull { it.id == shown }
             // Arming dismisses a tip for good.
-            if (ctx.armed) return TipDecision.Hide(shown, markSeen = true, reason = HideReason.Arm)
+            if (ctx.armed == true) return TipDecision.Hide(shown, markSeen = true, reason = HideReason.Arm)
             if (!ok || tip == null || ctx.anchorsVisible[tip.anchor] != true) {
                 return TipDecision.Hide(shown, markSeen = false, reason = HideReason.NotAllowed)
             }

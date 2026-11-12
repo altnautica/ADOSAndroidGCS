@@ -25,6 +25,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -82,10 +83,10 @@ internal class DemoPilotPins(
                 flying(PILOT, GUIDED)
                 put("link_loss_in_s", round1((LINK_LOSS_MS - sinceMs % LINK_LOSS_MS) / 1000.0))
             }
+            // The pilot's own readiness ids; the lost fix itself shows on the flight controller's telemetry.
             DemoScenario.NoGnss -> putJsonArray("readiness") {
                 add(FC_PROFILE_OK)
                 add(readiness("position", true, "block", "Position from the EKF origin only"))
-                add(readiness("gps", false, "warn", "No GNSS fix"))
             }
             DemoScenario.StatusTexts -> putJsonArray("statustext") {
                 STATUS_TEXTS.forEachIndexed { i, text ->
@@ -119,6 +120,7 @@ internal class DemoPilotPins(
         put("hold_reason", reason)
         when (reason) {
             HOLD_CONTROLLER_LOST -> banner("pilot.banner.controller_lost")
+            "link-loss" -> banner("pilot.banner.link_loss")
             "obstacle-close" -> {
                 put("avoid_state", "blocked")
                 put("min_clearance_m", 0.9)
@@ -155,7 +157,8 @@ internal class DemoPilotPins(
             "failsafe" -> fcFailsafeRtl()
             else -> flying(PILOT, GUIDED)
         }
-        putJsonArray("surface_ops") { add(GOTO) }
+        // The pilot offers `goto` only in ADOS control.
+        putJsonArray("surface_ops") { if (code != "control_mode") add(GOTO) }
     }
 
     /** The flight controller in RTL on its own failsafe. */
@@ -213,6 +216,13 @@ internal class DemoPilotPins(
             return (f["landed"] as? JsonPrimitive)?.booleanOrNull == false
         }
 
+        /** The flight mode [scenario] reports, or null when it leaves the flight controller's own. */
+        fun fcMode(scenario: DemoScenario?): Int? {
+            if (scenario == null) return null
+            val f = DemoPilotPins("ados", "normal", gotoAccepted = false).fields(scenario, 0)
+            return (f["fc_mode"] as? JsonPrimitive)?.intOrNull
+        }
+
         /** Height a flying pin reports, metres. */
         const val PIN_HEIGHT_M = 15.0
         private const val LINK_LOSS_MS = 10_000L
@@ -226,16 +236,21 @@ internal class DemoPilotPins(
         private const val SEVERITY_WARNING = 4
         private const val STATUS_TEXT_SPACING_MS = 1_500L
         private const val STATUS_TEXT_WRAP_MS = 20_000L
+
+        /**
+         * Nine warnings the pill lists side by side, one of them long. None is a PreArm text:
+         * the pill keeps only the newest PreArm, so those would collapse into one item.
+         */
         private val STATUS_TEXTS = listOf(
-            "PreArm: Compass not calibrated",
-            "PreArm: RC not calibrated",
-            "PreArm: Battery 1 below minimum arming voltage",
-            "PreArm: Throttle below failsafe",
-            "PreArm: Hardware safety switch",
-            "PreArm: Logging failed",
             "Vibration compensation ON",
             "EKF variance",
-            "PreArm: AHRS: waiting for the attitude and heading reference to settle; keep the vehicle still and level until the estimate converges before arming",
+            "GPS glitch",
+            "Compass variance",
+            "Battery 1 low",
+            "Radio failsafe cleared",
+            "High wind speed",
+            "Terrain data missing",
+            "Gyro inconsistent: the second inertial unit disagrees with the first by more than its limit; land and recalibrate before the next flight",
         )
     }
 }

@@ -117,15 +117,29 @@ class NodeVitalsRepository @Inject constructor(
         .distinctUntilChanged()
         .flatMapLatest { v -> if (v == null) flowOf(NodeVitals.UNKNOWN) else telemetryVitals(v) }
 
+    /**
+     * The link's last values, shown only while heartbeats are recent: none yet, or none for
+     * [MAX_HEARTBEAT_AGE_MS], is unknown (a silent link keeps its last values in the flows).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun telemetryVitals(v: Vehicle): Flow<NodeVitals> =
         combine(v.telemetry.battery, v.telemetry.heartbeat, v.telemetry.gps) { b, hb, gps ->
-            NodeVitals(
+            hb?.tMs to NodeVitals(
                 batteryPct = b?.remainingPct?.takeIf { it >= 0 },
                 modeName = hb?.mode?.name,
                 armed = hb?.armed,
                 gpsFix = gps?.fix,
                 satellites = gps?.satellites,
             )
+        }.transformLatest { (heardMs, vitals) ->
+            val age = heardMs?.let { clock() - it }
+            if (age == null || age >= MAX_HEARTBEAT_AGE_MS) {
+                emit(NodeVitals.UNKNOWN)
+            } else {
+                emit(vitals)
+                delay(MAX_HEARTBEAT_AGE_MS - age)
+                emit(NodeVitals.UNKNOWN)
+            }
         }
 
     /**
@@ -151,6 +165,9 @@ class NodeVitalsRepository @Inject constructor(
          */
         const val MAX_POLL_AGE_MS = 2 * AgentStatusRepository.LAN_INTERVAL_MS + AgentHttp.LAN_TIMEOUT_S * 1_000L
         private const val SNAPSHOT_PATH = "api/video/snapshot"
+
+        /** Oldest direct-link heartbeat still shown as current (the link turns stale at the same age). */
+        const val MAX_HEARTBEAT_AGE_MS = 5_000L
         private const val THUMBNAIL_INTERVAL_MS = 15_000L
     }
 }

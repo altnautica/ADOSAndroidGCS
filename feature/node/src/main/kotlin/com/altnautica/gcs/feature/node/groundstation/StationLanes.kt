@@ -145,9 +145,9 @@ class StationLanes(
         s.copy(mismatches = LoraLinks.mismatches(lora?.regionCode, plans, modules, lora?.meshtastic, lora?.expectedMeshtasticPreset))
     }
 
-    private fun failGnss(problem: PageProblem) = _state.update { s -> if (s.gnss is Load.Ready) s else s.copy(gnss = Load.Failed(problem)) }
+    private fun failGnss(problem: PageProblem) = _state.update { s -> s.copy(gnss = s.gnss.afterFailure(problem)) }
 
-    private fun failLora(problem: PageProblem) = _state.update { s -> if (s.lora is Load.Ready) s else s.copy(lora = Load.Failed(problem)) }
+    private fun failLora(problem: PageProblem) = _state.update { s -> s.copy(lora = s.lora.afterFailure(problem)) }
 
     companion object {
         fun regionFailure(error: AgentError): RegionWrite.Failed = when {
