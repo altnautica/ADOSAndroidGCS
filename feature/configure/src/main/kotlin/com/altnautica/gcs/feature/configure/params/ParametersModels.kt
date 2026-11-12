@@ -34,6 +34,8 @@ data class ImportReview(
     val applied: Int = 0,
     val failed: List<String> = emptyList(),
     val running: Boolean = false,
+    /** The value sent and awaiting the flight controller's echo while applying. */
+    val inFlight: String? = null,
 ) {
     val selected: List<ParamDiff> get() = comparison.changed.filter { it.name !in deselected && it.name !in invalid }
 }
@@ -49,8 +51,12 @@ sealed interface ParamMessage {
     data object FileWriteFailed : ParamMessage
     data class Reboot(val result: CommandResult) : ParamMessage
 
-    /** A file apply closed part-way: [applied] of [total] values were written before it stopped. */
-    data class ImportStopped(val applied: Int, val total: Int) : ParamMessage
+    /**
+     * A file apply closed part-way: [applied] of [total] values were confirmed before it stopped;
+     * [unconfirmed] names the value that was sent and whose echo had not arrived, so it may or may
+     * not have been written.
+     */
+    data class ImportStopped(val applied: Int, val total: Int, val unconfirmed: String? = null) : ParamMessage
 }
 
 enum class ParamWriteFailure { Timeout, UnknownParam, NoLink, Other }

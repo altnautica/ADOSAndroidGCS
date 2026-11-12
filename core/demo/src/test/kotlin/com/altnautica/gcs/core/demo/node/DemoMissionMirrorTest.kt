@@ -15,6 +15,7 @@ class DemoMissionMirrorTest {
         override var mode = 0
         override var gnssFix = true
         override fun command(command: Int, p1: Float, p2: Float, p7: Float) = Unit
+        override fun reposition(latDeg: Double, lonDeg: Double, altM: Float) = Unit
     }
 
     private val scenarios = DemoScenarioStore()

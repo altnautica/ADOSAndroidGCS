@@ -57,7 +57,7 @@ fun OverviewContent(
             value = clock()
         }
     }
-    val stale = state.agent?.let { pollStale(it.lastOkMs, now) } == true
+    val stale = state.agent?.let { pollStale(it, now) } == true
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(AdosSpacing.S4),

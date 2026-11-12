@@ -120,7 +120,8 @@ internal class DemoPilotPins(
         put("hold_reason", reason)
         when (reason) {
             HOLD_CONTROLLER_LOST -> banner("pilot.banner.controller_lost")
-            "link-loss" -> banner("pilot.banner.link_loss")
+            // The hold has already run its link-loss action: "Link lost: rth in 0 s".
+            "link-loss" -> banner("pilot.banner.link_loss", "action" to "rth", "in_s" to "0")
             "obstacle-close" -> {
                 put("avoid_state", "blocked")
                 put("min_clearance_m", 0.9)

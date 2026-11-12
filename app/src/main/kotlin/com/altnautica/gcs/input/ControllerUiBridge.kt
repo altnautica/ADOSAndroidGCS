@@ -59,8 +59,8 @@ class ControllerUiBridge(
                 leaveTouchMode()
                 val now = SystemClock.uptimeMillis()
                 if (input.pressed) activateDownTime = now
-                // A chord start or a pad loss ends the press as cancelled: the key-up
-                // carries FLAG_CANCELED so the focused control does not click.
+                // A chord start or a pad loss ends the press as cancelled: the key-up carries
+                // FLAG_CANCELED, and CancelledConfirmGuard drops it so no control clicks.
                 sendKey(if (input.pressed) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, activateDownTime, now, input.keyFlags)
             }
             UiInput.Back -> activity.onBackPressedDispatcher.onBackPressed()

@@ -12,7 +12,9 @@ import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -47,16 +49,28 @@ import kotlin.math.sqrt
  * On disarm, or when the tracking job ends while armed: closes the tlog (after its queued
  * frames are written) and updates the session row with its final stats and the file size.
  *
- * A process death mid-flight skips that update. Before the first session, the tracker closes
- * any session left open and indexes any `.tlog` file the index does not know, each as an
- * interrupted flight, so Logs shows the recording and Delete can remove it.
+ * A process death mid-flight skips that update. When the tracker starts, before any session,
+ * it closes any session left open and indexes any `.tlog` file the index does not know, each
+ * as an interrupted flight, so Logs shows the recording and Delete can remove it.
  */
 @Singleton
-class FlightSessionTracker @Inject constructor(
+class FlightSessionTracker internal constructor(
     private val tlogRecorder: TlogRecorder,
     private val flightSessionDao: FlightSessionDao,
     private val tlogFileDao: TlogFileDao,
+    private val transaction: IndexTransaction,
+    scope: CoroutineScope,
 ) {
+    @Inject constructor(
+        tlogRecorder: TlogRecorder,
+        flightSessionDao: FlightSessionDao,
+        tlogFileDao: TlogFileDao,
+        transaction: IndexTransaction,
+    ) : this(tlogRecorder, flightSessionDao, tlogFileDao, transaction, CoroutineScope(SupervisorJob() + Dispatchers.IO))
+
+    init {
+        scope.launch { reconcileOnce() }
+    }
 
     private companion object {
         const val TAG = "FlightSessionTracker"
@@ -162,29 +176,35 @@ class FlightSessionTracker @Inject constructor(
         }
     }
 
-    /** Inserts the open session and its log file at arm; null ids when the index could not be written. */
+    /**
+     * Inserts the open session and its log file at arm, in one transaction; null ids when the
+     * index could not be written (neither row then exists, and [finish] writes both).
+     */
     private suspend fun open(vehicleId: DeviceId, startTime: Long, batteryStart: Int, tlog: File?): Pair<Long?, Long?> = try {
-        val tlogPath = tlog?.absolutePath.orEmpty()
-        val sessionId = flightSessionDao.insert(
-            FlightSessionEntity(startTime = startTime, batteryStart = batteryStart, tlogPath = tlogPath),
-        )
-        val fileId = tlog?.let {
-            tlogFileDao.insert(
-                TlogFileEntity(
-                    sessionId = sessionId,
-                    path = tlogPath,
-                    kind = LogFileKind.Tlog,
-                    sizeBytes = 0,
-                    createdAtMs = startTime,
-                    deviceId = vehicleId.value,
-                ),
+        var sessionId: Long? = null
+        var fileId: Long? = null
+        transaction.run {
+            val tlogPath = tlog?.absolutePath.orEmpty()
+            val id = flightSessionDao.insert(
+                FlightSessionEntity(startTime = startTime, batteryStart = batteryStart, tlogPath = tlogPath),
             )
+            fileId = tlog?.let { tlogFileDao.insert(tlogRow(vehicleId, id, tlogPath, startTime)) }
+            sessionId = id
         }
         sessionId to fileId
     } catch (e: Exception) {
         Log.e(TAG, "Failed to open flight session: ${e.message}", e)
         null to null
     }
+
+    private fun tlogRow(vehicleId: DeviceId, sessionId: Long, path: String, startTime: Long) = TlogFileEntity(
+        sessionId = sessionId,
+        path = path,
+        kind = LogFileKind.Tlog,
+        sizeBytes = 0,
+        createdAtMs = startTime,
+        deviceId = vehicleId.value,
+    )
 
     private suspend fun finish(vehicleId: DeviceId, session: Session, telemetry: VehicleTelemetry, tlogPath: String) {
         Log.i(TAG, "${vehicleId.value} ending flight session")
@@ -206,15 +226,15 @@ class FlightSessionTracker @Inject constructor(
         )
 
         try {
-            if (session.sessionId != null) {
-                flightSessionDao.update(entity.copy(id = session.sessionId))
-            } else {
-                // The insert at arm failed: try once more now.
-                flightSessionDao.insert(entity)
-            }
-            if (session.fileId != null && tlogPath.isNotEmpty()) {
-                val file = File(tlogPath)
-                tlogFileDao.updateSize(session.fileId, if (file.exists()) file.length() else 0)
+            transaction.run {
+                // Null ids: the inserts at arm failed, so both rows are written now.
+                val sessionId = session.sessionId?.also { flightSessionDao.update(entity.copy(id = it)) }
+                    ?: flightSessionDao.insert(entity)
+                if (tlogPath.isNotEmpty()) {
+                    val file = File(tlogPath)
+                    val fileId = session.fileId ?: tlogFileDao.insert(tlogRow(vehicleId, sessionId, tlogPath, session.startTime))
+                    tlogFileDao.updateSize(fileId, if (file.exists()) file.length() else 0)
+                }
             }
             Log.i(TAG, "Flight session saved: ${durationSec}s, maxAlt=${session.maxAltitude}")
         } catch (e: Exception) {

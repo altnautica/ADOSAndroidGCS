@@ -153,23 +153,58 @@ class CalibrationViewModelTest {
     }
 
     @Test
-    fun escAndCompassMotOnArduCopterAirspeedOnPlanes() = runTest(dispatcher) {
+    fun px4CalibrationsDoNotAdviseAReboot() = runTest(dispatcher) {
+        vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(autopilot = 12) // PX4 quad
         val vm = vm()
-        assertTrue(vm.state.value.offers(CalibrationKind.Esc))
-        assertTrue(vm.state.value.offers(CalibrationKind.CompassMot))
-        assertFalse(vm.state.value.offers(CalibrationKind.Airspeed))
-        vm.start(CalibrationKind.Esc)
-        cal.state.value = CalibrationState.Idle
-        vm.start(CalibrationKind.CompassMot)
-        cal.state.value = CalibrationState.Idle
-        vm.start(CalibrationKind.Airspeed) // not offered on a quad: ignored
-        assertEquals(listOf("esc", "compassMot"), cal.calls)
+        for (kind in listOf(CalibrationKind.Compass, CalibrationKind.Accel, CalibrationKind.Level)) {
+            cal.state.value = CalibrationState.Running(kind, null)
+            cal.state.value = CalibrationState.Succeeded(kind, null)
+            assertFalse("$kind on PX4", vm.rebootAdvised.value)
+        }
+    }
 
-        vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(vehicleType = 1, autopilot = 12) // PX4 fixed wing
-        assertTrue(vm.state.value.offers(CalibrationKind.Airspeed))
+    @Test
+    fun compassMotorCalibrationIsNeverOffered() = runTest(dispatcher) {
+        val vm = vm()
+        for (autopilot in listOf(3, 12)) {
+            for (type in listOf(1, 2, 4, 10, 11, 12, 13, 14, 15, 19, 20, 21)) {
+                vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(vehicleType = type, autopilot = autopilot)
+                val offered = CalibrationKind.entries.filter { vm.state.value.offers(it) }.map { it.name }
+                assertFalse("autopilot $autopilot, type $type", "CompassMot" in offered)
+            }
+        }
+    }
+
+    @Test
+    fun escIsOfferedOnPx4RotorcraftOnly() = runTest(dispatcher) {
+        val vm = vm()
+        assertFalse("ArduCopter calibrates ESCs through a parameter and a power cycle", vm.state.value.offers(CalibrationKind.Esc))
+        vm.start(CalibrationKind.Esc)
+        assertTrue(cal.calls.isEmpty())
+
+        vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(autopilot = 12) // PX4 quad
+        assertTrue(vm.state.value.offers(CalibrationKind.Esc))
+        vm.start(CalibrationKind.Esc)
+        assertEquals(listOf("esc"), cal.calls)
+
+        vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(vehicleType = 1) // PX4 fixed wing
         assertFalse(vm.state.value.offers(CalibrationKind.Esc))
-        assertFalse(vm.state.value.offers(CalibrationKind.CompassMot))
-        assertEquals(null, CalibrationKind.Gyro.precaution())
         assertTrue(CalibrationKind.Esc.precaution() != null)
+        assertEquals(null, CalibrationKind.Gyro.precaution())
+    }
+
+    @Test
+    fun airspeedIsOfferedOnPlanesOnly() = runTest(dispatcher) {
+        val vm = vm()
+        assertFalse(vm.state.value.offers(CalibrationKind.Airspeed))
+        vm.start(CalibrationKind.Airspeed) // not offered on a quad: ignored
+        assertTrue(cal.calls.isEmpty())
+
+        for (autopilot in listOf(3, 12)) {
+            vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(vehicleType = 1, autopilot = autopilot)
+            assertTrue(vm.state.value.offers(CalibrationKind.Airspeed))
+        }
+        vm.start(CalibrationKind.Airspeed)
+        assertEquals(listOf("airspeed"), cal.calls)
     }
 }

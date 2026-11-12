@@ -26,6 +26,20 @@ class PlannerWordingTest {
     }
 
     @Test
+    fun theMirrorLoadButtonNamesADifferentSourceThanDownload() {
+        assertEquals("Load plan reported by Hawk 1", mirrorLoadLabel(res, "Hawk 1"))
+        assertEquals("Load plan reported by drone", mirrorLoadLabel(res, null))
+        assertFalse(mirrorLoadLabel(res, "Hawk 1") == downloadLabel(res, "Hawk 1"))
+    }
+
+    @Test
+    fun uploadGuardsSayWhatUnblocksThem() {
+        assertEquals("Switch out of AUTO before uploading", res.getString(R.string.plan_mission_in_flight))
+        val unknown = res.getString(R.string.plan_arm_state_unknown)
+        assertTrue(unknown, unknown.contains("armed", ignoreCase = true))
+    }
+
+    @Test
     fun reasonTokensAndRejectCodesBecomeWords() {
         listOf("receiveOnly", "notAuthorized", "someInternalToken").forEach { token ->
             val write = missionErrorText(res, MissionError.WriteFailed(token))
@@ -63,6 +77,8 @@ class PlannerWordingTest {
     fun importWarningsNameTheRows() {
         val text = importWarningText(res, com.altnautica.gcs.feature.plan.model.PlanWarning.DroppedJump(6, 42))
         assertTrue(text, text.contains("Item 6") && text.contains("item 42"))
+        val skipped = importWarningText(res, com.altnautica.gcs.feature.plan.model.PlanWarning.SkippedItem(3, "Mystery"))
+        assertTrue(skipped, skipped.contains("Item 3") && skipped.contains("Mystery"))
     }
 
     @Test

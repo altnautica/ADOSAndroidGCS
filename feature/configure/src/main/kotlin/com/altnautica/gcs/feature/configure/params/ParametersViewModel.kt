@@ -281,15 +281,18 @@ class ParametersViewModel internal constructor(
     }
 
     /**
-     * Closes the review. A running apply is cancelled, so no further value is sent, and the
-     * count confirmed so far is reported.
+     * Closes the review. A running apply is cancelled, so no further value is sent; the count
+     * confirmed so far is reported, and a value already sent whose echo had not arrived is
+     * reported as unconfirmed rather than not written.
      */
     fun dismissImport() {
         val review = _import.value
         applyJob?.cancel()
         applyJob = null
         _import.value = null
-        if (review != null && review.running) _message.value = ParamMessage.ImportStopped(review.applied, review.selected.size)
+        if (review != null && review.running) {
+            _message.value = ParamMessage.ImportStopped(review.applied, review.selected.size, review.inFlight)
+        }
     }
 
     /** Includes or leaves out one changed row of the reviewed file; ignored while applying and for refused rows. */
@@ -309,9 +312,10 @@ class ParametersViewModel internal constructor(
             _import.update { it?.copy(running = true, applied = 0, failed = emptyList()) }
             for (diff in review.selected) {
                 if (isArmed()) break
+                _import.update { it?.copy(inFlight = diff.name) }
                 val ok = writeOne(diff.name, diff.fromFile) is ParamMessage.Saved
                 _import.update { r ->
-                    r?.copy(applied = r.applied + if (ok) 1 else 0, failed = if (ok) r.failed else r.failed + diff.name)
+                    r?.copy(applied = r.applied + if (ok) 1 else 0, failed = if (ok) r.failed else r.failed + diff.name, inFlight = null)
                 }
             }
             _import.update { it?.copy(running = false) }

@@ -12,6 +12,9 @@
     <string name="home_mode_unknown">Mode —</string>
     <string name="home_armed">Armed</string>
     <string name="home_disarmed">Disarmed</string>
+    <string name="home_vitals_heard_s">Last heard %1$d s ago</string>
+    <string name="home_vitals_heard_min">Last heard %1$d min ago</string>
+    <string name="home_vitals_heard_h">Last heard %1$d h ago</string>
     <string name="home_carries">Carries %1$s</string>
     <string name="home_thumbnail">Live video still from %1$s</string>
     <string name="home_saved_nodes_unreadable">The keys of your paired nodes could not be read from this phone\'s credential store just now, so some nodes may be missing. Nothing was deleted.</string>

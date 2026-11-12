@@ -31,9 +31,10 @@ data class FlyHereOffer(val route: FlyHereRoute?, val reason: FlyHereReason? = n
  * [pilotAgeMs] old and the FC's own state (web module `hud/fly-here-offer.ts`, held to
  * `fly-here-cases.json`). The pilot route needs a fresh state under ADOS control that offers
  * `goto`, known armed and airborne, outside an FC failsafe (the pilot refuses a goto then);
- * else the FC route while the FC flies GUIDED, armed and airborne. Otherwise the reason, so a
- * map long-press can say it instead of opening a dialog. An unknown arm state (the pilot has
- * no FC link) is possibly airborne: never [FlyHereReason.Landed].
+ * else the FC route while the FC flies GUIDED, armed and airborne, unless a fresh pilot state
+ * reports an FC failsafe (a reposition would fight the failsafe RTL or land). Otherwise the
+ * reason, so a map long-press can say it instead of opening a dialog. An unknown arm state
+ * (the pilot has no FC link) is possibly airborne: never [FlyHereReason.Landed].
  */
 fun flyHereOffered(p: PilotState?, pilotAgeMs: Long, fc: FlyHereFc?, staleAfterMs: Long = PilotState.STALE_MS): FlyHereOffer {
     val fresh = pilotAgeMs < staleAfterMs
@@ -41,7 +42,8 @@ fun flyHereOffered(p: PilotState?, pilotAgeMs: Long, fc: FlyHereFc?, staleAfterM
     if (p != null && fresh && p.controlMode == ControlMode.Ados && gotoAdvertised && p.knownAirborne && !p.fcFailsafe) {
         return FlyHereOffer(FlyHereRoute.Pilot)
     }
-    if (fc != null && fc.guided && fc.armed && !fc.landed) return FlyHereOffer(FlyHereRoute.Fc)
+    val failsafe = p != null && fresh && p.fcFailsafe
+    if (fc != null && !failsafe && fc.guided && fc.armed && !fc.landed) return FlyHereOffer(FlyHereRoute.Fc)
     if (p != null && !fresh) return FlyHereOffer(null, FlyHereReason.PilotStale)
     if (p != null) {
         if (p.fcFailsafe) return FlyHereOffer(null, FlyHereReason.Failsafe)

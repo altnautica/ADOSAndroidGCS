@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.altnautica.gcs.core.designsystem.component.CancelledConfirmGuard
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.model.AvoidMode
 import com.altnautica.gcs.core.model.ConfirmGesture
@@ -68,8 +69,11 @@ class ModeSheetFcModesTest {
     private fun show(linked: Boolean, keyboard: Boolean = false) = compose.setContent {
         if (keyboard) LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
         AdosTheme {
-            CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) {
-                ModeSheet(ui(linked), testSpec.flightState.modeSheet, actions, testSpec.layout.holdsMs)
+            // The app wraps everything in this guard; it is what drops a cancelled release.
+            CancelledConfirmGuard {
+                CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) {
+                    ModeSheet(ui(linked), testSpec.flightState.modeSheet, actions, testSpec.layout.holdsMs)
+                }
             }
         }
     }

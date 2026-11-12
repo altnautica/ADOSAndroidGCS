@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.NumberSettingRow
+import com.altnautica.gcs.core.designsystem.component.OnConfirmCancelled
 import com.altnautica.gcs.core.designsystem.component.SectionHeader
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
@@ -102,9 +103,7 @@ fun AgentMotorTestScreen(
     Column(modifier.fillMaxWidth().padding(AdosSpacing.S4), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
         SectionHeader(stringResource(R.string.cfg_motor_title))
         Text(stringResource(R.string.cfg_setup_agent_running), color = AdosTheme.colors.fgSecondary)
-        test.problem?.key?.let {
-            Text(com.altnautica.gcs.feature.configure.wizard.LocalSetupText.current.format(it, emptyMap()), color = AdosTheme.colors.statusError)
-        }
+        test.problem?.let { com.altnautica.gcs.feature.configure.wizard.SetupProblemText(it) }
         val step = test.step
         if (step != null && running) {
             com.altnautica.gcs.feature.configure.wizard.WizardStepView(step, busy = test.busy, onAction = onAction)
@@ -206,6 +205,8 @@ private fun MotorHoldButton(label: String, running: Boolean, enabled: Boolean, o
     val currentEnabled by rememberUpdatedState(enabled)
     val currentOnPress by rememberUpdatedState(onPress)
     val currentOnRelease by rememberUpdatedState(onRelease)
+    // A cancelled confirm release never reaches onKeyEvent; stop here, whatever was held.
+    OnConfirmCancelled { currentOnRelease() }
     val shape = RoundedCornerShape(AdosRadius.Lg)
     val accent = colors.accentPrimary
     Box(

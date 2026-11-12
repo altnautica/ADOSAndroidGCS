@@ -9,6 +9,13 @@ internal class FakeDemoFc : DemoFc {
     override var mode = STABILIZE
     override var gnssFix = true
     val sent = mutableListOf<Int>()
+    val repositions = mutableListOf<Reposition>()
+
+    data class Reposition(val latDeg: Double, val lonDeg: Double, val altM: Float)
+
+    override fun reposition(latDeg: Double, lonDeg: Double, altM: Float) {
+        repositions += Reposition(latDeg, lonDeg, altM)
+    }
 
     override fun command(command: Int, p1: Float, p2: Float, p7: Float) {
         sent += command

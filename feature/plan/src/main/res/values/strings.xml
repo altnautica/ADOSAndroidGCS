@@ -53,6 +53,8 @@
     <string name="plan_download_from">Download from %1$s</string>
     <string name="plan_upload_to_drone">Upload to drone</string>
     <string name="plan_download_from_drone">Download from drone</string>
+    <string name="plan_mirror_load_from">Load plan reported by %1$s</string>
+    <string name="plan_mirror_load_from_drone">Load plan reported by drone</string>
     <string name="plan_in_sync">On drone</string>
     <string name="plan_not_in_sync">Not on drone</string>
     <string name="plan_transfer_mission">mission</string>
@@ -77,7 +79,8 @@
     <string name="plan_error_no_link">no link to the drone</string>
     <string name="plan_error_busy">another transfer is running</string>
     <string name="plan_error_timeout">the drone stopped answering</string>
-    <string name="plan_mission_in_flight">Pause the mission before uploading</string>
+    <string name="plan_mission_in_flight">Switch out of AUTO before uploading</string>
+    <string name="plan_arm_state_unknown">Not sure whether the drone is armed: no recent heartbeat. Upload waits until the drone reports in.</string>
     <string name="plan_upload_in_progress">Transfer in progress. Wait for it to finish before leaving.</string>
     <string name="plan_download_replace_title">Replace the open plan?</string>
     <string name="plan_download_replace_message">The open plan has unsaved changes. Downloading replaces it with the drone\'s mission.</string>
@@ -227,7 +230,7 @@
     <string name="plan_import_warnings_title">Not everything was imported</string>
     <string name="plan_import_warnings_message">Check the plan before uploading. These items from the file are not in it:</string>
     <string name="plan_import_warning_jump">Item %1$d: a jump to item %2$d was dropped because that item is not in the file, so the loop is gone</string>
-    <string name="plan_import_warning_skipped">An item of type %1$s was skipped because it carried nothing the planner can fly</string>
+    <string name="plan_import_warning_skipped">Item %1$d: an item of type %2$s was skipped because it carried nothing the planner can fly</string>
     <string name="plan_msg_import_failed">Could not import: %1$s</string>
     <string name="plan_msg_import_not_waypoints">the file is not a QGC WPL waypoint list</string>
     <string name="plan_msg_import_not_plan">the file is not a QGroundControl plan</string>

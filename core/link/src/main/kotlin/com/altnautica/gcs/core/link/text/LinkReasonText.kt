@@ -28,6 +28,7 @@ fun knownLinkReasonRes(reason: String?): Int? = when (reason) {
     "busy" -> R.string.link_reason_busy
     "notPaired" -> R.string.link_reason_not_paired
     "sticksNotMoved" -> R.string.link_reason_sticks_not_moved
+    "rcMapNotLoaded" -> R.string.link_reason_rc_map_not_loaded
     "pinRequired" -> R.string.link_reason_pin_required
     "armed" -> R.string.link_reason_armed
     "denied", "rejected" -> R.string.link_reason_denied

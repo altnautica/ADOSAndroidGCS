@@ -28,6 +28,7 @@ import com.altnautica.gcs.core.designsystem.component.console.ConsoleScaffold
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.logs.R
+import com.altnautica.gcs.feature.logs.share.ShareOutcome
 import com.altnautica.gcs.feature.logs.share.shareLogFile
 import java.io.File
 
@@ -65,7 +66,7 @@ fun FlightDetailPane(
         state = state,
         onReload = viewModel::load,
         onReplay = onReplay,
-        onShare = { shareLogFile(context, File(it)) },
+        onShare = { if (shareLogFile(context, File(it)) == ShareOutcome.Missing) viewModel.fileMissing(it) },
         modifier = modifier,
     )
 }

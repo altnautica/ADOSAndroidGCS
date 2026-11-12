@@ -9,6 +9,7 @@ import com.altnautica.gcs.core.agent.fcsetup.SetupStepState
 import com.altnautica.gcs.core.agent.fcsetup.SetupWizard
 import com.altnautica.gcs.core.agent.fcsetup.StepReply
 import com.altnautica.gcs.core.agent.fcsetup.WizardReply
+import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.core.agent.http.AgentResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,11 +34,21 @@ class SetupSessionTest {
         val calls = mutableListOf<String>()
         var stepGate: CompletableDeferred<Unit>? = null
         var dropFirstStream = false
-        private var streams = 0
 
-        override suspend fun overview() = AgentResult.Ok(
-            FcSetupOverview(uid = "fc", wizards = listOf(SetupWizard("ground", steps = listOf(waiting.copy(state = SetupStepState.Done))))),
-        )
+        /** The overviews after the first that fail before one succeeds. */
+        var failingOverviews = 0
+        private var streams = 0
+        private var overviews = 0
+
+        override suspend fun overview(): AgentResult<FcSetupOverview> {
+            if (overviews++ > 0 && failingOverviews > 0) {
+                failingOverviews--
+                return AgentResult.Err(AgentError.Network(java.io.IOException("unreachable")))
+            }
+            return AgentResult.Ok(
+                FcSetupOverview(uid = "fc", wizards = listOf(SetupWizard("ground", steps = listOf(waiting.copy(state = SetupStepState.Done))))),
+            )
+        }
 
         override fun stream(): Flow<FcSetupEvent> = flow {
             if (dropFirstStream && streams++ == 0) {
@@ -113,6 +124,33 @@ class SetupSessionTest {
         advanceTimeBy(2_001)
         runCurrent()
         assertFalse(session.state.value.stale)
+        assertEquals(SetupStepState.Done, session.state.value.step("ground", "outputs")?.state)
+    }
+
+    @Test
+    fun aFailedOverviewAfterAReconnectIsRetriedUntilTheStepsAreLive() = runTest {
+        val backend = Backend(outputs.copy(state = SetupStepState.WaitingUser)).apply {
+            dropFirstStream = true
+            failingOverviews = 2 // the overview right after the reconnect, and its first retry
+        }
+        val session = SetupSession(backend, backgroundScope)
+        session.open()
+        runCurrent()
+        assertTrue(session.state.value.stale)
+
+        advanceTimeBy(2_001)
+        runCurrent()
+        assertTrue("the overview failed: still not live", session.state.value.stale)
+        assertTrue(session.state.value.problem != null)
+
+        advanceTimeBy(2_001)
+        runCurrent()
+        assertTrue(session.state.value.stale)
+
+        advanceTimeBy(2_001)
+        runCurrent()
+        assertFalse("a retried overview makes the steps live again", session.state.value.stale)
+        assertTrue(session.state.value.problem == null)
         assertEquals(SetupStepState.Done, session.state.value.step("ground", "outputs")?.state)
     }
 }

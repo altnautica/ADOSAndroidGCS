@@ -240,7 +240,10 @@ internal fun paramMessageText(message: ParamMessage, rows: Map<String, ParamRow>
     ParamMessage.FileWriteFailed -> stringResource(R.string.cfg_param_file_write_failed) to StatusLevel.Error
     is ParamMessage.Reboot -> stringResource(R.string.cfg_reboot_result, commandResultText(message.result)) to
         if (message.result == CommandResult.Accepted) StatusLevel.Success else StatusLevel.Error
-    is ParamMessage.ImportStopped -> stringResource(R.string.cfg_import_stopped, message.applied, message.total) to StatusLevel.Warning
+    is ParamMessage.ImportStopped -> when (val name = message.unconfirmed) {
+        null -> stringResource(R.string.cfg_import_stopped, message.applied, message.total)
+        else -> stringResource(R.string.cfg_import_stopped_unconfirmed, message.applied, message.total, name)
+    } to StatusLevel.Warning
 }
 
 @Composable

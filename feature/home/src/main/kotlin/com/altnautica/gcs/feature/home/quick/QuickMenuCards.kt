@@ -46,6 +46,7 @@ import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
 import com.altnautica.gcs.core.skills.input.controller.ControllerInfo
 import com.altnautica.gcs.feature.home.FleetCard
 import com.altnautica.gcs.feature.home.R
+import com.altnautica.gcs.feature.home.keptAgeLabel
 import com.altnautica.gcs.feature.home.livenessLabel
 
 /**
@@ -107,6 +108,7 @@ internal fun VehicleStatusCard(vehicle: FleetCard?, cockpit: CockpitSummary?) {
             Line(listOfNotNull(mode, armed).joinToString(SEPARATOR))
             val pct = vitals.batteryPct
             Line(if (pct != null) stringResource(R.string.home_battery, pct) else stringResource(R.string.home_battery_unknown))
+            vehicle.keptHeardAtMs?.let { Line(keptAgeLabel(it)) }
         }
         Line(stringResource(livenessLabel(node.liveness)) + SEPARATOR + stringResource(reachLabel(node.reaches.firstOrNull())))
         if (cockpit != null && cockpit.nodeId == node.id) {

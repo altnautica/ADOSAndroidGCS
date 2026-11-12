@@ -318,7 +318,11 @@ class ParametersViewModelTest {
         assertTrue(vm.importReview.value!!.running)
         vm.dismissImport()
         assertNull(vm.importReview.value)
-        assertEquals(ParamMessage.ImportStopped(applied = 0, total = 2), vm.message.value)
+        assertEquals(
+            "the value in flight is unconfirmed, not unwritten",
+            ParamMessage.ImportStopped(applied = 0, total = 2, unconfirmed = "RATE"),
+            vm.message.value,
+        )
 
         gate.complete(Unit)
         assertEquals("nothing is sent after the review closed", listOf("RATE" to 8.0), params.writes)

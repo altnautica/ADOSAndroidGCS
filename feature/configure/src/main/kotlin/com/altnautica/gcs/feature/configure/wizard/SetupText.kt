@@ -62,23 +62,30 @@ private fun trimNumber(v: Double): String =
 /** Step arguments as string interpolation values. */
 fun JsonObject.textArgs(): Map<String, String> = filterKeys { it != INPUTS_KEY }.mapValues { (_, v) -> v.displayText() }
 
-/** A setup failure: the engine's message key ([key]) or a local reason ([local]). */
+/** A setup failure: the engine's message key ([key], `setup.err.<code>`) or a local reason ([local]). */
 data class SetupProblem(val key: String? = null, val local: SetupLocalProblem? = null)
 
 enum class SetupLocalProblem { Unreachable, Unauthorized, Unsupported, Armed }
 
+/** The spec key of an engine error: a bare code (`not_running`) becomes `setup.err.not_running`. */
+fun setupErrKey(err: String): String = if (err.startsWith("setup.")) err else "setup.err.$err"
+
 fun AgentError.setupProblem(): SetupProblem = when (this) {
-    is AgentError.Server -> message?.let { SetupProblem(key = it) } ?: SetupProblem(local = SetupLocalProblem.Unreachable)
+    is AgentError.Server -> message?.let { SetupProblem(key = setupErrKey(it)) } ?: SetupProblem(local = SetupLocalProblem.Unreachable)
     is AgentError.Network, is AgentError.PeerApi, is AgentError.RelayTicket -> SetupProblem(local = SetupLocalProblem.Unreachable)
     AgentError.Unauthorized, is AgentError.PinRequired -> SetupProblem(local = SetupLocalProblem.Unauthorized)
     AgentError.FeatureAbsent, AgentError.ProfileMismatch -> SetupProblem(local = SetupLocalProblem.Unsupported)
     is AgentError.Armed -> SetupProblem(local = SetupLocalProblem.Armed)
 }
 
-/** A setup failure in operator words: the engine's spec text, or the local reason. */
+/** The spec text of [problem]'s engine key, or null when it has none (the caller words the local reason). */
+fun SetupText.problemText(problem: SetupProblem): String? =
+    problem.key?.let { key -> format(key, emptyMap()).takeIf { it != key } }
+
+/** A setup failure in operator words: the engine's spec text, else the local reason (unreachable by default). */
 @Composable
 fun SetupProblemText(problem: SetupProblem, modifier: Modifier = Modifier) {
-    val text = problem.key?.let { LocalSetupText.current.format(it, emptyMap()) } ?: stringResource(
+    val text = LocalSetupText.current.problemText(problem) ?: stringResource(
         when (problem.local) {
             SetupLocalProblem.Unauthorized -> R.string.cfg_setup_err_unauthorized
             SetupLocalProblem.Unsupported -> R.string.cfg_setup_err_unsupported

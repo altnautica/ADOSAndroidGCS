@@ -107,7 +107,11 @@ internal fun LocalMinimap(
     modifier: Modifier = Modifier,
     /** A tap anywhere on the map (the card swaps video and map); null takes no tap. */
     onTap: (() -> Unit)? = null,
-    /** A long-press on the map at north and east metres in the local frame: Fly Here. */
+    /**
+     * A long-press on the map, in metres north and east of the drone as drawn: Fly Here. The
+     * offset, not the point, because the drawn frame (SLAM map or FC local) need not be the
+     * frame the flight controller flies.
+     */
     onLongPress: ((northM: Float, eastM: Float) -> Unit)? = null,
 ) {
     val c = AdosTheme.colors
@@ -148,7 +152,7 @@ internal fun LocalMinimap(
                         onLongPress = if (onLongPress != null) {
                             { o ->
                                 val (n, e) = frame.toMap(o.x, o.y, size.width / 2f, size.height / 2f)
-                                longPress?.invoke(n, e)
+                                longPress?.invoke(n - frame.droneN, e - frame.droneE)
                             }
                         } else {
                             null

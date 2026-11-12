@@ -28,6 +28,7 @@ import com.altnautica.gcs.core.mavlink.messages.WindCov
 import com.altnautica.gcs.core.mavlink.modes.FlightModeTables
 import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.model.BatteryState
+import com.altnautica.gcs.core.model.EkfOrigin
 import com.altnautica.gcs.core.model.EkfState
 import com.altnautica.gcs.core.model.FenceStatus
 import com.altnautica.gcs.core.model.GpsFix
@@ -85,6 +86,7 @@ class MavlinkVehicleTelemetry(
     private val _vtolTransitioning = MutableStateFlow(false)
     private val _onGround = MutableStateFlow<Boolean?>(null)
     private val _ekfOriginSet = MutableStateFlow(false)
+    private val _ekfOrigin = MutableStateFlow<EkfOrigin?>(null)
     private val _statusText = MutableSharedFlow<StatusText>(extraBufferCapacity = 64)
 
     override val attitude: StateFlow<Attitude?> = _attitude.asStateFlow()
@@ -107,6 +109,7 @@ class MavlinkVehicleTelemetry(
     override val vtolTransitioning: StateFlow<Boolean> = _vtolTransitioning.asStateFlow()
     override val onGround: StateFlow<Boolean?> = _onGround.asStateFlow()
     override val ekfOriginSet: StateFlow<Boolean> = _ekfOriginSet.asStateFlow()
+    override val ekfOrigin: StateFlow<EkfOrigin?> = _ekfOrigin.asStateFlow()
 
     /** BATTERY_STATUS for battery 0 wins over SYS_STATUS while it keeps arriving. */
     private var batteryStatusAtMs: Long = Long.MIN_VALUE
@@ -193,7 +196,10 @@ class MavlinkVehicleTelemetry(
                 tMs = now,
             )
             is HomePositionMsg -> _home.value = HomePosition(msg.latitude / 1e7, msg.longitude / 1e7, msg.altitude / 1000f, now)
-            is GpsGlobalOrigin -> _ekfOriginSet.value = true
+            is GpsGlobalOrigin -> {
+                _ekfOrigin.value = EkfOrigin(msg.latitude / 1e7, msg.longitude / 1e7, msg.altitude / 1000f, now)
+                _ekfOriginSet.value = true
+            }
             is LocalPositionNed -> _localPosition.value = LocalPosition(msg.x, msg.y, msg.z, msg.vx, msg.vy, msg.vz, now)
             is ExtendedSysState -> {
                 // MAV_VTOL_STATE_TRANSITION_TO_FW = 1, MAV_VTOL_STATE_TRANSITION_TO_MC = 2.

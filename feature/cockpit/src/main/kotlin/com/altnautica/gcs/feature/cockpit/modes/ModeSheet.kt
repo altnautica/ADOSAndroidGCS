@@ -1,7 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.modes
 
 import androidx.compose.foundation.BorderStroke
-import com.altnautica.gcs.feature.cockpit.chrome.padClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -285,7 +285,7 @@ internal fun Segments(
                     .alpha(if (v in disabled) DISABLED_ALPHA else 1f)
                     .testTag("$tag:$v")
                     .semantics { this.selected = on }
-                    .padClickable(enabled = usable, role = Role.Tab) { onSelect(v) },
+                    .clickable(enabled = usable, role = Role.Tab) { onSelect(v) },
                 shape = RoundedCornerShape(AdosRadius.Lg),
                 color = if (on) colors.accentPrimary.copy(alpha = 0.16f) else colors.bgRaised,
                 border = BorderStroke(if (on) 2.dp else 1.dp, if (on) colors.accentPrimary else colors.borderDefault),

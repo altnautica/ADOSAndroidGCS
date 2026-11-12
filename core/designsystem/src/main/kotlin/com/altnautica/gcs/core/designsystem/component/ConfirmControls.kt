@@ -118,6 +118,8 @@ fun HoldToConfirmButton(
             }
         }
     }
+    // A cancelled confirm release never reaches onKeyEvent; it ends the hold here instead.
+    OnConfirmCancelled { state.release() }
     val accent = if (danger) colors.statusError else colors.accentPrimary
     val shape = RoundedCornerShape(AdosRadius.Lg)
     Row(

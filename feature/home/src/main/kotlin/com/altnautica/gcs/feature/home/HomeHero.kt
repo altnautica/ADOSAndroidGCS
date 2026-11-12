@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BatteryStd
 import androidx.compose.material.icons.outlined.BatteryUnknown
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Lock
@@ -154,12 +155,16 @@ internal fun HeroInfo(card: FleetCard, fly: SurfaceCard?, modifier: Modifier = M
         ) {
             // A closed direct link with nothing reported yet has no vitals: dash chips would read as "waiting".
             if (!(card.directLinkClosed && card.vitals == NodeVitals.UNKNOWN)) VitalsChips(card)
+            // Kept vitals are the last reading before the link closed: say how old it is.
+            card.keptHeardAtMs?.let { heard ->
+                StatusChip(level = StatusLevel.Warning, label = keptAgeLabel(heard), icon = Icons.Outlined.History)
+            }
             LivenessChip(node.liveness)
         }
         node.carriedDroneId?.let {
             Text(stringResource(R.string.home_carries, it.value), style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
         }
-        if (fly != null) Readiness(heroReadiness(fly, card.vitals, linkClosed = card.directLinkClosed))
+        if (fly != null) Readiness(heroReadiness(fly, card.vitals, linkClosed = card.directLinkClosed, kept = card.keptHeardAtMs != null))
     }
 }
 

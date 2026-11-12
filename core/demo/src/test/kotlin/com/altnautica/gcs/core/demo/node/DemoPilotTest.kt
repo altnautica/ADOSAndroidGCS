@@ -192,8 +192,12 @@ class DemoPilotTest {
         action("takeoff", """{"alt_m":1.5}""")
         fly(1_000)
         assertEquals("bad_args", action("goto", """{"lon":77.6,"alt_m":10}""").str("err"))
+        fc.mode = FakeDemoFc.LOITER
         assertTrue(action("goto", GOTO_ARGS)["ok"]!!.jsonPrimitive.boolean)
         assertEquals("goto", state().str("owner"))
+        // The demo flight controller is put in GUIDED and sent the point, so the drone flies there.
+        assertEquals(GUIDED, fc.mode)
+        assertEquals(listOf(FakeDemoFc.Reposition(12.9, 77.6, 10f)), fc.repositions)
 
         action("control_mode:fc_manual")
         assertTrue(state().strings("surface_ops").isEmpty())
@@ -443,7 +447,11 @@ class DemoPilotTest {
             assertEquals(scenario.name, "pilot", s.str("owner"))
         }
         scenarios.pin(DemoScenario.HoldLinkLoss)
-        assertEquals("pilot.banner.link_loss", state().obj("banner").str("text_key"))
+        val banner = state().obj("banner")
+        assertEquals("pilot.banner.link_loss", banner.str("text_key"))
+        // The banner reads "Link lost: rth in 0 s", never with empty blanks.
+        assertEquals("rth", banner.obj("args").str("action"))
+        assertEquals("0", banner.obj("args").str("in_s"))
     }
 
     @Test

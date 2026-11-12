@@ -39,7 +39,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
-import kotlinx.coroutines.flow.toList
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -76,6 +75,7 @@ class HomeViewModelTest {
         mockk<LanNodeSource> { every { savedNodesUnreadable } returns unreadable }
 
     private val openVehicles = MutableStateFlow<Map<DeviceId, com.altnautica.gcs.core.model.Vehicle>>(emptyMap())
+    private var now = 50_000L
 
     private fun CoroutineScope.vm(
         nodes: List<NodeSummary>,
@@ -84,8 +84,22 @@ class HomeViewModelTest {
     ): HomeViewModel {
         val repo = NodeRepository(setOf(Source(MutableStateFlow(nodes))), this)
         val vehicles = mockk<VehicleRepository> { every { this@mockk.openVehicles } returns this@HomeViewModelTest.openVehicles }
-        return HomeViewModel(repo, vitals, lan, store, demo, vehicles).also { vm -> launch { vm.uiState.collect {} } }
+        return HomeViewModel(repo, vitals, lan, store, demo, vehicles).also { vm ->
+            vm.clock = { now }
+            launch { vm.uiState.collect {} }
+        }
     }
+
+    /** A direct link's vitals as the repository reports them: unknown once heartbeats stop for 5 s. */
+    private fun liveVitals(flow: Flow<NodeVitals>) = mockk<NodeVitalsRepository> {
+        every { vitals(any()) } returns flow
+        every { thumbnails(any(), any()) } returns flowOf(null)
+    }
+
+    private val heard = NodeVitals(80, "LOITER", true, com.altnautica.gcs.core.model.GpsFix.Fix3D, 12)
+
+    private fun readiness(card: FleetCard) =
+        heroReadiness(surfaces(card).single { it.surface == HomeSurface.Fly }, card.vitals, card.directLinkClosed, card.keptHeardAtMs != null)
 
     @Test
     fun aClosedDirectLinkIsNotConnecting() = runTest(dispatcher) {
@@ -114,10 +128,41 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun directLinkVitalsSurviveTheLinkClosing() = runTest(dispatcher) {
-        val known = NodeVitals(64, "RTL", false)
-        val seen = flowOf(NodeVitals.UNKNOWN, known, NodeVitals.UNKNOWN).keepLastKnown()
-        assertEquals(listOf(NodeVitals.UNKNOWN, known), seen.toList(mutableListOf()))
+    fun anOpenLinkWhoseControllerFallsSilentShowsNoVitalsAndIsNotReady() = runTest(dispatcher) {
+        openVehicles.value = mapOf(DeviceId("usb") to mockk(relaxed = true))
+        val live = MutableStateFlow(heard)
+        val vm = backgroundScope.vm(listOf(node("usb", NodeProfile.Drone, listOf(Reach.DirectFc))), vitals = liveVitals(live))
+        vm.uiState.first { s -> s.vehicles.any { it.vitals == heard } }
+
+        live.value = NodeVitals.UNKNOWN
+        val card = vm.uiState.value.vehicles.single()
+        assertFalse(card.directLinkClosed)
+        assertEquals(NodeVitals.UNKNOWN, card.vitals)
+        assertNull(card.keptHeardAtMs)
+        assertEquals(HeroReadiness.Connecting, readiness(card))
+    }
+
+    @Test
+    fun aClosedLinkKeepsItsLastReadingWithItsAgeAndWithoutArmState() = runTest(dispatcher) {
+        openVehicles.value = mapOf(DeviceId("usb") to mockk(relaxed = true))
+        val live = MutableStateFlow(heard)
+        val vm = backgroundScope.vm(listOf(node("usb", NodeProfile.Drone, listOf(Reach.DirectFc))), vitals = liveVitals(live))
+        vm.uiState.first { s -> s.vehicles.any { it.vitals == heard } }
+
+        now = 61_000L
+        openVehicles.value = emptyMap()
+        live.value = NodeVitals.UNKNOWN
+        val card = vm.uiState.value.vehicles.single()
+        assertTrue(card.directLinkClosed)
+        assertEquals(heard.copy(armed = null), card.vitals)
+        assertEquals(61_000L, card.keptHeardAtMs)
+        assertEquals(HeroReadiness.OpensOnFly, readiness(card))
+
+        // Reopened but still silent: the kept reading is not shown as current.
+        openVehicles.value = mapOf(DeviceId("usb") to mockk(relaxed = true))
+        val reopened = vm.uiState.value.vehicles.single()
+        assertEquals(NodeVitals.UNKNOWN, reopened.vitals)
+        assertNull(reopened.keptHeardAtMs)
     }
 
     @Test

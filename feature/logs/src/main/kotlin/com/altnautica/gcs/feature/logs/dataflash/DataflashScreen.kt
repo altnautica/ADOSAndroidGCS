@@ -41,6 +41,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.link.log.LogEntry
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.logs.R
+import com.altnautica.gcs.feature.logs.share.ShareOutcome
 import com.altnautica.gcs.feature.logs.share.shareLogFile
 import java.io.File
 
@@ -69,7 +70,7 @@ fun DataflashRoute(nodeId: DeviceId, onBack: () -> Unit, modifier: Modifier = Mo
             onRefresh = viewModel::refresh,
             onDownload = viewModel::download,
             onCancel = viewModel::cancel,
-            onShare = { shareLogFile(context, File(it)) },
+            onShare = { if (shareLogFile(context, File(it)) == ShareOutcome.Missing) viewModel.fileMissing(it) },
             modifier = Modifier.padding(padding),
         )
     }
@@ -135,8 +136,11 @@ private fun DataflashItem(row: DataflashRow, onDownload: (LogEntry) -> Unit, onC
                 )
             }
             when (val d = row.download) {
-                EntryDownload.None, is EntryDownload.Failed ->
+                EntryDownload.None ->
                     AdosButton(stringResource(R.string.logs_df_download), onClick = { onDownload(e) }, variant = AdosButtonVariant.Secondary)
+                // A retry resumes from what the failed attempt already received.
+                is EntryDownload.Failed ->
+                    AdosButton(stringResource(R.string.logs_retry), onClick = { onDownload(e) }, variant = AdosButtonVariant.Secondary)
                 is EntryDownload.Running, EntryDownload.Queued ->
                     AdosButton(stringResource(R.string.logs_df_cancel), onClick = { onCancel(e) }, variant = AdosButtonVariant.Secondary)
                 is EntryDownload.Saved -> IconButton(onClick = { onShare(d.path) }) {

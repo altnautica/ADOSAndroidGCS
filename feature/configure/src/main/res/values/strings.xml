@@ -88,6 +88,7 @@
     <string name="cfg_import_confirm">Write</string>
     <string name="cfg_import_disarm_first">Disarm to apply a parameter file</string>
     <string name="cfg_import_stopped">Stopped: %1$d of %2$d values written before the review closed</string>
+    <string name="cfg_import_stopped_unconfirmed">Stopped: %1$d of %2$d values written before the review closed. %3$s was sent but not confirmed: it may or may not be written</string>
 
     <!-- Calibration -->
     <string name="cfg_cal_title">Calibration</string>
@@ -97,11 +98,9 @@
     <string name="cfg_cal_compass">Compass</string>
     <string name="cfg_cal_radio">Radio</string>
     <string name="cfg_cal_esc">ESC</string>
-    <string name="cfg_cal_compassmot">Compass-motor</string>
     <string name="cfg_cal_airspeed">Airspeed</string>
     <string name="cfg_cal_start">Start calibration</string>
     <string name="cfg_cal_esc_precaution">Remove every propeller first. The flight controller sets the ESC throttle range: when it asks, unplug the battery, plug it back in and wait for the ESC tones.</string>
-    <string name="cfg_cal_compassmot_precaution">Propellers stay on, so tie the vehicle down and keep clear. Raise the throttle slowly to full and back while the flight controller measures motor interference on the compass.</string>
     <string name="cfg_cal_airspeed_precaution">Cover the pitot tube so no air flows over it, and keep the vehicle still.</string>
     <string name="cfg_cal_idle">Choose a calibration. The vehicle must be disarmed.</string>
     <string name="cfg_cal_running">%1$s calibration running</string>

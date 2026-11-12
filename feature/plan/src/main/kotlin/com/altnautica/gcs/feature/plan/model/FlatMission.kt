@@ -26,8 +26,8 @@ sealed interface PlanWarning {
     /** A `DO_JUMP` whose target row is not in the mission was dropped. */
     data class DroppedJump(val seq: Int, val target: Int) : PlanWarning
 
-    /** A complex or unknown item type that carried nothing to expand was skipped. */
-    data class SkippedItem(val type: String) : PlanWarning
+    /** A complex or unknown item type that carried nothing to expand was skipped; [row] is its place in the file's item list, from 1. */
+    data class SkippedItem(val row: Int, val type: String) : PlanWarning
 }
 
 /**

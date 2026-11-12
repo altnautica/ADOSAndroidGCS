@@ -85,6 +85,13 @@ class VisorViewModel @AssistedInject constructor(
         }
     }
 
+    /** Reads the visible tab again now, restarting its poll (the Retry button). */
+    fun retry() {
+        val tab = activeTab
+        activeTab = null
+        show(tab)
+    }
+
     // ---- loads ---------------------------------------------------------------
 
     internal suspend fun loadCapture() {

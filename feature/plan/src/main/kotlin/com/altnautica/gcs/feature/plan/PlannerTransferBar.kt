@@ -56,7 +56,7 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
     }
     val canTransfer = connected != null && !state.transferring
     val issues = state.issues
-    val uploadBlocked = issues.any { it.kind.blocking } || state.missionInFlight
+    val uploadBlocked = issues.any { it.kind.blocking } || state.missionInFlight || state.armStateUnknown
     Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         if (reason != null) Text(reason, style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
         if (connected != null) {
@@ -68,7 +68,7 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
         state.drone?.takeIf { it.differs }?.let {
             Text(stringResource(R.string.plan_drone_differs), style = MaterialTheme.typography.bodySmall, color = colors.statusWarning)
             AdosButton(
-                downloadLabel(LocalResources.current, state.nodeName),
+                mirrorLoadLabel(LocalResources.current, state.nodeName),
                 onClick = actions.onLoadFromDrone,
                 enabled = !state.transferring,
                 variant = AdosButtonVariant.Secondary,
@@ -78,6 +78,8 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
         PlanIssueList(issues)
         if (state.missionInFlight) {
             Text(stringResource(R.string.plan_mission_in_flight), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
+        } else if (state.armStateUnknown) {
+            Text(stringResource(R.string.plan_arm_state_unknown), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
         } else if (uploadBlocked && connected != null) {
             Text(stringResource(R.string.plan_issues_blocking), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
         }

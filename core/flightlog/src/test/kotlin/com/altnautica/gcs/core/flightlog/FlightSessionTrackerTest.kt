@@ -73,6 +73,24 @@ private class Daos {
     val sessions = mutableListOf<FlightSessionEntity>()
     val files = mutableListOf<TlogFileEntity>()
 
+    /** How many file-row inserts fail before they succeed again. */
+    var failFileInserts = 0
+
+    /** Rolls both tables back when the block throws, as a database transaction would. */
+    val transaction = object : IndexTransaction {
+        override suspend fun run(block: suspend () -> Unit) {
+            val s = sessions.toList()
+            val f = files.toList()
+            try {
+                block()
+            } catch (e: Exception) {
+                sessions.clear(); sessions += s
+                files.clear(); files += f
+                throw e
+            }
+        }
+    }
+
     val sessionDao = object : FlightSessionDao {
         override suspend fun insert(session: FlightSessionEntity): Long {
             sessions += session.copy(id = sessions.size + 1L)
@@ -88,6 +106,10 @@ private class Daos {
 
     val fileDao = object : TlogFileDao {
         override suspend fun insert(file: TlogFileEntity): Long {
+            if (failFileInserts > 0) {
+                failFileInserts--
+                throw IllegalStateException("disk full")
+            }
             files += file.copy(id = files.size + 1L)
             return files.size.toLong()
         }
@@ -115,7 +137,7 @@ class FlightSessionTrackerTest {
         val dir = tmp.newFolder("tlogs")
         val recorder = TlogRecorder({ dir }, StandardTestDispatcher(testScheduler))
         val daos = Daos()
-        val tracker = FlightSessionTracker(recorder, daos.sessionDao, daos.fileDao)
+        val tracker = FlightSessionTracker(recorder, daos.sessionDao, daos.fileDao, daos.transaction, backgroundScope)
         val telemetry = FakeTelemetry()
         val frames = MutableSharedFlow<MavlinkFrame>(extraBufferCapacity = 64)
 
@@ -187,7 +209,10 @@ class FlightSessionTrackerTest {
         // A recording the index never heard of.
         val stray = java.io.File(dir, "2026-01-03_11-30-00_stray.tlog").apply { writeBytes(ByteArray(32)) }
 
-        val tracker = FlightSessionTracker(recorder, daos.sessionDao, daos.fileDao)
+        val tracker = FlightSessionTracker(recorder, daos.sessionDao, daos.fileDao, daos.transaction, backgroundScope)
+        // Reconcile runs when the tracker starts, before any vehicle is tracked.
+        runCurrent()
+        assertEquals("interrupted", daos.sessions.first().notes)
         tracker.track(DeviceId("drone-1"), FakeTelemetry(), null, backgroundScope)
         runCurrent()
 
@@ -205,5 +230,34 @@ class FlightSessionTrackerTest {
         val strayFile = daos.files.single { it.path == stray.absolutePath }
         assertEquals(indexed.id, strayFile.sessionId)
         assertEquals(32L, strayFile.sizeBytes)
+    }
+
+    @Test
+    fun `a failed log index write at arm leaves one session and one file row`() = runTest {
+        val dir = tmp.newFolder("tlogs")
+        val recorder = TlogRecorder({ dir }, StandardTestDispatcher(testScheduler))
+        val daos = Daos()
+        daos.failFileInserts = 1
+        val tracker = FlightSessionTracker(recorder, daos.sessionDao, daos.fileDao, daos.transaction, backgroundScope)
+        val telemetry = FakeTelemetry()
+        val frames = MutableSharedFlow<MavlinkFrame>(extraBufferCapacity = 64)
+
+        tracker.track(DeviceId("drone-1"), telemetry, frames, backgroundScope)
+        telemetry.armed(false)
+        runCurrent()
+        telemetry.armed(true)
+        runCurrent()
+        // The arm-time writes were rolled back together: no half-written session.
+        assertTrue(daos.sessions.isEmpty())
+        frames.emit(frameOf(vehicle.encode(Heartbeat(type = 2, autopilot = 3, baseMode = 128))))
+        runCurrent()
+        telemetry.armed(false)
+        runCurrent()
+
+        val session = daos.sessions.single()
+        val file = daos.files.single()
+        assertEquals(session.id, file.sessionId)
+        assertEquals(session.tlogPath, file.path)
+        assertTrue(file.sizeBytes > 0)
     }
 }

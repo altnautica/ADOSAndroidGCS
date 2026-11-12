@@ -69,12 +69,13 @@ fun vitalsKnown(vitals: NodeVitals): Boolean =
  * The readiness line for [fly] with [vitals]: a disabled Fly card shows its reason;
  * an open one reads as ready only once the vitals are known. Before that it reads as
  * connecting, unless the only source is a direct link that is closed ([linkClosed]):
- * nothing is connecting then, and the link opens with the flight screen.
+ * nothing is connecting then, and the link opens with the flight screen. [kept] vitals
+ * (a reading kept after the link closed) are never current, so never read as ready.
  */
-fun heroReadiness(fly: SurfaceCard, vitals: NodeVitals, linkClosed: Boolean = false): HeroReadiness = when {
+fun heroReadiness(fly: SurfaceCard, vitals: NodeVitals, linkClosed: Boolean = false, kept: Boolean = false): HeroReadiness = when {
     !fly.enabled -> fly.reason?.let { HeroReadiness.Blocked(it) } ?: HeroReadiness.Connecting
     linkClosed -> HeroReadiness.OpensOnFly
-    !vitalsKnown(vitals) -> HeroReadiness.Connecting
+    kept || !vitalsKnown(vitals) -> HeroReadiness.Connecting
     else -> HeroReadiness.Ready
 }
 

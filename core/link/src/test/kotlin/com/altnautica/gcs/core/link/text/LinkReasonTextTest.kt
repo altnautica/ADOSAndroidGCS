@@ -23,7 +23,7 @@ class LinkReasonTextTest {
             MavlinkLogService.REASON_TIMEOUT,
             MavlinkParamService.REASON_NO_LINK,
             MavlinkParamService.REASON_TIMEOUT,
-            "unsupported", "noRcInput", "notWaiting", "failed",
+            "unsupported", "noRcInput", "notWaiting", "failed", "rcMapNotLoaded",
         )
         tokens.forEach { assertNotEquals(it, R.string.link_reason_unknown, linkReasonRes(it)) }
         assertEquals(R.string.link_reason_no_fc_link, linkReasonRes("noFcLink"))

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -202,6 +203,14 @@ class DataflashViewModel internal constructor(
         if (running) {
             worker?.cancel()
             worker = if (queue.isNotEmpty()) viewModelScope.launch { drain() } else null
+        }
+    }
+
+    /** The saved file at [path] is gone (Share found nothing): drops its index row so the entry downloads again. */
+    fun fileMissing(path: String) {
+        downloads.update { d -> d.filterValues { it != EntryDownload.Saved(path) } }
+        viewModelScope.launch {
+            files.observeAll().first().filter { it.path == path }.forEach { files.delete(it.id) }
         }
     }
 

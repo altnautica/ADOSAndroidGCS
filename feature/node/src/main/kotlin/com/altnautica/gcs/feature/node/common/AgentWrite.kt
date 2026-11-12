@@ -61,15 +61,28 @@ class AgentWriteRunner(private val scope: CoroutineScope) {
 
     private var pending: Pending? = null
 
-    private class Pending(val label: WriteLabel, val write: suspend (force: Boolean) -> AgentResult<*>, val onDone: () -> Unit)
+    private class Pending(
+        val label: WriteLabel,
+        val write: suspend (force: Boolean) -> AgentResult<*>,
+        val onDone: () -> Unit,
+        val beforeForce: () -> Boolean,
+    )
 
     /**
      * Starts [write] without force. [onDone] runs after a successful write
-     * (first try or forced retry), typically to reload the page.
+     * (first try or forced retry), typically to reload the page. [beforeForce]
+     * runs when the operator confirms the override; returning false sends
+     * nothing and ends this write (the caller has taken it over, e.g. to ask
+     * a further question first).
      */
-    fun run(label: WriteLabel, onDone: () -> Unit = {}, write: suspend (force: Boolean) -> AgentResult<*>) {
+    fun run(
+        label: WriteLabel,
+        onDone: () -> Unit = {},
+        beforeForce: () -> Boolean = { true },
+        write: suspend (force: Boolean) -> AgentResult<*>,
+    ) {
         if (_state.value is WriteState.Running) return
-        val p = Pending(label, write, onDone)
+        val p = Pending(label, write, onDone, beforeForce)
         pending = p
         execute(p, force = false)
     }
@@ -77,6 +90,11 @@ class AgentWriteRunner(private val scope: CoroutineScope) {
     fun confirmForce() {
         val p = pending ?: return
         if (_state.value !is WriteState.ForceRequired) return
+        if (!p.beforeForce()) {
+            pending = null
+            _state.value = WriteState.Idle
+            return
+        }
         execute(p, force = true)
     }
 

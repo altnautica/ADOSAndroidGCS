@@ -63,7 +63,7 @@ fun VisorSessionsTab(nodeId: String, modifier: Modifier = Modifier) {
         }
         when (val load = state.sessions) {
             Load.Loading -> LoadingState(stringResource(R.string.node_loading))
-            is Load.Failed -> ProblemState(load.problem, onRetry = { vm.show(NodeTab.Sessions) })
+            is Load.Failed -> ProblemState(load.problem, onRetry = vm::retry)
             is Load.Ready -> if (load.value.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.FolderOff,

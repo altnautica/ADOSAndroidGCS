@@ -98,6 +98,17 @@ class FlightDetailViewModel internal constructor(
         }
     }
 
+    /** The log at [path] is gone (Share found nothing): drops its index rows and the session's link to it, then reloads. */
+    fun fileMissing(path: String) {
+        viewModelScope.launch {
+            withContext(io) {
+                files.listForSession(sessionId).filter { it.path == path }.forEach { files.delete(it.id) }
+                sessions.getById(sessionId)?.takeIf { it.tlogPath == path }?.let { sessions.update(it.copy(tlogPath = "")) }
+            }
+            load()
+        }
+    }
+
     private companion object {
         const val TAG = "FlightDetail"
     }

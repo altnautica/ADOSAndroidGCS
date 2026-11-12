@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.cockpit.band
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.MapVehicle
+import com.altnautica.gcs.core.model.HeartbeatState
 import com.altnautica.gcs.core.model.NodeProfile
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
@@ -12,6 +13,7 @@ import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import com.altnautica.gcs.core.skills.SkillTiming
 import com.altnautica.gcs.core.skills.heartbeatAgeMs
+import com.altnautica.gcs.core.skills.isLinkFresh
 import com.altnautica.gcs.core.video.RecordingState
 import com.altnautica.gcs.feature.cockpit.BandState
 import com.altnautica.gcs.feature.cockpit.BatteryBand
@@ -41,6 +43,13 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
+
+/**
+ * The heartbeat's arm state while the heartbeat is fresh, else null: a stale heartbeat no
+ * longer tells whether the vehicle is armed, and the telemetry keeps the last one.
+ */
+internal fun freshHeartbeatArmed(heartbeat: HeartbeatState?, nowMs: Long): Boolean? =
+    heartbeat?.armed?.takeIf { isLinkFresh(heartbeat, nowMs) }
 
 /** The band, bottom-row values, card page and minimap, all sampled on the shared 2 Hz tick. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -81,7 +90,7 @@ internal class CockpitHudFlows(
             // A stale heartbeat no longer tells the arm state or mode: show them as unknown.
             val fresh = age != null && age <= SkillTiming.LINK_STALE_MS
             BandTelemetry(
-                armed = hb?.armed?.takeIf { fresh },
+                armed = freshHeartbeatArmed(hb, now),
                 mode = hb?.mode?.name?.takeIf { fresh },
                 battery = batt?.remainingPct?.takeIf { it >= 0 },
                 ttr = batt?.timeToReserveS,

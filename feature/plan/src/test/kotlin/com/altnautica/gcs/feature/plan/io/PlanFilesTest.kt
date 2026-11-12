@@ -65,6 +65,19 @@ class PlanFilesTest {
     }
 
     @Test
+    fun `a skipped item names its row in the file`() {
+        val text = """
+            {"fileType": "Plan", "mission": {"items": [
+              {"type": "SimpleItem", "command": 22, "frame": 3, "params": [0, 0, 0, 0, 12.0, 77.0, 15]},
+              {"type": "SimpleItem", "command": 16, "frame": 3, "params": [0, 0, 0, 0, 12.001, 77.0, 15]},
+              {"type": "Mystery"}
+            ]}}
+        """.trimIndent()
+        val imported = PlanFiles.parsePlan(text, nextId)
+        assertEquals(listOf(PlanWarning.SkippedItem(3, "Mystery")), imported.warnings)
+    }
+
+    @Test
     fun `waypoints file round trips the mission and home`() {
         val original = plan()
 

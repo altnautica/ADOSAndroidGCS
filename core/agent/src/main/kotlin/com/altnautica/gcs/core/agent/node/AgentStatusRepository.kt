@@ -3,6 +3,7 @@ package com.altnautica.gcs.core.agent.node
 import android.os.SystemClock
 import com.altnautica.gcs.core.agent.AgentClientFactory
 import com.altnautica.gcs.core.agent.http.AgentResult
+import com.altnautica.gcs.core.agent.http.AgentHttp
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeProfile
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +50,7 @@ class AgentStatusRepository @Inject constructor(
         emit(last)
         while (true) {
             val client = clients.forNode(node)
+            val relayed = client?.endpoint?.isRelayed == true
             if (client != null) {
                 when (val r = client.statusFull()) {
                     is AgentResult.Ok -> {
@@ -63,9 +65,10 @@ class AgentStatusRepository @Inject constructor(
                     }
                     is AgentResult.Err -> Unit
                 }
+                last = last.copy(maxAgeMs = if (relayed) RELAY_MAX_POLL_AGE_MS else LAN_MAX_POLL_AGE_MS)
                 emit(last)
             }
-            delay(if (client?.endpoint?.isRelayed == true) RELAY_INTERVAL_MS else LAN_INTERVAL_MS)
+            delay(if (relayed) RELAY_INTERVAL_MS else LAN_INTERVAL_MS)
         }
     }
 
@@ -73,5 +76,13 @@ class AgentStatusRepository @Inject constructor(
         const val LAN_INTERVAL_MS = 3_000L
         const val RELAY_INTERVAL_MS = 10_000L
         const val STOP_GRACE_MS = 5_000L
+
+        /**
+         * Oldest poll still shown as current: two status intervals plus one request timeout,
+         * so a single slow or failed poll does not blank the values. A relayed node polls less
+         * often and through slower calls, so its poll may be older.
+         */
+        const val LAN_MAX_POLL_AGE_MS = 2 * LAN_INTERVAL_MS + AgentHttp.LAN_TIMEOUT_S * 1_000L
+        const val RELAY_MAX_POLL_AGE_MS = 2 * RELAY_INTERVAL_MS + AgentHttp.RELAY_TIMEOUT_S * 1_000L
     }
 }

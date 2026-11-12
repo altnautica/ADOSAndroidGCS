@@ -68,8 +68,10 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
                 }
                 // Whatever ended the stream, the step state shown is no longer live.
                 _state.update { it.copy(stale = true) }
-                delay(RECONNECT_MS)
-                refresh()
+                // The steps stay blocked until an overview loads: retry until one does.
+                do {
+                    delay(RECONNECT_MS)
+                } while (!refresh())
             }
         }
     }
@@ -79,10 +81,15 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
         jobs.clear()
     }
 
-    suspend fun refresh() {
-        when (val r = backend.overview()) {
-            is AgentResult.Ok -> _state.update { it.copy(overview = r.value, steps = emptyMap(), problem = null, stale = false) }
-            is AgentResult.Err -> _state.update { it.copy(problem = r.error.setupProblem()) }
+    /** Loads the overview; true once the steps shown are live again. */
+    suspend fun refresh(): Boolean = when (val r = backend.overview()) {
+        is AgentResult.Ok -> {
+            _state.update { it.copy(overview = r.value, steps = emptyMap(), problem = null, stale = false) }
+            true
+        }
+        is AgentResult.Err -> {
+            _state.update { it.copy(problem = r.error.setupProblem()) }
+            false
         }
     }
 

@@ -2,7 +2,6 @@ package com.altnautica.gcs.core.link.node
 
 import android.os.SystemClock
 import com.altnautica.gcs.core.agent.AgentClientFactory
-import com.altnautica.gcs.core.agent.http.AgentHttp
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.node.AgentStatusRepository
 import com.altnautica.gcs.core.agent.node.NodePoll
@@ -94,18 +93,19 @@ class NodeVitalsRepository @Inject constructor(
 
     /**
      * The poll keeps its last good status through failures; show it only while
-     * it is recent. No success yet, or none for [MAX_POLL_AGE_MS], is unknown,
-     * and a quiet poller (node forgotten) still turns unknown on time.
+     * it is recent. No success yet, or none for the poll's [NodePoll.maxAgeMs]
+     * (longer through a relay), is unknown, and a quiet poller (node forgotten)
+     * still turns unknown on time.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun fresh(polls: Flow<NodePoll>, read: (NodePoll) -> NodeVitals): Flow<NodeVitals> =
         polls.transformLatest { poll ->
             val age = poll.lastOkMs?.let { clock() - it }
-            if (age == null || age >= MAX_POLL_AGE_MS) {
+            if (age == null || age >= poll.maxAgeMs) {
                 emit(NodeVitals.UNKNOWN)
             } else {
                 emit(read(poll))
-                delay(MAX_POLL_AGE_MS - age)
+                delay(poll.maxAgeMs - age)
                 emit(NodeVitals.UNKNOWN)
             }
         }
@@ -159,11 +159,6 @@ class NodeVitalsRepository @Inject constructor(
     }
 
     companion object {
-        /**
-         * Oldest poll still shown: two status intervals plus one request
-         * timeout, so a single slow or failed poll does not blank the card.
-         */
-        const val MAX_POLL_AGE_MS = 2 * AgentStatusRepository.LAN_INTERVAL_MS + AgentHttp.LAN_TIMEOUT_S * 1_000L
         private const val SNAPSHOT_PATH = "api/video/snapshot"
 
         /** Oldest direct-link heartbeat still shown as current (the link turns stale at the same age). */

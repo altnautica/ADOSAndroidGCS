@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.node.visor
 
+import com.altnautica.gcs.feature.node.NodeTab
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.capture.CaptureApi
 import com.altnautica.gcs.core.agent.capture.CaptureExposure
@@ -271,5 +272,22 @@ class VisorViewModelTest {
         vm.selectCamera("cam_fr")
         assertEquals("cam_fr", (vm.state.value.preview as VideoSource.AgentWhep).streamId)
         coVerify(exactly = 0) { endpoints.endpointFor(any()) }
+    }
+
+    @Test
+    fun retryReadsTheVisibleTabAgainAtOnce() = runTest(dispatcher) {
+        coEvery { capture.sessions() } returns AgentResult.Err(AgentError.Network(java.io.IOException("down")))
+        val vm = vm()
+        try {
+            vm.show(NodeTab.Sessions)
+            assertTrue(vm.state.value.sessions is Load.Failed)
+            coVerify(exactly = 1) { capture.sessions() }
+
+            vm.retry()
+            coVerify(exactly = 2) { capture.sessions() }
+        } finally {
+            // Stop the poll even when an assertion fails, so it cannot spin on in virtual time.
+            vm.show(null)
+        }
     }
 }

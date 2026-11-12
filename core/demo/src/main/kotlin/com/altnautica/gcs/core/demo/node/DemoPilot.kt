@@ -276,7 +276,8 @@ internal class DemoPilot(
      * A surface's "fly here" (`{lat, lon, alt_m}`), offered in ADOS control as the vehicle's
      * pilot offers it: a goto refusal pin refuses with its code; otherwise the arguments, the
      * control mode, a failsafe and the reported armed and landed are checked as the pilot
-     * does, then the owner shows `goto`.
+     * does, then the flight controller is put in GUIDED and sent the point (a reposition),
+     * and the owner shows `goto`.
      */
     private fun goto(args: JsonObject?, t: Long): String? {
         val scenario = pinned(t)
@@ -289,6 +290,9 @@ internal class DemoPilot(
         if (DemoPilotPins.failsafe(scenario)) return "failsafe"
         if (!armed(t)) return "not_armed"
         if (grounded(t)) return "landed"
+        if (fc.mode != GUIDED) setMode(GUIDED)
+        guidedSentMs = t
+        fc.reposition(lat, lon, alt.toFloat())
         gotoAtMs = t
         return null
     }

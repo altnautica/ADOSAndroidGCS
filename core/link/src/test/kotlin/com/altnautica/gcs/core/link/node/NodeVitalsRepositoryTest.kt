@@ -51,18 +51,32 @@ class NodeVitalsRepositoryTest {
     private fun node(id: String, vararg reaches: Reach) =
         NodeSummary(DeviceId(id), id, NodeProfile.Drone, reaches.toList(), Liveness.Live, null, FcVariant.Unknown, null, null)
 
-    private fun poll(telemetry: TelemetrySnapshot? = null, carried: PairedDrone? = null, lastOkMs: Long? = now - 1_000) =
-        NodePoll(StatusFull(profile = "drone", telemetry = telemetry), lastOkMs, carried?.deviceId, null, carried)
+    private fun poll(
+        telemetry: TelemetrySnapshot? = null,
+        carried: PairedDrone? = null,
+        lastOkMs: Long? = now - 1_000,
+        maxAgeMs: Long = AgentStatusRepository.LAN_MAX_POLL_AGE_MS,
+    ) = NodePoll(StatusFull(profile = "drone", telemetry = telemetry), lastOkMs, carried?.deviceId, null, carried, maxAgeMs)
 
     private fun vitals(n: NodeSummary) = runBlocking { repo.vitals(n).first() }
 
     @Test
     fun `last good status is not shown as current once the poll goes stale`() = runTest {
         val auto = TelemetrySnapshot(armed = true, mode = "AUTO", battery = SnapshotBattery(remaining = 76))
-        polls["d1"] = poll(auto, lastOkMs = now - NodeVitalsRepository.MAX_POLL_AGE_MS)
+        polls["d1"] = poll(auto, lastOkMs = now - AgentStatusRepository.LAN_MAX_POLL_AGE_MS)
         assertEquals(NodeVitals.UNKNOWN, repo.vitals(node("d1", Reach.Lan)).first())
 
         polls["d1"] = poll(auto, lastOkMs = null)
+        assertEquals(NodeVitals.UNKNOWN, repo.vitals(node("d1", Reach.Lan)).first())
+    }
+
+    @Test
+    fun `a relayed poll one slow relay cycle old is still shown`() = runTest {
+        val auto = TelemetrySnapshot(armed = false, mode = "AUTO", battery = SnapshotBattery(remaining = 60))
+        polls["d1"] = poll(auto, lastOkMs = now - 13_000, maxAgeMs = AgentStatusRepository.RELAY_MAX_POLL_AGE_MS)
+        assertEquals(NodeVitals(60, "AUTO", false), repo.vitals(node("d1", Reach.Lan)).first())
+
+        polls["d1"] = poll(auto, lastOkMs = now - AgentStatusRepository.RELAY_MAX_POLL_AGE_MS, maxAgeMs = AgentStatusRepository.RELAY_MAX_POLL_AGE_MS)
         assertEquals(NodeVitals.UNKNOWN, repo.vitals(node("d1", Reach.Lan)).first())
     }
 
@@ -73,7 +87,7 @@ class NodeVitalsRepositoryTest {
         val job = launch { repo.vitals(node("d1", Reach.Lan)).toList(seen) }
         runCurrent()
         assertEquals(listOf(NodeVitals(null, "AUTO", null)), seen)
-        advanceTimeBy(NodeVitalsRepository.MAX_POLL_AGE_MS - 2_000 - 1)
+        advanceTimeBy(AgentStatusRepository.LAN_MAX_POLL_AGE_MS - 2_000 - 1)
         assertEquals(1, seen.size)
         advanceTimeBy(2)
         assertEquals(listOf(NodeVitals(null, "AUTO", null), NodeVitals.UNKNOWN), seen)

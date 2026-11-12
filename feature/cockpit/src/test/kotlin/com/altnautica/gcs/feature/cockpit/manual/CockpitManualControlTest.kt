@@ -16,7 +16,10 @@ import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.GamepadAxes
 import com.altnautica.gcs.core.skills.input.GamepadButton
 import com.altnautica.gcs.core.skills.input.PadSnapshot
+import com.altnautica.gcs.core.skills.controls.AxisCalibration
+import com.altnautica.gcs.core.skills.controls.PadCalibration
 import com.altnautica.gcs.core.skills.controls.StickMode
+import com.altnautica.gcs.core.skills.controls.padKey
 import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
 import com.altnautica.gcs.feature.cockpit.FakeVehicle
 import com.altnautica.gcs.feature.cockpit.StickChip
@@ -259,6 +262,30 @@ class CockpitManualControlTest {
         assertEquals("the right stick full up is full throttle", 1f, input.throttle, 1e-5f)
         assertEquals(0f, input.roll, 1e-5f)
         assertEquals(0f, input.yaw, 1e-5f)
+    }
+
+    @Test
+    fun `a calibrated DualShock 4 resting off centre sends centred sticks`() = runTest(UnconfinedTestDispatcher()) {
+        // This pad's sticks rest off centre; its stored calibration moves the centre there.
+        val cal = PadCalibration(
+            lx = AxisCalibration(centre = 0.2f),
+            rx = AxisCalibration(centre = 0.3f),
+            ry = AxisCalibration(centre = -0.25f),
+        )
+        val r = backgroundScope.rig(conditioning = StickConditioning(deadzone = 0f, calibrations = mapOf(padKey(0x054c, 0x09cc) to cal)))
+        runCurrent()
+        r.control.toggle()
+        runCurrent()
+        r.sticks(GamepadAxes(leftX = 0.2f, leftY = 0f, rightX = 0.3f, rightY = -0.25f))
+        runCurrent()
+        val rest = r.streamer.input!!.value
+        assertEquals("the resting right stick sends no roll", 0f, rest.roll, 1e-5f)
+        assertEquals("the resting right stick sends no pitch", 0f, rest.pitch, 1e-5f)
+        assertEquals("the resting left stick sends no yaw", 0f, rest.yaw, 1e-5f)
+        // Full travel past the calibrated centre still reads full.
+        r.sticks(GamepadAxes(leftX = 0.2f, leftY = 0f, rightX = 1f, rightY = -0.25f))
+        runCurrent()
+        assertEquals(1f, r.streamer.input!!.value.roll, 1e-5f)
     }
 
     @Test

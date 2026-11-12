@@ -22,6 +22,10 @@ internal fun uploadLabel(res: Resources, droneName: String?): String =
 internal fun downloadLabel(res: Resources, droneName: String?): String =
     droneName?.let { res.getString(R.string.plan_download_from, it) } ?: res.getString(R.string.plan_download_from_drone)
 
+/** "Load plan reported by {drone}": the copy the drone's agent reports, not a download from the flight controller. */
+internal fun mirrorLoadLabel(res: Resources, droneName: String?): String =
+    droneName?.let { res.getString(R.string.plan_mirror_load_from, it) } ?: res.getString(R.string.plan_mirror_load_from_drone)
+
 internal fun missionTypeText(res: Resources, type: MissionType): String = res.getString(
     when (type) {
         MissionType.Mission -> R.string.plan_transfer_mission
@@ -76,5 +80,5 @@ internal fun importFailedText(res: Resources, reason: PlanFormatException.Reason
 /** One import warning with the file row it came from. */
 internal fun importWarningText(res: Resources, warning: PlanWarning): String = when (warning) {
     is PlanWarning.DroppedJump -> res.getString(R.string.plan_import_warning_jump, warning.seq, warning.target)
-    is PlanWarning.SkippedItem -> res.getString(R.string.plan_import_warning_skipped, warning.type)
+    is PlanWarning.SkippedItem -> res.getString(R.string.plan_import_warning_skipped, warning.row, warning.type)
 }

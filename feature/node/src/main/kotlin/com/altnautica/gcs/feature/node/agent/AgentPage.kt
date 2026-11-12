@@ -32,7 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -107,11 +107,7 @@ fun AgentTab(nodeId: String, modifier: Modifier = Modifier) {
             else -> sectionId = null
         }
     }
-    // Live readouts poll while their section is open, and stop when it closes or the page leaves.
-    DisposableEffect(section) {
-        section?.let(vm::openSection)
-        onDispose { vm.closeSection() }
-    }
+    SectionPolling(section, vm::openSection, vm::closeSection)
     val closeSection: (() -> Unit)? = if (landscape) null else ({ sectionId = null })
 
     Column(modifier.fillMaxSize()) {
@@ -475,3 +471,15 @@ private fun ServicesReadout(o: JsonObject, busy: Boolean, onRestart: (String) ->
 private val LINK_UNITS = listOf("ados-mavlink", "ados-wfb", "ados-video", "ados-control", "ados-groundlink", "ados-net")
 
 internal fun carriesLink(service: String): Boolean = LINK_UNITS.any { service.removeSuffix(".service").startsWith(it) }
+
+/**
+ * Live readouts poll while their section is open and the app is in the foreground; they stop
+ * when the section closes, the page leaves, or the app goes to the background, and resume on return.
+ */
+@Composable
+internal fun SectionPolling(section: AgentSection?, open: (AgentSection) -> Unit, close: () -> Unit) {
+    LifecycleStartEffect(section) {
+        section?.let(open)
+        onStopOrDispose { close() }
+    }
+}

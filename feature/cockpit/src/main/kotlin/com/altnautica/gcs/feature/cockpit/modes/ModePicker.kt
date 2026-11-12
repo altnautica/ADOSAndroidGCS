@@ -1,7 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.modes
 
 import androidx.compose.foundation.BorderStroke
-import com.altnautica.gcs.feature.cockpit.chrome.padClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -96,7 +96,7 @@ private fun ModeTile(choice: ModeChoice, enabled: Boolean, onClick: () -> Unit) 
             .defaultMinSize(minHeight = AdosTheme.touchMin)
             .alpha(if (enabled) 1f else 0.5f)
             .semantics { selected = choice.current }
-            .padClickable(enabled = enabled && !choice.current, role = Role.Button, onClick = onClick),
+            .clickable(enabled = enabled && !choice.current, role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(AdosRadius.Lg),
         color = if (choice.current) colors.accentPrimary.copy(alpha = 0.16f) else colors.bgRaised,
         border = BorderStroke(if (choice.current) 2.dp else 1.dp, if (choice.current) colors.accentPrimary else colors.borderDefault),

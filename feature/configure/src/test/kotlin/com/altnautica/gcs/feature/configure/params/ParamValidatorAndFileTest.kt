@@ -62,9 +62,17 @@ class ParamValidatorAndFileTest {
         for (name in listOf("STAT_FLTTIME", "INS_ACC_ID", "INS_GYR2_ID", "GND_BARO_ID")) {
             assertEquals(name, ParamValidation.Invalid(ParamInvalidReason.ReadOnly), ParamValidator.validate(name, null, 1.0))
         }
-        // Metadata, when present, decides: a documented writable ID stays writable.
-        assertEquals(ParamValidation.Valid(1.0), ParamValidator.validate("INS_ACC_ID", ParamMeta("INS_ACC_ID", "Id", "", group = "INS"), 1.0))
         assertEquals(ParamValidation.Valid(1.0), ParamValidator.validate("INS_ACCEL_FILTER", null, 1.0))
+    }
+
+    @Test
+    fun countersAndSensorIdsStayReadOnlyWhenTheMetadataDoesNotFlagThem() {
+        for (name in listOf("STAT_BOOTCNT", "INS_ACC_ID", "GND_BARO_ID")) {
+            val doc = ParamMeta(name, "Doc", "", group = name.substringBefore('_'))
+            assertTrue(name, ParamValidator.isReadOnly(name, doc))
+            assertEquals(name, ParamValidation.Invalid(ParamInvalidReason.ReadOnly), ParamValidator.validate(name, doc, 1.0))
+        }
+        assertFalse(ParamValidator.isReadOnly("INS_ACCEL_FILTER", ParamMeta("INS_ACCEL_FILTER", "Filter", "", group = "INS")))
     }
 
     @Test

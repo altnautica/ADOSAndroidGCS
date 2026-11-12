@@ -18,6 +18,11 @@ if [[ -f $BASELINE ]]; then
   done <"$BASELINE"
 fi
 
+ROOTS=(app core feature)
+for root in "${ROOTS[@]}"; do
+  [[ -d $root ]] || { echo "source root missing: $root"; exit 1; }
+done
+
 fail=0
 while IFS= read -r f; do
   n=$(wc -l <"$f")
@@ -34,7 +39,7 @@ while IFS= read -r f; do
     echo "grew past its baseline: $f ($n > $max)"
     fail=1
   fi
-done < <(find app core feature -name '*.kt' -not -path '*/src/test/*' -not -path '*/src/androidTest/*' -not -path '*/build/*' | sort)
+done < <(find "${ROOTS[@]}" -name '*.kt' -not -path '*/src/test/*' -not -path '*/src/androidTest/*' -not -path '*/build/*' | sort)
 
 if (( fail )); then
   echo "File-size check failed: split the file, or (for an existing file) keep it at or under its baseline."

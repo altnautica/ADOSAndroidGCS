@@ -1,6 +1,8 @@
 package com.altnautica.gcs.core.demo
 
 import com.altnautica.gcs.core.link.transport.DemoTransport
+import com.altnautica.gcs.core.mavlink.enums.MavCmd
+import com.altnautica.gcs.core.mavlink.enums.MavDoRepositionFlags
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,6 +18,12 @@ interface DemoFc {
 
     /** Sends COMMAND_LONG [command] from the onboard computer; the outcome shows in the state above. */
     fun command(command: Int, p1: Float = 0f, p2: Float = 0f, p7: Float = 0f)
+
+    /**
+     * Sends MAV_CMD_DO_REPOSITION to ([latDeg], [lonDeg]) at [altM] above home, after the
+     * commands sent before it: the flight controller flies there in GUIDED.
+     */
+    fun reposition(latDeg: Double, lonDeg: Double, altM: Float)
 
     /** The GNSS fix the flight controller reports; false drops it, as a receiver without a fix does. */
     var gnssFix: Boolean
@@ -54,6 +62,14 @@ class DemoVehicleHub @Inject constructor() : DemoFc {
 
     override fun command(command: Int, p1: Float, p2: Float, p7: Float) {
         transport?.companionCommand(command, p1, p2, p7)
+    }
+
+    override fun reposition(latDeg: Double, lonDeg: Double, altM: Float) {
+        // Default speed (-1), switch to GUIDED if not there yet, keep the current yaw (NaN).
+        transport?.companionCommandInt(
+            MavCmd.MAV_CMD_DO_REPOSITION, latDeg, lonDeg, altM,
+            p1 = -1f, p2 = MavDoRepositionFlags.MAV_DO_REPOSITION_FLAGS_CHANGE_MODE.toFloat(), p4 = Float.NaN,
+        )
     }
 
     private companion object {

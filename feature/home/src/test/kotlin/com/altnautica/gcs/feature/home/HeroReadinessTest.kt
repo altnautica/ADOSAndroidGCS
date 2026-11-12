@@ -49,4 +49,10 @@ class HeroReadinessTest {
         assertEquals(HeroReadiness.OpensOnFly, heroReadiness(flyOpen, NodeVitals.UNKNOWN, linkClosed = true))
         assertEquals(HeroReadiness.OpensOnFly, heroReadiness(flyOpen, known, linkClosed = true))
     }
+
+    @Test
+    fun keptVitalsNeverReadAsReady() {
+        assertEquals(HeroReadiness.Connecting, heroReadiness(flyOpen, known, kept = true))
+        assertEquals(HeroReadiness.OpensOnFly, heroReadiness(flyOpen, known, linkClosed = true, kept = true))
+    }
 }

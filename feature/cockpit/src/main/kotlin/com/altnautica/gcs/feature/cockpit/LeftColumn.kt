@@ -20,15 +20,16 @@ import com.altnautica.gcs.feature.cockpit.chrome.RoundButton
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /**
- * Whether the left column offers Land instead of Take off: the pilot's state when it
- * reports, else the heartbeat's arm. An unknown arm state counts as possibly airborne.
+ * Whether the left column offers Land instead of Take off: the pilot's state while its frame
+ * is fresh ([pilot] is null otherwise), else the band's freshness-gated arm. An unknown arm
+ * state counts as possibly airborne.
  */
 internal fun leftColumnLands(pilot: PilotState?, bandArmed: Boolean?): Boolean = pilot?.possiblyAirborne ?: (bandArmed != false)
 
 /** Take off (opens the Launch sheet) or land, return home, pause: the built-ins' own gates and confirms apply. */
 @Composable
 internal fun LeftColumn(vm: CockpitViewModel, size: Dp, gap: Dp) {
-    val pilot by vm.pilotState.collectAsStateWithLifecycle()
+    val pilot by vm.freshPilotState.collectAsStateWithLifecycle()
     val band by vm.band.collectAsStateWithLifecycle()
     val airborne = leftColumnLands(pilot, band.armed)
     val labels = vm.cockpitSpec.builtins.builtins.associate { it.id to it.label }

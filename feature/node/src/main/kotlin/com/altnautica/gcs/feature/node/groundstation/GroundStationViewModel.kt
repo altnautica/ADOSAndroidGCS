@@ -121,6 +121,13 @@ class GroundStationViewModel @AssistedInject constructor(
         }
     }
 
+    /** Reads the visible tab again now, restarting its poll: the Retry button, and the reload after a write. */
+    fun retry() {
+        val tab = activeTab
+        activeTab = null
+        show(tab)
+    }
+
     private fun showLane(tab: NodeTab) {
         pollJob = viewModelScope.launch {
             if (tab == NodeTab.Lora) {
@@ -143,12 +150,6 @@ class GroundStationViewModel @AssistedInject constructor(
 
     /** RTK base mode; a write refused while armed retries with the override after the hold-to-confirm. */
     fun setBase(request: BaseModeRequest) = writes.run(label = WriteLabel(WriteAction.GnssBase)) { force -> lanes.setBase(request, force) }
-
-    private fun refresh() {
-        val tab = activeTab
-        activeTab = null
-        show(tab)
-    }
 
     // ---- carried drones ------------------------------------------------------
 
@@ -213,10 +214,20 @@ class GroundStationViewModel @AssistedInject constructor(
         }
     }
 
-    /** Joins a Wi-Fi network as uplink; an active access point asks before it is stood down. */
+    /**
+     * Joins a Wi-Fi network as uplink; an active access point asks before it is stood down.
+     * The agent reads one `force` flag both as the armed override and as "take wlan0 from the
+     * access point", so a confirmed armed override with the access point (possibly) up asks the
+     * access-point question first and sends nothing until that is confirmed too.
+     */
     fun join(ssid: String, passphrase: String?, standDownAccessPoint: Boolean = false) {
         _state.update { it.copy(joinNeedsForce = null) }
-        writes.run(label = WriteLabel(WriteAction.Join, ssid), onDone = ::refresh) { force ->
+        val askAccessPointFirst = {
+            val ask = !standDownAccessPoint && accessPointMayBeUp()
+            if (ask) _state.update { it.copy(joinNeedsForce = PendingJoin(ssid, passphrase)) }
+            !ask
+        }
+        writes.run(label = WriteLabel(WriteAction.Join, ssid), onDone = ::retry, beforeForce = askAccessPointFirst) { force ->
             val c = client() ?: return@run AgentResult.Err(NO_AGENT_LINK)
             val r = c.groundStation.joinClientNetwork(joinBody(ssid, passphrase, force = standDownAccessPoint || force))
             val err = (r as? AgentResult.Err)?.error
@@ -225,6 +236,12 @@ class GroundStationViewModel @AssistedInject constructor(
             }
             r
         }
+    }
+
+    /** The station's access point is running, enabled, or not yet known. */
+    private fun accessPointMayBeUp(): Boolean = when (val n = _state.value.network) {
+        is Load.Ready -> n.value.ap?.let { it.running == true || it.enabled != false } ?: false
+        else -> true
     }
 
     fun cancelJoin() = _state.update { it.copy(joinNeedsForce = null) }
@@ -280,7 +297,7 @@ class GroundStationViewModel @AssistedInject constructor(
     // ---- plumbing ------------------------------------------------------------
 
     private fun write(label: WriteLabel, block: suspend (AgentClient, Boolean) -> AgentResult<*>) {
-        writes.run(label = label, onDone = ::refresh) { force ->
+        writes.run(label = label, onDone = ::retry) { force ->
             val c = client() ?: return@run AgentResult.Err(NO_AGENT_LINK)
             block(c, force)
         }

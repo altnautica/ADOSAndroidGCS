@@ -1,8 +1,10 @@
 package com.altnautica.gcs.feature.logs.detail
 
 import com.altnautica.gcs.core.database.FlightSessionDao
+import com.altnautica.gcs.core.database.LogFileKind
 import com.altnautica.gcs.core.database.FlightSessionEntity
 import com.altnautica.gcs.core.database.TlogFileDao
+import com.altnautica.gcs.core.database.TlogFileEntity
 import com.altnautica.gcs.core.mavlink.MavlinkFrameWriter
 import com.altnautica.gcs.core.mavlink.messages.Heartbeat
 import com.altnautica.gcs.core.mavlink.messages.VfrHud
@@ -70,5 +72,23 @@ class FlightDetailViewModelTest {
 
         val bad = vm { throw IOException("gone") }.state.value as FlightDetailUiState.Content
         assertEquals(SeriesState.Failed("/x.tlog"), bad.series)
+    }
+
+    @Test
+    fun aSharedLogThatIsGoneDropsItsIndexRowAndPath() = runTest(dispatcher) {
+        var session = FlightSessionEntity(id = 5, startTime = 1, tlogPath = "/x.tlog")
+        var indexed = listOf(TlogFileEntity(id = 9, path = "/x.tlog", kind = LogFileKind.Tlog, sizeBytes = 1, createdAtMs = 1, sessionId = 5))
+        coEvery { sessions.getById(5) } answers { session }
+        coEvery { sessions.update(any()) } answers { session = firstArg() }
+        coEvery { files.listForSession(5) } answers { indexed }
+        coEvery { files.delete(any()) } answers { indexed = indexed.filterNot { it.id == firstArg<Long>() } }
+        val vm = vm { tlog().inputStream() }
+        assertTrue((vm.state.value as FlightDetailUiState.Content).series is SeriesState.Ready)
+
+        vm.fileMissing("/x.tlog")
+
+        assertTrue(indexed.isEmpty())
+        assertEquals("", session.tlogPath)
+        assertEquals(SeriesState.NoLog, (vm.state.value as FlightDetailUiState.Content).series)
     }
 }

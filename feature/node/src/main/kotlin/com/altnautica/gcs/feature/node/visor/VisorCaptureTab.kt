@@ -77,7 +77,7 @@ fun VisorCaptureTab(nodeId: String, modifier: Modifier = Modifier) {
             item { PreviewCard(state.preview, state.cameras, state.previewCamera, vm::selectCamera) }
             when (val load = state.capture) {
                 Load.Loading -> item { LoadingState(stringResource(R.string.node_loading)) }
-                is Load.Failed -> item { ProblemState(load.problem, onRetry = { vm.show(NodeTab.Capture) }) }
+                is Load.Failed -> item { ProblemState(load.problem, onRetry = vm::retry) }
                 is Load.Ready -> {
                     if (load.stale) item { StatusChip(StatusLevel.Warning, stringResource(R.string.visor_stale)) }
                     val c = load.value

@@ -64,6 +64,17 @@ class MissionValidatorTest {
     }
 
     @Test
+    fun `rovers boats and subs are not blocked by the at or below home rule`() {
+        val surface = MissionPlan(items = listOf(item(PlanCommand.Waypoint, near, altM = 0f), item(PlanCommand.Waypoint, home, altM = 0f)))
+        val dive = MissionPlan(items = listOf(item(PlanCommand.Waypoint, near, altM = -10f), item(PlanCommand.Waypoint, home, altM = -3f)))
+        assertFalse(PlanIssueKind.AltitudeAtOrBelowHome in kinds(surface, ValidationProfile(10, Autopilot.ArduPilotOther)))
+        assertFalse(PlanIssueKind.AltitudeAtOrBelowHome in kinds(surface, ValidationProfile(11, Autopilot.ArduPilotOther)))
+        assertFalse(PlanIssueKind.AltitudeAtOrBelowHome in kinds(dive, ValidationProfile(12, Autopilot.ArduPilotOther)))
+        // A copter flying the same plan is still blocked.
+        assertTrue(PlanIssueKind.AltitudeAtOrBelowHome in kinds(surface, ValidationProfile(2, Autopilot.ArduCopter)))
+    }
+
+    @Test
     fun `a waypoint at zero zero or off the globe blocks`() {
         val zero = item(PlanCommand.Waypoint, near).copy(x = 0.0, y = 0.0)
         assertEquals(setOf(PlanIssueKind.InvalidCoordinates), kinds(good(zero)))

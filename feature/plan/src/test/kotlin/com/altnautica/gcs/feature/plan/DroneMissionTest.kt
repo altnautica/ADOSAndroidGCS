@@ -157,6 +157,43 @@ class DroneMissionTest {
     }
 
     @Test
+    fun `upload is refused while the arm state is unknown`() = runTest {
+        h.withViewModel { vm ->
+            h.connect(vm)
+            vm.onMapTap(GeoPoint(12.001, 77.001))
+            vm.onMapTap(GeoPoint(12.002, 77.002))
+            runCurrent()
+            assertFalse(vm.state.value.armStateUnknown)
+
+            // The heartbeat goes stale: the drone may have armed since.
+            h.now += 3_500
+            testScheduler.advanceTimeBy(1_100)
+            runCurrent()
+            assertTrue(vm.state.value.armStateUnknown)
+            vm.upload()
+            runCurrent()
+            assertTrue(h.mission.uploads.isEmpty())
+
+            // No heartbeat at all.
+            h.heartbeat.value = null
+            runCurrent()
+            assertTrue(vm.state.value.armStateUnknown)
+            vm.upload()
+            runCurrent()
+            assertTrue(h.mission.uploads.isEmpty())
+
+            // A fresh disarmed heartbeat lets the upload through.
+            h.connect(vm)
+            testScheduler.advanceTimeBy(1_100)
+            runCurrent()
+            assertFalse(vm.state.value.armStateUnknown)
+            vm.upload()
+            runCurrent()
+            assertTrue(h.mission.uploads.isNotEmpty())
+        }
+    }
+
+    @Test
     fun `the drone's fence parameters block points outside its limits`() = runTest {
         h.withViewModel { vm ->
             h.connect(vm)

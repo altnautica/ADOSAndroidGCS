@@ -151,10 +151,17 @@ class FlightStateChipResolver(
     private fun launchStep(p: PilotState): LaunchStep? =
         p.sequence?.takeIf { it.step != LaunchStep.Done && it.error == null }?.step
 
-    /** The step's spec name (`flow.launch.step.<step>`, `after` reads `after_label`). */
+    /**
+     * The step's spec name (`flow.launch.step.<step>`, `after` reads `after_label`). The take-off
+     * step reads as its action (`chip.launch_step.takeoff`), so the chip never says "Taking off · Take off".
+     */
     private fun stepLabel(step: LaunchStep): String {
-        val key = if (step == LaunchStep.After) "after_label" else step.wire
-        return strings["flow.launch.step.$key"] ?: step.wire
+        val key = when (step) {
+            LaunchStep.After -> "flow.launch.step.after_label"
+            LaunchStep.Takeoff -> "chip.launch_step.takeoff"
+            else -> "flow.launch.step.${step.wire}"
+        }
+        return strings[key] ?: step.wire
     }
 
     /** The secondary line in the spec's order (FC failsafe, paused mission, hold reason, avoidance, control mode). */

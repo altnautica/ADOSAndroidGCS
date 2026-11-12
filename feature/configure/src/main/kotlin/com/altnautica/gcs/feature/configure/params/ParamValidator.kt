@@ -10,18 +10,18 @@ enum class ParamInvalidReason { NotANumber, NotInteger, BelowMin, AboveMax, NotA
 
 object ParamValidator {
     /**
-     * Names treated as read-only when the metadata does not say: the flight statistics counters
-     * and the sensor identity parameters, which describe the fitted hardware.
+     * Names always treated as read-only, whatever the metadata says: the flight statistics
+     * counters and the sensor identity parameters, which describe the fitted hardware.
      */
     private val READ_ONLY_PATTERNS = listOf(Regex("^STAT_"), Regex("^INS_\\w+_ID$"), Regex("^GND_\\w+_ID$"))
 
     /** Documented read-only but still writable: setting `STAT_RESET` to 0 resets the flight statistics. */
     private val WRITABLE_DESPITE_READONLY = setOf("STAT_RESET")
 
-    /** Whether [name] refuses writes, from its metadata or, without metadata, from its name. */
+    /** Whether [name] refuses writes: flagged read-only by its metadata, or matched by name. */
     fun isReadOnly(name: String, meta: ParamMeta?): Boolean = when {
         name in WRITABLE_DESPITE_READONLY -> false
-        meta != null -> meta.readOnly
+        meta?.readOnly == true -> true
         else -> READ_ONLY_PATTERNS.any { it.containsMatchIn(name) }
     }
 

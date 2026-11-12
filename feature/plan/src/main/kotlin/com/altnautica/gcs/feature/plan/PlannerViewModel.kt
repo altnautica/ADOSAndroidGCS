@@ -42,6 +42,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
@@ -82,7 +86,13 @@ class PlannerViewModel @Inject constructor(
     private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId, mirrorSource) { plan, name, savedId, dirty ->
         session.replacePlan(plan, name = name, savedId = savedId, dirty = dirty)
     }
-    private val library = PlannerLibrary(viewModelScope, _state, savedPlans, documents, session, nextId) { vehicle.planWithHome() }
+    private val library = PlannerLibrary(viewModelScope, _state, savedPlans, documents, session, nextId, ::clearDraft) { vehicle.planWithHome() }
+
+    /** Serialises draft writes, so a clear is never overtaken by a write already under way. */
+    private val draftLock = Mutex()
+
+    /** False once the operator left with the plan discarded: no later write may bring it back. */
+    @Volatile private var draftKept = true
 
     init {
         library.observe()
@@ -112,12 +122,26 @@ class PlannerViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .collectLatest { k ->
                     delay(DRAFT_DEBOUNCE_MS)
-                    draftStore.write(if (k.dirty && !k.plan.isEmpty) PlanDraft(k.name, k.savedId, PlanFiles.exportPlan(k.plan)) else null)
+                    draftLock.withLock {
+                        if (draftKept) draftStore.write(if (k.dirty && !k.plan.isEmpty) PlanDraft(k.name, k.savedId, PlanFiles.exportPlan(k.plan)) else null)
+                    }
                 }
         }
     }
 
     private data class DraftKey(val plan: MissionPlan, val name: String, val savedId: String?, val dirty: Boolean)
+
+    /**
+     * Clears the draft now rather than after the debounce, in a write that finishes even when
+     * the view model is cleared right after (Save then Back, or Back then Discard).
+     * [discarded]: the open plan was thrown away, so stop keeping drafts for this view model.
+     */
+    private fun clearDraft(discarded: Boolean) {
+        if (discarded) draftKept = false
+        viewModelScope.launch {
+            withContext(NonCancellable) { draftLock.withLock { draftStore.write(null) } }
+        }
+    }
 
     // ── Vehicle ──────────────────────────────────────────────
 

@@ -3,11 +3,8 @@ package com.altnautica.gcs.core.link.calibration
 import com.altnautica.gcs.core.model.CommandResult
 import kotlinx.coroutines.flow.StateFlow
 
-/**
- * [Esc] sets the ESC throttle endpoints, [CompassMot] measures motor interference on the
- * compass (ArduPilot), [Airspeed] zeroes the airspeed sensor.
- */
-enum class CalibrationKind { Gyro, Level, Accel, Compass, Radio, Esc, CompassMot, Airspeed }
+/** [Esc] sets the ESC throttle endpoints (PX4), [Airspeed] zeroes the airspeed sensor. */
+enum class CalibrationKind { Gyro, Level, Accel, Compass, Radio, Esc, Airspeed }
 
 /** Vehicle orientations requested by the six-position accelerometer calibration (ACCELCAL_VEHICLE_POS). */
 enum class AccelPose(val wire: Int) {
@@ -69,20 +66,21 @@ interface CalibrationService {
     suspend fun acceptCompass(): CommandResult
     suspend fun cancelCompass(): CommandResult
 
-    /** ESC throttle calibration (`MAV_CMD_PREFLIGHT_CALIBRATION` p7=1). Propellers off. */
+    /** ESC throttle calibration (`MAV_CMD_PREFLIGHT_CALIBRATION` p7=1); PX4 only, refused elsewhere without sending. Propellers off. */
     suspend fun startEsc(): CommandResult
 
-    /** Compass-motor interference calibration (p6=1); ArduPilot only, refused elsewhere without sending. */
-    suspend fun startCompassMot(): CommandResult
-
-    /** Airspeed sensor zero (p6=2). Cover the pitot tube. */
+    /** Airspeed sensor zero: p3=1 on ArduPilot (with the barometer), p6=2 on PX4. Cover the pitot tube. */
     suspend fun startAirspeed(): CommandResult
 
     fun startRadio()
 
-    /** Writes the captured `RCn_MIN/MAX/TRIM`; trims are the stick positions now (throttle: its minimum). */
+    /**
+     * Writes the captured `RCn_MIN/MAX/TRIM` once the mapped sticks moved (rover and boat:
+     * steering and throttle); trims are the stick positions now (throttle of an aircraft: its
+     * minimum). Refused with `rcMapNotLoaded`, writing nothing, while the stick map is unknown.
+     */
     suspend fun saveRadio(): CommandResult
 
-    /** Abandons the running flow (compass is cancelled on the vehicle) and returns to [CalibrationState.Idle]. */
+    /** Abandons the running flow (a compass calibration is cancelled on the vehicle) and returns to [CalibrationState.Idle]. */
     suspend fun cancel()
 }

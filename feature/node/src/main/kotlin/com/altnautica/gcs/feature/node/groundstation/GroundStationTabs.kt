@@ -70,19 +70,19 @@ fun GroundStationTab(nodeId: String, tab: NodeTab, onOpenNode: (DeviceId) -> Uni
             verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3),
         ) {
             when (tab) {
-                NodeTab.CarriedDrones -> item { LoadView(state.carried, { vm.show(tab) }) { CarriedView(it, busy, onOpenNode, vm::releaseSlot) } }
+                NodeTab.CarriedDrones -> item { LoadView(state.carried, vm::retry) { CarriedView(it, busy, onOpenNode, vm::releaseSlot) } }
                 NodeTab.Radio -> {
-                    item { LoadView(state.radio, { vm.show(tab) }) { RadioView(it, busy, vm::setTxPower) } }
+                    item { LoadView(state.radio, vm::retry) { RadioView(it, busy, vm::setTxPower) } }
                     item { PhoneReceiversCard(nodeId) }
                 }
                 NodeTab.Network -> item {
-                    LoadView(state.network, { vm.show(tab) }) { net ->
+                    LoadView(state.network, vm::retry) { net ->
                         NetworkView(net, state.scan, state.joinNeedsForce, busy, vm)
                     }
                 }
-                NodeTab.Gnss -> item { LoadView(lanes.gnss, { vm.show(tab) }) { GnssView(it, busy, vm::setBase) } }
-                NodeTab.Lora -> item { LoadView(lanes.lora, { vm.show(tab) }) { LoraView(lanes, vm) } }
-                NodeTab.Mesh -> item { LoadView(state.mesh, { vm.show(tab) }) { MeshView(it, state.pairWindow, busy, vm) } }
+                NodeTab.Gnss -> item { LoadView(lanes.gnss, vm::retry) { GnssView(it, busy, vm::setBase) } }
+                NodeTab.Lora -> item { LoadView(lanes.lora, vm::retry) { LoraView(lanes, vm) } }
+                NodeTab.Mesh -> item { LoadView(state.mesh, vm::retry) { MeshView(it, state.pairWindow, busy, vm) } }
                 else -> Unit
             }
         }

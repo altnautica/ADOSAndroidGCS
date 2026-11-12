@@ -15,7 +15,6 @@ import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -103,7 +102,6 @@ private fun kindLabel(kind: CalibrationKind): String = stringResource(
         CalibrationKind.Compass -> R.string.cfg_cal_compass
         CalibrationKind.Radio -> R.string.cfg_cal_radio
         CalibrationKind.Esc -> R.string.cfg_cal_esc
-        CalibrationKind.CompassMot -> R.string.cfg_cal_compassmot
         CalibrationKind.Airspeed -> R.string.cfg_cal_airspeed
     },
 )
@@ -121,7 +119,6 @@ private fun kindIcon(kind: CalibrationKind): ImageVector = when (kind) {
     CalibrationKind.Compass -> Icons.Outlined.Explore
     CalibrationKind.Radio -> Icons.Outlined.SettingsRemote
     CalibrationKind.Esc -> Icons.Outlined.Bolt
-    CalibrationKind.CompassMot -> Icons.Outlined.Tune
     CalibrationKind.Airspeed -> Icons.Outlined.Air
 }
 

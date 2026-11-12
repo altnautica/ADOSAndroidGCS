@@ -75,7 +75,6 @@ class FakeCalibrationService : CalibrationService {
     override suspend fun acceptCompass() = call("acceptCompass")
     override suspend fun cancelCompass() = call("cancelCompass")
     override suspend fun startEsc() = call("esc")
-    override suspend fun startCompassMot() = call("compassMot")
     override suspend fun startAirspeed() = call("airspeed")
     override fun startRadio() {
         calls += "radio"

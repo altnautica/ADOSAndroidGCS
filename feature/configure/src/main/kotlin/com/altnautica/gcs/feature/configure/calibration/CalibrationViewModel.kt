@@ -51,7 +51,6 @@ data class AccelStep(val pose: AccelPose, val index: Int, val total: Int = Accel
 /** Words the operator must act on before [this] calibration starts; null when none. */
 fun CalibrationKind.precaution(): Int? = when (this) {
     CalibrationKind.Esc -> R.string.cfg_cal_esc_precaution
-    CalibrationKind.CompassMot -> R.string.cfg_cal_compassmot_precaution
     CalibrationKind.Airspeed -> R.string.cfg_cal_airspeed_precaution
     else -> null
 }
@@ -65,12 +64,15 @@ fun CalibrationKind.agentStep(): String? = when (this) {
     // The vehicle's engine calibrates the gyros as part of the accelerometer step.
     CalibrationKind.Gyro -> null
     // Run straight on the flight controller only.
-    CalibrationKind.Esc, CalibrationKind.CompassMot, CalibrationKind.Airspeed -> null
+    CalibrationKind.Esc, CalibrationKind.Airspeed -> null
 }
 
-/** The flight controller applies the offsets of [this] calibration only after a reboot. */
-fun CalibrationKind.needsReboot(): Boolean =
-    this == CalibrationKind.Compass || this == CalibrationKind.Accel || this == CalibrationKind.Level
+/**
+ * ArduPilot applies the offsets of [this] calibration only after a reboot; PX4 applies its
+ * compass, accelerometer and level offsets at once.
+ */
+fun CalibrationKind.needsReboot(variant: FcVariant): Boolean = variant == FcVariant.MavlinkArdupilot &&
+    (this == CalibrationKind.Compass || this == CalibrationKind.Accel || this == CalibrationKind.Level)
 
 data class CalibrationUiState(
     val block: CalibrationBlock? = CalibrationBlock.NoVehicle,
@@ -103,15 +105,14 @@ data class CalibrationUiState(
     val canStart: Boolean get() = block == null && !running && !busy
 
     /**
-     * Whether [kind] is offered on this link and vehicle: ESC on rotorcraft, CompassMot on
-     * ArduPilot rotorcraft, airspeed on fixed wing.
+     * Whether [kind] is offered on this link and vehicle: ESC on PX4 rotorcraft (ArduPilot
+     * calibrates ESCs at boot through a parameter), airspeed on fixed wing.
      */
     fun offers(kind: CalibrationKind): Boolean {
         if (agent) return kind.agentStep() != null
         val copter = mavType in SetupCatalog.COPTER_TYPES
         return when (kind) {
-            CalibrationKind.Esc -> copter
-            CalibrationKind.CompassMot -> copter && variant == FcVariant.MavlinkArdupilot
+            CalibrationKind.Esc -> copter && variant == FcVariant.MavlinkPx4
             CalibrationKind.Airspeed -> mavType in SetupCatalog.PLANE_TYPES
             else -> true
         }
@@ -204,8 +205,8 @@ class CalibrationViewModel internal constructor(
     private val _rebootAdvised = MutableStateFlow(false)
 
     /**
-     * A flight-controller calibration whose offsets apply after a reboot (compass,
-     * accelerometer, level) just finished; the host offers the reboot, then calls
+     * An ArduPilot calibration whose offsets apply after a reboot (compass, accelerometer,
+     * level) just finished; the host offers the reboot, then calls
      * [consumeRebootAdvice].
      */
     val rebootAdvised: StateFlow<Boolean> = _rebootAdvised.asStateFlow()
@@ -218,7 +219,7 @@ class CalibrationViewModel internal constructor(
                 // Only a finish seen here: a success left over from an earlier visit does not count.
                 val wasRunning = previous !is CalibrationState.Idle && previous !is CalibrationState.Succeeded &&
                     previous !is CalibrationState.Failed
-                if (!s.agent && wasRunning && cal is CalibrationState.Succeeded && cal.kind.needsReboot()) _rebootAdvised.value = true
+                if (!s.agent && wasRunning && cal is CalibrationState.Succeeded && cal.kind.needsReboot(s.variant)) _rebootAdvised.value = true
                 previous = cal
             }
         }
@@ -248,7 +249,6 @@ class CalibrationViewModel internal constructor(
                     null
                 }
                 CalibrationKind.Esc -> t.calibration.startEsc()
-                CalibrationKind.CompassMot -> t.calibration.startCompassMot()
                 CalibrationKind.Airspeed -> t.calibration.startAirspeed()
             }
         }

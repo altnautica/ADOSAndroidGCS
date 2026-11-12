@@ -70,6 +70,14 @@ data class HomePosition(
     val tMs: Long,
 )
 
+/** `GPS_GLOBAL_ORIGIN`: where the FC's local frame (LOCAL_POSITION_NED 0, 0, 0) sits on the globe. */
+data class EkfOrigin(
+    val latDeg: Double,
+    val lonDeg: Double,
+    val altMslM: Float,
+    val tMs: Long,
+)
+
 data class WindState(
     val directionDeg: Float,
     val speedMs: Float,
@@ -159,6 +167,7 @@ private val NO_LOCAL_POSITION: StateFlow<LocalPosition?> = MutableStateFlow(null
 private val NO_VTOL_TRANSITION: StateFlow<Boolean> = MutableStateFlow(false)
 private val NO_LANDED_STATE: StateFlow<Boolean?> = MutableStateFlow(null)
 private val NO_EKF_ORIGIN: StateFlow<Boolean> = MutableStateFlow(false)
+private val NO_EKF_ORIGIN_POSITION: StateFlow<EkfOrigin?> = MutableStateFlow(null)
 
 /** One flow per telemetry topic so consumers only observe what they draw. */
 interface VehicleTelemetry {
@@ -196,4 +205,7 @@ interface VehicleTelemetry {
 
     /** True once the FC reported its EKF origin (`GPS_GLOBAL_ORIGIN`): its position frame is anchored. */
     val ekfOriginSet: StateFlow<Boolean> get() = NO_EKF_ORIGIN
+
+    /** The FC's EKF origin on the globe (`GPS_GLOBAL_ORIGIN`); null until reported. */
+    val ekfOrigin: StateFlow<EkfOrigin?> get() = NO_EKF_ORIGIN_POSITION
 }

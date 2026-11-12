@@ -34,7 +34,7 @@ class CalibrationPrecautionTest {
                 // As in the app: sheets draw in the overlay host, above the screen.
                 ProvideOverlayHost {
                     CalibrationScreen(
-                        CalibrationUiState(block = null, variant = FcVariant.MavlinkArdupilot, mavType = 2),
+                        CalibrationUiState(block = null, variant = FcVariant.MavlinkPx4, mavType = 2),
                         onStart = { started += it },
                         onConfirmPose = {},
                         onAcceptCompass = {},

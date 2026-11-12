@@ -3,10 +3,13 @@ package com.altnautica.gcs.core.link.calibration
 import com.altnautica.gcs.core.link.command.CommandService
 import com.altnautica.gcs.core.link.mavlink.MavlinkLink
 import com.altnautica.gcs.core.link.mavlink.targetMessages
+import com.altnautica.gcs.core.link.mavlink.VehicleTarget
 import com.altnautica.gcs.core.link.param.ParamService
 import com.altnautica.gcs.core.link.param.ParamSetResult
+import com.altnautica.gcs.core.link.param.ParamValue
 import com.altnautica.gcs.core.mavlink.enums.AccelcalVehiclePos
 import com.altnautica.gcs.core.mavlink.enums.MavCmd
+import com.altnautica.gcs.core.mavlink.enums.MavType
 import com.altnautica.gcs.core.mavlink.messages.CommandLong
 import com.altnautica.gcs.core.mavlink.messages.MagCalProgress
 import com.altnautica.gcs.core.mavlink.messages.MagCalReport
@@ -32,8 +35,8 @@ import kotlinx.coroutines.launch
  *   confirmation is echoed back with the same command;
  * - compass: ArduPilot runs `MAV_CMD_DO_START_MAG_CAL`, `MAG_CAL_PROGRESS`/`MAG_CAL_REPORT`,
  *   then accept or cancel; PX4 runs p2=1 and reports through `[cal]` status texts;
- * - ESC (p7=1), CompassMot (p6=1, ArduPilot only) and airspeed (p6=2) follow the gyro
- *   pattern: the ACK on ArduPilot, the `[cal]` texts on PX4;
+ * - ESC (PX4 only, p7=1) and airspeed (ArduPilot p3=1, PX4 p6=2) follow the gyro pattern:
+ *   the final ACK on ArduPilot, the `[cal]` texts on PX4;
  * - radio: `RC_CHANNELS` min/max capture written to `RCn_MIN/MAX/TRIM`.
  *
  * PX4 reports its own calibration steps through `[cal]` status texts, which
@@ -68,7 +71,7 @@ class MavlinkCalibrationService(
             r != CommandResult.Accepted -> fail(kind, r.reason())
             // PX4 ACKs the start and runs the calibration afterwards; its `[cal]` texts give the result.
             isPx4() -> Unit
-            // ArduPilot ACKs gyro and level calibration once they are done.
+            // ArduPilot's final ACK (after any IN_PROGRESS) comes once the calibration is done.
             else -> succeed(kind, lastText)
         }
         return r
@@ -76,15 +79,16 @@ class MavlinkCalibrationService(
 
     private fun isPx4(): Boolean = link.target.value?.family == FirmwareFamily.Px4
 
-    override suspend fun startEsc(): CommandResult = simple(CalibrationKind.Esc, 0f, 0f, 0f, 0f, 0f, 0f, 1f)
-
-    override suspend fun startCompassMot(): CommandResult {
-        // p6=1 is ArduCopter's CompassMot slot; other firmware would accept it and do nothing recognisable.
-        if (link.target.value?.family != FirmwareFamily.ArduCopter) return CommandResult.Unsupported
-        return simple(CalibrationKind.CompassMot, 0f, 0f, 0f, 0f, 0f, 1f)
+    // p7=1 is PX4's ESC slot; ArduPilot has no handler for it and calibrates ESCs at boot (ESC_CALIBRATION).
+    override suspend fun startEsc(): CommandResult {
+        if (!isPx4()) return CommandResult.Unsupported
+        return simple(CalibrationKind.Esc, 0f, 0f, 0f, 0f, 0f, 0f, 1f)
     }
 
-    override suspend fun startAirspeed(): CommandResult = simple(CalibrationKind.Airspeed, 0f, 0f, 0f, 0f, 0f, 2f)
+    // ArduPilot zeroes the airspeed sensor with the barometer (p3=1: IN_PROGRESS, then the result);
+    // PX4 has its own airspeed slot (p6=2).
+    override suspend fun startAirspeed(): CommandResult =
+        if (isPx4()) simple(CalibrationKind.Airspeed, 0f, 0f, 0f, 0f, 0f, 2f) else simple(CalibrationKind.Airspeed, 0f, 0f, 1f)
 
     override suspend fun startAccel(): CommandResult {
         begin(CalibrationKind.Accel)
@@ -140,14 +144,12 @@ class MavlinkCalibrationService(
     override suspend fun saveRadio(): CommandResult {
         val all = radio.values.toList()
         if (all.isEmpty()) return CommandResult.Rejected(-1, "noRcInput")
-        val values = params.snapshot.value.values
-        val sticks = listOf("RCMAP_ROLL" to 1, "RCMAP_PITCH" to 2, "RCMAP_THROTTLE" to 3, "RCMAP_YAW" to 4)
-            .map { (name, default) -> values[name]?.value?.toInt() ?: default }
+        val sticks = radioSticks(link.target.value, params.snapshot.value.values)
+            ?: return CommandResult.Rejected(-1, "rcMapNotLoaded")
         // Keep the screen in the Radio state: the operator moves the sticks further and saves again.
         val channels = radioChannelsToWrite(all, sticks) ?: return CommandResult.Rejected(-1, "sticksNotMoved")
-        val throttle = sticks[2]
         for (c in channels) {
-            val trim = if (c.channel == throttle) c.min else c.current.coerceIn(c.min, c.max)
+            val trim = if (c.channel == sticks.throttle) c.min else c.current.coerceIn(c.min, c.max)
             for ((suffix, v) in listOf("MIN" to c.min, "MAX" to c.max, "TRIM" to trim)) {
                 when (val r = params.set("RC${c.channel}_$suffix", v.toDouble())) {
                     is ParamSetResult.Confirmed -> Unit
@@ -165,8 +167,14 @@ class MavlinkCalibrationService(
     }
 
     override suspend fun cancel() {
-        val current = _state.value
-        if (current is CalibrationState.Compass) commands.long(MavCmd.MAV_CMD_DO_CANCEL_MAG_CAL, 0f)
+        when (val current = _state.value) {
+            is CalibrationState.Compass -> commands.long(MavCmd.MAV_CMD_DO_CANCEL_MAG_CAL, 0f)
+            // PX4 cancels a running sensor calibration on PREFLIGHT_CALIBRATION with every parameter 0.
+            is CalibrationState.Running -> if (current.kind == CalibrationKind.Compass && isPx4()) {
+                commands.long(MavCmd.MAV_CMD_PREFLIGHT_CALIBRATION, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+            }
+            else -> Unit
+        }
         stopWatching()
         _state.value = CalibrationState.Idle
     }
@@ -291,12 +299,33 @@ class MavlinkCalibrationService(
         const val MIN_STICK_SPAN_US = 200
 
         /**
-         * The channels a radio calibration writes: only those the operator moved. Null when any
-         * stick channel ([sticks], from RCMAP) spans under [MIN_STICK_SPAN_US], so nothing is written.
+         * The sticks of the vehicle behind [target], from its map parameters (`RC_MAP_*` on PX4,
+         * where 0 is an unmapped axis; `RCMAP_*` on ArduPilot). Rovers and boats check steering
+         * and throttle only: ArduPilot steers on the roll channel, and PX4's stick mapping
+         * picks two of its four axes. Null while any map parameter is not loaded.
          */
-        fun radioChannelsToWrite(channels: List<RcChannelRange>, sticks: List<Int>): List<RcChannelRange>? {
+        fun radioSticks(target: VehicleTarget?, values: Map<String, ParamValue>): RadioSticks? {
+            val px4 = target?.family == FirmwareFamily.Px4
+            val surface = target?.vehicleType == MavType.MAV_TYPE_GROUND_ROVER || target?.vehicleType == MavType.MAV_TYPE_SURFACE_BOAT
+            val prefix = if (px4) "RC_MAP_" else "RCMAP_"
+            val axes = if (surface && !px4) listOf("ROLL", "THROTTLE") else listOf("ROLL", "PITCH", "THROTTLE", "YAW")
+            val mapped = axes.associateWith { values["$prefix$it"]?.value?.toInt() ?: return null }.filterValues { it > 0 }
+            val channels = mapped.values.distinct()
+            return RadioSticks(
+                channels = channels,
+                required = if (surface && px4) minOf(2, channels.size) else channels.size,
+                throttle = if (surface) null else mapped["THROTTLE"],
+            )
+        }
+
+        /**
+         * The channels a radio calibration writes: only those the operator moved. Null when fewer
+         * than [RadioSticks.required] stick channels span [MIN_STICK_SPAN_US], so nothing is written.
+         */
+        fun radioChannelsToWrite(channels: List<RcChannelRange>, sticks: RadioSticks): List<RcChannelRange>? {
             val byChannel = channels.associateBy { it.channel }
-            if (sticks.any { ch -> byChannel[ch]?.let { it.max - it.min >= MIN_STICK_SPAN_US } != true }) return null
+            val moved = sticks.channels.count { ch -> byChannel[ch]?.let { it.max - it.min >= MIN_STICK_SPAN_US } == true }
+            if (moved < sticks.required) return null
             return channels.filter { it.max - it.min >= MIN_MOVED_US }
         }
 
@@ -308,3 +337,10 @@ class MavlinkCalibrationService(
         }
     }
 }
+
+/**
+ * The stick channels a radio calibration checks: at least [required] of [channels] must each
+ * span [MavlinkCalibrationService.MIN_STICK_SPAN_US]. [throttle] trims to its minimum; null when
+ * the throttle rests centred (rover and boat: forward and reverse).
+ */
+internal data class RadioSticks(val channels: List<Int>, val required: Int = channels.size, val throttle: Int? = null)

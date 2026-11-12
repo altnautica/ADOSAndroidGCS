@@ -17,6 +17,7 @@
     <string name="link_reason_denied">The flight controller refused the request</string>
     <string name="link_reason_temporarily_rejected">The flight controller cannot do this right now. Try again shortly</string>
     <string name="link_reason_sticks_not_moved">Move both sticks to every corner first. Each stick channel must travel at least 200 µs</string>
+    <string name="link_reason_rc_map_not_loaded">The stick channel map is not loaded yet. Load the parameters, then save again</string>
     <string name="link_reason_unknown">The flight controller did not complete the request</string>
 
     <string name="link_mission_result_error">The flight controller reported an error</string>

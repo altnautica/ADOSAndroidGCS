@@ -34,14 +34,17 @@ class DataflashViewModelTest {
     private val rows = MutableStateFlow<List<TlogFileEntity>>(emptyList())
     private val dao = object : TlogFileDao {
         override suspend fun insert(file: TlogFileEntity): Long {
-            rows.value = rows.value + file; return 1
+            val id = rows.value.size + 1L
+            rows.value = rows.value + file.copy(id = id); return id
         }
         override fun observeAll(): Flow<List<TlogFileEntity>> = rows
         override fun observeForSession(sessionId: Long) = rows.map { emptyList<TlogFileEntity>() }
         override suspend fun listForSession(sessionId: Long) = emptyList<TlogFileEntity>()
         override suspend fun getById(id: Long) = null
         override suspend fun updateSize(id: Long, sizeBytes: Long) = Unit
-        override suspend fun delete(id: Long) = Unit
+        override suspend fun delete(id: Long) {
+            rows.value = rows.value.filterNot { it.id == id }
+        }
     }
     private val progress = MutableSharedFlow<LogDownloadProgress>()
     private var cancelled = false
@@ -161,5 +164,22 @@ class DataflashViewModelTest {
 
         assertTrue(rows.value.single().path.endsWith("fc-log1.ulg"))
         assertTrue(File(dir, "fc-log1.ulg").exists())
+    }
+
+    @Test
+    fun aSavedFileThatIsGoneDropsItsIndexRow() = runTest(dispatcher) {
+        serviceFlow.value = service
+        val vm = vm()
+        val entry = (vm.state.value as DataflashUiState.Content).rows.last().entry
+        vm.download(entry)
+        val file = File(dir, "fc-log1.bin").apply { writeBytes(ByteArray(100)) }
+        progress.emit(LogDownloadProgress.Done(file))
+        assertEquals(1, rows.value.size)
+
+        file.delete()
+        vm.fileMissing(file.absolutePath)
+
+        assertTrue(rows.value.isEmpty())
+        assertEquals(EntryDownload.None, (vm.state.value as DataflashUiState.Content).rows.last().download)
     }
 }

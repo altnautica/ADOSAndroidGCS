@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.autonomy
 
 import com.altnautica.gcs.core.skills.hud.freshPilot
+import com.altnautica.gcs.feature.cockpit.band.freshHeartbeatArmed
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.nav.AutonomyControlApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
@@ -59,7 +60,7 @@ internal class CockpitAutonomy(
     private val scope: CoroutineScope,
     private val clock: MonotonicClock,
     private val node: StateFlow<DeviceId?>,
-    telemetry: StateFlow<VehicleTelemetry?>,
+    private val telemetry: StateFlow<VehicleTelemetry?>,
     services: StateFlow<VehicleServices?>,
     private val video: StateFlow<VideoUi>,
     skills: StateFlow<List<Skill>>,
@@ -84,17 +85,21 @@ internal class CockpitAutonomy(
             override suspend fun setDetector(node: DeviceId, modelId: String) = engineApi(node)?.setDetector(modelId) is AgentResult.Ok
         },
         now = clock::nowMs,
-        // Only a fresh pilot frame decides armed; an old one falls back to the heartbeat.
+        // Only a fresh pilot frame decides armed; an old one falls back to a fresh heartbeat,
+        // and an unknown arm state (no fresh source) counts as possibly armed and airborne.
         previewAllowed = {
             val pilot = freshPilot(feed.pilot.value, clock.nowMs())
             if (pilot != null) {
                 pilot.armed == false || pilot.owner == com.altnautica.gcs.core.model.PilotOwner.Pilot || pilot.owner == com.altnautica.gcs.core.model.PilotOwner.FcMode
             } else {
-                telemetry.value?.heartbeat?.value?.armed != true
+                fcArmed() == false
             }
         },
-        armed = { freshPilot(feed.pilot.value, clock.nowMs())?.armed ?: (telemetry.value?.heartbeat?.value?.armed == true) },
+        armed = { (freshPilot(feed.pilot.value, clock.nowMs())?.armed ?: fcArmed()) != false },
     )
+
+    /** The flight controller's arm state from a fresh heartbeat; null when unknown. */
+    private fun fcArmed(): Boolean? = freshHeartbeatArmed(telemetry.value?.heartbeat?.value, clock.nowMs())
 
     val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound)
 

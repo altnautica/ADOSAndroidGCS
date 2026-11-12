@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.home.quick
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.data.home.SelectedVehicleStore
@@ -10,7 +11,8 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
-import com.altnautica.gcs.feature.home.keepLastKnown
+import com.altnautica.gcs.feature.home.ShownVitals
+import com.altnautica.gcs.feature.home.keptWhileClosed
 import com.altnautica.gcs.core.model.MissionStatus
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
@@ -69,6 +71,9 @@ class QuickMenuViewModel @Inject constructor(
     vehicleRepository: VehicleRepository,
 ) : ViewModel() {
 
+    /** `elapsedRealtime`, the clock kept vitals are stamped with. */
+    internal var clock: () -> Long = SystemClock::elapsedRealtime
+
     /** Same choice Home makes: the stored vehicle when listed, otherwise the first in row order. */
     private val selectedNode: Flow<NodeSummary?> = combine(
         nodeRepository.nodes,
@@ -79,19 +84,27 @@ class QuickMenuViewModel @Inject constructor(
 
     /** Vitals restart only when the selected node or its reaches change, not on liveness ticks. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val vitals: Flow<Pair<DeviceId, NodeVitals>?> = selectedNode
+    private val vitals: Flow<Pair<DeviceId, ShownVitals>?> = selectedNode
         .distinctUntilChanged { a, b -> a?.id == b?.id && a?.reaches == b?.reaches }
         .flatMapLatest { node ->
             if (node == null) {
                 flowOf(null)
             } else {
                 val live = vitalsRepository.vitals(node).onStart { emit(NodeVitals.UNKNOWN) }
-                (if (HomeViewModel.vitalsNeedOpenLink(node)) live.keepLastKnown() else live).map { node.id to it }
+                val shown = if (HomeViewModel.vitalsNeedOpenLink(node)) {
+                    live.keptWhileClosed(vehicleRepository.openVehicles.map { node.id in it }.distinctUntilChanged()) { clock() }
+                } else {
+                    live.map { ShownVitals(it) }
+                }
+                shown.map { node.id to it }
             }
         }
 
     private val vehicle: Flow<FleetCard?> = combine(selectedNode, vitals.onStart { emit(null) }, vehicleRepository.openVehicles) { node, v, open ->
-        node?.let { n -> HomeViewModel.card(n, v?.takeIf { it.first == n.id }?.second ?: NodeVitals.UNKNOWN, linkOpen = n.id in open) }
+        node?.let { n ->
+            val shown = v?.takeIf { it.first == n.id }?.second
+            HomeViewModel.card(n, shown?.vitals ?: NodeVitals.UNKNOWN, linkOpen = n.id in open, keptHeardAtMs = shown?.keptHeardAtMs)
+        }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

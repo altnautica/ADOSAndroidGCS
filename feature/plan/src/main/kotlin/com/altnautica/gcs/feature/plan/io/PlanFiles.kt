@@ -226,7 +226,7 @@ object PlanFiles {
         val warnings = ArrayList<PlanWarning>()
         val jumpSeq = HashMap<Int, Int>()
         val rows = ArrayList<FlatItem>()
-        items.forEach { expand(it.jsonObject, rows, jumpSeq, warnings) }
+        items.forEachIndexed { i, item -> expand(item.jsonObject, i + 1, rows, jumpSeq, warnings) }
         val resolved = resolveJumps(rows, jumpSeq, warnings)
         val collapsed: CollapsedItems = MissionFlattener.collapse(resolved, nextId)
         val plan = MissionPlan(
@@ -239,8 +239,8 @@ object PlanFiles {
         return ImportedPlan(plan, warnings + collapsed.warnings)
     }
 
-    /** Expands a `.plan` item into flat rows numbered by output position (from 1). */
-    private fun expand(item: JsonObject, out: MutableList<FlatItem>, jumpSeq: MutableMap<Int, Int>, warnings: MutableList<PlanWarning>) {
+    /** Expands a `.plan` item ([fileRow]: its place in the file's item list, from 1) into flat rows numbered by output position (from 1). */
+    private fun expand(item: JsonObject, fileRow: Int, out: MutableList<FlatItem>, jumpSeq: MutableMap<Int, Int>, warnings: MutableList<PlanWarning>) {
         item.number("doJumpId")?.toInt()?.let { jumpSeq[it] = out.size + 1 }
         when (val type = item.string("type")) {
             "SimpleItem" -> out += simpleItem(item, out.size + 1)
@@ -249,7 +249,7 @@ object PlanFiles {
                     ?: item.takeIf { type == "TransectStyleComplexItem" }
                 val embedded = transect?.get("Items") as? JsonArray
                 if (embedded != null && embedded.isNotEmpty()) {
-                    embedded.forEach { expand(it.jsonObject, out, jumpSeq, warnings) }
+                    embedded.forEach { expand(it.jsonObject, fileRow, out, jumpSeq, warnings) }
                     return
                 }
                 val visual = (transect?.get("VisualTransectPoints") ?: item["VisualTransectPoints"]) as? JsonArray
@@ -268,7 +268,7 @@ object PlanFiles {
                 }
                 throw PlanFormatException(PlanFormatException.Reason.ComplexWithoutGeometry, item.string("complexItemType") ?: type)
             }
-            else -> warnings += PlanWarning.SkippedItem(type ?: "none")
+            else -> warnings += PlanWarning.SkippedItem(fileRow, type ?: "none")
         }
     }
 

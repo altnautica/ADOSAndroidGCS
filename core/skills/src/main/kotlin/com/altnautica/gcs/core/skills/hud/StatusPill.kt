@@ -166,7 +166,7 @@ class StatusPill(
         }
         if (!prearm.isNullOrEmpty()) {
             val t = prearm.last().replace(PREARM, "")
-            out += PillAlert("fc:$t", PillSource.FcPrearm, PillSeverity.Warning, text.text("flow.preflight.fc_prearm.failing", mapOf("text" to t)))
+            out += PillAlert("fc:$t", PillSource.FcPrearm, PillSeverity.Warning, t)
         }
         // The FC repeats a warning while its condition lasts: one alert per text, at its worst severity.
         val fcAt = HashMap<String, Int>()

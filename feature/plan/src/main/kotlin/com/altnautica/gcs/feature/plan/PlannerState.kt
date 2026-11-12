@@ -227,6 +227,13 @@ data class PlannerUiState(
     val missionInFlight: Boolean
         get() = drone?.state == MissionState.Active || (link as? VehicleLink.Connected)?.flyingMission == true
 
+    /**
+     * Connected, but the arm state is not known: no heartbeat yet, or the last one is stale.
+     * The drone may be flying, so uploads wait for a fresh heartbeat.
+     */
+    val armStateUnknown: Boolean
+        get() = (link as? VehicleLink.Connected)?.let { it.armed == null || !it.linkFresh } == true
+
     /** The plan as drawn: [plan] with an active drag applied. */
     val displayPlan: MissionPlan get() = dragPreview?.applyTo(plan) ?: plan
 

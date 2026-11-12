@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.altnautica.gcs.core.designsystem.component.CancelledConfirmGuard
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommandDispatcher
 import com.altnautica.gcs.core.designsystem.component.console.ControllerUi
 import com.altnautica.gcs.core.designsystem.component.console.GlyphSet
@@ -104,9 +105,11 @@ class MainActivity : ComponentActivity() {
             }
             CompositionLocalProvider(LocalConsoleCommands provides consoleCommands, LocalControllerUi provides controllerUi) {
                 AdosTheme(themeId = appearance.theme, gloveMode = appearance.gloveMode) {
-                    ProvideOverlayHost {
-                        // Nothing, deep links included, opens until the current safety disclaimer is accepted.
-                        DisclaimerGate { AppRoot(pairLinks = pairLinkFlow) }
+                    CancelledConfirmGuard {
+                        ProvideOverlayHost {
+                            // Nothing, deep links included, opens until the current safety disclaimer is accepted.
+                            DisclaimerGate { AppRoot(pairLinks = pairLinkFlow) }
+                        }
                     }
                 }
             }

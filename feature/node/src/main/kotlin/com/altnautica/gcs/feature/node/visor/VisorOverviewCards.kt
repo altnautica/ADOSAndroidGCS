@@ -32,7 +32,7 @@ fun VisorOverviewCards(nodeId: String, modifier: Modifier = Modifier) {
         vm.show(NodeTab.Overview)
         onDispose { vm.show(null) }
     }
-    val retry = { vm.show(NodeTab.Overview) }
+    val retry = vm::retry
     Column(modifier, verticalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
         when (val load = state.overview) {
             Load.Loading -> LoadingState(stringResource(R.string.node_loading))

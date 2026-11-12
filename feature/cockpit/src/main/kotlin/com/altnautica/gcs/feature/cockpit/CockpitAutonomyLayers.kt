@@ -258,7 +258,7 @@ internal fun radarDiameter(width: WidthClass): Dp = when (width) {
 
 /**
  * The minimap in its local frame, sampled at 2 Hz plus every pose. A tap runs [onClick]; a
- * long-press picks the point under it like any cockpit map ([CockpitViewModel.pickLocalPoint]).
+ * long-press flies to the point under it, as an offset from the drone ([CockpitViewModel.pickLocalPoint]).
  */
 @Composable
 internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {

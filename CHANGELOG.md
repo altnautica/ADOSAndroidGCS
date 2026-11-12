@@ -45,7 +45,8 @@ app's `versionName`.
   spec's stale age (a frame at exactly the stale age is stale); otherwise the
   heartbeat answers.
 - **Cancelled controller press.** A chord start or a pad disconnect cancels a
-  held select, so the press does nothing on release.
+  held select: no button, chip, tile or menu row clicks on that release, and a
+  hold-to-confirm stops without firing.
 - **Banner cause.** Pilot banners name their cause.
 - **Phone layout.** Snackbars sit above the bottom row and the map card no
   longer repeats its title; the centre banner no longer covers the heading.
@@ -55,6 +56,56 @@ app's `versionName`.
 - **Outside the flight screen.** Home, Connect, node, configure, planner, logs
   and settings screens no longer show raw ids, enum names or server messages,
   use one "Add a node" label, and their small rows are 48 dp targets.
+- **Manual control.** Stick input follows the controller's stick mode,
+  calibration and dead zone.
+- **Mission guards.** Upload and start are refused while a mission is flying,
+  from every entry point; the reason says to switch out of AUTO. Upload also
+  waits while the arm state is unknown.
+- **Missions for surface vehicles.** Rover, boat and sub missions at 0 m or
+  below are no longer blocked from upload.
+- **Plan drafts.** An unsaved plan is kept as a draft; a plan discarded on
+  leaving, or saved just before leaving, no longer comes back as a draft.
+- **Survey geometry.** Survey passes follow the set bearing, are centred on
+  the area and drop zero-length passes.
+- **Calibration.** Compass-motor calibration is no longer offered, and ESC
+  calibration only on PX4 multirotors. Airspeed calibration works on
+  ArduPilot planes, PX4 compass calibration follows the flight controller's
+  progress and Cancel stops it on the vehicle, and the reboot prompt appears
+  only on ArduPilot.
+- **Radio calibration Save** checks the sticks the vehicle actually maps, on
+  PX4 and ArduPilot, rovers and boats included, and refuses with a reason
+  until they have moved or while the stick map is not loaded.
+- **Parameters.** Closing a parameter-file apply part-way names the value
+  whose write was not confirmed; counter and sensor-ID parameters stay
+  read-only even when their documentation does not flag them; setup steps
+  recover on their own after a reconnect.
+- **Logs.** Sharing a log whose file is gone removes it from the list, a failed
+  onboard-log download offers Retry, and a flight record is written once even
+  if the first write fails at arm. Skipped import items show their row number,
+  and loading the plan the drone reports has its own button label.
+- **Disclaimer and licences.** The disclaimer must be accepted before the app
+  opens (pair links wait for it), and each licence row opens its bundled text.
+- **Language.** The app ships in English only.
+- **Home and Quick menu vitals.** A silent flight controller's last mode,
+  battery and arm state no longer show as live: while the link is open they
+  read unknown and never Ready; after it closes the last reading stays without
+  the arm state and says how long ago it was heard.
+- **Ground station.** Joining a Wi-Fi network on an armed ground station whose
+  access point is up asks before standing the access point down. Relayed nodes
+  no longer flip to stale between their slower polls. The Retry buttons on the
+  ground-station and Visor tabs reload at once, and the agent page's live
+  readouts stop polling while the app is in the background.
+- **Node pages** mark stale readings and ask before uninstall, restart,
+  leaving Wi-Fi, turning the access point off and sharing.
+- **Arm state on the flight screen.** The status pill, the vision layers and
+  the left column read the arm state only from a fresh pilot frame or a fresh
+  heartbeat, so a stale "disarmed" no longer shows pre-flight items or Take off
+  while the drone may be flying.
+- **Fly Here from the local map** places the target from the flight
+  controller's own origin and the drone as drawn, with or without GNSS, and
+  the demo drone flies to it. Fly Here through the flight controller is
+  refused while the pilot reports a flight-controller failsafe.
+- **Setup errors** show the shared spec's words for every setup error code.
 
 ## [0.5.0] - 2026-11-10
 

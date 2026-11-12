@@ -46,6 +46,8 @@ class FakeTelemetry : VehicleTelemetry {
     override val statusText = MutableSharedFlow<StatusText>(extraBufferCapacity = 16)
     override val localPosition = MutableStateFlow<com.altnautica.gcs.core.model.LocalPosition?>(null)
     override val vtolTransitioning = MutableStateFlow(false)
+    override val ekfOriginSet = MutableStateFlow(false)
+    override val ekfOrigin = MutableStateFlow<com.altnautica.gcs.core.model.EkfOrigin?>(null)
 }
 
 class FakeControl : VehicleControl {

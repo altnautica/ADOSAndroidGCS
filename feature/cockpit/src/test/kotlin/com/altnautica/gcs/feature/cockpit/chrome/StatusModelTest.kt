@@ -66,7 +66,7 @@ class StatusModelTest {
         )
         assertEquals("98 % used", got[5].text)
         assertEquals(StatusSeverity.Warning, got[5].severity)
-        assertEquals("Flight controller: Compass not calibrated", got[3].text)
+        assertEquals("Compass not calibrated", got[3].text)
     }
 
     @Test

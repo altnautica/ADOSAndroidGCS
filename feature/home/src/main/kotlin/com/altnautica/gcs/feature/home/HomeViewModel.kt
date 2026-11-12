@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.home
 
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.agent.node.LanNodeSource
@@ -9,7 +10,6 @@ import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
 import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.link.node.NodeVitalsRepository
-import kotlinx.coroutines.flow.runningFold
 import com.altnautica.gcs.core.link.node.canFly
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant
@@ -46,6 +46,11 @@ data class FleetCard(
      * closed: nothing is connecting, so Home shows no vitals and no "Connecting…".
      */
     val directLinkClosed: Boolean,
+    /**
+     * Set when [vitals] are the last reading kept after the direct link closed: when that
+     * reading was last heard (`elapsedRealtime`). Kept vitals carry no arm state.
+     */
+    val keptHeardAtMs: Long? = null,
 )
 
 data class HomeUiState(
@@ -73,9 +78,14 @@ class HomeViewModel @Inject constructor(
 
     private val nodes = nodeRepository.nodes
 
+    /** `elapsedRealtime`, the clock kept vitals are stamped with. */
+    internal var clock: () -> Long = SystemClock::elapsedRealtime
+
+    private val openLinks: Flow<Set<DeviceId>> = vehicleRepository.openVehicles.map { it.keys }.distinctUntilChanged()
+
     /** Vitals depend only on a node's id and reaches, so liveness ticks do not restart them. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val vitals: Flow<Map<DeviceId, NodeVitals>> = nodes
+    private val vitals: Flow<Map<DeviceId, ShownVitals>> = nodes
         .map { list -> list?.map { it.id to it.reaches } }
         .distinctUntilChanged()
         .flatMapLatest { keys ->
@@ -87,17 +97,23 @@ class HomeViewModel @Inject constructor(
                     keys.map { (id, reaches) ->
                         val node = current[id] ?: placeholder(id, reaches)
                         val live = vitalsRepository.vitals(node).onStart { emit(NodeVitals.UNKNOWN) }
-                        // A direct link reports nothing once closed: keep what it last reported.
-                        (if (vitalsNeedOpenLink(node)) live.keepLastKnown() else live).map { id to it }
+                        // A direct link reports nothing once closed: keep what it last reported, marked as kept.
+                        val shown = if (vitalsNeedOpenLink(node)) {
+                            live.keptWhileClosed(openLinks.map { id in it }.distinctUntilChanged()) { clock() }
+                        } else {
+                            live.map { ShownVitals(it) }
+                        }
+                        shown.map { id to it }
                     },
                 ) { pairs -> pairs.toMap() }
             }
         }
 
-    private val openLinks: Flow<Set<DeviceId>> = vehicleRepository.openVehicles.map { it.keys }.distinctUntilChanged()
-
     private val cards: Flow<List<FleetCard>?> = combine(nodes, vitals.onStart { emit(emptyMap()) }, openLinks) { list, v, open ->
-        list?.sortedWith(FLEET_RANK)?.map { card(it, v[it.id] ?: NodeVitals.UNKNOWN, linkOpen = it.id in open) }
+        list?.sortedWith(FLEET_RANK)?.map {
+            val shown = v[it.id]
+            card(it, shown?.vitals ?: NodeVitals.UNKNOWN, linkOpen = it.id in open, keptHeardAtMs = shown?.keptHeardAtMs)
+        }
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -161,9 +177,10 @@ class HomeViewModel @Inject constructor(
 
         /**
          * [linkOpen] says whether the node's vehicle link is open now; it matters only for a node
-         * whose vitals come from that link alone (see [vitalsNeedOpenLink]).
+         * whose vitals come from that link alone (see [vitalsNeedOpenLink]). [keptHeardAtMs] marks
+         * [vitals] as a reading kept after that link closed.
          */
-        fun card(node: NodeSummary, vitals: NodeVitals, linkOpen: Boolean): FleetCard {
+        fun card(node: NodeSummary, vitals: NodeVitals, linkOpen: Boolean, keptHeardAtMs: Long? = null): FleetCard {
             val agentReach = node.reaches.any { it == Reach.Lan || it is Reach.ViaGround }
             return FleetCard(
                 node = node,
@@ -172,6 +189,7 @@ class HomeViewModel @Inject constructor(
                 showThumbnail = node.profile == NodeProfile.Drone && node.liveness == Liveness.Live && agentReach,
                 hasAgentLink = agentReach,
                 directLinkClosed = vitalsNeedOpenLink(node) && !linkOpen,
+                keptHeardAtMs = keptHeardAtMs,
             )
         }
 
@@ -189,7 +207,3 @@ class HomeViewModel @Inject constructor(
         )
     }
 }
-
-/** Replaces an all-unknown reading (the link closed) with the last reading that knew something. */
-internal fun Flow<NodeVitals>.keepLastKnown(): Flow<NodeVitals> =
-    runningFold(NodeVitals.UNKNOWN) { last, v -> if (v == NodeVitals.UNKNOWN) last else v }.distinctUntilChanged()

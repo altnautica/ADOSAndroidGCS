@@ -236,7 +236,7 @@ internal class PlannerVehicleController(
     fun upload() {
         val svc = services ?: return
         val s = state.value
-        if (s.transferring || s.missionInFlight || s.issues.any { it.kind.blocking }) return
+        if (s.transferring || s.missionInFlight || s.armStateUnknown || s.issues.any { it.kind.blocking }) return
         val plan = s.plan
         val homeSlot = homeSlot()
         val wire = MissionWire.toWire(plan, homeSlot)

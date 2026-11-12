@@ -22,6 +22,11 @@ data class NodePoll(
     val agentVersion: String?,
     /** A ground station's summary of that drone (mode, battery), polled with it; null elsewhere. */
     val carriedDrone: PairedDrone? = null,
+    /**
+     * Oldest [lastOkMs] still shown as current for this node's endpoint
+     * ([AgentStatusRepository.LAN_MAX_POLL_AGE_MS] or, through a relay, [AgentStatusRepository.RELAY_MAX_POLL_AGE_MS]).
+     */
+    val maxAgeMs: Long = AgentStatusRepository.LAN_MAX_POLL_AGE_MS,
 )
 
 /** Pure merge of stored credentials, discovery, and status polls into [NodeSummary]s. */

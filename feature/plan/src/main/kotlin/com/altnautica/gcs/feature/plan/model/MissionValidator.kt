@@ -15,7 +15,7 @@ enum class PlanIssueKind(val blocking: Boolean) {
     NoLandOrRtlLast(false),
     AltitudeAbove120mRel(false),
 
-    /** A flown item at or below 0 m above home. */
+    /** A flown item at or below 0 m above home (vehicles that fly only). */
     AltitudeAtOrBelowHome(true),
 
     /** A flown item at (0, 0) or outside the valid latitude/longitude range. */
@@ -133,7 +133,9 @@ object MissionValidator {
         if (plan.isEmpty) return listOf(PlanIssue(PlanIssueKind.Empty))
         val issues = ArrayList<PlanIssue>()
         val nav = plan.items.filter { MavCmd.isNav(it.command) }
-        if (takeoffExpected(profile.mavType)) takeoffIssue(plan, nav.firstOrNull(), profile)?.let { issues += it }
+        // Rovers and boats run at 0 m and subs at negative depth: only flyers need altitude.
+        val airborne = takeoffExpected(profile.mavType)
+        if (airborne) takeoffIssue(plan, nav.firstOrNull(), profile)?.let { issues += it }
         nav.lastOrNull()?.let { last ->
             if (last.command !in ENDINGS) issues += PlanIssue(PlanIssueKind.NoLandOrRtlLast, last.id)
         }
@@ -141,7 +143,7 @@ object MissionValidator {
             if (item.altitudeRef == AltitudeRef.Relative && item.command != MavCmd.NAV_RETURN_TO_LAUNCH && item.z > MAX_REL_ALT_M) {
                 issues += PlanIssue(PlanIssueKind.AltitudeAbove120mRel, item.id)
             }
-            if (item.command in FLOWN_AT_ALTITUDE && item.altitudeRef == AltitudeRef.Relative && item.z <= 0f) {
+            if (airborne && item.command in FLOWN_AT_ALTITUDE && item.altitudeRef == AltitudeRef.Relative && item.z <= 0f) {
                 issues += PlanIssue(PlanIssueKind.AltitudeAtOrBelowHome, item.id)
             }
             if (item.command in FLOWN_TO && !validCoordinates(item)) issues += PlanIssue(PlanIssueKind.InvalidCoordinates, item.id)

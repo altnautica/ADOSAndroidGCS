@@ -3,7 +3,7 @@ package com.altnautica.gcs.feature.node.common
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
-import com.altnautica.gcs.core.link.node.NodeVitalsRepository
+import com.altnautica.gcs.core.agent.node.NodePoll
 import com.altnautica.gcs.feature.node.R
 
 /** Words for the agent's video pipeline state; null for a value this app does not know. */
@@ -106,8 +106,10 @@ fun sensorName(key: String): String {
 }
 
 /**
- * The agent's last good status is too old to show as live: no success yet, or none for
- * [NodeVitalsRepository.MAX_POLL_AGE_MS] (the same rule the node header uses).
+ * The agent's last good status is too old to show as live: no success yet, or none for the
+ * poll's own [NodePoll.maxAgeMs], which is longer through a relay (the same rule the node header uses).
  */
-fun pollStale(lastOkMs: Long?, nowMs: Long): Boolean =
-    lastOkMs == null || nowMs - lastOkMs >= NodeVitalsRepository.MAX_POLL_AGE_MS
+fun pollStale(poll: NodePoll, nowMs: Long): Boolean {
+    val okMs = poll.lastOkMs ?: return true
+    return nowMs - okMs >= poll.maxAgeMs
+}

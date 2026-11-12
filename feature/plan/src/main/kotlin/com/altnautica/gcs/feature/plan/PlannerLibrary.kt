@@ -27,6 +27,8 @@ internal class PlannerLibrary(
     private val documents: PlanDocuments,
     private val session: PlanSession,
     private val nextId: () -> Long,
+    /** Clears the stored draft at once; true when the open plan was discarded. */
+    private val clearDraft: (discarded: Boolean) -> Unit,
     /** The plan as exported: with the vehicle's home filled in when the plan has none. */
     private val planWithHome: () -> MissionPlan,
 ) {
@@ -62,7 +64,11 @@ internal class PlannerLibrary(
         DiscardAction.New -> newPlan()
         is DiscardAction.Load -> load(action.id)
         DiscardAction.Import -> state.update { it.copy(pickImport = true) }
-        DiscardAction.Leave -> state.update { it.copy(leaveApproved = true) }
+        DiscardAction.Leave -> {
+            // The discarded plan must not come back as a draft once this screen is gone.
+            clearDraft(true)
+            state.update { it.copy(leaveApproved = true) }
+        }
     }
 
     // ── Library ──────────────────────────────────────────────
@@ -91,6 +97,7 @@ internal class PlannerLibrary(
             )
             session.markSaved(plan)
             state.update { it.copy(name = name, savedId = id, dirty = it.plan != plan, message = PlannerMessage.Saved(name)) }
+            if (!state.value.dirty) clearDraft(false)
         }
     }
 

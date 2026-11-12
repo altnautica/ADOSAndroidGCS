@@ -3,7 +3,8 @@ package com.altnautica.gcs.feature.node.overview
 import com.altnautica.gcs.core.agent.groundstation.StationStatus
 import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.core.agent.http.AgentResult
-import com.altnautica.gcs.core.link.node.NodeVitalsRepository
+import com.altnautica.gcs.core.agent.node.AgentStatusRepository
+import com.altnautica.gcs.core.agent.node.NodePoll
 import com.altnautica.gcs.feature.node.R
 import com.altnautica.gcs.feature.node.common.PageProblem
 import com.altnautica.gcs.feature.node.common.pollStale
@@ -36,11 +37,26 @@ class OverviewFreshnessTest {
         assertEquals(PageProblem.Unreachable, PageProblem.from(AgentError.Server(500, "stack trace")))
     }
 
+    private fun poll(lastOkMs: Long?, maxAgeMs: Long = AgentStatusRepository.LAN_MAX_POLL_AGE_MS) =
+        NodePoll(status = null, lastOkMs = lastOkMs, carriedDroneId = null, agentVersion = null, maxAgeMs = maxAgeMs)
+
     @Test
     fun anOldPollIsStale() {
-        assertFalse(pollStale(lastOkMs = 10_000, nowMs = 12_000))
-        assertTrue(pollStale(lastOkMs = 10_000, nowMs = 10_000 + NodeVitalsRepository.MAX_POLL_AGE_MS))
-        assertTrue(pollStale(lastOkMs = null, nowMs = 0))
+        assertFalse(pollStale(poll(lastOkMs = 10_000), nowMs = 12_000))
+        assertFalse(pollStale(poll(lastOkMs = 10_000), nowMs = 10_000 + AgentStatusRepository.LAN_MAX_POLL_AGE_MS - 1))
+        assertTrue(pollStale(poll(lastOkMs = 10_000), nowMs = 10_000 + AgentStatusRepository.LAN_MAX_POLL_AGE_MS))
+        assertTrue(pollStale(poll(lastOkMs = null), nowMs = 0))
+    }
+
+    @Test
+    fun aRelayedPollOneSlowCycleOldIsNotStale() {
+        val relayed = AgentStatusRepository.RELAY_MAX_POLL_AGE_MS
+        for (age in listOf(11_000L, 12_000L, 13_000L)) {
+            assertFalse(pollStale(poll(lastOkMs = 10_000, maxAgeMs = relayed), nowMs = 10_000 + age))
+        }
+        assertTrue(pollStale(poll(lastOkMs = 10_000, maxAgeMs = relayed), nowMs = 10_000 + relayed))
+        // A direct node keeps its own, tighter limit.
+        assertTrue(pollStale(poll(lastOkMs = 10_000), nowMs = 10_000 + 13_000))
     }
 
     @Test
