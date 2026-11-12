@@ -103,4 +103,32 @@ class CancelledConfirmGuardTest {
         compose.mainClock.advanceTimeBy(100)
         assertFalse("a cancelled release must end the hold", state.isPressed)
     }
+
+    @Test
+    fun `a cancelled release aborts a keyed slide-to-confirm`() {
+        var confirmed = 0
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
+            AdosTheme {
+                CancelledConfirmGuard {
+                    SlideToConfirm("Start", onConfirmed = { confirmed++ }, modifier = Modifier.testTag("slide"), keyHoldMs = 1500)
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(100)
+        val slide = compose.onNodeWithTag("slide")
+        slide.requestFocus()
+        slide.performKeyPress(down)
+        compose.mainClock.advanceTimeBy(500)
+        slide.performKeyPress(cancelled)
+        compose.mainClock.advanceTimeBy(3_000)
+        assertEquals("a cancelled release must not complete the slide", 0, confirmed)
+        // A full hold with a plain release still confirms.
+        slide.performKeyPress(down)
+        compose.mainClock.advanceTimeBy(3_000)
+        slide.performKeyPress(up)
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals(1, confirmed)
+    }
 }

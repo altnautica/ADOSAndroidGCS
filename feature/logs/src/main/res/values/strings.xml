@@ -59,6 +59,7 @@
     <string name="logs_df_armed_title">Drone is armed</string>
     <string name="logs_df_armed">Disarm to list or download flight-controller logs.</string>
     <string name="logs_df_failed">Download stopped. %1$s. Download again to resume.</string>
+    <string name="logs_df_share_partial">Share partial</string>
     <string name="logs_share_chooser">Share log file</string>
     <string name="logs_share_missing">This log file is no longer on the device</string>
 </resources>

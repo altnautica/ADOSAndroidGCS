@@ -73,7 +73,14 @@ internal class PlannerLibrary(
 
     // ── Library ──────────────────────────────────────────────
 
-    fun newPlan() = session.replacePlan(MissionPlan(), name = "", savedId = null)
+    /**
+     * A new or loaded plan clears the draft at once (here and in [load]): the screen's Back
+     * handler is off for a clean plan, so the view model can be gone before the debounced clear runs.
+     */
+    fun newPlan() {
+        session.replacePlan(MissionPlan(), name = "", savedId = null)
+        clearDraft(false)
+    }
 
     fun save(defaultName: String) {
         val s = state.value
@@ -109,6 +116,7 @@ internal class PlannerLibrary(
                 return@launch
             }
             session.replacePlan(imported.plan, name = entity.name, savedId = entity.id)
+            clearDraft(false)
             state.update { it.copy(message = PlannerMessage.Loaded(entity.name)) }
         }
     }

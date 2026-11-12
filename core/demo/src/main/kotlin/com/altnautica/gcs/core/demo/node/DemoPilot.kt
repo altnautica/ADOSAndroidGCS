@@ -277,14 +277,12 @@ internal class DemoPilot(
      * pilot offers it: a goto refusal pin refuses with its code; otherwise the arguments, the
      * control mode, a failsafe and the reported armed and landed are checked as the pilot
      * does, then the flight controller is put in GUIDED and sent the point (a reposition),
-     * and the owner shows `goto`.
+     * the pilot owns the vehicle and the owner shows `goto` (a flying pin's mode returns after).
      */
     private fun goto(args: JsonObject?, t: Long): String? {
         val scenario = pinned(t)
         scenario?.gotoRefusal?.let { return it }
-        val lat = args?.number("lat")
-        val lon = args?.number("lon")
-        val alt = args?.number("alt_m")
+        val (lat, lon, alt) = listOf("lat", "lon", "alt_m").map { args?.number(it) }
         if (lat == null || lon == null || alt == null || lat !in -90.0..90.0 || lon !in -180.0..180.0 || !alt.isFinite()) return "bad_args"
         if (controlMode != "ados") return "control_mode"
         if (DemoPilotPins.failsafe(scenario)) return "failsafe"
@@ -294,6 +292,7 @@ internal class DemoPilot(
         guidedSentMs = t
         fc.reposition(lat, lon, alt.toFloat())
         gotoAtMs = t
+        owner = PILOT
         return null
     }
 
@@ -406,7 +405,10 @@ internal class DemoPilot(
         if (l != null && l.endedMs == null) driveLaunch(l, armed, t)
         if (l != null && l.endedMs?.let { t - it > SEQUENCE_SHOWN_MS } == true) launch = null
         if (guidedSentMs?.let { t - it >= MODE_SETTLE_MS } == true) guidedSentMs = null
-        if (gotoAtMs?.let { t - it > GOTO_SHOWN_MS } == true) gotoAtMs = null
+        if (gotoAtMs?.let { t - it > GOTO_SHOWN_MS } == true) {
+            gotoAtMs = null
+            if (!pinModePending) holdPinMode() // back to the mode a pinned frame reports
+        }
         if (pinModePending && armed && fc.altitudeM >= ARRIVED_FRACTION * DemoPilotPins.PIN_HEIGHT_M) {
             pinModePending = false
             holdPinMode()

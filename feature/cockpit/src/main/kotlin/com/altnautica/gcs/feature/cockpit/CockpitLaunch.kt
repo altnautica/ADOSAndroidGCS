@@ -3,17 +3,19 @@ package com.altnautica.gcs.feature.cockpit
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillCategory
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.core.skills.SkillReason
+import com.altnautica.gcs.core.skills.isLinkFresh
 import com.altnautica.gcs.core.skills.NoticeLevel
 import com.altnautica.gcs.core.skills.SkillNotice
 import com.altnautica.gcs.core.skills.builtin.FlyHereAltitude
 import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.core.skills.hud.FlyHereFc
-import com.altnautica.gcs.core.skills.hud.FlyHereReason
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.flyHereOffered
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
@@ -96,8 +98,8 @@ internal class CockpitLaunch(
      */
     fun pickMapPoint(target: GeoPoint) {
         if (airborne()) {
-            flyHereRefusal()?.let { reason ->
-                val why = strings.format(reason.refusalKey).replaceFirstChar(Char::lowercase)
+            flyHereRefusal()?.let { key ->
+                val why = strings.format(key).replaceFirstChar(Char::lowercase)
                 warn(strings.format("refusal.fly_here_prefix", mapOf("reason" to why)))
                 return
             }
@@ -173,15 +175,24 @@ internal class CockpitLaunch(
         notices.tryEmit(SkillNotice(FlyHereSkill.id, NoticeLevel.Warning, null, message))
     }
 
-    /** Why Fly Here is not offered now (the shared offer's reason), or null when it is or no reason is known. */
-    private fun flyHereRefusal(): FlyHereReason? {
+    /**
+     * The spec key saying why Fly Here is not offered now (the shared offer's reason), or null
+     * when it is or no reason is known. The FC's state counts only from a fresh heartbeat; with
+     * neither it nor the pilot fresh the arm state is unknown, never "on the ground".
+     */
+    private fun flyHereRefusal(): String? {
         val p = pilot.state.value
         val t = telemetry.value
-        val fc = t?.heartbeat?.value?.let { hb ->
+        val now = clock.nowMs()
+        val fc = t?.heartbeat?.value?.takeIf { isLinkFresh(it, now) }?.let { hb ->
             FlyHereFc(guided = hb.mode.name.equals("GUIDED", ignoreCase = true), armed = hb.armed, landed = t.onGround.value == true)
         }
-        val offer = flyHereOffered(p, p?.let { clock.nowMs() - it.receivedAtMs } ?: Long.MAX_VALUE, fc)
-        return offer.reason.takeIf { offer.route == null }
+        val pilotAgeMs = p?.let { now - it.receivedAtMs } ?: Long.MAX_VALUE
+        val offer = flyHereOffered(p, pilotAgeMs, fc)
+        if (offer.route != null) return null
+        offer.reason?.let { return it.refusalKey }
+        val pilotFresh = p != null && pilotAgeMs < PilotState.STALE_MS
+        return if (fc == null && !pilotFresh) "refusal.${SkillReason.LANDED_UNKNOWN}" else null
     }
 
     /** [target] in the pilot's local frame at [altM] above it: from the vehicle's local position, else from home. */

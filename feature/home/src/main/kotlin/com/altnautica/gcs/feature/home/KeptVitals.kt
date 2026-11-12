@@ -19,20 +19,25 @@ private data class Heard(val live: NodeVitals, val last: NodeVitals?, val lastHe
 
 /**
  * A direct link's vitals as a card shows them. While the link reports, its reading shows. Once it
- * reports nothing, the last reading is kept only while the link is closed, stamped with [clock] at
- * the moment it stopped (within the heartbeat timeout of when it was last heard) and without its arm
- * state. An open link that has fallen silent shows unknown: a frozen reading must not pass for live.
+ * reports nothing, the last reading is kept only while the link is closed, stamped with when the link
+ * last heard the vehicle ([NodeVitals.heardAtMs], else [clock] at the moment it stopped) and without
+ * its arm state. An open link that has fallen silent shows unknown: a frozen reading must not pass for live.
  */
 internal fun Flow<NodeVitals>.keptWhileClosed(linkOpen: Flow<Boolean>, clock: () -> Long): Flow<ShownVitals> =
     runningFold(Heard(NodeVitals.UNKNOWN, null, null)) { h, v ->
         when {
             v != NodeVitals.UNKNOWN -> Heard(v, v, null)
-            h.last != null && h.lastHeardAtMs == null -> Heard(v, h.last, clock())
+            h.last != null && h.lastHeardAtMs == null -> Heard(v, h.last, h.last.heardAtMs ?: clock())
             else -> h.copy(live = v)
         }
     }.combine(linkOpen) { h, open ->
-        val last = h.last
-        if (h.live != NodeVitals.UNKNOWN || open || last == null) ShownVitals(h.live) else ShownVitals(last.copy(armed = null), h.lastHeardAtMs)
+        // The heard time changes with every heartbeat; a card shows the reading, not the stamp.
+        val last = h.last?.copy(heardAtMs = null)
+        if (h.live != NodeVitals.UNKNOWN || open || last == null) {
+            ShownVitals(h.live.copy(heardAtMs = null))
+        } else {
+            ShownVitals(last.copy(armed = null), h.lastHeardAtMs)
+        }
     }.distinctUntilChanged()
 
 /** "Last heard 40 s ago" for a kept reading heard at [heardAtMs] (`elapsedRealtime`), ticking each second. */

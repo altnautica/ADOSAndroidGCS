@@ -88,6 +88,16 @@ fun SlideToConfirm(
         scope.launch { offset.snapTo((offset.value + delta).coerceIn(0f, maxOffset)) }
     }
     var keyHold by remember { mutableStateOf<Job?>(null) }
+    // A confirm key that ends cancelled (pad gone, focus lost, a chord took the button) never
+    // reaches onKeyEvent: the app guard drops it. Abort a keyed slide here instead.
+    OnConfirmCancelled {
+        val hold = keyHold
+        if (hold != null && hold.isActive) {
+            hold.cancel()
+            keyHold = null
+            scope.launch { offset.animateTo(0f, back) }
+        }
+    }
     val shape = RoundedCornerShape(AdosRadius.Xl)
     Box(
         modifier = modifier

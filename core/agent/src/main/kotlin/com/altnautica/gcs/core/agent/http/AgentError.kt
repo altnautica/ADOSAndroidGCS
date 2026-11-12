@@ -31,7 +31,10 @@ sealed interface AgentError {
     /** Transport failure: the node could not be reached. */
     data class Network(val cause: IOException) : AgentError
 
-    /** Any other non-2xx answer, or a 2xx body that does not decode; [errorCode] is the agent's `E_*` code when it sent one. */
+    /**
+     * Any other non-2xx answer, or a 2xx body that does not decode; [errorCode] is the agent's
+     * `E_*` code, or the setup engine's `err` code, when it sent one.
+     */
     data class Server(val code: Int, val message: String?, val errorCode: String? = null) : AgentError
 }
 
@@ -66,7 +69,8 @@ object AgentErrorParser {
         val detail = json?.get("detail")
         val detailObj = detail as? JsonObject
         val nested = (detailObj?.get("error") as? JsonObject)
-        val code = topCode ?: nested?.str("code") ?: detailObj?.str("code")
+        // The setup engine names its refusals `{"ok":false,"err":"<code>"}`.
+        val code = topCode ?: nested?.str("code") ?: detailObj?.str("code") ?: json?.str("err")
         val message = json?.str("message")
             ?: nested?.str("message")
             ?: (detail as? JsonPrimitive)?.contentOrNull

@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.cockpit
 
 import com.altnautica.gcs.core.map.GeoPoint
+import com.altnautica.gcs.core.skills.SkillNotice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -12,6 +13,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -70,9 +72,15 @@ class StaleHeartbeatArmTest {
         settle(3_000)
         assertTrue("a stale heartbeat does not say disarmed", vm.autonomy.layers.armed())
         assertFalse("no route preview while possibly airborne", vm.autonomy.layers.previewAllowed())
+        val notices = mutableListOf<SkillNotice>()
+        backgroundScope.launch { vm.notices.collect { notices += it } }
+        runCurrent()
         vm.pickMapPoint(GeoPoint(47.001, 8.002))
         runCurrent()
         assertNull("a map long-press does not open Launch while possibly airborne", vm.launch.value)
+        val why = testSpec.setupStrings.format("refusal.landed_unknown").replaceFirstChar(Char::lowercase)
+        val unknown = testSpec.setupStrings.format("refusal.fly_here_prefix", mapOf("reason" to why))
+        assertEquals("the refusal says the arm state is unknown, not on the ground", listOf(unknown), notices.map { it.message })
     }
 
     @Test

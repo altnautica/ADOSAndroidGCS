@@ -42,6 +42,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
+/** ArduPilot's airspeed sensor type; 0 means none is fitted. */
+private const val ARSPD_TYPE = "ARSPD_TYPE"
+
 /** Why calibration cannot start; null when it may. */
 enum class CalibrationBlock { NoVehicle, LinkStale, Armed }
 
@@ -91,6 +94,8 @@ data class CalibrationUiState(
     val variant: FcVariant = FcVariant.Unknown,
     /** MAV_TYPE from the heartbeat; null while unknown. */
     val mavType: Int? = null,
+    /** The loaded parameters configure an airspeed sensor (`ARSPD_TYPE` present and not 0). */
+    val airspeedSensor: Boolean = false,
 ) {
     val running: Boolean
         get() = if (agent) {
@@ -106,14 +111,16 @@ data class CalibrationUiState(
 
     /**
      * Whether [kind] is offered on this link and vehicle: ESC on PX4 rotorcraft (ArduPilot
-     * calibrates ESCs at boot through a parameter), airspeed on fixed wing.
+     * calibrates ESCs at boot through a parameter), airspeed on fixed wing (on ArduPilot only
+     * with a configured sensor: without one its airspeed slot only zeroes the barometer).
      */
     fun offers(kind: CalibrationKind): Boolean {
         if (agent) return kind.agentStep() != null
         val copter = mavType in SetupCatalog.COPTER_TYPES
         return when (kind) {
             CalibrationKind.Esc -> copter && variant == FcVariant.MavlinkPx4
-            CalibrationKind.Airspeed -> mavType in SetupCatalog.PLANE_TYPES
+            CalibrationKind.Airspeed -> mavType in SetupCatalog.PLANE_TYPES &&
+                (variant != FcVariant.MavlinkArdupilot || airspeedSensor)
             else -> true
         }
     }
@@ -160,14 +167,17 @@ class CalibrationViewModel internal constructor(
 
     private val mavlinkState = combine(
         target.flatMapLatest { t ->
-            t?.let { combine(it.vehicle.telemetry.heartbeat, it.calibration.state) { hb, cal -> hb to cal } }
-                ?: flowOf(null to CalibrationState.Idle)
+            t?.let {
+                combine(it.vehicle.telemetry.heartbeat, it.calibration.state, it.params.snapshot) { hb, cal, params ->
+                    Triple(hb, cal, params.values[ARSPD_TYPE]?.let { p -> p.value != 0.0 } == true)
+                }
+            } ?: flowOf(Triple(null, CalibrationState.Idle, false))
         },
         target,
         busy,
         lastResult,
         ticks,
-    ) { (hb, cal), t, isBusy, result, _ ->
+    ) { (hb, cal, airspeedSensor), t, isBusy, result, _ ->
         val block = when {
             t == null || hb == null -> CalibrationBlock.NoVehicle
             now() - hb.tMs > LINK_FRESH_MS -> CalibrationBlock.LinkStale
@@ -186,6 +196,7 @@ class CalibrationViewModel internal constructor(
             lastResult = result,
             variant = hb?.fcVariant() ?: FcVariant.Unknown,
             mavType = hb?.vehicleType,
+            airspeedSensor = airspeedSensor,
         )
     }
 

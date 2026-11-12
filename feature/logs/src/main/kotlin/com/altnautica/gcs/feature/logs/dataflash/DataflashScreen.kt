@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.logs.dataflash
 
 import android.text.format.DateUtils
 import android.text.format.Formatter
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -138,9 +139,13 @@ private fun DataflashItem(row: DataflashRow, onDownload: (LogEntry) -> Unit, onC
             when (val d = row.download) {
                 EntryDownload.None ->
                     AdosButton(stringResource(R.string.logs_df_download), onClick = { onDownload(e) }, variant = AdosButtonVariant.Secondary)
-                // A retry resumes from what the failed attempt already received.
-                is EntryDownload.Failed ->
+                // A retry resumes from what the failed attempt already received; that part shares as it is.
+                is EntryDownload.Failed -> Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                    d.partialPath?.let { path ->
+                        AdosButton(stringResource(R.string.logs_df_share_partial), onClick = { onShare(path) }, variant = AdosButtonVariant.Secondary)
+                    }
                     AdosButton(stringResource(R.string.logs_retry), onClick = { onDownload(e) }, variant = AdosButtonVariant.Secondary)
+                }
                 is EntryDownload.Running, EntryDownload.Queued ->
                     AdosButton(stringResource(R.string.logs_df_cancel), onClick = { onCancel(e) }, variant = AdosButtonVariant.Secondary)
                 is EntryDownload.Saved -> IconButton(onClick = { onShare(d.path) }) {

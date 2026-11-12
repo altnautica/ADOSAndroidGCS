@@ -298,34 +298,43 @@ class MavlinkCalibrationService(
         /** Every stick channel must span at least this (µs) before a radio calibration is saved. */
         const val MIN_STICK_SPAN_US = 200
 
+        /** The stick channels a vehicle uses before a radio calibration assigns its map (PX4 ships every `RC_MAP_*` at 0). */
+        private val DEFAULT_STICKS = mapOf("ROLL" to 1, "PITCH" to 2, "THROTTLE" to 3, "YAW" to 4)
+
         /**
          * The sticks of the vehicle behind [target], from its map parameters (`RC_MAP_*` on PX4,
-         * where 0 is an unmapped axis; `RCMAP_*` on ArduPilot). Rovers and boats check steering
-         * and throttle only: ArduPilot steers on the roll channel, and PX4's stick mapping
-         * picks two of its four axes. Null while any map parameter is not loaded.
+         * where 0 is an unmapped axis; `RCMAP_*` on ArduPilot). With every axis unmapped the
+         * sticks are channels 1-4. Rovers and boats check steering and throttle only: ArduPilot
+         * steers on the roll channel; on PX4 the throttle and at least one other mapped axis must
+         * move. Null while any map parameter is not loaded.
          */
         fun radioSticks(target: VehicleTarget?, values: Map<String, ParamValue>): RadioSticks? {
             val px4 = target?.family == FirmwareFamily.Px4
             val surface = target?.vehicleType == MavType.MAV_TYPE_GROUND_ROVER || target?.vehicleType == MavType.MAV_TYPE_SURFACE_BOAT
             val prefix = if (px4) "RC_MAP_" else "RCMAP_"
             val axes = if (surface && !px4) listOf("ROLL", "THROTTLE") else listOf("ROLL", "PITCH", "THROTTLE", "YAW")
-            val mapped = axes.associateWith { values["$prefix$it"]?.value?.toInt() ?: return null }.filterValues { it > 0 }
+            val mapped = axes.associateWith { values["$prefix$it"]?.value?.toInt() ?: return null }
+                .filterValues { it > 0 }
+                .ifEmpty { DEFAULT_STICKS.filterKeys { it in axes } }
             val channels = mapped.values.distinct()
-            return RadioSticks(
-                channels = channels,
-                required = if (surface && px4) minOf(2, channels.size) else channels.size,
-                throttle = if (surface) null else mapped["THROTTLE"],
-            )
+            val throttle = mapped["THROTTLE"]
+            return if (surface && px4) {
+                RadioSticks(channels, required = minOf(2, channels.size), mustMove = throttle)
+            } else {
+                RadioSticks(channels, throttle = if (surface) null else throttle)
+            }
         }
 
         /**
          * The channels a radio calibration writes: only those the operator moved. Null when fewer
-         * than [RadioSticks.required] stick channels span [MIN_STICK_SPAN_US], so nothing is written.
+         * than [RadioSticks.required] stick channels span [MIN_STICK_SPAN_US], or when
+         * [RadioSticks.mustMove] does not, so nothing is written.
          */
         fun radioChannelsToWrite(channels: List<RcChannelRange>, sticks: RadioSticks): List<RcChannelRange>? {
             val byChannel = channels.associateBy { it.channel }
-            val moved = sticks.channels.count { ch -> byChannel[ch]?.let { it.max - it.min >= MIN_STICK_SPAN_US } == true }
-            if (moved < sticks.required) return null
+            fun spans(ch: Int) = byChannel[ch]?.let { it.max - it.min >= MIN_STICK_SPAN_US } == true
+            if (sticks.channels.count(::spans) < sticks.required) return null
+            if (sticks.mustMove != null && !spans(sticks.mustMove)) return null
             return channels.filter { it.max - it.min >= MIN_MOVED_US }
         }
 
@@ -340,7 +349,13 @@ class MavlinkCalibrationService(
 
 /**
  * The stick channels a radio calibration checks: at least [required] of [channels] must each
- * span [MavlinkCalibrationService.MIN_STICK_SPAN_US]. [throttle] trims to its minimum; null when
- * the throttle rests centred (rover and boat: forward and reverse).
+ * span [MavlinkCalibrationService.MIN_STICK_SPAN_US], and [mustMove] among them when set.
+ * [throttle] trims to its minimum; null when the throttle rests centred (rover and boat:
+ * forward and reverse).
  */
-internal data class RadioSticks(val channels: List<Int>, val required: Int = channels.size, val throttle: Int? = null)
+internal data class RadioSticks(
+    val channels: List<Int>,
+    val required: Int = channels.size,
+    val throttle: Int? = null,
+    val mustMove: Int? = null,
+)

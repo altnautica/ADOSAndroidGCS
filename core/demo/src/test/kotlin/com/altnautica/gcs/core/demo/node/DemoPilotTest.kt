@@ -507,6 +507,32 @@ class DemoPilotTest {
         assertTrue(arItems(layers.ar(t, pilot.view())).none { it.str("t") == "wp" || it.str("t") == "leg" })
     }
 
+    @Test
+    fun `a goto accepted from a mission leaves the pilot owning the guided hover`() {
+        action("takeoff", """{"alt_m":1.5}""")
+        fly(1_000)
+        fc.mode = FakeDemoFc.AUTO
+        fly(200)
+        assertEquals("mission_fc", state().str("owner"))
+        assertTrue(action("goto", GOTO_ARGS)["ok"]!!.jsonPrimitive.boolean)
+        fly(25_000)
+        assertEquals(GUIDED, fc.mode)
+        assertEquals("pilot", state().str("owner"))
+    }
+
+    @Test
+    fun `under a mission pin the flight controller returns to the pinned mode after a goto`() {
+        scenarios.pin(DemoScenario.MissionActive)
+        fly(30_000)
+        assertEquals(FakeDemoFc.AUTO, fc.mode)
+        assertTrue(action("goto", GOTO_ARGS)["ok"]!!.jsonPrimitive.boolean)
+        fly(200)
+        assertEquals(GUIDED, fc.mode)
+        fly(25_000)
+        assertEquals("the flight controller agrees with the pinned AUTO frame again", FakeDemoFc.AUTO, fc.mode)
+        assertEquals("AUTO", state().str("fc_mode_name"))
+    }
+
     private companion object {
         const val GOTO_ARGS = """{"lat":12.9,"lon":77.6,"alt_m":10}"""
     }

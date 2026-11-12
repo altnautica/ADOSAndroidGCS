@@ -195,6 +195,7 @@ class CalibrationViewModelTest {
 
     @Test
     fun airspeedIsOfferedOnPlanesOnly() = runTest(dispatcher) {
+        target.value = vehicle.target(FakeParamService(mapOf("ARSPD_TYPE" to 1.0)), cal)
         val vm = vm()
         assertFalse(vm.state.value.offers(CalibrationKind.Airspeed))
         vm.start(CalibrationKind.Airspeed) // not offered on a quad: ignored
@@ -206,5 +207,25 @@ class CalibrationViewModelTest {
         }
         vm.start(CalibrationKind.Airspeed)
         assertEquals(listOf("airspeed"), cal.calls)
+    }
+
+    @Test
+    fun ardupilotOffersAirspeedOnlyWithAConfiguredSensor() = runTest(dispatcher) {
+        vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(vehicleType = 1, autopilot = 3) // ArduPlane
+        target.value = vehicle.target(FakeParamService(mapOf("ARSPD_TYPE" to 0.0)), cal)
+        val vm = vm()
+        assertFalse("ARSPD_TYPE=0: no sensor to calibrate", vm.state.value.offers(CalibrationKind.Airspeed))
+        vm.start(CalibrationKind.Airspeed)
+        assertTrue(cal.calls.isEmpty())
+
+        target.value = vehicle.target(FakeParamService(), cal)
+        assertFalse("parameters not loaded", vm.state.value.offers(CalibrationKind.Airspeed))
+
+        target.value = vehicle.target(FakeParamService(mapOf("ARSPD_TYPE" to 1.0)), cal)
+        assertTrue(vm.state.value.offers(CalibrationKind.Airspeed))
+
+        vehicle.heartbeat.value = vehicle.heartbeat.value!!.copy(autopilot = 12) // PX4 plane: its own airspeed slot
+        target.value = vehicle.target(FakeParamService(), cal)
+        assertTrue(vm.state.value.offers(CalibrationKind.Airspeed))
     }
 }

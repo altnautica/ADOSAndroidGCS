@@ -235,15 +235,32 @@ class CalibrationServiceTest {
     }
 
     @Test
-    fun `px4 rover radio save needs two of its mapped sticks`() = runTest {
+    fun `px4 rover radio save needs its throttle and one steering stick`() = runTest {
         val link = ScriptedLink(px4Rover)
         val params = RecordingParams(mapOf("RC_MAP_ROLL" to 1.0, "RC_MAP_PITCH" to 2.0, "RC_MAP_THROTTLE" to 3.0, "RC_MAP_YAW" to 4.0))
         val cal = service(link, backgroundScope, params)
         capture(link, cal, setOf(2))
         assertEquals(CommandResult.Rejected(-1, "sticksNotMoved"), cal.saveRadio())
-
         capture(link, cal, setOf(2, 4))
+        assertEquals(CommandResult.Rejected(-1, "sticksNotMoved"), cal.saveRadio())
+
+        capture(link, cal, setOf(3, 4))
         assertEquals(CommandResult.Accepted, cal.saveRadio())
+    }
+
+    @Test
+    fun `px4 radio save with an unset stick map checks channels one to four`() = runTest {
+        val link = ScriptedLink(px4)
+        val params = RecordingParams(mapOf("RC_MAP_ROLL" to 0.0, "RC_MAP_PITCH" to 0.0, "RC_MAP_THROTTLE" to 0.0, "RC_MAP_YAW" to 0.0))
+        val cal = service(link, backgroundScope, params)
+        capture(link, cal, emptySet())
+        assertEquals(CommandResult.Rejected(-1, "sticksNotMoved"), cal.saveRadio())
+        assertTrue(params.writes.isEmpty())
+        assertTrue("the capture stays open", cal.state.value is CalibrationState.Radio)
+
+        capture(link, cal, setOf(1, 2, 3, 4))
+        assertEquals(CommandResult.Accepted, cal.saveRadio())
+        assertTrue("throttle trims to its minimum", "RC3_TRIM" to 1000.0 in params.writes)
     }
 
     @Test

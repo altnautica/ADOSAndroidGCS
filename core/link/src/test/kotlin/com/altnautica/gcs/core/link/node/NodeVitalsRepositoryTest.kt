@@ -145,7 +145,7 @@ class NodeVitalsRepositoryTest {
         val seen = mutableListOf<NodeVitals>()
         val job = launch { repo.vitals(node("usb", Reach.DirectFc)).toList(seen) }
         runCurrent()
-        assertEquals(listOf(NodeVitals(null, "LOITER", true)), seen)
+        assertEquals(listOf(NodeVitals(null, "LOITER", true, heardAtMs = now - 1_000)), seen)
         advanceTimeBy(NodeVitalsRepository.MAX_HEARTBEAT_AGE_MS - 1_000 + 1)
         assertEquals(NodeVitals.UNKNOWN, seen.last())
         job.cancel()

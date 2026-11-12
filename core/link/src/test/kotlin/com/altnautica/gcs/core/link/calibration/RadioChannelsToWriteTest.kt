@@ -56,4 +56,25 @@ class RadioChannelsToWriteTest {
         )
         assertNull(MavlinkCalibrationService.radioSticks(copter, params("RCMAP_ROLL" to 1)))
     }
+
+    @Test
+    fun anUnmappedPx4RadioChecksChannelsOneToFour() {
+        val px4 = VehicleTarget(1, 1, MavAutopilot.MAV_AUTOPILOT_PX4, MavType.MAV_TYPE_QUADROTOR)
+        val unset = params("RC_MAP_ROLL" to 0, "RC_MAP_PITCH" to 0, "RC_MAP_THROTTLE" to 0, "RC_MAP_YAW" to 0)
+        val sticks = MavlinkCalibrationService.radioSticks(px4, unset)!!
+        assertEquals(RadioSticks(listOf(1, 2, 3, 4), throttle = 3), sticks)
+        val untouched = (1..4).map { ch(it, 1500, 1500) }
+        assertNull("nothing moved: the save is refused", MavlinkCalibrationService.radioChannelsToWrite(untouched, sticks))
+    }
+
+    @Test
+    fun aPx4SurfaceVehicleNeedsItsThrottleMoved() {
+        val rover = VehicleTarget(1, 1, MavAutopilot.MAV_AUTOPILOT_PX4, MavType.MAV_TYPE_GROUND_ROVER)
+        val map = params("RC_MAP_ROLL" to 1, "RC_MAP_PITCH" to 2, "RC_MAP_THROTTLE" to 3, "RC_MAP_YAW" to 4)
+        val sticks = MavlinkCalibrationService.radioSticks(rover, map)!!
+        val pitchYaw = listOf(ch(1, 1500, 1500), ch(2, 1000, 2000), ch(3, 1500, 1500), ch(4, 1000, 2000))
+        assertNull("pitch and yaw alone leave the throttle unchecked", MavlinkCalibrationService.radioChannelsToWrite(pitchYaw, sticks))
+        val throttleYaw = listOf(ch(1, 1500, 1500), ch(2, 1500, 1500), ch(3, 1000, 2000), ch(4, 1000, 2000))
+        assertEquals(listOf(3, 4), MavlinkCalibrationService.radioChannelsToWrite(throttleYaw, sticks)!!.map { it.channel })
+    }
 }

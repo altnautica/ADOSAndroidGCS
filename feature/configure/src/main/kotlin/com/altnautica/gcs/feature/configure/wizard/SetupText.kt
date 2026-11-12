@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.configure.wizard
 
+import androidx.annotation.StringRes
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,36 +63,72 @@ private fun trimNumber(v: Double): String =
 /** Step arguments as string interpolation values. */
 fun JsonObject.textArgs(): Map<String, String> = filterKeys { it != INPUTS_KEY }.mapValues { (_, v) -> v.displayText() }
 
-/** A setup failure: the engine's message key ([key], `setup.err.<code>`) or a local reason ([local]). */
+/**
+ * A setup failure: the engine's message key ([key], `setup.err.<code>`) and the local reason
+ * ([local]) that words it when the spec has no text for the key.
+ */
 data class SetupProblem(val key: String? = null, val local: SetupLocalProblem? = null)
 
-enum class SetupLocalProblem { Unreachable, Unauthorized, Unsupported, Armed }
+enum class SetupLocalProblem {
+    Unreachable,
+
+    /** The agent answered but its setup engine is not running. */
+    EngineDown,
+
+    /** The engine refused the request with a code the spec has no text for, or with none. */
+    Refused,
+    Unauthorized,
+    Unsupported,
+    Armed,
+}
+
+private const val ERR_PREFIX = "setup.err."
+
+/** The engine's own code for an unavailable setup service. */
+private const val SETUP_UNAVAILABLE = "setup_unavailable"
 
 /** The spec key of an engine error: a bare code (`not_running`) becomes `setup.err.not_running`. */
-fun setupErrKey(err: String): String = if (err.startsWith("setup.")) err else "setup.err.$err"
+fun setupErrKey(err: String): String = if (err.startsWith("setup.")) err else ERR_PREFIX + err
 
 fun AgentError.setupProblem(): SetupProblem = when (this) {
-    is AgentError.Server -> message?.let { SetupProblem(key = setupErrKey(it)) } ?: SetupProblem(local = SetupLocalProblem.Unreachable)
+    is AgentError.Server -> serverProblem(code, errorCode)
     is AgentError.Network, is AgentError.PeerApi, is AgentError.RelayTicket -> SetupProblem(local = SetupLocalProblem.Unreachable)
     AgentError.Unauthorized, is AgentError.PinRequired -> SetupProblem(local = SetupLocalProblem.Unauthorized)
     AgentError.FeatureAbsent, AgentError.ProfileMismatch -> SetupProblem(local = SetupLocalProblem.Unsupported)
     is AgentError.Armed -> SetupProblem(local = SetupLocalProblem.Armed)
 }
 
+private fun serverProblem(status: Int, err: String?): SetupProblem = when {
+    err == SETUP_UNAVAILABLE -> SetupProblem(key = setupErrKey(err), local = SetupLocalProblem.EngineDown)
+    err != null -> SetupProblem(key = setupErrKey(err), local = SetupLocalProblem.Refused)
+    // The agent answers 503 with a plain detail when its setup engine does not reply.
+    status == 503 -> SetupProblem(local = SetupLocalProblem.EngineDown)
+    // A refusal without a code (the engine's bare `ok: false`).
+    status in 400..499 -> SetupProblem(local = SetupLocalProblem.Refused)
+    else -> SetupProblem(local = SetupLocalProblem.Unreachable)
+}
+
 /** The spec text of [problem]'s engine key, or null when it has none (the caller words the local reason). */
 fun SetupText.problemText(problem: SetupProblem): String? =
     problem.key?.let { key -> format(key, emptyMap()).takeIf { it != key } }
 
+/** The engine's code behind [this], filling the placeholder of [localText]'s string. */
+val SetupProblem.engineCode: String? get() = key?.removePrefix(ERR_PREFIX)
+
+/** The string that words [this] when the spec has no text for its key. */
+@StringRes
+fun SetupProblem.localText(): Int = when (local) {
+    SetupLocalProblem.Unauthorized -> R.string.cfg_setup_err_unauthorized
+    SetupLocalProblem.Unsupported -> R.string.cfg_setup_err_unsupported
+    SetupLocalProblem.Armed -> R.string.cfg_setup_err_armed
+    SetupLocalProblem.EngineDown -> R.string.cfg_setup_err_engine_down
+    SetupLocalProblem.Refused -> if (engineCode != null) R.string.cfg_setup_err_refused_code else R.string.cfg_setup_err_refused
+    SetupLocalProblem.Unreachable, null -> R.string.cfg_setup_err_unreachable
+}
+
 /** A setup failure in operator words: the engine's spec text, else the local reason (unreachable by default). */
 @Composable
 fun SetupProblemText(problem: SetupProblem, modifier: Modifier = Modifier) {
-    val text = LocalSetupText.current.problemText(problem) ?: stringResource(
-        when (problem.local) {
-            SetupLocalProblem.Unauthorized -> R.string.cfg_setup_err_unauthorized
-            SetupLocalProblem.Unsupported -> R.string.cfg_setup_err_unsupported
-            SetupLocalProblem.Armed -> R.string.cfg_setup_err_armed
-            SetupLocalProblem.Unreachable, null -> R.string.cfg_setup_err_unreachable
-        },
-    )
+    val text = LocalSetupText.current.problemText(problem) ?: stringResource(problem.localText(), problem.engineCode.orEmpty())
     Text(text, modifier, color = AdosTheme.colors.statusError)
 }

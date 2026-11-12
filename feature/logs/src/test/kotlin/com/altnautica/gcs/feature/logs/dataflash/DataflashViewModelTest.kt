@@ -182,4 +182,38 @@ class DataflashViewModelTest {
         assertTrue(rows.value.isEmpty())
         assertEquals(EntryDownload.None, (vm.state.value as DataflashUiState.Content).rows.last().download)
     }
+
+    @Test
+    fun aFailedDownloadWithReceivedBytesOffersItsPartialFile() = runTest(dispatcher) {
+        serviceFlow.value = service
+        val vm = vm()
+        val entry = (vm.state.value as DataflashUiState.Content).rows.last().entry
+        vm.download(entry)
+        progress.emit(LogDownloadProgress.Running(50, 100))
+        val partial = File(dir, "fc-log1.bin").apply { writeBytes(ByteArray(50)) }
+        progress.emit(LogDownloadProgress.Failed("timeout", 50))
+
+        assertEquals(
+            EntryDownload.Failed("timeout", partial.absolutePath),
+            (vm.state.value as DataflashUiState.Content).rows.last().download,
+        )
+
+        // Share found the partial file gone: the offer goes, the retry stays.
+        partial.delete()
+        vm.fileMissing(partial.absolutePath)
+        assertEquals(EntryDownload.Failed("timeout", null), (vm.state.value as DataflashUiState.Content).rows.last().download)
+    }
+
+    @Test
+    fun aFailedDownloadWithNoBytesOffersNothingToShare() = runTest(dispatcher) {
+        serviceFlow.value = service
+        val vm = vm()
+        val entry = (vm.state.value as DataflashUiState.Content).rows.first().entry
+        vm.download(entry)
+        // The transfer opens its file before the first byte arrives.
+        File(dir, "fc-log2.bin").createNewFile()
+        progress.emit(LogDownloadProgress.Failed("timeout", 0))
+
+        assertEquals(EntryDownload.Failed("timeout", null), (vm.state.value as DataflashUiState.Content).rows.first().download)
+    }
 }

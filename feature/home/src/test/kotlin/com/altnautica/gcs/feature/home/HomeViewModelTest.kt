@@ -166,6 +166,20 @@ class HomeViewModelTest {
     }
 
     @Test
+    fun aKeptReadingIsAgedFromWhenTheVehicleWasLastHeard() = runTest(dispatcher) {
+        openVehicles.value = mapOf(DeviceId("usb") to mockk(relaxed = true))
+        val live = MutableStateFlow(heard.copy(heardAtMs = 56_000L))
+        val vm = backgroundScope.vm(listOf(node("usb", NodeProfile.Drone, listOf(Reach.DirectFc))), vitals = liveVitals(live))
+        vm.uiState.first { s -> s.vehicles.any { it.vitals == heard } }
+
+        // The link went silent at 56 s; the reading turns unknown only after the heartbeat timeout.
+        now = 61_000L
+        openVehicles.value = emptyMap()
+        live.value = NodeVitals.UNKNOWN
+        assertEquals(56_000L, vm.uiState.value.vehicles.single().keptHeardAtMs)
+    }
+
+    @Test
     fun unpairIsOfferedOnlyWithAnAgentLink() {
         val lan = HomeViewModel.card(node("d", NodeProfile.Drone, listOf(Reach.Lan)), NodeVitals.UNKNOWN, linkOpen = false)
         val usb = HomeViewModel.card(node("u", NodeProfile.Drone, listOf(Reach.DirectFc)), NodeVitals.UNKNOWN, linkOpen = false)

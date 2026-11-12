@@ -55,4 +55,16 @@ class AgentErrorParserTest {
         assertEquals(AgentError.FeatureAbsent, AgentErrorParser.parse(501, ""))
         assertEquals(AgentError.Server(500, null), AgentErrorParser.parse(500, "<html>"))
     }
+
+    @Test
+    fun `setup engine err is the error code`() {
+        assertEquals(
+            AgentError.Server(404, "no_snapshot", "no_snapshot"),
+            AgentErrorParser.parse(404, """{"ok":false,"err":"no_snapshot"}"""),
+        )
+        assertEquals(
+            AgentError.Server(422, "unknown_action", "unknown_action"),
+            AgentErrorParser.parse(422, """{"ok":false,"err":"unknown_action"}"""),
+        )
+    }
 }

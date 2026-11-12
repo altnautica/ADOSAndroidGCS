@@ -31,6 +31,8 @@ data class NodeVitals(
     val armed: Boolean?,
     val gpsFix: com.altnautica.gcs.core.model.GpsFix? = null,
     val satellites: Int? = null,
+    /** When a direct link last heard the vehicle (`elapsedRealtime`); null for agent-reported vitals. */
+    val heardAtMs: Long? = null,
 ) {
     companion object {
         val UNKNOWN = NodeVitals(null, null, null)
@@ -130,6 +132,7 @@ class NodeVitalsRepository @Inject constructor(
                 armed = hb?.armed,
                 gpsFix = gps?.fix,
                 satellites = gps?.satellites,
+                heardAtMs = hb?.tMs,
             )
         }.transformLatest { (heardMs, vitals) ->
             val age = heardMs?.let { clock() - it }

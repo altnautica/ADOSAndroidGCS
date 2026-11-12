@@ -51,15 +51,7 @@ class LeftColumnStalePilotTest {
                 vehicle.heartbeatAt(testScheduler.currentTime, armed = false)
                 advanceTimeBy(300)
                 runCurrent()
-                // The pilot stalls on its disarmed frame while the drone is armed and flown on the FC.
-                agent.pilotAnswers = false
-                var left = 3_000L
-                while (left > 0) {
-                    vehicle.heartbeatAt(testScheduler.currentTime, armed = true)
-                    advanceTimeBy(250)
-                    runCurrent()
-                    left -= 250
-                }
+                // Composed while the pilot frame is fresh: the column must notice it go stale on its own.
                 compose.setContent {
                     AdosTheme {
                         CompositionLocalProvider(
@@ -69,6 +61,17 @@ class LeftColumnStalePilotTest {
                             Box(Modifier.size(80.dp, 300.dp)) { LeftColumn(vm, 56.dp, 8.dp) }
                         }
                     }
+                }
+                compose.waitForIdle()
+                compose.onNodeWithTag("grid-takeoff", useUnmergedTree = true).assertExists()
+                // The pilot stalls on its disarmed frame while the drone is armed and flown on the FC.
+                agent.pilotAnswers = false
+                var left = 3_000L
+                while (left > 0) {
+                    vehicle.heartbeatAt(testScheduler.currentTime, armed = true)
+                    advanceTimeBy(250)
+                    runCurrent()
+                    left -= 250
                 }
                 compose.waitForIdle()
                 compose.onNodeWithTag("grid-land", useUnmergedTree = true).assertExists()

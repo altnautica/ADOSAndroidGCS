@@ -40,7 +40,9 @@ sealed interface EntryDownload {
     /** Waiting for the download ahead of it: the flight controller serves one at a time. */
     data object Queued : EntryDownload
     data class Running(val receivedBytes: Long, val totalBytes: Long) : EntryDownload
-    data class Failed(val reason: String) : EntryDownload
+
+    /** [partialPath]: what the attempt left on disk, shareable as it is; null when it left nothing. */
+    data class Failed(val reason: String, val partialPath: String?) : EntryDownload
     data class Saved(val path: String) : EntryDownload
 }
 
@@ -175,7 +177,7 @@ class DataflashViewModel internal constructor(
         s.download(entry, target).collect { p ->
             val state = when (p) {
                 is LogDownloadProgress.Running -> EntryDownload.Running(p.receivedBytes, p.totalBytes)
-                is LogDownloadProgress.Failed -> EntryDownload.Failed(p.reason)
+                is LogDownloadProgress.Failed -> EntryDownload.Failed(p.reason, target.takeIf { it.length() > 0 }?.absolutePath)
                 is LogDownloadProgress.Done -> {
                     val file = LogFileType.withSniffedExtension(p.file)
                     files.insert(
@@ -206,9 +208,12 @@ class DataflashViewModel internal constructor(
         }
     }
 
-    /** The saved file at [path] is gone (Share found nothing): drops its index row so the entry downloads again. */
+    /** The file at [path] is gone (Share found nothing): drops its index row so the entry downloads again. */
     fun fileMissing(path: String) {
-        downloads.update { d -> d.filterValues { it != EntryDownload.Saved(path) } }
+        downloads.update { d ->
+            d.filterValues { it != EntryDownload.Saved(path) }
+                .mapValues { (_, v) -> if (v is EntryDownload.Failed && v.partialPath == path) v.copy(partialPath = null) else v }
+        }
         viewModelScope.launch {
             files.observeAll().first().filter { it.path == path }.forEach { files.delete(it.id) }
         }

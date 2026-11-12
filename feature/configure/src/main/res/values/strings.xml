@@ -176,6 +176,9 @@
     <string name="cfg_setup_err_unauthorized">This device is not paired with the vehicle.</string>
     <string name="cfg_setup_err_unsupported">The vehicle\'s software does not offer guided setup.</string>
     <string name="cfg_setup_err_armed">Disarm before running setup.</string>
+    <string name="cfg_setup_err_engine_down">The vehicle\'s setup service is not running. Try again in a moment.</string>
+    <string name="cfg_setup_err_refused">The vehicle refused this setup action.</string>
+    <string name="cfg_setup_err_refused_code">The vehicle refused this setup action (%1$s).</string>
     <string name="cfg_setup_agent_running">Running on the vehicle</string>
     <string name="cfg_setup_gyro_agent">Gyro calibration runs with accelerometer calibration on the vehicle</string>
 </resources>

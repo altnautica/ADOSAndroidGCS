@@ -46,7 +46,7 @@ app's `versionName`.
   heartbeat answers.
 - **Cancelled controller press.** A chord start or a pad disconnect cancels a
   held select: no button, chip, tile or menu row clicks on that release, and a
-  hold-to-confirm stops without firing.
+  hold-to-confirm or a slide-to-confirm driven by the key stops without firing.
 - **Banner cause.** Pilot banners name their cause.
 - **Phone layout.** Snackbars sit above the bottom row and the map card no
   longer repeats its title; the centre banner no longer covers the heading.
@@ -64,23 +64,26 @@ app's `versionName`.
 - **Missions for surface vehicles.** Rover, boat and sub missions at 0 m or
   below are no longer blocked from upload.
 - **Plan drafts.** An unsaved plan is kept as a draft; a plan discarded on
-  leaving, or saved just before leaving, no longer comes back as a draft.
+  leaving, replaced through New or Load, or saved just before leaving, no
+  longer comes back as a draft.
 - **Survey geometry.** Survey passes follow the set bearing, are centred on
   the area and drop zero-length passes.
 - **Calibration.** Compass-motor calibration is no longer offered, and ESC
   calibration only on PX4 multirotors. Airspeed calibration works on
-  ArduPilot planes, PX4 compass calibration follows the flight controller's
+  ArduPilot planes that have an airspeed sensor configured, PX4 compass calibration follows the flight controller's
   progress and Cancel stops it on the vehicle, and the reboot prompt appears
   only on ArduPilot.
 - **Radio calibration Save** checks the sticks the vehicle actually maps, on
-  PX4 and ArduPilot, rovers and boats included, and refuses with a reason
-  until they have moved or while the stick map is not loaded.
+  PX4 and ArduPilot, rovers and boats included (channels 1-4 while PX4 has no
+  stick map yet; throttle plus a steering stick on a PX4 rover or boat), and
+  refuses with a reason until they have moved or while the stick map is not
+  loaded.
 - **Parameters.** Closing a parameter-file apply part-way names the value
   whose write was not confirmed; counter and sensor-ID parameters stay
   read-only even when their documentation does not flag them; setup steps
   recover on their own after a reconnect.
 - **Logs.** Sharing a log whose file is gone removes it from the list, a failed
-  onboard-log download offers Retry, and a flight record is written once even
+  onboard-log download offers Retry and a share of the part that arrived, and a flight record is written once even
   if the first write fails at arm. Skipped import items show their row number,
   and loading the plan the drone reports has its own button label.
 - **Disclaimer and licences.** The disclaimer must be accepted before the app
@@ -89,7 +92,7 @@ app's `versionName`.
 - **Home and Quick menu vitals.** A silent flight controller's last mode,
   battery and arm state no longer show as live: while the link is open they
   read unknown and never Ready; after it closes the last reading stays without
-  the arm state and says how long ago it was heard.
+  the arm state and says how long ago the vehicle was last heard.
 - **Ground station.** Joining a Wi-Fi network on an armed ground station whose
   access point is up asks before standing the access point down. Relayed nodes
   no longer flip to stale between their slower polls. The Retry buttons on the
@@ -103,9 +106,13 @@ app's `versionName`.
   while the drone may be flying.
 - **Fly Here from the local map** places the target from the flight
   controller's own origin and the drone as drawn, with or without GNSS, and
-  the demo drone flies to it. Fly Here through the flight controller is
+  the demo drone flies to it, held by the pilot (or back in a pinned mode).
+  With neither a fresh pilot nor a fresh heartbeat a long-press says the
+  landed state is unknown. Fly Here through the flight controller is
   refused while the pilot reports a flight-controller failsafe.
-- **Setup errors** show the shared spec's words for every setup error code.
+- **Setup errors** show the shared spec's words for every setup error code;
+  a code without spec words, or a stopped setup service, reads as a refusal
+  rather than a link failure.
 
 ## [0.5.0] - 2026-11-10
 

@@ -39,11 +39,13 @@ import com.altnautica.gcs.feature.plan.io.PlanDocuments
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 /** Scripted mission protocol: stores what is uploaded and returns it on download. */
 internal class FakeMissionService : MissionService {
@@ -232,9 +234,23 @@ internal class PlannerHarness {
 internal class MemoryDraftStore : com.altnautica.gcs.feature.plan.io.PlanDraftStore {
     var draft: com.altnautica.gcs.feature.plan.io.PlanDraft? = null
 
+    /**
+     * When set, a draft write suspends here, then lands even if its caller was cancelled
+     * meanwhile, as a disk write already under way does. Clears never wait.
+     */
+    var gate: CompletableDeferred<Unit>? = null
+
     override suspend fun read() = draft
 
     override suspend fun write(draft: com.altnautica.gcs.feature.plan.io.PlanDraft?) {
-        this.draft = draft
+        val gate = gate
+        if (draft != null && gate != null) {
+            withContext(NonCancellable) {
+                gate.await()
+                this@MemoryDraftStore.draft = draft
+            }
+        } else {
+            this.draft = draft
+        }
     }
 }
