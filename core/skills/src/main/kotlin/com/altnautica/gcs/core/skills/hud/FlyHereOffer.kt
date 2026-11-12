@@ -17,6 +17,7 @@ enum class FlyHereReason(val wire: String) {
     PilotStale("pilot_stale"),
     ControlMode("control_mode"),
     NotGuided("not_guided"),
+    NoFcLink("no_fc_link"),
     ;
 
     /** The spec string that words this reason. */
@@ -34,7 +35,8 @@ data class FlyHereOffer(val route: FlyHereRoute?, val reason: FlyHereReason? = n
  * else the FC route while the FC flies GUIDED, armed and airborne, unless a fresh pilot state
  * reports an FC failsafe (a reposition would fight the failsafe RTL or land). Otherwise the
  * reason, so a map long-press can say it instead of opening a dialog. An unknown arm state
- * (the pilot has no FC link) is possibly airborne: never [FlyHereReason.Landed].
+ * (the pilot has no FC link) is possibly airborne: never [FlyHereReason.Landed];
+ * without the surface's own FC facts it is [FlyHereReason.NoFcLink].
  */
 fun flyHereOffered(p: PilotState?, pilotAgeMs: Long, fc: FlyHereFc?, staleAfterMs: Long = PilotState.STALE_MS): FlyHereOffer {
     val fresh = pilotAgeMs < staleAfterMs
@@ -48,6 +50,7 @@ fun flyHereOffered(p: PilotState?, pilotAgeMs: Long, fc: FlyHereFc?, staleAfterM
     if (p != null) {
         if (p.fcFailsafe) return FlyHereOffer(null, FlyHereReason.Failsafe)
         if (p.armed == false || p.landed == true) return FlyHereOffer(null, FlyHereReason.Landed)
+        if (fc == null && p.armed == null) return FlyHereOffer(null, FlyHereReason.NoFcLink)
         if (fc == null && gotoAdvertised && p.controlMode != ControlMode.Ados) return FlyHereOffer(null, FlyHereReason.ControlMode)
     }
     if (fc != null) {

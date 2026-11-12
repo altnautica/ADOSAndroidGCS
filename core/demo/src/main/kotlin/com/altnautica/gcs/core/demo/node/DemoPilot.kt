@@ -407,7 +407,7 @@ internal class DemoPilot(
         if (guidedSentMs?.let { t - it >= MODE_SETTLE_MS } == true) guidedSentMs = null
         if (gotoAtMs?.let { t - it > GOTO_SHOWN_MS } == true) {
             gotoAtMs = null
-            if (!pinModePending) holdPinMode() // back to the mode a pinned frame reports
+            if (!pinModePending && pinMode != null) holdPinMode() // back to the mode a pinned frame reports
         }
         if (pinModePending && armed && fc.altitudeM >= ARRIVED_FRACTION * DemoPilotPins.PIN_HEIGHT_M) {
             pinModePending = false

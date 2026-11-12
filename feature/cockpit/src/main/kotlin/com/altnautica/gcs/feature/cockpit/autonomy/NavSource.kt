@@ -73,7 +73,7 @@ object NavSource {
     fun resolve(i: NavInputs): NavChip {
         val set = activeSet(i)
         val flags = i.ekfFlags
-        if (flags == null || i.ekfAgeMs == null || i.ekfAgeMs > EKF_STALE_MS) return NavChip(NavLabel.Stale, null, NavTone.Muted, activeSet = set)
+        if (flags == null || i.ekfAgeMs == null || i.ekfAgeMs >= EKF_STALE_MS) return NavChip(NavLabel.Stale, null, NavTone.Muted, activeSet = set)
         fun has(bit: Int) = flags and bit != 0
         if (has(CONST_POS) || !(has(VEL_H) || has(POS_H_REL) || has(POS_H_ABS))) {
             return NavChip(NavLabel.DeadReckoning, NavQuality.Drift, NavTone.Crit, activeSet = set)

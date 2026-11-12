@@ -205,6 +205,17 @@ class DemoPilotTest {
     }
 
     @Test
+    fun `unpinned, a land picked while a goto shows is kept when the goto window ends`() {
+        action("takeoff", """{"alt_m":1.5}""")
+        fly(1_000)
+        assertTrue(action("goto", GOTO_ARGS)["ok"]!!.jsonPrimitive.boolean)
+        fly(5_000)
+        fc.mode = FakeDemoFc.LAND_MODE
+        fly(25_000)
+        assertEquals(FakeDemoFc.LAND_MODE, fc.mode)
+    }
+
+    @Test
     fun `the transition log runs outside the pilot's lock, so another thread never waits on it`() {
         val answered = java.util.concurrent.atomic.AtomicBoolean(false)
         val answeredInTime = java.util.concurrent.atomic.AtomicBoolean(false)

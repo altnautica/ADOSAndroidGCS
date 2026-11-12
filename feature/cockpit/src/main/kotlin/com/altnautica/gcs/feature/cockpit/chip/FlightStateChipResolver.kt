@@ -124,10 +124,10 @@ class FlightStateChipResolver(
     }
 
     private fun values(p: PilotState, ctx: ChipContext): Map<String, String> = mapOf(
-        "step" to launchStep(p)?.let(::stepLabel).orEmpty().uppercase(),
+        "step" to launchStep(p)?.let(::stepLabel).orEmpty(),
         "first_block_msg" to p.firstBlock?.msg.orEmpty(),
-        "profile_upper" to (p.profile ?: PilotProfile.Normal).wire.uppercase(),
-        "skill_label_upper" to (p.skill?.label ?: DEFAULT_SKILL_LABEL).uppercase(),
+        "profile" to profileLabel((p.profile ?: PilotProfile.Normal).wire),
+        "skill_label" to (p.skill?.label ?: DEFAULT_SKILL_LABEL).replaceFirstChar { it.uppercaseChar() },
         "mode_detail" to (ctx.modeDetail?.takeIf { p.owner == PilotOwner.Skill } ?: DEFAULT_MODE_DETAIL),
         "dist_m" to num(ctx.goalDistM),
         "home_dist_m" to num(ctx.homeDistM),
@@ -137,6 +137,13 @@ class FlightStateChipResolver(
         "eta" to formatEta(ctx.missionEtaS),
         "fc_mode_name_upper" to (p.fcModeName ?: NO_VALUE).uppercase(),
     )
+
+    /** A profile as the mode sheet labels it (`mode_sheet.profile`); an unknown value reads with a capital first letter. */
+    private fun profileLabel(wire: String): String {
+        val sheet = spec.modeSheet.profile
+        val i = sheet.values.indexOf(wire)
+        return if (i >= 0) sheet.labels[i] else wire.replaceFirstChar { it.uppercaseChar() }
+    }
 
     /** The rule's button; the setup link shows only while the setup-needed readiness item is unmet. */
     private fun button(id: String?, p: PilotState): ChipButton? = when (id) {
@@ -202,8 +209,8 @@ class FlightStateChipResolver(
 
         /** The pilot reports the aircraft still needs setup (its `setup_needed` readiness item is unmet). */
         fun setupNeeded(p: PilotState?): Boolean = p?.readiness?.any { it.id == SETUP_NEEDED && !it.ok } == true
-        private const val DEFAULT_SKILL_LABEL = "SKILL"
-        private const val DEFAULT_MODE_DETAIL = "ACTIVE"
+        private const val DEFAULT_SKILL_LABEL = "Skill"
+        private const val DEFAULT_MODE_DETAIL = "Active"
         private const val NO_VALUE = "—"
         private const val FALLBACK_GREY = 0xFF909090L
         private const val SEPARATOR = " · "

@@ -22,6 +22,10 @@ app's `versionName`.
 
 ### Changed
 
+- **Sentence-case flight states.** The flight-state chip reads `Link`,
+  `Pilot · Normal` and `Follow · Orbit 8 m` as the shared cockpit spec words them,
+  and a Fly Here long-press with no flight controller link says so.
+
 - **Sharper, quieter flight screen.** Smaller radii, near-opaque panels with
   a light blur, hairline borders and one control height across the top bar.
   The flight-state chip and the status pill are outlines with a coloured dot,
@@ -37,6 +41,9 @@ app's `versionName`.
   the demo uses varied warning texts.
 
 ### Fixed
+
+- **Demo Fly Here.** A LAND picked while a demo goto still shows is no longer
+  switched back to GUIDED when the goto window ends.
 
 - **Unknown arm state.** Without a flight-controller link the pilot's arm
   state is unknown and is treated as possibly airborne: no tips, Land rather

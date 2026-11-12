@@ -62,11 +62,11 @@ class CockpitRulesTest {
     fun `chip text follows the flight-state rules, first match wins`() {
         val now = 10_000L
         val pilot = chips.resolve(pilotState(PilotOwner.Pilot, receivedAtMs = now), ChipContext(now))
-        assertEquals("Pilot · NORMAL", pilot.primary.text)
+        assertEquals("Pilot · Normal", pilot.primary.text)
         assertTrue(pilot.secondary.any { it.text == "ADOS Pilot" })
 
         val stale = chips.resolve(pilotState(PilotOwner.Pilot, receivedAtMs = now - 2_500), ChipContext(now))
-        assertEquals("LINK", stale.primary.text)
+        assertEquals("Link", stale.primary.text)
         assertTrue(stale.dim)
 
         val standby = chips.resolve(pilotState(PilotOwner.FcMode, fcModeName = "Loiter", receivedAtMs = now), ChipContext(now))

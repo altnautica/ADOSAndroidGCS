@@ -5,8 +5,8 @@ import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
 /**
  * Text from the cockpit spec's string table with single-brace `{arg}` interpolation, the
  * same rules as the shared web module: an unknown key reads as itself, a missing arg fills
- * empty, `profile` and `mode` read upper case, and enumerated arg values (`source`, `action`)
- * resolve through their own keys.
+ * empty, `mode` (an FC mode name) reads upper case, and enumerated arg values (`source`,
+ * `action`, `cause`, `profile`) resolve through their own keys; the profile lookup ignores case.
  */
 class SpecText(private val strings: Map<String, String>) {
     constructor(spec: SetupStringsSpec) : this(spec.strings)
@@ -22,9 +22,10 @@ class SpecText(private val strings: Map<String, String>) {
             val name = m.groupValues[1]
             val s = args[name]?.toString() ?: return@replace ""
             val prefix = ARG_KEYS[name]
+            val lookup = if (name in CASELESS_ARGS) s.lowercase() else s
             when {
-                prefix != null && strings.containsKey(prefix + s) -> strings.getValue(prefix + s)
-                name == "profile" || name == "mode" -> s.uppercase()
+                prefix != null && strings.containsKey(prefix + lookup) -> strings.getValue(prefix + lookup)
+                name == "mode" -> s.uppercase()
                 else -> s
             }
         }
@@ -40,6 +41,10 @@ class SpecText(private val strings: Map<String, String>) {
             "source" to "pilot.banner.source.",
             "action" to "pilot.link_loss_action.",
             "cause" to "pilot.banner.cause.",
+            "profile" to "pilot.profile.",
         )
+
+        /** The pilot sends the profile upper case (`NORMAL`); its keys are the lower-case wire values. */
+        val CASELESS_ARGS = setOf("profile")
     }
 }
