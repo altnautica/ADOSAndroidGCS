@@ -40,8 +40,8 @@ android {
 
     defaultConfig {
         applicationId = "com.altnautica.gcs"
-        versionCode = 12
-        versionName = "0.6.0"
+        versionCode = 13
+        versionName = "0.6.1"
 
         buildConfigField("String", "CONVEX_URL", "\"${localProperty("ados.convexUrl")}\"")
         buildConfigField("String", "MAP_TOKEN", "\"${localProperty("ados.mapToken")}\"")

@@ -3,6 +3,12 @@
 All notable changes to ADOS Android GCS are recorded here. Versions follow the
 app's `versionName`.
 
+## [0.6.1] - 2026-11-13
+
+- When the flight controller refuses Take control, the flight screen shows its
+  own reason ("The flight controller refused: …"), or "No answer from the
+  flight controller" when it does not reply, instead of a raw code.
+
 ## [0.6.0] - 2026-11-13
 
 This release covers everything since 0.5.0: eleven commits over 2026-11-12 and
