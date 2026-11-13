@@ -50,6 +50,10 @@ app's `versionName`.
 - **Camera zoom.** The zoom buttons and controller zoom send continuous zoom
   (a rate, then stop) instead of the step type autopilots refuse, so the
   vehicle's camera zooms instead of falling back to digital zoom.
+- **Camera zoom stop.** The stop goes out 400 ms after the zoom starts, even
+  when the start's acknowledgement is lost or still in progress, and a second
+  stop follows a start the camera settles late, so a press no longer zooms
+  for up to 11 seconds.
 - **No video source.** A vehicle that reports no camera (video error, empty
   camera roster) shows "No video source" and drops the last frame instead of
   "Video failed" with Retry over a frozen picture.

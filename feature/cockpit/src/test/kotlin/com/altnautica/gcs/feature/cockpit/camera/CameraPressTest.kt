@@ -12,12 +12,15 @@ import com.altnautica.gcs.feature.cockpit.FakeTelemetry
 import com.altnautica.gcs.feature.cockpit.FakeVehicle
 import com.altnautica.gcs.feature.cockpit.testCockpitVm
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -34,10 +37,13 @@ import org.junit.Test
 internal class GatedControl : VehicleControl {
     override val availableModes = MutableStateFlow(listOf(FlightMode(0, "STABILIZE")))
     val sent = mutableListOf<VehicleCommand>()
+    var clock: () -> Long = { 0L }
+    val sentAt = mutableListOf<Long>()
     val answers = mutableListOf<CompletableDeferred<CommandResult>>()
 
     override suspend fun run(command: VehicleCommand): CommandResult {
         sent += command
+        sentAt += clock()
         val answer = CompletableDeferred<CommandResult>()
         answers += answer
         return answer.await()
@@ -209,5 +215,72 @@ class CameraPressTest {
         runCurrent()
         assertTrue(grabs.single().keep.await())
         assertEquals(2, camera.digitalZoom.value)
+    }
+
+    private fun TestScope.camera(): Pair<GatedControl, CockpitCamera> {
+        val control = GatedControl().apply { clock = { testScheduler.currentTime } }
+        return control to CockpitCamera(backgroundScope) { control }
+    }
+
+    @Test
+    fun `a zoom start whose ack is lost is stopped at the burst, then stopped again`() = runTest(dispatcher) {
+        val (control, camera) = camera()
+        camera.zoom(1)
+        advanceTimeBy(401)
+        assertEquals("stop at the burst, not after the start's retries", listOf(VehicleCommand.CameraZoom(1), VehicleCommand.CameraZoom(0)), control.sent)
+        assertEquals(listOf(0L, 400L), control.sentAt)
+        control.answers[1].complete(CommandResult.Timeout)
+        runCurrent()
+        control.answers[0].complete(CommandResult.Accepted)
+        runCurrent()
+        assertEquals(listOf(VehicleCommand.CameraZoom(1), VehicleCommand.CameraZoom(0), VehicleCommand.CameraZoom(0)), control.sent)
+        assertEquals(1, camera.digitalZoom.value)
+    }
+
+    @Test
+    fun `a zoom start in progress is stopped at the burst and a late accept gets a second stop`() = runTest(dispatcher) {
+        val (control, camera) = camera()
+        camera.zoom(-1)
+        advanceTimeBy(5_000)
+        assertEquals(listOf(0L, 400L), control.sentAt)
+        // The camera settles the start late; the first stop's exchange ends on that answer.
+        control.answers[1].complete(CommandResult.Accepted)
+        runCurrent()
+        assertEquals(listOf(VehicleCommand.CameraZoom(-1), VehicleCommand.CameraZoom(0), VehicleCommand.CameraZoom(0)), control.sent)
+        control.answers[2].complete(CommandResult.Accepted)
+        advanceTimeBy(20_000)
+        assertEquals("the stop is the last zoom frame", VehicleCommand.CameraZoom(0), control.sent.last())
+        assertEquals(3, control.sent.size)
+    }
+
+    @Test
+    fun `a zoom start refused before the burst steps digitally and stops once`() = runTest(dispatcher) {
+        val (control, camera) = camera()
+        camera.zoom(1)
+        advanceTimeBy(100)
+        control.answers[0].complete(CommandResult.Denied("denied"))
+        runCurrent()
+        advanceTimeBy(1_000)
+        assertEquals(listOf(VehicleCommand.CameraZoom(1), VehicleCommand.CameraZoom(0)), control.sent)
+        assertEquals(listOf(0L, 100L), control.sentAt)
+        assertEquals(2, camera.digitalZoom.value)
+    }
+
+    @Test
+    fun `leaving the screen before the start is answered stops at once`() = runTest(dispatcher) {
+        val control = GatedControl().apply { clock = { testScheduler.currentTime } }
+        val scope = CoroutineScope(coroutineContext + Job(coroutineContext[Job]))
+        val camera = CockpitCamera(scope) { control }
+        camera.zoom(1)
+        advanceTimeBy(100)
+        scope.cancel()
+        runCurrent()
+        assertEquals(listOf(VehicleCommand.CameraZoom(1), VehicleCommand.CameraZoom(0)), control.sent)
+        assertEquals(listOf(0L, 100L), control.sentAt)
+        control.answers[1].complete(CommandResult.Accepted)
+        runCurrent()
+        assertEquals(VehicleCommand.CameraZoom(0), control.sent.last())
+        control.answers.forEach { it.complete(CommandResult.Accepted) }
+        runCurrent()
     }
 }

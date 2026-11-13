@@ -9,6 +9,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 
 /**
@@ -56,10 +58,13 @@ internal class CockpitCamera(private val scope: CoroutineScope, private val cont
     }
 
     /**
-     * The vehicle's camera zooms when it can: a press zooms continuously for [ZOOM_BURST_MS] and
-     * then stops it (rate 0). Otherwise the video zooms digitally 1× → 2× → 4×. The stop goes out
-     * whatever happened to the start (refused, lost ack, timeout, no link) and when the screen
-     * closes mid-press, so a camera that did start never runs to its limit.
+     * The vehicle's camera zooms when it can: a press zooms continuously and the stop (rate 0)
+     * goes out [ZOOM_BURST_MS] after the start was sent, whatever the start's answer: refused,
+     * lost ack, in progress, no link, or the screen closing mid-press. A start still unanswered
+     * at the stop is abandoned (no more resends), and a second stop follows once the first one's
+     * exchange ends, so a start the camera settles late is still stopped and the stop is always
+     * the last zoom frame. Only a refusal before the stop makes the video zoom digitally
+     * 1× → 2× → 4× instead.
      */
     fun zoom(step: Int) {
         if (zoomJob?.isActive == true) return
@@ -69,14 +74,26 @@ internal class CockpitCamera(private val scope: CoroutineScope, private val cont
             return
         }
         zoomJob = scope.launch {
+            val burst = launch { delay(ZOOM_BURST_MS) }
+            val start = async { c.run(VehicleCommand.CameraZoom(step.coerceIn(-1, 1))) }
+            var settled = false
             try {
-                if (c.run(VehicleCommand.CameraZoom(step.coerceIn(-1, 1))).cameraTookIt()) {
-                    delay(ZOOM_BURST_MS)
-                } else {
-                    _digitalZoom.update { digitalZoomStep(it, step) }
+                val answer = select {
+                    start.onAwait { it }
+                    burst.onJoin { null }
+                }
+                if (answer != null) {
+                    settled = true
+                    if (answer.cameraTookIt()) burst.join() else _digitalZoom.update { digitalZoomStep(it, step) }
                 }
             } finally {
-                withContext(NonCancellable) { c.run(VehicleCommand.CameraZoom(0)) }
+                withContext(NonCancellable) {
+                    burst.cancel()
+                    // Ends the start's resends and frees the command's lock before the stop.
+                    if (!settled) start.cancelAndJoin()
+                    c.run(VehicleCommand.CameraZoom(0))
+                    if (!settled) c.run(VehicleCommand.CameraZoom(0))
+                }
             }
         }
     }
