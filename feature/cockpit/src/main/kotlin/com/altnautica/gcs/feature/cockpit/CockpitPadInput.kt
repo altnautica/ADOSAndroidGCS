@@ -17,6 +17,7 @@ import com.altnautica.gcs.feature.cockpit.input.CockpitInputMapper
 import com.altnautica.gcs.feature.cockpit.pilot.CockpitControllerAction
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerHold
 import com.altnautica.gcs.feature.cockpit.pilot.Ds4ActionDispatcher
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
@@ -36,10 +37,15 @@ import kotlinx.coroutines.launch
  * router, and the controller's buttons and holds sampled at 50 Hz through the DS4
  * dispatcher. Each action runs on [vm]; with a confirm or an app-style sheet open only the
  * safety actions (brake, return, kill, cancel) act.
+ *
+ * The controller tick runs in [work] (off the main thread in the app), so hold timing never
+ * waits on a slow frame. It reads only state flows and its own dispatcher state (guarded by
+ * a lock shared with [detach]); the actions it yields run on [scope] (the main thread).
  */
 internal class CockpitPadInput(
     private val vm: CockpitViewModel,
     private val scope: CoroutineScope,
+    private val work: CoroutineContext,
     private val clock: MonotonicClock,
     private val router: AdosInputRouter,
     private val confirm: ConfirmController,
@@ -48,6 +54,8 @@ internal class CockpitPadInput(
     private val controlRows: StateFlow<List<ControlBindingSpec>>,
     spec: CockpitSpecRepository,
 ) {
+    private val lock = Any()
+    private var attached = false
     private var inputJob: Job? = null
     private var controllerJob: Job? = null
     private val dispatcher = Ds4ActionDispatcher(spec.ds4, Ds4Bindings.stopHoldMs(spec.layout))
@@ -58,9 +66,18 @@ internal class CockpitPadInput(
     /** D-pad ↑/↓ with the skill picker open: steps for the focused parameter of the open Tweak panel. */
     val paramNudges: SharedFlow<Int> = _paramNudges.asSharedFlow()
 
-    /** The controller hold in progress (arm, kill, RTH, take-off), for the hold ring. */
-    private val _hold = MutableStateFlow<ControllerHold?>(null)
-    val hold: StateFlow<ControllerHold?> = _hold.asStateFlow()
+    /**
+     * The binding action of the controller hold in progress (arm, kill, RTH, take-off), for
+     * the hold ring. It changes only when a hold starts, ends or moves to another action;
+     * read the hold's progress with [holdProgress].
+     */
+    private val _holdAction = MutableStateFlow<String?>(null)
+    val holdAction: StateFlow<String?> = _holdAction.asStateFlow()
+
+    @Volatile private var progress = 0f
+
+    /** Fraction 0..1 of the hold in progress, 0 with none; safe to sample from any thread (e.g. on the redraw beat). */
+    fun holdProgress(): Float = progress
 
     private val capture = object : InputCapture {
         override fun consumesChord(chord: String) = CockpitInputMapper.consumesChord(chord, vm.loadout.value)
@@ -74,10 +91,11 @@ internal class CockpitPadInput(
     fun attach(): Boolean {
         router.capture = capture
         if (inputJob?.isActive == true) return false
+        synchronized(lock) { attached = true }
         inputJob = scope.launch { router.events.collect(::onInput) }
-        controllerJob = scope.launch {
+        controllerJob = scope.launch(work) {
             while (isActive) {
-                controllerTick()
+                synchronized(lock) { controllerTick() }
                 delay(CONTROLLER_TICK_MS)
             }
         }
@@ -91,23 +109,38 @@ internal class CockpitPadInput(
         inputJob = null
         controllerJob?.cancel()
         controllerJob = null
-        dispatcher.reset()
-        _hold.value = null
+        synchronized(lock) {
+            attached = false
+            dispatcher.reset()
+            setHold(null)
+        }
     }
 
+    private fun setHold(hold: ControllerHold?) {
+        progress = hold?.progress ?: 0f
+        _holdAction.value = hold?.action
+    }
+
+    /** One sample of the pad in [work], under [lock]. */
     private fun controllerTick() {
+        if (!attached) return
         val pad = router.snapshot.value
         if (pad.deviceId == null) {
-            _hold.value = null
+            setHold(null)
             return
         }
         val actions = dispatcher.update(clock.nowMs(), pad, controlRows.value, vm.controllerContext.value)
-        _hold.value = dispatcher.hold
-        for (a in actions) {
-            // A confirm sheet or an app-style sheet takes the buttons; the brake, RTH and kill always act.
-            val busy = confirm.isOpen || overlays.uiNavigation
-            if (busy && !isSafety(a)) continue
-            perform(a)
+        setHold(dispatcher.hold)
+        if (actions.isEmpty()) return
+        scope.launch {
+            // Detached while the actions waited for the main thread: they no longer apply.
+            if (inputJob == null) return@launch
+            for (a in actions) {
+                // A confirm sheet or an app-style sheet takes the buttons; the brake, RTH and kill always act.
+                val busy = confirm.isOpen || overlays.uiNavigation
+                if (busy && !isSafety(a)) continue
+                perform(a)
+            }
         }
     }
 

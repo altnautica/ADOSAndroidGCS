@@ -31,11 +31,14 @@ data class ConfirmUiState(
     /** Failing preflight checks when the skill is checklist-aware and the checklist is not ready. */
     val failingChecks: List<PreflightCheck>,
     val overrideChecklist: Boolean,
-    /** Hold progress 0..1 from any hold source. */
+    /** Hold progress 0..1 from any hold source, stepped with [holdRemainingMs] (every 100 ms). */
     val progress: Float,
-    /** Guard window left for `guarded`, else null. */
+    /**
+     * Guard window left for `guarded` when this state was published, else null. The
+     * controller times the lapse itself; this is not republished while nothing shown changes.
+     */
     val guardRemainingMs: Long?,
-    /** Hold time still needed while a hold runs, else null. */
+    /** Hold time still needed while a hold runs, rounded up to the tenth of a second the sheet shows, else null. */
     val holdRemainingMs: Long? = null,
 ) {
     val gesture: ConfirmGesture get() = request.policy.gesture
@@ -129,8 +132,16 @@ class ConfirmController(
                 resolve(ConfirmResult.Cancelled)
                 return
             }
-            _state.update {
-                it?.copy(progress = m.progress(now), guardRemainingMs = m.guardRemainingMs(now), holdRemainingMs = m.holdRemainingMs(now))
+            // The sheet shows the hold in tenths of a second: publish only when that changes.
+            // Completion and the guard lapse are timed above at full rate.
+            val hold = m.holdRemainingMs(now)?.let { (it + 99) / 100 * 100 }
+            val progress = hold?.let { (1f - it.toFloat() / m.holdMs).coerceIn(0f, 1f) } ?: 0f
+            _state.update { s ->
+                if (s == null || (s.holdRemainingMs == hold && s.progress == progress)) {
+                    s
+                } else {
+                    s.copy(progress = progress, guardRemainingMs = m.guardRemainingMs(now), holdRemainingMs = hold)
+                }
             }
             delay(TICK_MS)
         }

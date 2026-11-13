@@ -12,6 +12,7 @@ import com.altnautica.gcs.core.skills.spec.RumbleSpec
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerContext
 import com.altnautica.gcs.feature.cockpit.pilot.LightbarState
 import com.altnautica.gcs.feature.cockpit.pilot.lightbarState
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -61,9 +62,15 @@ internal class ControllerFeedback(
     private val context: StateFlow<ControllerContext>,
     private val lightbar: LightbarSpec,
     private val rumble: RumbleSpec,
+    /** Runs the light bar (off the main thread in the app): a blink or pulse is a 20 Hz loop of binder calls. */
+    private val lightbarWork: CoroutineContext,
 ) {
     private val palette = MutableStateFlow(AdosColors.BrandDark)
     private var job: Job? = null
+
+    /** Guards [lit]: a frame drawn off the main thread never lands after [stop] restored the accent. */
+    private val lightLock = Any()
+    private var lit = false
 
     /** The current theme's colour roles, used when the cockpit stops. */
     fun setPalette(colors: AdosColorRoles) {
@@ -72,8 +79,9 @@ internal class ControllerFeedback(
 
     fun start() {
         if (job?.isActive == true) return
+        synchronized(lightLock) { lit = true }
         job = scope.launch {
-            launch {
+            launch(lightbarWork) {
                 val state = context.map(::lightbarState).distinctUntilChanged()
                 // Re-applied when another controller becomes active.
                 val device = controllers.active.map { it?.deviceId }.distinctUntilChanged()
@@ -105,7 +113,7 @@ internal class ControllerFeedback(
     private suspend fun show(frame: LightbarFrame) {
         val hz = frame.hz
         if (frame.pattern == SOLID || hz == null || hz <= 0f) {
-            controllers.setLightbar(frame.argb)
+            light(frame.argb)
             return
         }
         val periodMs = (1_000f / hz).toLong()
@@ -115,16 +123,23 @@ internal class ControllerFeedback(
                 BLINK -> if (t % periodMs < periodMs / 2) 1f else 0f
                 else -> (0.5f - 0.5f * cos(2.0 * PI * t / periodMs).toFloat()).coerceIn(PULSE_FLOOR, 1f)
             }
-            controllers.setLightbar(scaled(frame.argb, level))
+            light(scaled(frame.argb, level))
             delay(FRAME_MS)
             t += FRAME_MS
         }
     }
 
+    private fun light(argb: Int) = synchronized(lightLock) {
+        if (lit) controllers.setLightbar(argb)
+    }
+
     fun stop() {
         job?.cancel()
         job = null
-        controllers.setLightbar(palette.value.accentPrimary.toArgb())
+        synchronized(lightLock) {
+            lit = false
+            controllers.setLightbar(palette.value.accentPrimary.toArgb())
+        }
     }
 
     /** A confirm sheet resolved confirmed. */

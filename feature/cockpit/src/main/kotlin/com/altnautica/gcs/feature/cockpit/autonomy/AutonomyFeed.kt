@@ -27,9 +27,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** A value with its local receive time. */
 data class Stamped<T>(val value: T, val atMs: Long)
@@ -59,6 +63,8 @@ internal class AutonomyFeed(
     private val outbound: Flow<String>,
     /** The camera the flight-state chip reads the mission ETA from while a mission runs, else null. */
     private val etaCamera: () -> String?,
+    /** Where stream frames and detection batches are parsed: off the main thread in the app. */
+    private val parseContext: CoroutineContext = EmptyCoroutineContext,
 ) {
     private val _batches = MutableStateFlow<Map<String, DetectionBatch>>(emptyMap())
     val batches: StateFlow<Map<String, DetectionBatch>> = _batches.asStateFlow()
@@ -122,11 +128,14 @@ internal class AutonomyFeed(
                     launch { detections(id) }
                     launch {
                         retrying {
-                            api(id)?.navStream(outbound)?.collect { text ->
-                                lastStreamMs = clock.nowMs()
-                                _reducedRate.value = false
-                                onNavText(text)
-                            }
+                            api(id)?.navStream(outbound)
+                                ?.map { text -> clock.nowMs().let { now -> now to AutonomyParse.navFrame(text, now) } }
+                                ?.flowOn(parseContext)
+                                ?.collect { (now, frame) ->
+                                    lastStreamMs = now
+                                    _reducedRate.value = false
+                                    frame?.let { applyNav(it, now) }
+                                }
                         }
                     }
                     launch { pollStatus(id) }
@@ -218,26 +227,35 @@ internal class AutonomyFeed(
     private suspend fun detections(id: DeviceId) {
         val local = local(id)
         if (local != null) {
-            retrying { local.detections().collect { text -> perception.mapBatch(text)?.let(::onBatch) } }
+            retrying {
+                local.detections().map { text -> perception.mapBatch(text)?.let { AutonomyParse.batch(it, clock.nowMs()) } }
+                    .flowOn(parseContext).collect { b -> b?.let(::putBatch) }
+            }
             return
         }
         val release = perception.acquire(id)
         try {
-            retrying { perception.batches(id)?.collect { onBatch(it.payload) } ?: delay(RETRY_MS) }
+            retrying {
+                perception.batches(id)?.map { AutonomyParse.batch(it.payload, clock.nowMs()) }
+                    ?.flowOn(parseContext)?.collect { b -> b?.let(::putBatch) } ?: delay(RETRY_MS)
+            }
         } finally {
             release()
         }
     }
 
-    private fun onBatch(o: kotlinx.serialization.json.JsonObject) {
-        val b = AutonomyParse.batch(o, clock.nowMs()) ?: return
+    private fun putBatch(b: DetectionBatch) {
         _batches.update { it + (b.cameraId to b) }
     }
 
-    /** Applies one navigation frame received (or, for a polled frame, produced) at [receivedAtMs]. */
+    /** Parses and applies one navigation frame received (or, for a polled frame, produced) at [receivedAtMs]. */
     internal fun onNavText(text: String, receivedAtMs: Long = clock.nowMs()) {
-        val now = receivedAtMs
-        when (val f = AutonomyParse.navFrame(text, now) ?: return) {
+        AutonomyParse.navFrame(text, receivedAtMs)?.let { applyNav(it, receivedAtMs) }
+    }
+
+    /** Applies one parsed navigation frame received at [now], on the collector's thread. */
+    private fun applyNav(f: NavFrame, now: Long) {
+        when (f) {
             is NavFrame.Pose -> {
                 _pose.value = f.pose
                 _trail.update { appendTrail(it, f.pose, now) }

@@ -180,8 +180,9 @@ class LayerPainter(private val measurer: TextMeasurer) {
         }
     }
 
-    private fun lerp(a: Float?, b: Float?, f: Float): Float? = when {
-        b == null -> null
+    /** [b] eased from [a] by [f]; NaN when [b] is absent. A plain float, so no interpolated value is boxed. */
+    private fun lerp(a: Float?, b: Float?, f: Float): Float = when {
+        b == null -> Float.NaN
         a == null -> b
         else -> a + (b - a) * f
     }
@@ -197,8 +198,9 @@ class LayerPainter(private val measurer: TextMeasurer) {
         for (i in pts.indices) {
             val p = pts[i]
             if (p.size < 2) continue
-            val x = b?.get(i)?.getOrNull(0)?.let { it + (p[0] - it) * f } ?: p[0]
-            val y = b?.get(i)?.getOrNull(1)?.let { it + (p[1] - it) * f } ?: p[1]
+            val q = b?.get(i)
+            val x = if (q != null && q.isNotEmpty()) q[0] + (p[0] - q[0]) * f else p[0]
+            val y = if (q != null && q.size > 1) q[1] + (p[1] - q[1]) * f else p[1]
             val o = pt(view, x, y)
             if (i == 0) path.moveTo(o.x, o.y) else path.lineTo(o.x, o.y)
         }
@@ -230,7 +232,7 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 }
             }
             "wp" -> {
-                if (x == null || y == null) return
+                if (x.isNaN() || y.isNaN()) return
                 val c = pt(view, x, y)
                 if (it.role == "other") {
                     drawCircle(routeColor, px(3f), c, alpha = alpha * 0.4f)
@@ -238,7 +240,7 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 }
                 val gx = lerp(before?.gx, it.gx, f)
                 val gy = lerp(before?.gy, it.gy, f)
-                if (gx != null && gy != null && it.role == "next") {
+                if (!gx.isNaN() && !gy.isNaN() && it.role == "next") {
                     path.rewind()
                     path.moveTo(c.x, c.y)
                     val g = pt(view, gx, gy)
@@ -261,7 +263,7 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 }
             }
             "home" -> {
-                if (x == null || y == null) return
+                if (x.isNaN() || y.isNaN()) return
                 val c = pt(view, x, y)
                 val emph = route == RouteStyle.Returning
                 val r = px(if (emph) 18f else 12f)
@@ -272,7 +274,7 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 if (emph) it.distM?.let { d -> chip(text(texts, it) { "H · ${Math.round(d)} m" }, Offset(c.x + r + px(4f), c.y - r), LayerColors.Home, alpha) }
             }
             "fpv" -> {
-                if (x == null || y == null) return
+                if (x.isNaN() || y.isNaN()) return
                 val c = pt(view, x, y)
                 val r = px(6f)
                 drawCircle(LayerColors.Halo, r + px(2f), c, alpha = alpha, style = stroke(px(4f)))
@@ -307,7 +309,7 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 }
             }
             "fgoal" -> {
-                if (x == null || y == null) return
+                if (x.isNaN() || y.isNaN()) return
                 val c = pt(view, x, y)
                 drawCircle(LayerColors.Halo, px(9f), c, alpha = alpha, style = stroke(px(4f)))
                 drawCircle(LayerColors.Follow, px(9f), c, alpha = alpha, style = stroke(px(2f)))
@@ -319,7 +321,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
                 chevrons(it, view, alpha)
             }
             "edge" -> {
-                val ang = lerp(before?.ang, it.ang, f) ?: return
+                val ang = lerp(before?.ang, it.ang, f)
+                if (ang.isNaN()) return
                 val inset = px(16f)
                 val cx = view.center.x
                 val cy = view.center.y

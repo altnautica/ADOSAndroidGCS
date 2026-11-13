@@ -2,5 +2,5 @@
 # Shrink a file, then lower its count here; never raise one.
 core/demo/src/main/kotlin/com/altnautica/gcs/core/demo/node/DemoFcSetup.kt 543
 core/skills/src/main/kotlin/com/altnautica/gcs/core/skills/builtin/BuiltinSkills.kt 583
-feature/cockpit/src/main/kotlin/com/altnautica/gcs/feature/cockpit/CockpitScreen.kt 612
+feature/cockpit/src/main/kotlin/com/altnautica/gcs/feature/cockpit/CockpitScreen.kt 587
 feature/cockpit/src/main/kotlin/com/altnautica/gcs/feature/cockpit/CockpitViewModel.kt 880

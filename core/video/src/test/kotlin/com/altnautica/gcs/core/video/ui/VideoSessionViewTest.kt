@@ -135,6 +135,20 @@ class VideoSessionViewTest {
     }
 
     @Test
+    fun `a picture-in-picture video draws into a TextureView, which its rounded clip can shape`() {
+        val handle = mainHandle(1f)
+        lateinit var root: View
+        compose.setContent {
+            root = LocalView.current.rootView
+            VideoSessionView(handle, VideoSurfaceRole.Pip, Modifier)
+        }
+        compose.waitForIdle()
+        val views = viewsIn(root)
+        assertTrue(views.any { it is TextureView })
+        assertTrue(views.none { it is SurfaceView })
+    }
+
+    @Test
     fun `a session switch ends reporting the new session's view`() {
         val reported = mutableListOf<View?>()
         val a = mainHandle(0.5f)

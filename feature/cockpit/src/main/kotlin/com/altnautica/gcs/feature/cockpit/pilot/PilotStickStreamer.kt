@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.skills.controls.padKey
 import com.altnautica.gcs.core.skills.controls.radialDeadzone
 import com.altnautica.gcs.core.skills.input.GamepadButton
 import com.altnautica.gcs.core.skills.input.PadSnapshot
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -56,9 +57,15 @@ data class StickConditioning(
  * still sends nothing: the pad stays live for as long as its device is attached, and
  * its last reported position keeps streaming. A new stick session starts when the
  * cockpit starts, a pad connects or the channel changes.
+ *
+ * The stream runs in [work] (off the main thread in the app), so a slow frame never delays a
+ * stick frame. It reads only thread-safe state (state flows and the volatile on-screen
+ * pads) and sends through the channel's queue; its session fields are guarded by a lock
+ * shared with [stop], which the main thread calls.
  */
 internal class PilotStickStreamer(
     private val scope: CoroutineScope,
+    private val work: CoroutineContext,
     private val clock: MonotonicClock,
     /** The pad to stream: the controller, or the on-screen sticks while a finger holds them. */
     private val pad: () -> PadSnapshot,
@@ -71,6 +78,7 @@ internal class PilotStickStreamer(
     /** True while input frames go out. */
     val streaming: StateFlow<Boolean> = _streaming.asStateFlow()
 
+    private val lock = Any()
     private var job: Job? = null
     private var target: StickSink? = null
     private var sessionSink: StickSink? = null
@@ -79,12 +87,15 @@ internal class PilotStickStreamer(
     /** The cockpit reached STARTED: stream while the other conditions hold. */
     fun start() {
         if (job?.isActive == true) return
-        sessionSink = null
-        sessionPad = null
-        job = scope.launch {
+        synchronized(lock) {
+            sessionSink = null
+            sessionPad = null
+        }
+        job = scope.launch(work) {
             val period = 1_000L / rateHz
             while (isActive) {
-                tick()
+                // Re-checked under the lock: [stop] cancels before it halts, so no frame follows a halt.
+                synchronized(lock) { if (isActive) tick() }
                 delay(period)
             }
         }
@@ -94,7 +105,7 @@ internal class PilotStickStreamer(
     fun stop() {
         job?.cancel()
         job = null
-        halt()
+        synchronized(lock) { halt() }
     }
 
     private fun tick() {

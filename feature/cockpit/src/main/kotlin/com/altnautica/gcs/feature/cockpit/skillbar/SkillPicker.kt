@@ -17,7 +17,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -109,7 +117,7 @@ fun SkillPickerChip(chip: PickerChip, onOpen: () -> Unit, modifier: Modifier = M
             horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
         ) {
             if (chip is PickerChip.Pending) {
-                CircularProgressIndicator(Modifier.size(AdosSize.IconMd), color = colors.hudPrimary, strokeWidth = 2.dp)
+                PendingRing(colors.hudPrimary, Modifier.size(AdosSize.IconMd))
             } else {
                 Icon(skill?.let { skillIcon(it.icon) } ?: Icons.Outlined.AutoAwesome, contentDescription = null, tint = colors.hudPrimary, modifier = Modifier.size(AdosSize.IconMd))
             }
@@ -120,6 +128,29 @@ fun SkillPickerChip(chip: PickerChip, onOpen: () -> Unit, modifier: Modifier = M
         }
     }
 }
+
+/**
+ * The pending ring: a quarter arc that turns a tenth of a turn on each flight-screen beat.
+ * The step is read by the draw pass only, so a pending skill redraws the ring (never
+ * recomposes it) at most 10 times a second, in the beat's frame, instead of every frame.
+ */
+@Composable
+internal fun PendingRing(color: Color, modifier: Modifier = Modifier) {
+    val step = remember { mutableIntStateOf(0) }
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(beat) { beat.ticks.collect { step.intValue = (step.intValue + 1) % PENDING_STEPS } }
+    Spacer(
+        modifier.drawWithCache {
+            val w = 2.dp.toPx()
+            val stroke = Stroke(w)
+            onDrawBehind {
+                drawArc(color, step.intValue * 360f / PENDING_STEPS - 90f, 90f, false, Offset(w / 2, w / 2), Size(size.width - w, size.height - w), style = stroke)
+            }
+        },
+    )
+}
+
+private const val PENDING_STEPS = 10
 
 /**
  * The skill picker: tabs Behaviors / Camera / Navigation / Utility, each plugin's skills under
@@ -217,7 +248,7 @@ private fun SkillRow(slot: SlotUi, selected: Boolean, actions: SkillPickerAction
         ) {
             Row(Modifier.padding(horizontal = AdosSpacing.S3, vertical = AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {
                 if (state?.pending == true) {
-                    CircularProgressIndicator(Modifier.size(AdosSize.IconMd), strokeWidth = 2.dp)
+                    PendingRing(MaterialTheme.colorScheme.primary, Modifier.size(AdosSize.IconMd))
                 } else {
                     Icon(skillIcon(skill.icon), contentDescription = null, tint = colors.accentPrimary, modifier = Modifier.size(AdosSize.IconMd))
                 }

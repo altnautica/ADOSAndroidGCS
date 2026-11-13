@@ -42,7 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -68,6 +68,7 @@ import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.skills.hud.ReadoutFormat
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 
@@ -361,45 +362,60 @@ fun SwitchCard(
 
 /**
  * Attitude radar: the horizon disc (roll and pitch), the fixed aircraft mark and the
- * heading. Redraws from the attitude flow in the draw pass, without recomposing.
+ * heading. A new attitude sample only marks the radar dirty; the flight screen's
+ * [RedrawBeat] then bumps a draw-phase counter, so the disc redraws at most once a beat
+ * (10 Hz), in the same frame as the HUD, and never recomposes.
  */
 @Composable
 fun AttitudeRadar(attitude: StateFlow<Attitude?>?, modifier: Modifier = Modifier) {
     val c = LocalChrome.current
     val frame = remember { mutableLongStateOf(0L) }
-    LaunchedEffect(attitude) { attitude?.collect { frame.longValue++ } }
-    val path = remember { Path() }
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(attitude, beat) {
+        if (attitude == null) return@LaunchedEffect
+        var dirty = true
+        launch { attitude.collect { dirty = true } }
+        beat.ticks.collect {
+            if (!dirty) return@collect
+            dirty = false
+            // Only the draw pass reads it, so no composition runs for it.
+            frame.longValue++
+        }
+    }
     val sky = Color(0xFF2B5C8A)
     val ground = Color(0xFF6B4A2B)
     Box(
         modifier
             .fillMaxSize()
             .graphicsLayer()
-            .drawBehind {
-                frame.longValue
-                val att = attitude?.value
-                val roll = att?.let { Math.toDegrees(it.rollRad.toDouble()).toFloat() } ?: 0f
-                val pitch = att?.let { Math.toDegrees(it.pitchRad.toDouble()).toFloat() } ?: 0f
+            .drawWithCache {
+                // Geometry, clip and ring stroke per size; the draw below only reads the attitude.
                 val r = size.minDimension / 2 - 10.dp.toPx()
                 val center = Offset(size.width / 2, size.height / 2 + 4.dp.toPx())
-                path.reset()
-                path.addOval(androidx.compose.ui.geometry.Rect(center, r))
-                clipPath(path) {
-                    rotate(-roll, center) {
-                        translate(0f, pitch / 45f * r) {
-                            drawRect(sky.copy(alpha = 0.75f), Offset(center.x - r * 2, center.y - r * 3), androidx.compose.ui.geometry.Size(r * 4, r * 3))
-                            drawRect(ground.copy(alpha = 0.75f), Offset(center.x - r * 2, center.y), androidx.compose.ui.geometry.Size(r * 4, r * 3))
-                            drawLine(c.text, Offset(center.x - r * 2, center.y), Offset(center.x + r * 2, center.y), 1.5.dp.toPx())
+                val disc = Path().apply { addOval(androidx.compose.ui.geometry.Rect(center, r)) }
+                val ring = Stroke(1.dp.toPx())
+                onDrawBehind {
+                    frame.longValue
+                    val att = attitude?.value
+                    val roll = if (att != null) Math.toDegrees(att.rollRad.toDouble()).toFloat() else 0f
+                    val pitch = if (att != null) Math.toDegrees(att.pitchRad.toDouble()).toFloat() else 0f
+                    clipPath(disc) {
+                        rotate(-roll, center) {
+                            translate(0f, pitch / 45f * r) {
+                                drawRect(sky.copy(alpha = 0.75f), Offset(center.x - r * 2, center.y - r * 3), androidx.compose.ui.geometry.Size(r * 4, r * 3))
+                                drawRect(ground.copy(alpha = 0.75f), Offset(center.x - r * 2, center.y), androidx.compose.ui.geometry.Size(r * 4, r * 3))
+                                drawLine(c.text, Offset(center.x - r * 2, center.y), Offset(center.x + r * 2, center.y), 1.5.dp.toPx())
+                            }
                         }
                     }
+                    drawCircle(c.border, r, center, style = ring)
+                    // The aircraft, fixed.
+                    val w = r * 0.45f
+                    drawLine(Color(0xFFFFC107), Offset(center.x - w, center.y), Offset(center.x - w * 0.3f, center.y), 3.dp.toPx(), StrokeCap.Round)
+                    drawLine(Color(0xFFFFC107), Offset(center.x + w * 0.3f, center.y), Offset(center.x + w, center.y), 3.dp.toPx(), StrokeCap.Round)
+                    drawCircle(Color(0xFFFFC107), 3.dp.toPx(), center)
+                    if (att == null) drawCircle(Color.Black.copy(alpha = 0.45f), r, center)
                 }
-                drawCircle(c.border, r, center, style = Stroke(1.dp.toPx()))
-                // The aircraft, fixed.
-                val w = r * 0.45f
-                drawLine(Color(0xFFFFC107), Offset(center.x - w, center.y), Offset(center.x - w * 0.3f, center.y), 3.dp.toPx(), StrokeCap.Round)
-                drawLine(Color(0xFFFFC107), Offset(center.x + w * 0.3f, center.y), Offset(center.x + w, center.y), 3.dp.toPx(), StrokeCap.Round)
-                drawCircle(Color(0xFFFFC107), 3.dp.toPx(), center)
-                if (att == null) drawCircle(Color.Black.copy(alpha = 0.45f), r, center)
             }
             .testTag("attitude-radar"),
     )

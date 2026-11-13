@@ -46,6 +46,7 @@ import com.altnautica.gcs.feature.cockpit.launch.StepStrip
 import com.altnautica.gcs.core.skills.hud.ReadoutFormat
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
+import kotlin.math.ceil
 import kotlin.math.roundToLong
 
 /** Hold that takes the stick session over from another surface. */
@@ -54,14 +55,20 @@ const val TAKE_OVER_HOLD_MS = 1_500
 /**
  * The flow announcements the cockpit shows over the video, derived from the pilot state:
  * the handover banner, the centre-sticks gate ring, another surface holding the sticks,
- * the link-loss countdown and the low-battery return countdown.
+ * the link-loss countdown and the low-battery return countdown. It holds only what the
+ * screen shows: the countdowns in the whole seconds they read and the gate as pending (its
+ * ring reads the progress itself, on the beat), so a pilot frame that changes nothing on
+ * screen leaves it equal and redraws nothing.
  */
 data class FlowUi(
     val banner: PilotBanner? = null,
-    val gateProgress: Float? = null,
+    /** The centre-sticks gate is pending while this surface streams: its ring shows. */
+    val gatePending: Boolean = false,
     /** Another surface holds the stick session. */
     val sticksWith: InputSession? = null,
+    /** Seconds until the link-loss action, rounded up to the whole second the banner reads. */
     val linkLossInS: Float? = null,
+    /** Seconds until the low-battery return, rounded up to the whole second the banner reads. */
     val rthCountdownS: Float? = null,
     /** A launch sequence running (or refused): its steps and Abort stay on screen until it is done. */
     val launch: LaunchSequence? = null,
@@ -76,13 +83,16 @@ data class FlowUi(
             val session = pilot.inputSession
             return FlowUi(
                 banner = pilot.banner,
-                gateProgress = pilot.gate?.takeIf { it.pending && streaming }?.progress,
+                gatePending = pilot.gate?.pending == true && streaming,
                 sticksWith = session?.takeIf { it.src != ownSrc },
-                linkLossInS = pilot.linkLossInS,
-                rthCountdownS = pilot.rthCountdownS,
+                linkLossInS = pilot.linkLossInS?.let(::shownSeconds),
+                rthCountdownS = pilot.rthCountdownS?.let(::shownSeconds),
                 launch = pilot.sequence?.takeIf { it.step != LaunchStep.Done },
             )
         }
+
+        /** A countdown as the whole second it reads (rounded up, never below zero). */
+        internal fun shownSeconds(s: Float): Float = ceil(s.toDouble()).toFloat().coerceAtLeast(0f)
     }
 }
 
@@ -121,9 +131,12 @@ fun HandoverBanner(banner: PilotBanner, modifier: Modifier = Modifier) {
     }
 }
 
-/** "Centre sticks to take control" with a progress ring that fills while the sticks rest centred. */
+/**
+ * "Centre sticks to take control" with a progress ring that fills while the sticks rest
+ * centred. [progress] is read while drawing, so a moving ring redraws without recomposing.
+ */
 @Composable
-fun GateRing(progress: Float, modifier: Modifier = Modifier) {
+fun GateRing(progress: () -> Float, modifier: Modifier = Modifier) {
     val colors = AdosTheme.colors
     val chrome = LocalChrome.current
     ChromePanel(modifier.testTag("flow-gate")) {
@@ -137,7 +150,7 @@ fun GateRing(progress: Float, modifier: Modifier = Modifier) {
             Canvas(Modifier.size(64.dp)) {
                 val stroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
                 drawArc(track, 0f, 360f, useCenter = false, style = stroke)
-                drawArc(fill, -90f, 360f * progress.coerceIn(0f, 1f), useCenter = false, style = stroke)
+                drawArc(fill, -90f, 360f * progress().coerceIn(0f, 1f), useCenter = false, style = stroke)
             }
             Text(specText("flow.gate.centre_sticks"), color = chrome.text, style = MaterialTheme.typography.titleSmall)
         }

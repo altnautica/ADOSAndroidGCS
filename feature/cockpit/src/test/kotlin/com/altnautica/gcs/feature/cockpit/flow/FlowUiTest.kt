@@ -4,6 +4,7 @@ import com.altnautica.gcs.core.model.LaunchSequence
 import com.altnautica.gcs.core.model.LaunchStep
 import com.altnautica.gcs.core.model.PilotBanner
 import com.altnautica.gcs.core.model.PilotOwner
+import com.altnautica.gcs.core.model.HandoverGate
 import com.altnautica.gcs.feature.cockpit.testSpec
 import com.altnautica.gcs.feature.cockpit.pilotState
 import org.junit.Assert.assertEquals
@@ -39,5 +40,23 @@ class FlowUiTest {
         assertEquals("ADOS engaged by RC switch", bannerLine(testSpec.setupStrings, engaged))
         val linkLoss = PilotBanner("pilot.banner.link_loss", mapOf("action" to "rth", "in_s" to "7"), null)
         assertEquals("Link lost: Return home in 7 s", bannerLine(testSpec.setupStrings, linkLoss))
+    }
+
+    @Test
+    fun `pilot frames that change nothing shown leave the flow state equal`() {
+        val pilot = pilotState(PilotOwner.Pilot)
+        // A countdown within one shown second, and a gate filling: equal state, no redraw.
+        val a = FlowUi.of(pilot.copy(linkLossInS = 6.9f, rthCountdownS = 12.4f, gate = HandoverGate(true, 0.2f)), "android", streaming = true)
+        val b = FlowUi.of(pilot.copy(linkLossInS = 6.05f, rthCountdownS = 12.01f, gate = HandoverGate(true, 0.6f)), "android", streaming = true)
+        assertEquals(a, b)
+        assertEquals(7f, a.linkLossInS)
+        assertEquals(13f, a.rthCountdownS)
+        assertEquals(true, a.gatePending)
+        // The next shown second is a change.
+        val c = FlowUi.of(pilot.copy(linkLossInS = 5.9f, rthCountdownS = 12.01f, gate = HandoverGate(true, 0.7f)), "android", streaming = true)
+        assertEquals(6f, c.linkLossInS)
+        // The banner's words read the same whole seconds as before.
+        assertEquals(lowBatteryCountdown(12.4f), lowBatteryCountdown(a.rthCountdownS!!))
+        assertEquals(false, FlowUi.of(pilot.copy(gate = HandoverGate(true, 0.2f)), "android", streaming = false).gatePending)
     }
 }

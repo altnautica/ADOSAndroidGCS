@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,7 @@ import com.altnautica.gcs.core.skills.spec.ChromeTokensSpec
 import com.altnautica.gcs.core.skills.spec.SpecColor
 import com.altnautica.gcs.core.video.whep.isEmulatorDevice
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -185,12 +187,14 @@ val LocalChromeBackdrop = staticCompositionLocalOf<ChromeBackdrop?> { null }
 /**
  * Copies the main video into [backdrop] every [BACKDROP_SAMPLE_MS] at 1/[DOWNSCALE] size;
  * nothing below API 31. On an emulator a SurfaceView is not copied (see [copiesBackdrop]).
+ * A new copy reaches the panels on the next beat of the flight screen's [RedrawBeat], so it
+ * redraws them in a frame the beat draws anyway, never in one of its own.
  */
 @Composable
-fun BackdropSampler(backdrop: ChromeBackdrop) {
+fun BackdropSampler(backdrop: ChromeBackdrop, copy: suspend (View, Bitmap) -> Boolean = ::copyVideoView) {
     if (!BackdropBlurSupported) return
-    LaunchedEffect(backdrop) {
-        val handler = Handler(Looper.getMainLooper())
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(backdrop, beat) {
         // Two bitmaps: one on screen, one being written.
         var spare: Bitmap? = null
         var shown: Bitmap? = null
@@ -202,16 +206,8 @@ fun BackdropSampler(backdrop: ChromeBackdrop) {
             val w = (view.width / DOWNSCALE).coerceAtLeast(1)
             val h = (view.height / DOWNSCALE).coerceAtLeast(1)
             val target = spare?.takeIf { it.width == w && it.height == h } ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-            val ok = when (view) {
-                is SurfaceView -> view.holder.surface?.isValid == true && suspendCancellableCoroutine { cont ->
-                    runCatching {
-                        PixelCopy.request(view, target, { result -> if (cont.isActive) cont.resume(result == PixelCopy.SUCCESS) }, handler)
-                    }.onFailure { if (cont.isActive) cont.resume(false) }
-                }
-                is TextureView -> view.isAvailable && runCatching { view.getBitmap(target) }.isSuccess
-                else -> false
-            }
-            if (ok) {
+            if (copy(view, target)) {
+                beat.ticks.first()
                 spare = shown
                 shown = target
                 backdrop.frame = target.asImageBitmap()
@@ -220,6 +216,17 @@ fun BackdropSampler(backdrop: ChromeBackdrop) {
             }
         }
     }
+}
+
+/** Copies [view] (PixelCopy for a SurfaceView, `getBitmap` for a TextureView) into [target]. */
+private suspend fun copyVideoView(view: View, target: Bitmap): Boolean = when (view) {
+    is SurfaceView -> view.holder.surface?.isValid == true && suspendCancellableCoroutine { cont ->
+        runCatching {
+            PixelCopy.request(view, target, { result -> if (cont.isActive) cont.resume(result == PixelCopy.SUCCESS) }, Handler(Looper.getMainLooper()))
+        }.onFailure { if (cont.isActive) cont.resume(false) }
+    }
+    is TextureView -> view.isAvailable && runCatching { view.getBitmap(target) }.isSuccess
+    else -> false
 }
 
 /** How often the backdrop is copied; the blur hides detail, so once a second is enough. */
@@ -236,8 +243,9 @@ private const val DOWNSCALE = 12
 
 /**
  * A flight-screen panel: the blurred video behind it (API 31 and later, once a frame is
- * sampled), the translucent tint, a hairline border, then [content]. Below API 31 the tint
- * is the stronger no-blur colour.
+ * sampled), the translucent tint, a hairline border, then [content]. Below API 31, and until
+ * a frame is sampled (never, on an emulator), the tint is the stronger no-blur colour and the
+ * panel carries no blur layer at all.
  */
 @Composable
 fun ChromePanel(
@@ -248,11 +256,12 @@ fun ChromePanel(
 ) {
     val c = LocalChrome.current
     val backdrop = LocalChromeBackdrop.current
+    // Read in composition only for whether a frame exists: it changes once, from none to some.
+    val blurred = backdrop != null && BackdropBlurSupported && remember(backdrop) { derivedStateOf { backdrop.frame != null } }.value
     Box(modifier.clip(shape).border(c.borderWidth, c.border, shape), propagateMinConstraints = false) {
-        if (backdrop != null && BackdropBlurSupported) BackdropFill(backdrop, c, Modifier.matchParentSize())
+        if (blurred) BackdropFill(backdrop!!, c, Modifier.matchParentSize())
         Spacer(
             Modifier.matchParentSize().drawBehind {
-                val blurred = backdrop?.frame != null && BackdropBlurSupported
                 drawRect(tint ?: if (blurred) c.panel else c.panelNoBlur)
             },
         )

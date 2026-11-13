@@ -3,7 +3,10 @@ package com.altnautica.gcs.feature.cockpit.chrome
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -81,4 +84,18 @@ fun rememberRedrawBeat(): RedrawBeat {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(own, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { own.run() } }
     return own
+}
+
+/**
+ * [read] sampled on every beat, as state: a value that changes faster than the beat (a hold or
+ * gate progress, a countdown) reaches the screen only on beats, in the same window frame as
+ * everything else that changed. Read it in a draw lambda to redraw without recomposing.
+ */
+@Composable
+fun <T> rememberOnBeat(read: () -> T): State<T> {
+    val beat = rememberRedrawBeat()
+    val latest = rememberUpdatedState(read)
+    val state = remember { mutableStateOf(read()) }
+    LaunchedEffect(beat) { beat.ticks.collect { state.value = latest.value() } }
+    return state
 }

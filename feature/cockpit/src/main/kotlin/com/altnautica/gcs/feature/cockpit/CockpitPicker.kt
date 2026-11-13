@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -29,7 +30,11 @@ internal class CockpitPicker(
     /** The skill the open picker has selected, if any. */
     val selected = MutableStateFlow<String?>(null)
 
-    val chip: StateFlow<PickerChip> = combine(session.pickerSkills, session.states, pilot) { skills, states, p ->
+    /** The chip reads only the pilot's leased skill: other pilot fields changing re-resolve nothing. */
+    val chip: StateFlow<PickerChip> = combine(
+        session.pickerSkills, session.states,
+        pilot.distinctUntilChanged { a, b -> SkillPickerModel.pilotSkillId(a) == SkillPickerModel.pilotSkillId(b) },
+    ) { skills, states, p ->
         SkillPickerModel.chip(skills, states, p)
     }.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), PickerChip.Idle)
 

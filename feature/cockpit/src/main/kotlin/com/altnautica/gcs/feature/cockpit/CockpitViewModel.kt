@@ -83,7 +83,6 @@ import com.altnautica.gcs.feature.cockpit.modes.ModeSheetActions
 import com.altnautica.gcs.feature.cockpit.modes.ModeSheetUi
 import com.altnautica.gcs.feature.cockpit.pilot.CockpitPilot
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerContext
-import com.altnautica.gcs.feature.cockpit.pilot.ControllerHold
 import com.altnautica.gcs.feature.cockpit.pilot.OnScreenSticks
 import com.altnautica.gcs.feature.cockpit.pilot.PilotStickStreamer
 import com.altnautica.gcs.feature.cockpit.pilot.StickConditioning
@@ -95,6 +94,7 @@ import com.altnautica.gcs.feature.cockpit.preflight.PreflightContext
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightResult
 import com.altnautica.gcs.feature.cockpit.preflight.cockpitPreflight
 import com.altnautica.gcs.feature.cockpit.preflight.sticksAvailable
+import com.altnautica.gcs.feature.cockpit.preflight.storageUsedPct
 import com.altnautica.gcs.feature.cockpit.skillbar.CockpitTargetActions
 import com.altnautica.gcs.feature.cockpit.skillbar.PickerChip
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerActions
@@ -109,7 +109,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -124,7 +123,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -172,6 +170,7 @@ class CockpitViewModel @AssistedInject constructor(
     private val spec: CockpitSpecRepository,
     private val controls: ControlsRepository,
     missionMirror: MissionMirrorSource,
+    @com.altnautica.gcs.feature.cockpit.di.CockpitWork work: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
 ) : ViewModel() {
 
     @AssistedFactory
@@ -302,7 +301,7 @@ class CockpitViewModel @AssistedInject constructor(
     private suspend fun autonomyApi(id: DeviceId): AutonomyFeedApi? =
         localApis.firstNotNullOfOrNull { it.autonomy(id) } ?: extensions.api(id)
 
-    internal val pilot = CockpitPilot(viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot, vehicle.flatMapLatest { it?.reach ?: flowOf(null) })
+    internal val pilot = CockpitPilot(viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot, vehicle.flatMapLatest { it?.reach ?: flowOf(null) }, work)
 
     /** The onboard pilot's state, or null for a vehicle without one. */
     val pilotState: StateFlow<PilotState?> = pilot.state
@@ -314,17 +313,10 @@ class CockpitViewModel @AssistedInject constructor(
     val freshPilotState: StateFlow<PilotState?> = combine(pilot.state, tick500) { p, _ -> freshPilot(p, clock.nowMs()) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), freshPilot(pilot.state.value, clock.nowMs()))
 
-    /** The return reserve from the agent's battery engine for the flown vehicle, or null without one. */
-    val batteryReserve: StateFlow<BatteryReserve?> = vehicleNodeId.flatMapLatest { id ->
-        if (id == null) return@flatMapLatest flowOf<BatteryReserve?>(null)
-        flow {
-            while (true) {
-                val r = autonomyApi(id)?.let { runCatching { it.battery() }.getOrNull() }
-                emit(BatteryReserve.from((r as? com.altnautica.gcs.core.agent.http.AgentResult.Ok)?.value))
-                delay(BatteryReserve.POLL_MS)
-            }
-        }
-    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
+    /** The return reserve from the agent's battery engine for the flown vehicle, or null without one; polled, shown on the 2 Hz tick. */
+    val batteryReserve: StateFlow<BatteryReserve?> = onTick(viewModelScope, vehicleNodeId.flatMapLatest { id ->
+        id?.let { batteryReservePolls { autonomyApi(it) } } ?: flowOf(null)
+    }, tick500, null)
 
     /** The settings with the battery bands the cockpit flies by: the spec's fallback, raised to the engine's reserve. */
     private val flightSettings: StateFlow<CockpitSettings> = combine(settings, batteryReserve) { s, r ->
@@ -343,10 +335,10 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Preflight --------------------------------------------------------------------
 
-    private val preflightContext = MutableStateFlow(PreflightContext(null, false, null))
+    private val preflightContext = MutableStateFlow(PreflightContext.of(null, false, null))
 
-    val preflight: StateFlow<PreflightResult> =
-        cockpitPreflight(viewModelScope, clock, telemetry, flightSettings, prearmText, preflightContext, tick500, spec.layout.statusPill!!.storageWarnPct!!)
+    val preflight: StateFlow<PreflightResult> = cockpitPreflight(viewModelScope, clock, telemetry, flightSettings, prearmText, preflightContext, tick500,
+        spec.layout.statusPill!!.storageWarnPct!!, storageUsedPct(viewModelScope, work))
 
     private val armGate = FirstArmGate()
     private val _armGateOpen = MutableStateFlow(false)
@@ -516,7 +508,7 @@ class CockpitViewModel @AssistedInject constructor(
         return if (screen.deviceId != null) screen else router.snapshot.value
     }
 
-    private val streamer = PilotStickStreamer(viewModelScope, clock, ::streamPad, conditioning, pilot.stickSink)
+    private val streamer = PilotStickStreamer(viewModelScope, work, clock, ::streamPad, conditioning, pilot.stickSink)
 
     private val sticks = CockpitStickController(
         viewModelScope, clock, vehicle, nodeFlows.vehicleServices, router, controllerSettings, controllerManager,
@@ -600,7 +592,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** Detections, follow and navigation state, designation, nav-source chip, minimap frame and data layers. */
     internal val autonomy = CockpitAutonomy(
         viewModelScope, clock, vehicleNodeId, telemetry, nodeFlows.vehicleServices, video, session.allSkills, tick500,
-        extensions, perception, localApis, settingsRepo, _events, ::activate, pilot.state,
+        extensions, perception, localApis, settingsRepo, _events, ::activate, pilot.state, work,
     )
 
     private val widthClass = MutableStateFlow<WidthClass?>(null)
@@ -613,9 +605,9 @@ class CockpitViewModel @AssistedInject constructor(
     init {
         viewModelScope.launch { autonomy.feed.pilot.collect { navPilot.value = it } }
         viewModelScope.launch {
-            // On-screen sticks shown at this width fly as well as a pad.
+            // On-screen sticks shown at this width fly as well as a pad; an equal context re-evaluates nothing.
             combine(pilot.state, router.gamepadConnected, onScreenSticksEnabled, widthClass, autonomy.navChip) { p, pad, on, w, nav ->
-                PreflightContext(p, sticksAvailable(pad, on, w, spec.layout.onScreenSticks.classes), nav)
+                PreflightContext.of(p, sticksAvailable(pad, on, w, spec.layout.onScreenSticks.classes), nav)
             }.collect { preflightContext.value = it }
         }
     }
@@ -706,7 +698,7 @@ class CockpitViewModel @AssistedInject constructor(
     // ---- Flight-state chip, flows and controller context ------------------------------
 
     private val facts: CockpitFacts = CockpitFacts(
-        viewModelScope, clock, spec, pilot.state, tick500, telemetry, autonomy, band, minimap, hud.flightValues, streamer.streaming,
+        viewModelScope, clock, spec, pilot.state, tick500, telemetry, autonomy, band, minimap, hud::flightValuesNow, streamer.streaming,
         overlays.picker, alerts, settings,
     )
 
@@ -721,6 +713,9 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** Banners, gate ring, stick session, countdowns and launch steps; none from a stale frame. */
     val flow: StateFlow<FlowUi> = facts.flow
+
+    /** The tips' flight facts and banner flag; equal across pilot frames that change neither. */
+    internal val tipFlight: StateFlow<TipFlightFacts> = tipFlightFacts(viewModelScope, freshPilotState, band, alerts, flow)
 
     /** Controller buttons held now (W3C bitfield); any press dismisses a contextual tip. */
     val padButtons: StateFlow<Int> get() = router.buttons
@@ -749,7 +744,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** Only a fresh pilot frame decides armed and landed; an old one falls back to the heartbeat. */
     internal val controllerContext: StateFlow<ControllerContext> = facts.controllerContext
 
-    internal val feedback: ControllerFeedback = ControllerFeedback(viewModelScope, controllerManager, alerts, controllerContext, spec.ds4.lightbar, spec.ds4.rumble)
+    internal val feedback: ControllerFeedback = ControllerFeedback(viewModelScope, controllerManager, alerts, controllerContext, spec.ds4.lightbar, spec.ds4.rumble, work)
 
     /** The current theme's colours for the controller light bar. */
     fun setControllerPalette(colors: AdosColorRoles) = feedback.setPalette(colors)
@@ -788,13 +783,16 @@ class CockpitViewModel @AssistedInject constructor(
         }
     }
 
-    private val padInput = CockpitPadInput(this, viewModelScope, clock, router, confirm, overlays, pickerCtl, controlRows, spec)
+    private val padInput = CockpitPadInput(this, viewModelScope, work, clock, router, confirm, overlays, pickerCtl, controlRows, spec)
 
     /** D-pad ↑/↓ with the skill picker open: steps for the focused parameter of the open Tweak panel. */
     val paramNudges: SharedFlow<Int> = padInput.paramNudges
 
-    /** The controller hold in progress (arm, kill, RTH, take-off), for the hold ring. */
-    val controllerHold: StateFlow<ControllerHold?> = padInput.hold
+    /** The binding action of the controller hold in progress (arm, kill, RTH, take-off); changes only when a hold starts, ends or switches action. */
+    val controllerHold: StateFlow<String?> = padInput.holdAction
+
+    /** Progress 0..1 of [controllerHold], for sampling on the redraw beat and reading in draw. */
+    fun controllerHoldProgress(): Float = padInput.holdProgress()
 
     private var summaryJob: Job? = null
 

@@ -429,4 +429,22 @@ class AdosInputRouterTest {
         r.onMotion(motion(1, MotionEvent.AXIS_HAT_X to 1f))
         assertEquals(listOf<UiInput>(UiInput.Direction(NavDirection.Right)), ui)
     }
+
+    @Test
+    fun `a batched motion event publishes one pad snapshot carrying its latest sample`() = runTest {
+        val r = router()
+        r.onMotion(stick(0f, device = 1))
+        val snapshots = mutableListOf<PadSnapshot>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { r.snapshot.collect { snapshots += it } }
+        snapshots.clear()
+        val history = floatArrayOf(0.2f, 0.4f, 0.6f)
+        val batched = motion(1, MotionEvent.AXIS_X to 0.8f).also { e ->
+            every { e.historySize } returns history.size
+            every { e.getHistoricalAxisValue(any(), any()) } returns 0f
+            history.forEachIndexed { i, v -> every { e.getHistoricalAxisValue(MotionEvent.AXIS_X, i) } returns v }
+        }
+        r.onMotion(batched)
+        assertEquals(1, snapshots.size)
+        assertEquals(0.8f, snapshots.single().raw.leftX, 0.001f)
+    }
 }

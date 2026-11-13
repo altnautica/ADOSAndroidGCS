@@ -31,7 +31,6 @@ import kotlinx.coroutines.delay
 import com.altnautica.gcs.feature.cockpit.hud.layers.ArRules
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerController
 import com.altnautica.gcs.feature.cockpit.hud.layers.VisionEngine
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,6 +43,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -76,6 +77,8 @@ internal class CockpitAutonomy(
     private val activate: (String, Map<String, Any?>) -> Unit,
     /** The onboard pilot's state as the flight-state chip reads it. */
     private val pilotState: StateFlow<PilotState?>,
+    /** Where the feed parses stream frames ([AutonomyFeed]). */
+    parseContext: CoroutineContext = EmptyCoroutineContext,
 ) {
     /** The video data layers: frames, flags, view and compute leases. */
     val layers: LayerController = LayerController(
@@ -106,7 +109,7 @@ internal class CockpitAutonomy(
     /** The flight controller's arm state from a fresh heartbeat; null when unknown. */
     private fun fcArmed(): Boolean? = freshHeartbeatArmed(telemetry.value?.heartbeat?.value, clock.nowMs())
 
-    val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound, ::etaCamera)
+    val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound, ::etaCamera, parseContext)
 
     /**
      * Whether the cockpit is started (on screen). The chip's ETA lease, like every overlay
@@ -379,25 +382,8 @@ internal class CockpitAutonomy(
         } ?: flowOf(emptyMap())
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyMap())
 
-    private val navInputs: Flow<NavInputs> = combine(
-        telemetry.flatMapLatest { t -> t?.let { combine(it.ekf, it.gps) { e, g -> e to g } } ?: flowOf(null to null) },
-        feed.nav, commandedSet, ekfParams, tick,
-    ) { (ekf, gps), nav, commanded, params, _ ->
-        val now = clock.nowMs()
-        NavInputs(
-            ekfFlags = ekf?.flags,
-            ekfAgeMs = ekf?.let { now - it.tMs },
-            nav = nav?.value,
-            navFresh = nav != null && now - nav.atMs <= TargetState.FOLLOW_STALE_MS,
-            commandedSet = commanded,
-            params = params,
-            gpsFixType = gps?.fix?.let(::fixType),
-            sats = gps?.satellites,
-            hdop = gps?.hdop,
-        )
-    }
-
-    val navInputsState: StateFlow<NavInputs?> = navInputs.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
+    /** The nav chip's inputs ([navInputsOnTick]). */
+    val navInputsState: StateFlow<NavInputs?> = navInputsOnTick(scope, clock, telemetry, feed.nav, tick, commandedSet, ekfParams)
 
     val navChip: StateFlow<NavChip?> = navInputsState.map { it?.let(NavSource::resolve) }
         .distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)

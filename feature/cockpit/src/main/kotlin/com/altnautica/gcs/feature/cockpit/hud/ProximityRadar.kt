@@ -20,7 +20,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -45,6 +47,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.ScanFrame
 import com.altnautica.gcs.feature.cockpit.autonomy.Stamped
 import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /** Obstacle data older than this is not drawn: a dead link must never paint a stale danger arc. */
@@ -83,13 +86,26 @@ fun ProximityRadar(
     }
     val hasScan by produceState(false, scanFlow) { scanFlow.collect { if (it != null) value = true } }
     if (!hasSectors && !hasScan) return
-    val frame = remember { mutableLongStateOf(0L) }
-    // Redraws on the flight screen's beat (10 Hz), in the same window frame as the HUD.
-    val beat = rememberRedrawBeat()
-    LaunchedEffect(telemetry, scanFlow, beat) {
-        beat.ticks.collect { frame.longValue++ }
-    }
     var scale by remember { mutableStateOf(RadarScale.Auto) }
+    var stale by remember { mutableStateOf(false) }
+    var displayM by remember { mutableFloatStateOf(6f) }
+    // What the dial shows, sampled on the flight screen's beat (10 Hz) outside the draw pass;
+    // the dial redraws, in the HUD's window frame, only when the sample changed.
+    val shown = remember { RadarShown() }
+    val frame = remember { mutableLongStateOf(0L) }
+    val now by rememberUpdatedState(nowMs)
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(telemetry, scanFlow, navFlow, beat) {
+        beat.ticks.collect {
+            val next = RadarFrame.sample(telemetry?.obstacles?.value, scanFlow.value, navFlow.value, now(), SystemClock.elapsedRealtime(), scale)
+            if (next.stale != stale) stale = next.stale
+            if (next.rangeM != displayM) displayM = next.rangeM
+            if (next != shown.frame) {
+                shown.frame = next
+                frame.longValue++
+            }
+        }
+    }
     val colors = AdosTheme.colors
     val measurer = rememberTextMeasurer()
     val style = AdosTypography.numeric.small.copy(color = colors.hudInk)
@@ -102,68 +118,67 @@ fun ProximityRadar(
         ProximityWord.Danger to specText("radar.danger").uppercase(),
     )
     val scanNone = specText("radar.scan_none").uppercase()
-    val navNow by navFlow.collectAsState()
-    val rate = navNow?.value?.obstacleRateHz
-    val headerText = rate?.let { specText("radar.header", "hz" to Math.round(it).toString()).upperFirstWord() } ?: scanNone
-    var stale by remember { mutableStateOf(false) }
-    var displayM by remember { mutableFloatStateOf(6f) }
+    // Only the rounded obstacle rate shows, so the nav stream recomposes the header only when it changes.
+    val rateFlow = remember(navFlow) { navFlow.map { it?.value?.obstacleRateHz?.let { hz -> Math.round(hz) } }.distinctUntilChanged() }
+    val rateNow = remember(navFlow) { navFlow.value?.value?.obstacleRateHz?.let { Math.round(it) } }
+    val rate by rateFlow.collectAsState(rateNow)
+    val headerText = rate?.let { specText("radar.header", "hz" to it.toString()).upperFirstWord() } ?: scanNone
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier.alpha(if (stale) 0.5f else 1f)) {
         Spacer(
             Modifier
                 .size(diameter)
                 .semantics { contentDescription = description }
                 .clickable(onClickLabel = cycleLabel, role = Role.Button) { scale = LocalFrame.nextScale(scale) }
-                .drawBehind {
-                    frame.longValue
-                    val now = nowMs()
-                    val s = telemetry?.obstacles?.value
-                    val sectorsFresh = s != null && SystemClock.elapsedRealtime() - s.tMs <= OBSTACLE_STALE_MS
-                    val scan = scanFlow.value?.takeIf { now - it.receivedAtMs <= LocalFrame.SCAN_STALE_MS }
-                    val nav = navFlow.value?.takeIf { now - it.atMs <= OBSTACLE_STALE_MS }?.value
-                    stale = !sectorsFresh && scan == null
-                    val sectorNearest = if (sectorsFresh) RadarMath.nearestCm(s!!)?.let { it / 100f } else null
-                    val nearest = listOfNotNull(sectorNearest, scan?.let(LocalFrame::nearestScanM), nav?.minObstacleM).minOrNull()
-                    val range = LocalFrame.displayRange(scale, nearest)
-                    displayM = range
-                    val center = Offset(size.width / 2, size.height / 2)
-                    val outer = size.minDimension / 2 - 4.dp.toPx()
-                    drawCircle(colors.hudGlass, outer, center)
-                    for (f in listOf(1f / 3, 2f / 3, 1f)) {
-                        drawCircle(colors.hudHair, outer * f, center, style = Stroke(1.dp.toPx()))
-                        val label = measurer.measure(HudGeometry.oneDecimal(range * f).removeSuffix(".0"), ringStyle)
-                        val p = outer * f * 0.7071f
-                        drawText(label, topLeft = Offset(center.x + p, center.y - p - label.size.height))
-                    }
-                    drawLine(colors.hudHair, Offset(center.x, center.y - outer), Offset(center.x, center.y + outer))
-                    drawLine(colors.hudHair, Offset(center.x - outer, center.y), Offset(center.x + outer, center.y))
-                    if (sectorsFresh) {
-                        val sec = s!!
-                        sec.distancesCm.forEachIndexed { i, cm ->
-                            if (!RadarMath.valid(cm, sec) || cm > LocalFrame.CAUTION_M * 100) return@forEachIndexed
-                            val color = if (cm < LocalFrame.DANGER_M * 100) colors.hudCrit else colors.hudWarn
-                            val r = (cm / 100f / range).coerceAtMost(1f) * outer
-                            val start = RadarMath.sectorStart(i, sec) - 90f
-                            drawArc(color.copy(alpha = 0.35f), start, sec.incrementDeg, true, Offset(center.x - r, center.y - r), Size(r * 2, r * 2))
-                            drawArc(color, start, sec.incrementDeg, false, Offset(center.x - r, center.y - r), Size(r * 2, r * 2), style = Stroke(2.dp.toPx()))
+                // Its own render node: a beat's redraw re-records only the dial.
+                .graphicsLayer()
+                .drawWithCache {
+                    val hair = Stroke(1.dp.toPx())
+                    val edge = Stroke(2.dp.toPx())
+                    onDrawBehind {
+                        frame.longValue
+                        val f = shown.frame ?: return@onDrawBehind
+                        val sec = f.sectors
+                        val scan = f.scan
+                        val range = f.rangeM
+                        val center = Offset(size.width / 2, size.height / 2)
+                        val outer = size.minDimension / 2 - 4.dp.toPx()
+                        drawCircle(colors.hudGlass, outer, center)
+                        for (ring in RINGS) {
+                            drawCircle(colors.hudHair, outer * ring, center, style = hair)
+                            val label = measurer.measure(HudGeometry.oneDecimal(range * ring).removeSuffix(".0"), ringStyle)
+                            val p = outer * ring * 0.7071f
+                            drawText(label, topLeft = Offset(center.x + p, center.y - p - label.size.height))
                         }
-                    }
-                    if (scan != null) {
-                        val dots = LocalFrame.scanDots(scan, range, center.x, center.y, outer, if (lowPower) MAX_DOTS_LOW_POWER else MAX_DOTS)
-                        val r = 1.5.dp.toPx()
-                        var k = 0
-                        while (k < dots.size) {
-                            drawCircle(colors.hudInk.copy(alpha = 0.75f), r, Offset(dots[k], dots[k + 1]))
-                            k += 2
+                        drawLine(colors.hudHair, Offset(center.x, center.y - outer), Offset(center.x, center.y + outer))
+                        drawLine(colors.hudHair, Offset(center.x - outer, center.y), Offset(center.x + outer, center.y))
+                        if (sec != null) {
+                            sec.distancesCm.forEachIndexed { i, cm ->
+                                if (!RadarMath.valid(cm, sec) || cm > LocalFrame.CAUTION_M * 100) return@forEachIndexed
+                                val color = if (cm < LocalFrame.DANGER_M * 100) colors.hudCrit else colors.hudWarn
+                                val r = (cm / 100f / range).coerceAtMost(1f) * outer
+                                val start = RadarMath.sectorStart(i, sec) - 90f
+                                drawArc(color.copy(alpha = 0.35f), start, sec.incrementDeg, true, Offset(center.x - r, center.y - r), Size(r * 2, r * 2))
+                                drawArc(color, start, sec.incrementDeg, false, Offset(center.x - r, center.y - r), Size(r * 2, r * 2), style = edge)
+                            }
                         }
+                        if (scan != null) {
+                            val dots = LocalFrame.scanDots(scan, range, center.x, center.y, outer, if (lowPower) MAX_DOTS_LOW_POWER else MAX_DOTS)
+                            val r = 1.5.dp.toPx()
+                            var k = 0
+                            while (k < dots.size) {
+                                drawCircle(colors.hudInk.copy(alpha = 0.75f), r, Offset(dots[k], dots[k + 1]))
+                                k += 2
+                            }
+                        }
+                        val top = measurer.measure(if (f.northAligned && scan == null) "N" else "FWD", style)
+                        drawText(top, topLeft = Offset(center.x - top.size.width / 2f, center.y - outer + 2.dp.toPx()))
+                        val nearest = f.nearestM
+                        val readout = if (nearest != null && !f.stale) "${HudGeometry.oneDecimal(nearest)} m ${words.getValue(LocalFrame.proximityWord(nearest))}" else "—"
+                        val label = measurer.measure(readout, style)
+                        drawText(label, topLeft = Offset(center.x - label.size.width / 2f, center.y + outer / 3))
+                        val h = measurer.measure(headerText, ringStyle)
+                        drawText(h, topLeft = Offset(center.x - h.size.width / 2f, center.y - outer / 3 - h.size.height))
                     }
-                    val top = measurer.measure(if (s?.northAligned == true && scan == null) "N" else "FWD", style)
-                    drawText(top, topLeft = Offset(center.x - top.size.width / 2f, center.y - outer + 2.dp.toPx()))
-                    val readout = nearest?.takeIf { !stale }?.let { "${HudGeometry.oneDecimal(it)} m ${words.getValue(LocalFrame.proximityWord(it))}" } ?: "—"
-                    val label = measurer.measure(readout, style)
-                    drawText(label, topLeft = Offset(center.x - label.size.width / 2f, center.y + outer / 3))
-                    val header = headerText
-                    val h = measurer.measure(header, ringStyle)
-                    drawText(h, topLeft = Offset(center.x - h.size.width / 2f, center.y - outer / 3 - h.size.height))
                 },
         )
         val scaleLabel = if (scale.rangeM == null) {
@@ -172,5 +187,38 @@ fun ProximityRadar(
             specText("radar.scale", "m" to displayM.toInt().toString())
         }
         Text(scaleLabel, style = ringStyle)
+    }
+}
+
+/** The dial's three range rings, as fractions of the display range. */
+private val RINGS = floatArrayOf(1f / 3, 2f / 3, 1f)
+
+/** The last [RadarFrame] sampled on the beat; read by the draw pass only. */
+private class RadarShown {
+    var frame: RadarFrame? = null
+}
+
+/**
+ * One beat's sample of what the dial shows: the fresh sectors and scan (null when stale),
+ * the nearest distance, the display range and whether both sources are stale.
+ */
+internal data class RadarFrame(
+    val sectors: ObstacleSectors?,
+    val northAligned: Boolean,
+    val scan: ScanFrame?,
+    val nearestM: Float?,
+    val rangeM: Float,
+    val stale: Boolean,
+) {
+    companion object {
+        /** [nowMs] is the autonomy clock (scan, nav); [elapsedMs] the clock the sectors are stamped with. */
+        fun sample(s: ObstacleSectors?, scanNow: ScanFrame?, navNow: Stamped<NavState>?, nowMs: Long, elapsedMs: Long, scale: RadarScale): RadarFrame {
+            val sectors = s?.takeIf { elapsedMs - it.tMs <= OBSTACLE_STALE_MS }
+            val scan = scanNow?.takeIf { nowMs - it.receivedAtMs <= LocalFrame.SCAN_STALE_MS }
+            val nav = navNow?.takeIf { nowMs - it.atMs <= OBSTACLE_STALE_MS }?.value
+            val sectorNearest = sectors?.let { RadarMath.nearestCm(it) }?.let { it / 100f }
+            val nearest = listOfNotNull(sectorNearest, scan?.let(LocalFrame::nearestScanM), nav?.minObstacleM).minOrNull()
+            return RadarFrame(sectors, s?.northAligned == true, scan, nearest, LocalFrame.displayRange(scale, nearest), stale = sectors == null && scan == null)
+        }
     }
 }

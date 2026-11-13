@@ -1,15 +1,8 @@
 package com.altnautica.gcs.feature.cockpit.alerts
 
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
-import com.altnautica.gcs.core.model.BatteryState
 import com.altnautica.gcs.core.model.CockpitAlert
-import com.altnautica.gcs.core.model.EkfState
-import com.altnautica.gcs.core.model.FenceStatus
-import com.altnautica.gcs.core.model.GpsState
-import com.altnautica.gcs.core.model.HeartbeatState
-import com.altnautica.gcs.core.model.SystemHealth
 import com.altnautica.gcs.core.model.VehicleTelemetry
-import com.altnautica.gcs.core.model.VibrationState
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
@@ -43,33 +36,40 @@ internal class CockpitAlertsController(
 ) {
     private val alertEngine = AlertEngine()
 
+    /**
+     * The alerts, evaluated on the 2 Hz tick from each topic's newest value rather than on
+     * every message of ten topics. Discrete events that must not wait for the tick evaluate at
+     * once: an arm change or the first heartbeat, video freezing or recovering, an FC text,
+     * a raised cockpit event, the controller battery and a settings change.
+     */
     val alerts: StateFlow<List<CockpitAlert>> = telemetry.flatMapLatest { t ->
         if (t == null) return@flatMapLatest flowOf(emptyList())
-        combine(
-            combine(t.heartbeat, t.systemHealth, t.battery, t.ekf, t.fence) { hb, sys, batt, ekf, fence -> AlertParts1(hb, sys, batt, ekf, fence) },
-            combine(t.gps, t.vibration, videoState, criticalText, prearmText) { gps, vib, vs, crit, pre -> AlertParts2(gps, vib, vs is VideoState.Frozen, crit, pre) },
+        val discrete = combine(
+            t.heartbeat.map { it?.armed }.distinctUntilChanged(),
+            videoState.map { it is VideoState.Frozen }.distinctUntilChanged(),
+            combine(criticalText, prearmText) { c, p -> c to p },
             combine(settings, raised, controllerBatteryLow) { s, r, low -> Triple(s, r, low) },
-            tick500,
-        ) { a, b, (s, raisedAlert, batteryLow), _ ->
-            val now = clock.nowMs()
+        ) { _, frozen, (crit, pre), (s, raisedAlert, batteryLow) -> Discrete(frozen, crit, pre, s, raisedAlert, batteryLow) }
+        combine(discrete, tick500) { d, _ ->
+            val hb = t.heartbeat.value
             alertEngine.evaluate(
                 AlertInputs(
-                    armed = a.hb?.armed,
-                    heartbeatMs = a.hb?.tMs,
-                    systemHealth = a.sys,
-                    batteryPct = a.batt?.remainingPct,
-                    bands = s.batteryBands,
-                    ekf = a.ekf,
-                    fence = a.fence,
-                    gps = b.gps,
-                    vibration = b.vib,
-                    videoFrozen = b.frozen,
-                    criticalText = b.crit,
-                    prearmText = b.pre,
-                    raised = raisedAlert,
-                    controllerBatteryLow = batteryLow,
+                    armed = hb?.armed,
+                    heartbeatMs = hb?.tMs,
+                    systemHealth = t.systemHealth.value,
+                    batteryPct = t.battery.value?.remainingPct,
+                    bands = d.settings.batteryBands,
+                    ekf = t.ekf.value,
+                    fence = t.fence.value,
+                    gps = t.gps.value,
+                    vibration = t.vibration.value,
+                    videoFrozen = d.frozen,
+                    criticalText = d.crit,
+                    prearmText = d.pre,
+                    raised = d.raised,
+                    controllerBatteryLow = d.batteryLow,
                 ),
-                now,
+                clock.nowMs(),
             )
         }
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -84,19 +84,13 @@ internal class CockpitAlertsController(
         }
     }
 
-    private data class AlertParts1(
-        val hb: HeartbeatState?,
-        val sys: SystemHealth?,
-        val batt: BatteryState?,
-        val ekf: EkfState?,
-        val fence: FenceStatus?,
-    )
-
-    private data class AlertParts2(
-        val gps: GpsState?,
-        val vib: VibrationState?,
+    /** The discrete inputs that evaluate at once. */
+    private data class Discrete(
         val frozen: Boolean,
         val crit: ReceivedText?,
         val pre: ReceivedText?,
+        val settings: CockpitSettings,
+        val raised: RaisedAlert?,
+        val batteryLow: Boolean,
     )
 }

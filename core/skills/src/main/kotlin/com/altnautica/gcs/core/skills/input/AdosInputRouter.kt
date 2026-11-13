@@ -196,7 +196,11 @@ class AdosInputRouter @Inject constructor(
         }
     }
 
+    /** True while one motion event's samples apply; the snapshot is published once after them. */
+    private var batching = false
+
     private fun publish() {
+        if (batching) return
         _snapshot.value = PadSnapshot(
             deviceId = _activeDeviceId.value,
             vendorId = vendorId,
@@ -232,8 +236,16 @@ class AdosInputRouter @Inject constructor(
             return true
         }
         lastPadMs = clock.nowMs()
-        for (i in 0 until event.historySize) applySample(event, device, i)
-        applySample(event, device, -1)
+        // Batched samples still pass through the hat buttons in order; the snapshot carries
+        // only the latest sample, so it is published once per event.
+        batching = true
+        try {
+            for (i in 0 until event.historySize) applySample(event, device, i)
+            applySample(event, device, -1)
+        } finally {
+            batching = false
+        }
+        publish()
         updateDirection(event)
         // Always consumed: the platform's joystick-to-D-pad synthesis would double-move focus.
         return true

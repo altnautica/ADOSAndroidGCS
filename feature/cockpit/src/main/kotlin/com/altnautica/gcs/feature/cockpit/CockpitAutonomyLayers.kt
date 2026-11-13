@@ -35,9 +35,12 @@ import com.altnautica.gcs.core.skills.hud.freshPilot
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowEvent
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
+import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
+import com.altnautica.gcs.feature.cockpit.autonomy.Stamped
 import com.altnautica.gcs.feature.cockpit.autonomy.TargetState
 import com.altnautica.gcs.feature.cockpit.band.NavSourceChip
 import com.altnautica.gcs.feature.cockpit.chrome.RedrawBeat
+import com.altnautica.gcs.feature.cockpit.chrome.rememberOnBeat
 import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import com.altnautica.gcs.feature.cockpit.hud.DesignatorState
 import com.altnautica.gcs.feature.cockpit.hud.FollowRail
@@ -56,6 +59,7 @@ import com.altnautica.gcs.feature.cockpit.hud.rememberTargetDrawer
 import com.altnautica.gcs.feature.cockpit.hud.rememberMotionPrefs
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.skillbar.isWide
+import kotlinx.coroutines.flow.StateFlow
 
 /** Below this surface width candidate tags are hidden and tracked tags shorten to `#id`. */
 private val COMPACT_SURFACE = 600.dp
@@ -140,6 +144,19 @@ private fun rememberTick(a: CockpitAutonomy): Long {
 private const val AGE_BEATS = 500L / RedrawBeat.BEAT_MS
 
 /**
+ * The follow state and whether it is fresh, read on the beat: follow frames at up to 20 Hz
+ * recompose the reader at most once a beat, and only when the state or its freshness changed.
+ */
+@Composable
+internal fun rememberFollowOnBeat(follow: StateFlow<Stamped<FollowState>?>, nowMs: () -> Long): Pair<FollowState?, Boolean> {
+    val sample by rememberOnBeat {
+        val f = follow.value
+        f?.value to (f != null && nowMs() - f.atMs <= TargetState.FOLLOW_STALE_MS)
+    }
+    return sample
+}
+
+/**
  * Following-mode chrome over the video: the what's-locked chip (top centre), the range
  * panel (bottom centre, above the bottom row) and the right rail. Shown while follow-me
  * reports a phase other than idle, or a target is designated and follow-me is installed.
@@ -148,18 +165,20 @@ private const val AGE_BEATS = 500L / RedrawBeat.BEAT_MS
 internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp, modifier: Modifier = Modifier) {
     val a = vm.autonomy
     val now = rememberTick(a)
-    val follow by a.feed.follow.collectAsStateWithLifecycle()
     val designation by a.designation.collectAsStateWithLifecycle()
     val installed by a.followInstalled.collectAsStateWithLifecycle()
-    val batches by a.feed.batches.collectAsStateWithLifecycle()
-    val events by a.feed.events.collectAsStateWithLifecycle()
+    // Follow, detections and events arrive at up to 20 Hz: read on the beat, and only what is
+    // shown, so this chrome recomposes at most once a beat and only when a shown value changed.
+    val (state, fresh) = rememberFollowOnBeat(a.feed.follow, a::nowMs)
+    val designatedBatch by rememberOnBeat { designation?.let { a.feed.batches.value[it.cameraId] } }
+    val lastReacquired by rememberOnBeat {
+        if (designation == null) null else a.feed.events.value.lastOrNull { it is FollowEvent.Reacquired } as FollowEvent.Reacquired?
+    }
     val pending by a.reacquirePending.collectAsStateWithLifecycle()
     val video by vm.video.collectAsStateWithLifecycle()
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
     val skillStates by vm.skillStates.collectAsStateWithLifecycle()
-    val state = follow?.value
-    val fresh = follow?.let { now - it.atMs <= TargetState.FOLLOW_STALE_MS } == true
     val active = state != null && fresh && state.phase != FollowPhase.Idle && state.phase != FollowPhase.Lost
     val followingMode = (state != null && state.phase != FollowPhase.Idle) || (designation != null && installed)
     var expanded by remember { mutableStateOf(false) }
@@ -176,7 +195,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalAlignment = Alignment.CenterVertically) {
                 designation?.let { d ->
-                    val batch = batches[d.cameraId]
+                    val batch = designatedBatch
                     val det = batch?.items?.firstOrNull { d.trackId != null && it.trackId == d.trackId }
                     LockChip(
                         trackId = d.trackId,
@@ -184,7 +203,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                         feedFresh = batch != null && now - batch.receivedAtMs <= TargetState.DETECTION_STALE_MS,
                         follow = state,
                         followFresh = fresh,
-                        lastReacquired = events.filterIsInstance<FollowEvent.Reacquired>().lastOrNull(),
+                        lastReacquired = lastReacquired,
                         nowMs = now,
                         onRelease = a::release,
                     )
@@ -267,7 +286,7 @@ internal fun radarDiameter(width: WidthClass): Dp = when (width) {
  * changed, or every 500 ms so ages advance: a pose or attitude stream at the video rate
  * redraws the map at most 5 times a second, in the same frame as the HUD. A tap runs
  * [onClick]; a long-press flies to the point under it, as an offset from the drone
- * ([CockpitViewModel.pickLocalPoint]).
+ * ([CockpitViewModel.pickLocalPoint]). The sample is read only by the map's draw pass.
  */
 @Composable
 internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {
@@ -283,8 +302,9 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onCl
         }
     }
     Box(modifier) {
+        // Read inside the map's draw pass: a new sample redraws the map without recomposing this card.
         LocalMinimap(
-            inputs,
+            { inputs },
             pin,
             a::setMinimapPin,
             Modifier.fillMaxSize(),

@@ -3,8 +3,13 @@ package com.altnautica.gcs.feature.cockpit.pilot
 import com.altnautica.gcs.core.model.PilotInput
 import com.altnautica.gcs.core.skills.input.GamepadAxes
 import com.altnautica.gcs.core.skills.input.PadSnapshot
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -37,7 +42,14 @@ class PilotStickStreamerTest {
     private val sink = Sink()
     private val sinkFlow = MutableStateFlow<StickSink?>(sink)
 
-    private fun TestScope.streamer() = PilotStickStreamer(backgroundScope, { testScheduler.currentTime }, { pad }, MutableStateFlow(StickConditioning()), sinkFlow)
+    private fun TestScope.streamer(scope: CoroutineScope = backgroundScope) = PilotStickStreamer(
+        scope,
+        StandardTestDispatcher(testScheduler),
+        { testScheduler.currentTime },
+        { pad },
+        MutableStateFlow(StickConditioning()),
+        sinkFlow,
+    )
 
     @Test
     fun `a stick held still keeps streaming at 50 Hz in one session`() = runTest {
@@ -89,5 +101,19 @@ class PilotStickStreamerTest {
         val sent = sink.frames.size
         advanceTimeBy(500)
         assertEquals(sent, sink.frames.size)
+    }
+
+    @Test
+    fun `sticks keep their 20 ms cadence while the main thread is blocked`() = runTest {
+        // The owner's scope runs on a "main" dispatcher whose scheduler never advances: a
+        // main thread that is stuck for the whole second.
+        val blockedMain = CoroutineScope(SupervisorJob() + StandardTestDispatcher(TestCoroutineScheduler()))
+        val s = streamer(blockedMain)
+        s.start()
+        runCurrent()
+        advanceTimeBy(1_000)
+        assertTrue("${sink.frames.size} frames in 1 s", sink.frames.size in 49..51)
+        s.stop()
+        blockedMain.cancel()
     }
 }

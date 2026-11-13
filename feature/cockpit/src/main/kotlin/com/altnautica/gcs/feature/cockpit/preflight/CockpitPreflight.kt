@@ -4,10 +4,12 @@ import android.os.Environment
 import android.os.StatFs
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
 import com.altnautica.gcs.core.model.BatteryState
+import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.EkfState
 import com.altnautica.gcs.core.model.GpsState
 import com.altnautica.gcs.core.model.HomePosition
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.skills.MonotonicClock
 import com.altnautica.gcs.core.skills.isLinkFresh
@@ -17,19 +19,34 @@ import com.altnautica.gcs.feature.cockpit.sticksShown
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.CoroutineContext
+import kotlin.math.round
 
-/** What the checklist reads besides telemetry: the pilot, the sticks, the nav chip and storage. */
+/**
+ * What the checklist reads besides telemetry: the pilot's [readiness] and [controlMode], the
+ * sticks and the nav chip. Only those pilot fields, so pilot frames that differ in their
+ * receive time or input age leave it equal and re-evaluate nothing.
+ */
 internal data class PreflightContext(
-    val pilot: PilotState?,
+    val readiness: List<ReadinessItem>,
+    val controlMode: ControlMode?,
     val controllerConnected: Boolean,
     val navChip: NavChip?,
-)
+) {
+    companion object {
+        fun of(pilot: PilotState?, controllerConnected: Boolean, navChip: NavChip?) =
+            PreflightContext(pilot?.readiness.orEmpty(), pilot?.controlMode, controllerConnected, navChip)
+    }
+}
 
 /**
  * Whether something can fly the sticks for the pre-flight controller check: a pad, or the
@@ -51,9 +68,28 @@ internal fun dataVolumeUsedPct(): Double? = runCatching {
 internal fun usedPct(totalBytes: Long, availableBytes: Long): Double? =
     if (totalBytes <= 0L) null else (totalBytes - availableBytes).coerceAtLeast(0L) * 100.0 / totalBytes
 
+/** How often the data volume is read for the storage check. */
+internal const val STORAGE_POLL_MS = 10_000L
+
+/**
+ * The data volume's used percent in whole percent, read every [periodMs] in [readContext]
+ * (off the main thread in the app), so no checklist evaluation touches the file system.
+ */
+internal fun storageUsedPct(
+    scope: CoroutineScope,
+    readContext: CoroutineContext,
+    periodMs: Long = STORAGE_POLL_MS,
+    read: () -> Double? = ::dataVolumeUsedPct,
+): StateFlow<Double?> = flow {
+    while (true) {
+        emit(withContext(readContext) { read() }?.let { round(it) })
+        delay(periodMs)
+    }
+}.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, null)
+
 /**
  * The preflight checklist for the flown vehicle, re-evaluated on every input change and tick.
- * [storageWarnPct] is the spec's `status_pill.storage_warn_pct`.
+ * [storageWarnPct] is the spec's `status_pill.storage_warn_pct`; [storage] is [storageUsedPct].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal fun cockpitPreflight(
@@ -65,32 +101,33 @@ internal fun cockpitPreflight(
     context: StateFlow<PreflightContext>,
     tick500: StateFlow<Long>,
     storageWarnPct: Int,
-    storageUsedPct: () -> Double? = ::dataVolumeUsedPct,
+    storage: StateFlow<Double?>,
 ): StateFlow<PreflightResult> = telemetry.flatMapLatest { t ->
     if (t == null) {
-        combine(settings, context, tick500) { s, c, _ ->
-            PreflightChecklist.evaluate(inputs(null, null, null, null, false, false, null, s, c, storageUsedPct(), storageWarnPct), clock.nowMs())
+        combine(settings, context, storage, tick500) { s, c, st, _ ->
+            PreflightChecklist.evaluate(inputs(null, null, null, null, false, false, null, s, c, st, storageWarnPct), clock.nowMs())
         }
     } else {
+        // GPS, battery, EKF, home and the heartbeat are read on the tick, not on each sample, so
+        // the result (and the band's checklist count) changes on the tick only.
         combine(
-            combine(t.gps, t.battery, t.ekf, t.home, t.ekfOriginSet) { gps, batt, ekf, home, origin -> listOf(gps, batt, ekf, home, origin) },
-            t.heartbeat,
             combine(settings, prearmText, context) { s, p, c -> Triple(s, p, c) },
+            storage,
             tick500,
-        ) { parts, hb, (s, prearm, c), _ ->
+        ) { (s, prearm, c), st, _ ->
             val now = clock.nowMs()
             PreflightChecklist.evaluate(
                 inputs(
-                    gps = parts[0] as GpsState?,
-                    battery = parts[1] as BatteryState?,
-                    ekf = parts[2] as EkfState?,
-                    home = parts[3] as HomePosition?,
-                    ekfOriginSet = parts[4] as Boolean,
-                    linkFresh = isLinkFresh(hb, now),
+                    gps = t.gps.value,
+                    battery = t.battery.value,
+                    ekf = t.ekf.value,
+                    home = t.home.value,
+                    ekfOriginSet = t.ekfOriginSet.value,
+                    linkFresh = isLinkFresh(t.heartbeat.value, now),
                     lastPrearmMs = prearm?.atMs,
                     settings = s,
                     context = c,
-                    storage = storageUsedPct(),
+                    storage = st,
                     storageWarnPct = storageWarnPct,
                 ),
                 now,
@@ -120,8 +157,8 @@ private fun inputs(
     ekfOriginSet = ekfOriginSet,
     linkFresh = linkFresh,
     lastPrearmMs = lastPrearmMs,
-    readiness = context.pilot?.readiness.orEmpty(),
-    controlMode = context.pilot?.controlMode,
+    readiness = context.readiness,
+    controlMode = context.controlMode,
     controllerConnected = context.controllerConnected,
     navChip = context.navChip,
     storageUsedPct = storage,

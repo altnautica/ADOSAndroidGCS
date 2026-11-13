@@ -72,6 +72,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -669,6 +670,35 @@ class CockpitViewModelTest {
         assertNull(vm.confirm.state.value)
         assertEquals(listOf(VehicleCommand.Land), vehicle.control.sent)
         hold()
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a controller hold publishes its action only when it starts and ends, and its progress for sampling`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        advanceTimeBy(5_000)
+        vehicle.beat(armed = true, now = testScheduler.currentTime)
+        val vm = vm(listOf(node("drone-1")), vehicle)
+        val published = mutableListOf<String?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.controllerHold.collect { published += it } }
+        vm.attachInput()
+        runCurrent()
+        hold("triangle")
+        advanceTimeBy(750)
+        runCurrent()
+        val midway = vm.controllerHoldProgress()
+        assertTrue("progress $midway halfway through the hold", midway in 0.4f..0.6f)
+        advanceTimeBy(850)
+        runCurrent()
+        assertEquals(listOf(VehicleCommand.Land), vehicle.control.sent)
+        hold()
+        advanceTimeBy(60)
+        runCurrent()
+        // Composition sees the start and the end of the 1.5 s hold, not each 20 ms sample.
+        assertEquals(3, published.size)
+        assertNull(published.first())
+        assertNull(published.last())
+        assertEquals(0f, vm.controllerHoldProgress())
         vm.viewModelScope.cancel()
     }
 

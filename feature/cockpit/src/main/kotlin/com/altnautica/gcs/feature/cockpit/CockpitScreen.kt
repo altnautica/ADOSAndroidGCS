@@ -87,7 +87,8 @@ import com.altnautica.gcs.feature.cockpit.chrome.SwitchCard
 import com.altnautica.gcs.feature.cockpit.chrome.TopBarOverflow
 import com.altnautica.gcs.feature.cockpit.chrome.ZoneRect
 import com.altnautica.gcs.feature.cockpit.chrome.flightSizes
-import com.altnautica.gcs.feature.cockpit.flow.GateRing
+import com.altnautica.gcs.feature.cockpit.chrome.FlightFrameProbe
+import com.altnautica.gcs.feature.cockpit.chrome.flightFrameTaps
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.hud.HEADING_READOUT_HEIGHT
@@ -143,8 +144,8 @@ internal fun CockpitScreen(
     val anchors = remember { TipAnchorRegistry() }
     val tips = rememberTipsHandle()
     val tipsEngine = remember(vm) { TipsEngine(vm.cockpitSpec.tips) }
-    val padButtons by vm.padButtons.collectAsStateWithLifecycle()
-    LaunchedEffect(padButtons) { if (padButtons != 0) tips.dismissFromControllerButton() }
+    // Collected, not read in composition: a pad button press must not recompose the whole screen.
+    LaunchedEffect(vm, tips) { vm.padButtons.collect { if (it != 0) tips.dismissFromControllerButton() } }
     // The pre-flight controller check counts the on-screen sticks shown at this width.
     LaunchedEffect(width) { vm.setWidthClass(width) }
     val shownVideo = remember { ShownVideo() }
@@ -158,9 +159,10 @@ internal fun CockpitScreen(
         com.altnautica.gcs.feature.cockpit.chrome.LocalRedrawBeat provides vm.redrawBeat,
     ) {
         BackdropSampler(backdrop)
+        FlightFrameProbe()
         // Inside the providers: it reads the spec words for its toasts.
         FrameGrabEffect(vm, shownVideo, onToast)
-        Box(Modifier.fillMaxSize().background(Color.Black).focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing)) {
+        Box(Modifier.fillMaxSize().background(Color.Black).focusRings(layoutClass.focusRingsAlways, AdosTheme.colors.focusRing).flightFrameTaps()) {
             FlightScreen(vm, width, status, topBar, onExit, snackbar)
             if (connecting) {
                 Box(Modifier.align(Alignment.Center).zIndex(Z.ALERTS)) {
@@ -446,33 +448,6 @@ internal fun videoStateKey(state: VideoState): String = when (state) {
     is VideoState.Frozen -> "video.state.frozen"
     is VideoState.Failed -> "video.state.failed"
     is VideoState.Live, VideoState.Idle, VideoState.NoSource -> "video.state.no_source"
-}
-
-/** The centre-sticks gate ring and the controller hold ring. */
-@Composable
-private fun CentreRings(vm: CockpitViewModel, modifier: Modifier) {
-    val flow by vm.flow.collectAsStateWithLifecycle()
-    val hold by vm.controllerHold.collectAsStateWithLifecycle()
-    Box(modifier) {
-        flow.gateProgress?.let { GateRing(it) }
-        hold?.let { h ->
-            val label = vm.cockpitSpec.ds4.actions.firstOrNull { it.id == h.action }?.label ?: h.action
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                GateRingProgress(h.progress)
-                Text(label, color = AdosTheme.colors.hudInk)
-            }
-        }
-    }
-}
-
-@Composable
-private fun GateRingProgress(progress: Float) {
-    val colors = AdosTheme.colors
-    androidx.compose.foundation.Canvas(Modifier.size(64.dp).testTag("hold-ring")) {
-        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx())
-        drawArc(colors.borderStrong, 0f, 360f, useCenter = false, style = stroke)
-        drawArc(colors.accentPrimary, -90f, 360f * progress, useCenter = false, style = stroke)
-    }
 }
 
 /**

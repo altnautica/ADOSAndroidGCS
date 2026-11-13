@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import com.altnautica.gcs.core.model.PilotState
+import kotlin.math.ceil
 import com.altnautica.gcs.core.skills.hud.PillLinkLoss
 import com.altnautica.gcs.core.skills.hud.PillNavSource
 
@@ -50,6 +53,10 @@ internal class CockpitPill(
     val waiting: StateFlow<Boolean> = combine(pilot.state, heartbeatSeen) { p, hb -> p == null && !hb }
         .distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), true)
 
+    /**
+     * The pill's spec facts. The pilot frame's age is bucketed to what the pill compares it
+     * with ([pillPilotAgeMs]), so equal pilot frames at 10 Hz do not make each emission unequal.
+     */
     val facts: StateFlow<PillFacts> = combine(
         combine(pilot.link, pilot.linked) { link, linked -> link to linked },
         pilot.state, preflight, navSource, tick500,
@@ -59,25 +66,28 @@ internal class CockpitPill(
         val arm = armed()
         PillFacts(
             pilotRule = link != null,
-            pilotAgeMs = p?.let { now - it.receivedAtMs },
+            pilotAgeMs = pillPilotAgeMs(p?.receivedAtMs, now),
             agentReachable = link == null || linked || fresh,
             controllerLost = StatusPill.controllerLost(p),
             preflightFailing = if (preflightShown(arm)) pre.failing.map { it.item } else emptyList(),
-            linkLoss = if (fresh) PillLinkLoss.of(p) else null,
+            linkLoss = if (fresh) shownLinkLoss(p) else null,
             armUnknown = arm == null,
             navSource = nav,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), PillFacts())
 
+    /** The pilot's failsafe as the pill shows it; equal across pilot frames that do not change it. */
+    private val pilotFailsafe: Flow<PillFailsafe> = pilot.state.map { PillFailsafe.of(it) }.distinctUntilChanged()
+
     /** Alerts, pilot readiness, failing checks, storage, FC texts (from the link and the pilot's relay) and the FC failsafe. */
     val items: StateFlow<List<StatusItem>> = combine(
         combine(alerts, preflight, facts) { a, pre, f -> Triple(a, pre, f) },
         combine(criticalText, warningTexts) { c, w -> c to w },
-        pilot.state,
+        pilotFailsafe,
         tick500,
-    ) { (a, pre, f), (critical, warnings), p, _ ->
+    ) { (a, pre, f), (critical, warnings), fs, _ ->
         val now = clock.nowMs()
-        val failsafe = if (pilotFresh(p?.receivedAtMs, now)) PillFailsafe.of(p) else PillFailsafe.None
+        val failsafe = if (f.pilotAgeMs == FRESH_AGE_MS) fs else PillFailsafe.None
         StatusModel.items(a, pre, heldTexts(critical, warnings, now), f, pill, failsafe)
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
@@ -87,7 +97,26 @@ internal class CockpitPill(
             warnings.filter { now - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS }
 
     companion object {
+        /** The bucketed age of a fresh pilot frame. */
+        const val FRESH_AGE_MS = 0L
+
         /** Pre-flight items show only on a vehicle known to be disarmed: unknown is not on the ground. */
         fun preflightShown(armed: Boolean?): Boolean = armed == false
+
+        /**
+         * A pilot frame's age as the pill reads it: null before the first frame, [FRESH_AGE_MS]
+         * while fresh, else [PilotState.STALE_MS], the pill's stale threshold.
+         */
+        fun pillPilotAgeMs(receivedAtMs: Long?, nowMs: Long): Long? = when {
+            receivedAtMs == null -> null
+            pilotFresh(receivedAtMs, nowMs) -> FRESH_AGE_MS
+            else -> PilotState.STALE_MS
+        }
+
+        /**
+         * The link-loss countdown as the pill words it: whole seconds rounded up, the precision
+         * its text shows, so pilot frames within one shown second keep the facts equal.
+         */
+        fun shownLinkLoss(p: PilotState?): PillLinkLoss? = PillLinkLoss.of(p)?.let { it.copy(inS = ceil(it.inS)) }
     }
 }

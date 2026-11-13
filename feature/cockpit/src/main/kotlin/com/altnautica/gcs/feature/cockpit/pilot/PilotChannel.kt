@@ -26,10 +26,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.random.Random
 
 /** Where the stick streamer sends its frames: the pilot channel of the flown vehicle. */
@@ -48,11 +52,13 @@ internal interface StickSink {
  * backoff, numbers stick sessions and frames, sends a 1 Hz heartbeat while no stick
  * input streams, and publishes the pilot state and action results it receives.
  * [connected] is true while server frames arrive: a gap of the spec's `stale_after_ms`
- * ([PilotState.STALE_MS]) or more drops the link.
+ * ([PilotState.STALE_MS]) or more drops the link. Frames are parsed in [parseContext] (off
+ * the main thread in the app) and applied in the collector's, in arrival order.
  */
 internal class PilotChannel(
     private val scope: CoroutineScope,
     private val clock: MonotonicClock,
+    private val parseContext: CoroutineContext = EmptyCoroutineContext,
     private val open: (outgoing: Flow<String>) -> Flow<String>,
 ) : PilotLink, StickSink {
     override val src: String = PilotWire.SRC_ANDROID
@@ -111,9 +117,12 @@ internal class PilotChannel(
             while (outgoing.tryReceive().isSuccess) Unit
             val c = launch {
                 try {
-                    open(outgoing.receiveAsFlow()).collect { text ->
-                        if (onText(text)) backoff = RETRY_MS
-                    }
+                    open(outgoing.receiveAsFlow())
+                        .map { text -> clock.nowMs().let { now -> now to PilotWire.parseFrame(text, now) } }
+                        .flowOn(parseContext)
+                        .collect { (now, frame) ->
+                            if (frame != null && onFrame(frame, now)) backoff = RETRY_MS
+                        }
                 } catch (c: CancellationException) {
                     throw c
                 } catch (_: Exception) {
@@ -131,7 +140,11 @@ internal class PilotChannel(
     /** Applies one server frame; true when it was a pilot channel frame. */
     internal fun onText(text: String): Boolean {
         val now = clock.nowMs()
-        val frame = PilotWire.parseFrame(text, now) ?: return false
+        return onFrame(PilotWire.parseFrame(text, now) ?: return false, now)
+    }
+
+    /** Applies one parsed server frame received at [now]; always true. */
+    private fun onFrame(frame: PilotFrame, now: Long): Boolean {
         lastFrameMs = now
         _connected.value = true
         when (frame) {

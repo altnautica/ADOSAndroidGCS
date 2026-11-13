@@ -144,6 +144,10 @@ class SkillSession internal constructor(
         SkillContext(null, null, null, false, false, null),
     )
 
+    /**
+     * The once-a-second re-check for cooldowns and freshness. Not on the flight screen's redraw
+     * beat (this module has none): its changes reach the screen through the screen's own pacing.
+     */
     private val ticker: Flow<Long> = flow {
         while (true) {
             emit(clock.nowMs())
@@ -151,9 +155,21 @@ class SkillSession internal constructor(
         }
     }
 
+    /**
+     * The context as skill states read it: a pilot frame re-merges every skill only when it
+     * changes a pilot field a state reads ([statePilotKey]), not on each 10 Hz frame. The
+     * vehicle's reach and modes, read through [SkillContext.vehicle], are part of the key.
+     */
+    private val stateContext: Flow<SkillContext> = contextInputs
+        .map { ctx -> ctx to ctx.vehicle?.let { it.reach.value to it.control.availableModes.value } }
+        .distinctUntilChanged { (a, ra), (b, rb) ->
+            ra == rb && a.copy(pilot = null) == b.copy(pilot = null) && statePilotKey(a.pilot) == statePilotKey(b.pilot)
+        }
+        .map { it.first }
+
     /** Per-skill state keyed by skill id, with pending rings and queued stops merged in. */
     val states: StateFlow<Map<String, SkillState>> =
-        combine(contextInputs, allSkills, recomputeTick, combine(pending, queuedStops) { p, q -> p to q }, ticker) { ctx, skills, _, (pend, queued), _ ->
+        combine(stateContext, allSkills, recomputeTick, combine(pending, queuedStops) { p, q -> p to q }, ticker) { ctx, skills, _, (pend, queued), _ ->
             val id = ctx.vehicle?.id
             skills.associate { skill ->
                 val base = activator.mergedState(id, skill, ctx)
@@ -339,3 +355,10 @@ class SkillSessionFactory @Inject constructor(
 
 /** Stop reason when the extension's status is unknown. */
 const val REASON_STOPPED = "stopped"
+
+/**
+ * The pilot fields skill states read (the vehicle class, the mission state and the profile);
+ * null without a pilot. Frames equal in these re-merge no skill state.
+ */
+internal fun statePilotKey(p: PilotState?): Triple<Any?, Any?, Any?>? =
+    p?.let { Triple(it.vehicleClass, it.mission?.state, it.profile) }

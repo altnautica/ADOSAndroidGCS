@@ -6,12 +6,18 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -83,5 +89,27 @@ class PilotChannelTest {
         advanceTimeBy(1)
         ch.watchdog()
         assertFalse("2000 ms of silence is a lost link", ch.connected.value)
+    }
+
+    // Fails on the base commit: the channel took no parse context and parsed each frame in
+    // its collector, on the main thread.
+    @Test
+    fun `server frames are parsed in the parse context and applied in arrival order`() = runTest {
+        val parse = StandardTestDispatcher(testScheduler, name = "parse")
+        var streamedIn: ContinuationInterceptor? = null
+        val ch = PilotChannel(backgroundScope, MonotonicClock { testScheduler.currentTime }, parse) {
+            flow {
+                streamedIn = currentCoroutineContext()[ContinuationInterceptor]
+                emit("""{"kind":"pilot","ts_ms":1,"data":{"owner":"idle","armed":true}}""")
+                emit("""{"kind":"pilot","ts_ms":2,"data":{"owner":"idle","armed":false}}""")
+                awaitCancellation()
+            }
+        }
+        ch.start()
+        runCurrent()
+        assertSame("the stream and its parse run in the parse context", parse, streamedIn)
+        assertTrue(ch.connected.value)
+        assertEquals(false, ch.state.value?.armed)
+        ch.stop()
     }
 }

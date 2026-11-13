@@ -39,7 +39,12 @@ import org.webrtc.GlRectDrawer
 import org.webrtc.RendererCommon
 import org.webrtc.SurfaceViewRenderer
 
-/** Main feed draws on a SurfaceView; a picture-in-picture second stream on a TextureView. */
+/**
+ * Main feed draws on a SurfaceView; a picture-in-picture second stream on a TextureView.
+ * The picture-in-picture sits in a rounded, clipped card over the main feed, and a
+ * SurfaceView's surface ignores that clip (it draws square corners), so the card keeps the
+ * TextureView at the cost of a window redraw per picture-in-picture frame.
+ */
 enum class VideoSurfaceRole { Main, Pip }
 
 @EntryPoint

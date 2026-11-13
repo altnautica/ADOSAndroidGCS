@@ -9,6 +9,9 @@ import androidx.compose.runtime.InternalComposeTracingApi
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -19,20 +22,14 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.designsystem.component.overlay.OverlayTopBar
+import com.altnautica.gcs.core.designsystem.component.overlay.ProvideOverlayHost
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
-import com.altnautica.gcs.core.model.Attitude
-import com.altnautica.gcs.core.model.BatteryState
-import com.altnautica.gcs.core.model.GpsFix
-import com.altnautica.gcs.core.model.GpsState
-import com.altnautica.gcs.core.model.LocalPosition
 import com.altnautica.gcs.core.model.NodeSummary
-import com.altnautica.gcs.core.model.PositionFix
-import com.altnautica.gcs.core.model.StatusText
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
-import com.altnautica.gcs.core.model.Vfr
 import com.altnautica.gcs.core.extensions.ui.ExtensionMarksViewModel
 import com.altnautica.gcs.core.extensions.ui.ExtensionSlotViewModel
+import com.altnautica.gcs.core.skills.builtin.BuiltinIds
 import com.altnautica.gcs.core.skills.tips.TipsRepository
 import com.altnautica.gcs.core.video.FrameFanout
 import com.altnautica.gcs.core.video.VideoClock
@@ -41,8 +38,6 @@ import com.altnautica.gcs.core.video.VideoSessionHandle
 import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceFactory
 import com.altnautica.gcs.core.video.VideoSourceSelector
-import com.altnautica.gcs.feature.cockpit.hud.layers.LayerFrame
-import com.altnautica.gcs.feature.cockpit.hud.layers.LayerParse
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.tips.TipsEntryPoint
 import dagger.hilt.internal.GeneratedComponentManager
@@ -53,10 +48,12 @@ import io.mockk.mockkClass
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -71,17 +68,21 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.webrtc.VideoFrame
 import org.webrtc.VideoSink
+import java.lang.management.ManagementFactory
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass
-import kotlin.math.sin
 import kotlin.time.Duration.Companion.minutes
 
 /**
- * The whole flight screen during flight, measured: a 30 fps video stream through
- * [FrameFanout], telemetry on every topic at the video rate and data-layer frames at
- * 15 Hz. It counts every composable's recompositions (the runtime's composition trace)
- * and every window draw (the analogue of the frames `dumpsys gfxinfo` counts). Nothing
- * may redraw the window or recompose any composable faster than the HUD's 10 Hz.
+ * The whole flight screen in a live flight, measured. [LiveFlight] feeds it as the agent
+ * feeds the bench: telemetry on every topic at the agent's flight rates, the pilot at 10 Hz on
+ * two paths, the navigation stream, the AR and obstacle layers, detections, the battery engine
+ * and a 30 fps video stream through [FrameFanout]. Each step is one 60 Hz display frame, so a
+ * write off the beat shows as a frame of its own. It counts every composable's recompositions
+ * (the runtime's composition trace), every window draw (the analogue of the frames `dumpsys
+ * gfxinfo` counts), the emissions of the view-model flows the screen collects, and the main
+ * thread's CPU time and allocations. Nothing may redraw the window or recompose any composable
+ * faster than the HUD's 10 Hz beat.
  */
 @OptIn(ExperimentalCoroutinesApi::class, InternalComposeTracingApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -99,39 +100,160 @@ class FlightScreenRedrawTest {
     }
 
     @Test
-    fun `a 30 fps stream in flight redraws and recomposes the flight screen at most at the HUD rate`() {
-        val m = measureFlight(seconds = 4)
+    fun `a live flight redraws and recomposes the flight screen at most at the HUD rate`() = inFlight {
+        val m = measure(seconds = 4)
         println(m.report())
         assertTrue("the stream reached the renderer: ${m.shownFps} fps", m.shownFps >= 29.0)
         assertEquals("the flight screen root never recomposes", 0.0, m.perSecond["com.altnautica.gcs.feature.cockpit.CockpitScreen"] ?: 0.0, 0.0)
         assertEquals("the HUD never recomposes", 0.0, m.perSecond["com.altnautica.gcs.feature.cockpit.hud.HudCanvas"] ?: 0.0, 0.0)
         // A window can hold one beat more than its length allows, depending on the beat's phase.
         val slack = 1.0 / m.seconds
-        val minimap = m.perSecond["com.altnautica.gcs.feature.cockpit.hud.LocalMinimap"] ?: 0.0
-        assertTrue("the local minimap follows the pose at most 5 times a second: $minimap", minimap in 1.0..5.0 + slack)
         val limit = MAX_PER_SECOND + slack
         val busy = m.perSecond.filterValues { it > limit }
         assertTrue("composables recomposing faster than ${MAX_PER_SECOND.toInt()} Hz: $busy", busy.isEmpty())
+        val fast = m.emissionsPerSecond.filterKeys { it in TICK_FLOWS }.filterValues { it > TICK_PER_SECOND + slack }
+        assertTrue("2 Hz flows emitting off the tick: $fast", fast.isEmpty())
         assertTrue("window draws ${m.drawsPerSecond}/s, more than ${MAX_PER_SECOND.toInt()}", m.drawsPerSecond <= limit)
         assertTrue("the HUD and layers still redraw: ${m.drawsPerSecond}/s", m.drawsPerSecond >= 5.0)
     }
 
+    @Test
+    fun `the emergency stop sheet shows in the first frame after the tap`() = inFlight {
+        fly(1_000)
+        // The STOP button's own click handler (the harness's display host exposes no semantics for the top bar).
+        compose.runOnIdle { vm.activate(BuiltinIds.KILL) }
+        val title = testSpec.setupStrings.format("cockpit.estop")
+        var frames = 0
+        while (compose.onAllNodesWithText(title).fetchSemanticsNodes().isEmpty() && frames < 10) {
+            frame()
+            frames++
+        }
+        assertEquals("display frames from the tap to the sheet", 1, frames)
+    }
+
+    @Test
+    fun `a pad button press and release never recompose the flight screen root`() = inFlight {
+        fly(1_000)
+        val buttons = vm.padButtons as MutableStateFlow<Int>
+        Composer.setTracer(counter)
+        counter.counts.clear()
+        repeat(PRESSES) {
+            buttons.value = 1
+            fly(100)
+            buttons.value = 0
+            fly(100)
+        }
+        Composer.setTracer(CompositionCounter.Off)
+        assertEquals("flight screen root recompositions over $PRESSES presses", 0, counter.counts["com.altnautica.gcs.feature.cockpit.CockpitScreen"] ?: 0)
+    }
+
     /** Counts over [elapsedMs] of flight: whole frames, so slightly more than the asked span. */
-    private class Measurement(elapsedMs: Long, val counts: Map<String, Int>, val draws: Int, val shown: Long) {
+    private class Measurement(
+        elapsedMs: Long,
+        val counts: Map<String, Int>,
+        val draws: Int,
+        val shown: Long,
+        emissions: Map<String, Int>,
+        cpuNs: Long,
+        allocatedBytes: Long,
+        private val frames: Int,
+    ) {
         val seconds = elapsedMs / 1_000.0
         val perSecond: Map<String, Double> = counts.mapValues { it.value / seconds }
+        val emissionsPerSecond: Map<String, Double> = emissions.mapValues { it.value / seconds }
         val drawsPerSecond = draws / seconds
         val shownFps = shown / seconds
+        private val cpuMsPerSecond = cpuNs / 1e6 / seconds
+        private val bytesPerFrame = allocatedBytes / frames.coerceAtLeast(1)
 
         fun report(): String = buildString {
-            appendLine("window draws/s=$drawsPerSecond shown_fps=$shownFps")
+            appendLine("window draws/s=${"%.2f".format(drawsPerSecond)} shown_fps=${"%.1f".format(shownFps)}")
+            appendLine("main thread: cpu ${"%.0f".format(cpuMsPerSecond)} ms/s, allocated ${bytesPerFrame / 1024} KiB per display frame ($frames frames)")
+            appendLine("view-model flow emissions/s:")
+            emissionsPerSecond.entries.sortedByDescending { it.value }.forEach { (k, v) -> appendLine("  ${"%.1f".format(v)}/s $k") }
+            appendLine("recompositions (frames/s):")
             perSecond.entries.filter { it.value >= 2.0 }.sortedByDescending { it.value }.forEach { (k, v) -> appendLine("  ${"%.1f".format(v)}/s $k") }
         }
     }
 
-    /** Settles the screen for 3 s of flight, then measures [seconds] more. */
-    private fun measureFlight(seconds: Int): Measurement {
-        var result: Measurement? = null
+    /** One flight: the screen composed over [LiveFlight]'s sources, stepped one display frame at a time. */
+    private inner class Flight(
+        private val scope: TestScope,
+        val vm: CockpitViewModel,
+        private val live: LiveFlight,
+        private val video: SimulatedVideo,
+        private val window: () -> android.view.View,
+    ) {
+        private val frameCanvas = android.graphics.Canvas(android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888))
+        private val emissions = HashMap<String, Int>()
+        private var counting = false
+        var draws = 0
+            private set
+
+        init {
+            val flows = mapOf(
+                "band" to vm.band, "chip" to vm.chip, "flightValues" to vm.flightValues, "flow" to vm.flow,
+                "statusItems" to vm.statusItems, "minimap" to vm.minimap, "alerts" to vm.alerts, "preflight" to vm.preflight,
+                "freshPilotState" to vm.freshPilotState, "pickerChip" to vm.pickerChip, "videoState" to vm.videoState,
+            )
+            for ((name, f) in flows) {
+                scope.backgroundScope.launch { f.collect { if (counting) emissions[name] = (emissions[name] ?: 0) + 1 } }
+            }
+        }
+
+        /**
+         * One display frame: the sources due now, then the frame. Robolectric runs no render
+         * thread, so a frame in which anything invalidated the window is counted here and drawn
+         * by hand, which clears the dirty flags for the next frame.
+         */
+        fun frame() {
+            live.step(scope.testScheduler.currentTime)
+            scope.testScheduler.advanceTimeBy(DISPLAY_MS)
+            scope.runCurrent()
+            compose.mainClock.advanceTimeBy(DISPLAY_MS)
+            val root = window()
+            if (root.isDirty) {
+                draws++
+                root.draw(frameCanvas)
+            }
+            counter.endFrame()
+        }
+
+        fun fly(ms: Long) {
+            val end = scope.testScheduler.currentTime + ms
+            while (scope.testScheduler.currentTime < end) frame()
+        }
+
+        /** Measures [seconds] of flight. */
+        fun measure(seconds: Int): Measurement {
+            val mx = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+            val thread = Thread.currentThread().id
+            val shownBefore = video.fanout.shown.frameCount
+            val drawsBefore = draws
+            val startMs = scope.testScheduler.currentTime
+            Composer.setTracer(counter)
+            counting = true
+            val cpu0 = mx.currentThreadCpuTime
+            val alloc0 = mx.getThreadAllocatedBytes(thread)
+            var frames = 0
+            val end = startMs + seconds * 1_000L
+            while (scope.testScheduler.currentTime < end) {
+                frame()
+                frames++
+            }
+            val cpu = mx.currentThreadCpuTime - cpu0
+            val alloc = mx.getThreadAllocatedBytes(thread) - alloc0
+            counting = false
+            Composer.setTracer(CompositionCounter.Off)
+            return Measurement(
+                scope.testScheduler.currentTime - startMs, counter.counts.toMap(), draws - drawsBefore,
+                video.fanout.shown.frameCount - shownBefore, emissions.toMap(), cpu, alloc, frames,
+            )
+        }
+    }
+
+    /** Composes the flight screen over a live flight, settles it for 3 s of flight, then runs [block]. */
+    private fun inFlight(block: Flight.() -> Unit) {
         val dispatcher = UnconfinedTestDispatcher()
         Dispatchers.setMain(dispatcher)
         try {
@@ -140,16 +262,16 @@ class FlightScreenRedrawTest {
                 val now = { testScheduler.currentTime }
                 val video = SimulatedVideo(VideoClock { testScheduler.currentTime })
                 val sessions = VideoSessionManager(setOf(video), backgroundScope)
-                val vm = testCockpitVm(vehicle, videoSelector = VideoSourceSelector(setOf(video)), videoSessions = sessions)
+                val agent = LiveAgent(now)
+                val vm = testCockpitVm(vehicle, localApis = agent.apis, videoSelector = VideoSourceSelector(setOf(video)), videoSessions = sessions)
                 RedrawTestApp.sessions = sessions
-                vehicle.heartbeatAt(now(), armed = true, mode = "LOITER")
+                vehicle.heartbeatAt(now(), armed = true, mode = "GUIDED")
                 // The bench's card: the local minimap, which follows the drone's pose.
                 vm.autonomy.setMinimapPin(CockpitSettingsRepository.MINIMAP_LOCAL)
                 // CockpitRoute marks the flight view shown on start; the beat runs only then.
                 vm.setFlightViewShown(true)
                 runCurrent()
                 val hiltActivity = Robolectric.buildActivity(RedrawTestActivity::class.java).create().get()
-                var draws = 0
                 var window: android.view.View? = null
                 compose.mainClock.autoAdvance = false
                 compose.setContent {
@@ -159,67 +281,35 @@ class FlightScreenRedrawTest {
                     // extension contributes anything here).
                     CompositionLocalProvider(LocalContext provides hiltActivity, LocalViewModelStoreOwner provides extensionViewModels(vehicle.id.value)) {
                         AdosTheme {
-                            CockpitScreen(vm, WidthClass.Expanded, connecting = false, topBar = OverlayTopBar(), onExit = {}, snackbar = {})
+                            // As the app's root provides it: sheets and menus draw through the window's overlay host.
+                            ProvideOverlayHost {
+                                CockpitScreen(vm, WidthClass.Expanded, connecting = false, topBar = OverlayTopBar(), onExit = {}, snackbar = {})
+                            }
                         }
-                    }
-                }
-                val frameCanvas = android.graphics.Canvas(android.graphics.Bitmap.createBitmap(1, 1, android.graphics.Bitmap.Config.ARGB_8888))
-                val ar = LayerParse.ar(javaClass.classLoader!!.getResource("fixtures/ar-frame.json")!!.readText())
-                var step = 0
-                fun fly(ms: Long) {
-                    val end = now() + ms
-                    while (now() < end) {
-                        val t = now()
-                        val s = step++
-                        val wave = sin(s / 10.0).toFloat()
-                        val tel = vehicle.telemetry
-                        tel.attitude.value = Attitude(0.05f * wave, 0.02f, 1f + 0.01f * s, t)
-                        tel.position.value = PositionFix(47.0 + s * 1e-6, 8.0, 430f, 12f + wave, 3f, 1f, -0.2f * wave, t)
-                        tel.vfr.value = Vfr(3f + wave, 3.1f + wave, 57f + s * 0.1f, 45, -0.2f * wave, t)
-                        tel.localPosition.value = LocalPosition(s * 0.1f, wave, -12f, 3f, 1f, 0.2f, t)
-                        tel.battery.value = BatteryState(0, 15.8f - s * 1e-4f, 12f + wave, 88, null, t)
-                        tel.gps.value = GpsState(GpsFix.Fix3D, 14, 0.7f, t)
-                        if (s % 30 == 0) vehicle.heartbeatAt(t, armed = true, mode = "LOITER")
-                        // An unacknowledged warning keeps the status pill flashing throughout.
-                        if (s == 0) tel.statusText.tryEmit(StatusText(4, "GPS glitch", t))
-                        // Layer frames at about 15 Hz, as the agent streams them.
-                        if (s % 2 == 0) vm.autonomy.layers.store.push(LayerFrame.Ar(ar.copy(tsMs = ar.tsMs + s)), t)
-                        video.frame()
-                        testScheduler.advanceTimeBy(FRAME_MS)
-                        runCurrent()
-                        compose.mainClock.advanceTimeBy(FRAME_MS)
-                        // One display frame: Robolectric runs no render thread, so a frame in which
-                        // anything invalidated the window is counted here and drawn by hand, which
-                        // clears the dirty flags for the next frame.
-                        val root = window!!
-                        if (root.isDirty) {
-                            draws++
-                            root.draw(frameCanvas)
-                        }
-                        counter.endFrame()
                     }
                 }
                 compose.mainClock.advanceTimeByFrame()
-                fly(3_000)
+                val flight = Flight(this, vm, LiveFlight(vehicle, agent, video), video) { window!! }
+                flight.fly(3_000)
                 assertTrue("the video plays: ${vm.videoState.value}, main=${vm.video.value.main}", vm.videoState.value is VideoState.Live)
-                val shownBefore = video.fanout.shown.frameCount
-                Composer.setTracer(counter)
-                val drawsBefore = draws
-                val startMs = now()
-                fly(seconds * 1_000L)
-                Composer.setTracer(CompositionCounter.Off)
-                result = Measurement(now() - startMs, counter.counts.toMap(), draws - drawsBefore, video.fanout.shown.frameCount - shownBefore)
+                assertTrue("the pilot is live", vm.pilotState.value != null)
+                flight.block()
                 vm.viewModelScope.cancel()
             }
         } finally {
             Dispatchers.resetMain()
         }
-        return result!!
     }
 
     private companion object {
-        const val FRAME_MS = 33L
+        /** One 60 Hz display frame, as the bench's emulator panel draws. */
+        const val DISPLAY_MS = 16L
         const val MAX_PER_SECOND = 10.0
+
+        /** Flows the screen collects that change at most on the 2 Hz tick. */
+        val TICK_FLOWS = setOf("band", "chip", "flightValues", "flow", "statusItems", "minimap")
+        const val TICK_PER_SECOND = 2.0
+        const val PRESSES = 5
     }
 }
 

@@ -74,7 +74,7 @@ class LocalMinimapFlyHereTest {
                     AdosTheme {
                         CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings) {
                             Box(Modifier.size(300.dp)) {
-                                LocalMinimap(inputs, "auto", {}, Modifier.size(300.dp), onLongPress = { n, e -> presses += n to e })
+                                LocalMinimap({ inputs }, "auto", {}, Modifier.size(300.dp), onLongPress = { n, e -> presses += n to e })
                             }
                         }
                     }

@@ -45,7 +45,7 @@ internal class CockpitFacts(
     autonomy: CockpitAutonomy,
     band: StateFlow<BandState>,
     minimap: StateFlow<MinimapState>,
-    hudValues: StateFlow<FlightValues>,
+    hudValues: () -> FlightValues,
     streaming: StateFlow<Boolean>,
     pickerOpen: StateFlow<Boolean>,
     alerts: StateFlow<List<CockpitAlert>>,
@@ -62,33 +62,51 @@ internal class CockpitFacts(
         }
     }
 
-    /** The flight-state chip, re-evaluated on every pilot frame and on the 2 Hz tick for staleness. */
-    val chip: StateFlow<FlightStateChipUi> = combine(pilot, tick, band, missionCompleteSince, minimap) { p, _, b, done, map ->
+    /**
+     * The chip's distances and mission ETA, sampled on the 2 Hz tick: a moving goal or vehicle
+     * changes the chip's text on the tick, never on every pilot frame or position sample.
+     */
+    private val chipNumbers: StateFlow<ChipNumbers> = combine(tick, minimap) { _, map ->
+        ChipNumbers(
+            homeDistM = homeDistanceM(map),
+            goalDistM = pilot.value?.goalNed?.let { goalDistanceM(it, telemetry.value?.localPosition?.value) },
+            missionEtaS = autonomy.missionEtaS(),
+        )
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), ChipNumbers())
+
+    /**
+     * The flight-state chip, re-evaluated on every pilot frame (a mode or owner change shows at
+     * once) and on the 2 Hz tick for staleness; its numbers come from [chipNumbers].
+     */
+    val chip: StateFlow<FlightStateChipUi> = combine(pilot, tick, band, missionCompleteSince, chipNumbers) { p, _, b, done, n ->
         chipResolver.resolve(
             p,
             ChipContext(
                 nowMs = clock.nowMs(),
                 missionCompleteSinceMs = done,
-                homeDistM = homeDistanceM(map),
-                goalDistM = p?.goalNed?.let { goalDistanceM(it, telemetry.value?.localPosition?.value) },
-                missionEtaS = autonomy.missionEtaS(),
+                homeDistM = n.homeDistM,
+                // A goal that appeared since the last tick is measured now, so the chip never reads a dash for it.
+                goalDistM = p?.goalNed?.let { g -> n.goalDistM ?: goalDistanceM(g, telemetry.value?.localPosition?.value) },
+                missionEtaS = n.missionEtaS,
                 vtolTransitioning = telemetry.value?.vtolTransitioning?.value == true,
                 fcModeName = b.modeName,
                 modeDetail = p?.let { FlightStateChipResolver.modeDetail(it.ownerLabel, it.skill?.label) },
             ),
         )
-    }.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), chipResolver.resolve(null, ChipContext(clock.nowMs())))
+    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), chipResolver.resolve(null, ChipContext(clock.nowMs())))
 
     /**
-     * The bottom row. AGL comes from the follow feed while it is fresh, else from the agent's
-     * pilot while it is fresh; a height not measured by a rangefinder carries its reference
-     * as a tag. The 2 Hz tick re-checks freshness, so AGL goes to a dash with the other
-     * cells after a link loss.
+     * The bottom row, on the 2 Hz tick like its other cells. AGL comes from the follow feed
+     * while it is fresh, else from the agent's pilot while it is fresh; a height not measured
+     * by a rangefinder carries its reference as a tag. Both are read on the tick, never on
+     * each pilot or follow frame, so the row redraws on the tick only; the tick also re-checks
+     * freshness, so AGL goes to a dash with the other cells after a link loss.
      */
-    val flightValues: StateFlow<FlightValues> = combine(hudValues, autonomy.feed.follow, pilot, tick) { v, f, p, _ ->
+    val flightValues: StateFlow<FlightValues> = tick.map {
+        val v = hudValues()
         val strings = spec.setupStrings
-        val follow = f?.takeIf { autonomy.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value?.takeIf { it.aglM != null }
-        val fromPilot = p?.takeIf { isPilotFresh(it.receivedAtMs, clock.nowMs()) && it.aglM != null }
+        val follow = autonomy.feed.follow.value?.takeIf { autonomy.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value?.takeIf { it.aglM != null }
+        val fromPilot = pilot.value?.takeIf { isPilotFresh(it.receivedAtMs, clock.nowMs()) && it.aglM != null }
         val (agl, tag) = when {
             v == FlightValues.Empty -> null to null
             // The pilot's height is measured only from a rangefinder, else it is the EKF height
@@ -129,3 +147,6 @@ internal class CockpitFacts(
         )
     }.stateIn(scope, SharingStarted.Eagerly, ControllerContext())
 }
+
+/** The flight-state chip's measured numbers, as of the last 2 Hz tick. */
+internal data class ChipNumbers(val homeDistM: Float? = null, val goalDistM: Float? = null, val missionEtaS: Float? = null)

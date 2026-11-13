@@ -1,10 +1,14 @@
 package com.altnautica.gcs.feature.cockpit.chrome
 
 import androidx.lifecycle.viewModelScope
+import com.altnautica.gcs.core.model.BatteryState
+import com.altnautica.gcs.core.model.LinkQuality
 import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.Vfr
 import com.altnautica.gcs.feature.cockpit.FakeVehicle
+import com.altnautica.gcs.feature.cockpit.LiveAgent
 import com.altnautica.gcs.feature.cockpit.heartbeatAt
+import com.altnautica.gcs.feature.cockpit.livePilotFrame
 import com.altnautica.gcs.feature.cockpit.testCockpitVm
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -112,6 +116,65 @@ class RedrawBeatTest {
         val moved = changes.drop(1)
         assertTrue("the 2 Hz readouts still follow the telemetry: $moved", moved.size >= 5)
         assertTrue("readouts change only on 500 ms steps: $moved", moved.all { it % 500 == 0L })
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the bottom row's height above ground changes only on the tick under a 10 Hz pilot`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.heartbeatAt(testScheduler.currentTime, armed = true)
+        val agent = LiveAgent { testScheduler.currentTime }
+        val vm = testCockpitVm(vehicle, localApis = agent.apis)
+        vm.setFlightViewShown(true)
+        val beats = HashMap<Long, Long>()
+        backgroundScope.launch { vm.redrawBeat.ticks.collect { beats[testScheduler.currentTime] = it } }
+        val changes = ArrayList<Pair<Long, Float?>>()
+        backgroundScope.launch { vm.flightValues.collect { changes += testScheduler.currentTime to it.aglM } }
+        runCurrent()
+        // Pilot frames between beats, each with a new height, for 3 s; position keeps the row live.
+        advanceTimeBy(43)
+        repeat(30) { n ->
+            val t = testScheduler.currentTime
+            vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 430f, 2.5f, 0f, 0f, 0f, t)
+            agent.pilot.tryEmit(livePilotFrame(t, n))
+            advanceTimeBy(100)
+            runCurrent()
+        }
+        val withAgl = changes.filter { it.second != null }
+        assertTrue("the pilot's height reaches the row: $changes", withAgl.isNotEmpty())
+        for ((t, _) in changes.drop(1)) {
+            val n = beats[t]
+            assertTrue("the row changed at $t ms, off the tick (beat $n)", n != null && n % 5 == 0L)
+        }
+        assertTrue("at most one change per tick: ${changes.size}", changes.size <= 3_000 / 500 + 2)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `battery and link quality reach the top band only on the tick`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.heartbeatAt(testScheduler.currentTime, armed = true)
+        val vm = testCockpitVm(vehicle)
+        vm.setFlightViewShown(true)
+        val beats = HashMap<Long, Long>()
+        backgroundScope.launch { vm.redrawBeat.ticks.collect { beats[testScheduler.currentTime] = it } }
+        val changes = ArrayList<Long>()
+        backgroundScope.launch { vm.band.collect { changes += testScheduler.currentTime } }
+        runCurrent()
+        advanceTimeBy(37)
+        // Battery at 1 Hz with a new time to reserve each time, link quality every 250 ms, for 3 s.
+        repeat(12) { i ->
+            val t = testScheduler.currentTime
+            if (i % 4 == 0) vehicle.telemetry.battery.value = BatteryState(0, 15.8f, 12f, 92 - i, 500 - i, t)
+            vehicle.telemetry.linkQuality.value = LinkQuality(-60 - i, null, 0)
+            advanceTimeBy(250)
+            runCurrent()
+        }
+        assertTrue("the battery reaches the band", vm.band.value.batteryPct != null)
+        for (t in changes.drop(1)) {
+            val n = beats[t]
+            assertTrue("the band changed at $t ms, off the tick (beat $n)", n != null && n % 5 == 0L)
+        }
         vm.viewModelScope.cancel()
     }
 }

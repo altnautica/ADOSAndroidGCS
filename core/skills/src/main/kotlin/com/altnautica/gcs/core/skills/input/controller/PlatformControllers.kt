@@ -137,11 +137,12 @@ internal class PlatformControllers(context: Context) {
         )
     }
 
-    /** One open lights session per device; closing it restores the controller's default colour. */
+    /** One open lights session per device; closing it restores the controller's default colour. Called from more than one thread. */
     @RequiresApi(Build.VERSION_CODES.S)
     private class LightSessions {
         private val sessions = mutableMapOf<Int, LightsManager.LightsSession>()
 
+        @Synchronized
         fun set(deviceId: Int, argb: Int?) {
             if (argb == null) {
                 close(deviceId)
@@ -156,6 +157,7 @@ internal class PlatformControllers(context: Context) {
             }
         }
 
+        @Synchronized
         fun retain(deviceIds: Set<Int>) {
             (sessions.keys - deviceIds).forEach(::close)
         }

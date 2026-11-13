@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
 import java.io.IOException
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** Where operator sticks go right now. */
 enum class StickRoute {
@@ -69,6 +71,8 @@ internal class CockpitPilot(
     navPilot: StateFlow<PilotState?>,
     /** How the flown vehicle is reached, or null without one. */
     reach: Flow<Reach?>,
+    /** Where pilot frames are parsed ([PilotChannel]). */
+    private val parseContext: CoroutineContext = EmptyCoroutineContext,
 ) {
     /** The flown node's pilot channel, or null without a node. */
     val link: StateFlow<PilotChannel?> = vehicleNodeId
@@ -95,7 +99,7 @@ internal class CockpitPilot(
     val stickSink: StateFlow<StickSink?> = combine(link, route) { l, r -> l?.takeIf { r == StickRoute.Pilot } }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    private fun channelFor(id: DeviceId) = PilotChannel(scope, clock) { outgoing -> pilotStream(id, outgoing) }
+    private fun channelFor(id: DeviceId) = PilotChannel(scope, clock, parseContext) { outgoing -> pilotStream(id, outgoing) }
 
     private fun pilotStream(id: DeviceId, outgoing: Flow<String>): Flow<String> = flow {
         val a = api(id) ?: throw IOException("no agent path to the vehicle")

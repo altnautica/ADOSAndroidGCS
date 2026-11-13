@@ -41,6 +41,34 @@ app's `versionName`.
   draws, so it moves in 10 Hz steps without falling behind the video. The beat,
   the status-pill flash and the local minimap stop while the flight screen is
   hidden; the 2 Hz readouts, alerts and voice keep running.
+- **Flight screen redraws only on its beat in live flight.** With a live
+  drone, the window still redrew about 21 times a second: the bottom row's
+  height above ground took every pilot frame (10 a second, arriving twice),
+  and the battery, link quality, battery reserve and panel blur each redrew
+  the screen at their own moments. All of them now change on the beat or the
+  2 Hz tick, as do the flight-state chip's distances and ETA, the follow
+  readouts, the countdowns (in the whole seconds they show) and the gate and
+  controller hold rings, which fill while drawing instead of recomposing. A
+  pad button press no longer recomposes the whole flight screen, and switching
+  between touch and a controller no longer recomposes the whole app.
+- **Faster STOP and Land.** The confirm sheet now draws in the frame after the
+  tap; through the window's overlay layer it showed one frame later. An open
+  STOP sheet no longer recomposes 60 times a second while it waits for the hold.
+- **Sticks off the main thread.** The stick and pad loops, the controller light
+  bar, and the parsing of pilot, navigation and detection frames run off the
+  main thread, so a busy frame no longer delays a stick update. A batched pad
+  event publishes one stick sample instead of one per historical sample.
+- **Less work per frame.** The status pill, pre-flight checklist (its storage
+  check now runs every 10 s), tips, skill states and alerts no longer
+  re-evaluate on every pilot frame or telemetry sample, and the HUD, targets,
+  layers and local minimap reuse their paths and strokes instead of allocating
+  them on every draw. Panels carry no blur layer until there is a video frame
+  to blur.
+- **Frame diagnostics.** A debuggable build logs, every 10 s under the
+  `FlightFrames` tag, the flight screen's frames per second, janky share, p50
+  and p90, the mean of each frame stage and each confirm sheet's tap-to-frame
+  time; `adb shell setprop debug.ados.cockpit.probe 1` adds the busiest
+  composables.
 
 ## [0.6.1] - 2026-11-13
 

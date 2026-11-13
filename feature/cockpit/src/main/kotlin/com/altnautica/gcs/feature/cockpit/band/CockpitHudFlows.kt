@@ -56,7 +56,7 @@ internal fun freshHeartbeatArmed(heartbeat: HeartbeatState?, nowMs: Long): Boole
 internal class CockpitHudFlows(
     scope: CoroutineScope,
     private val clock: MonotonicClock,
-    telemetry: StateFlow<VehicleTelemetry?>,
+    private val telemetry: StateFlow<VehicleTelemetry?>,
     node: StateFlow<NodeSummary?>,
     vehicle: StateFlow<Vehicle?>,
     settings: StateFlow<CockpitSettings>,
@@ -82,12 +82,15 @@ internal class CockpitHudFlows(
     }
 
     val band: StateFlow<BandState> = telemetry.flatMapLatest { t ->
-        // Ages advance on the 2 Hz tick only, and a heartbeat re-evaluates the band at once only
-        // when it changes the arm state or mode: reading the clock or the heartbeat's time on
-        // every sample would change the band (and recompose the top bar) at the telemetry rate.
+        // Ages, battery and link quality advance on the 2 Hz tick only, and a heartbeat
+        // re-evaluates the band at once only when it changes the arm state or mode: reading the
+        // clock, the battery or the link on every sample would change the band (and recompose
+        // the top bar) at the telemetry rate, off the beat.
         val coarse = if (t == null) flowOf(BandTelemetry.Empty) else combine(
-            t.heartbeat.map { it?.armed to it?.mode }.distinctUntilChanged(), t.battery, t.linkQuality, tick500.map { clock.nowMs() },
-        ) { _, batt, lq, now ->
+            t.heartbeat.map { it?.armed to it?.mode }.distinctUntilChanged(), tick500.map { clock.nowMs() },
+        ) { _, now ->
+            val batt = t.battery.value
+            val lq = t.linkQuality.value
             val hb = t.heartbeat.value
             val age = hb?.let { heartbeatAgeMs(it.tMs, now) }
             // A stale heartbeat no longer tells the arm state or mode: show them as unknown.
@@ -139,23 +142,24 @@ internal class CockpitHudFlows(
         else -> BatteryBand.Good
     }
 
-    /** The bottom row's distance home, height, and horizontal and vertical speed, at 2 Hz (AGL is added by the caller). */
-    val flightValues: StateFlow<FlightValues> = telemetry.flatMapLatest { t ->
-        if (t == null) return@flatMapLatest flowOf(FlightValues.Empty)
-        tick500.map {
-            val now = clock.nowMs()
-            val pos = t.position.value?.takeIf { now - it.tMs <= HudMath.STALE_MS }
-            val home = t.home.value
-            val vfr = t.vfr.value?.takeIf { now - it.tMs <= HudMath.STALE_MS }
-            FlightValues(
-                distanceM = if (pos != null && home != null) Geo.distanceBearing(pos.latDeg, pos.lonDeg, home.latDeg, home.lonDeg).first else null,
-                heightM = pos?.altRelM,
-                hSpeedMs = vfr?.groundspeedMs ?: pos?.let { hypot(it.vxMs, it.vyMs) },
-                vSpeedMs = vfr?.climbMs ?: pos?.let { -it.vzMs },
-                aglM = null,
-            )
-        }
-    }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), FlightValues.Empty)
+    /**
+     * The bottom row's distance home, height, and horizontal and vertical speed now (AGL is
+     * added by the caller), for the caller's 2 Hz tick to sample: one emission per tick.
+     */
+    fun flightValuesNow(): FlightValues {
+        val t = telemetry.value ?: return FlightValues.Empty
+        val now = clock.nowMs()
+        val pos = t.position.value?.takeIf { now - it.tMs <= HudMath.STALE_MS }
+        val home = t.home.value
+        val vfr = t.vfr.value?.takeIf { now - it.tMs <= HudMath.STALE_MS }
+        return FlightValues(
+            distanceM = if (pos != null && home != null) Geo.distanceBearing(pos.latDeg, pos.lonDeg, home.latDeg, home.lonDeg).first else null,
+            heightM = pos?.altRelM,
+            hSpeedMs = vfr?.groundspeedMs ?: pos?.let { hypot(it.vxMs, it.vyMs) },
+            vSpeedMs = vfr?.climbMs ?: pos?.let { -it.vzMs },
+            aglM = null,
+        )
+    }
 
     private val _cardPage = MutableStateFlow(CardPage.Map)
 
