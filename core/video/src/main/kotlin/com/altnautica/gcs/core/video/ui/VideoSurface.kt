@@ -86,7 +86,8 @@ fun VideoSurface(
             lease?.release()
         }
     }
-    val overlay = rememberRatesOverlayEnabled() && role == VideoSurfaceRole.Main
+    // Only the main role reads the property; a PiP surface never starts the read.
+    val overlay = role == VideoSurfaceRole.Main && rememberRatesOverlayEnabled()
     val h = handle ?: return
     if (!overlay) {
         VideoSessionView(h, role, modifier, onVideoView)
