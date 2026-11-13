@@ -13,6 +13,7 @@ import com.altnautica.gcs.core.video.VideoOutput
 import com.altnautica.gcs.core.video.VideoRecording
 import com.altnautica.gcs.core.video.VideoSessionHandle
 import com.altnautica.gcs.core.video.VideoSourceFactory
+import com.altnautica.gcs.core.video.VideoStatsMeter
 import com.altnautica.gcs.core.video.whep.PeerLinkState
 import com.altnautica.gcs.core.video.whep.WebRtcEnvironment
 import com.altnautica.gcs.core.video.whep.WhepPeer
@@ -161,6 +162,7 @@ class CloudP2pSession(
         var flowed = false
         var lastStatsAt = Long.MIN_VALUE
         var latency: Int? = null
+        val meter = VideoStatsMeter()
         while (true) {
             val now = clock.nowMs()
             when (p.connection.value) {
@@ -183,7 +185,8 @@ class CloudP2pSession(
                     }
                     if (lastStatsAt == Long.MIN_VALUE || now - lastStatsAt >= STATS_INTERVAL_MS) {
                         lastStatsAt = now
-                        latency = p.latencyMs() ?: latency
+                        val frames = watchdog.frameCount
+                        latency = meter.update(now, p.inboundStats(), frames, frames)?.latencyMs ?: latency
                     }
                     _state.value = VideoState.Live(latency)
                 }

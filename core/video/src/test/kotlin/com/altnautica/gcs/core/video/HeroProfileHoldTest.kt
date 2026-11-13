@@ -8,12 +8,16 @@ import com.altnautica.gcs.core.agent.model.VideoProfileLease
 import com.altnautica.gcs.core.agent.model.VideoProfileState
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.net.SocketTimeoutException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HeroProfileHoldTest {
@@ -39,8 +43,16 @@ class HeroProfileHoldTest {
             return AgentResult.Ok(StatusFull(profile = nodeProfile, telemetry = TelemetrySnapshot(videoProfile = videoProfile)))
         }
 
+        /** How long each POST takes to answer, in virtual ms. */
+        var setLatencyMs = 0L
+
+        /** Virtual time at which each POST started. */
+        val setStartedAt = mutableListOf<Long>()
+
         override suspend fun setVideoProfile(profile: String, holder: String?, leaseS: Int?): AgentResult<VideoProfileState> {
             calls += listOfNotNull("POST", profile, holder, leaseS?.toString()).joinToString(" ")
+            setStartedAt += currentCoroutineContext()[TestCoroutineScheduler]!!.currentTime
+            if (setLatencyMs > 0) delay(setLatencyMs)
             setErrors.removeFirstOrNull()?.let { return AgentResult.Err(it) }
             return AgentResult.Ok(state(profile, holder))
         }
@@ -59,6 +71,8 @@ class HeroProfileHoldTest {
     private fun TestScope.hold(agent: FakeAgent) = HeroProfileHold(backgroundScope, holder) { agent }
 
     private val tooMany = AgentError.Server(429, "too many requests")
+    private val starting = AgentError.Server(503, "video service starting")
+    private val timedOut = AgentError.Network(SocketTimeoutException("timeout"))
 
     @Test
     fun `acquiring promotes the drone with a lease under the app's holder id`() = runTest {
@@ -69,16 +83,42 @@ class HeroProfileHoldTest {
     }
 
     @Test
-    fun `the lease is renewed every 15 s while held`() = runTest {
+    fun `the lease is renewed every 10 s while held`() = runTest {
         val agent = FakeAgent()
         hold(agent).acquire(drone, url)
         runCurrent()
-        advanceTimeBy(HeroProfileHold.RENEW_MS - 1)
-        assertEquals("no renewal before half the lease", 1, agent.calls.count { it == lease })
+        advanceTimeBy(9_999)
+        assertEquals("no renewal before a third of the lease", 1, agent.calls.count { it == lease })
         advanceTimeBy(2)
-        assertEquals("renewed at half the lease", 2, agent.calls.count { it == lease })
-        advanceTimeBy(HeroProfileHold.RENEW_MS)
+        assertEquals("renewed at a third of the lease", 2, agent.calls.count { it == lease })
+        advanceTimeBy(10_000)
         assertEquals(3, agent.calls.count { it == lease })
+    }
+
+    @Test
+    fun `renewals keep a fixed cadence from each request's start, however slow the answer`() = runTest {
+        val agent = FakeAgent()
+        hold(agent).acquire(drone, url)
+        runCurrent()
+        agent.setLatencyMs = 6_000
+        advanceTimeBy(40_001)
+        assertEquals("renewals start at 10, 20, 30 and 40 s", listOf(0L, 10_000L, 20_000L, 30_000L, 40_000L), agent.setStartedAt)
+    }
+
+    @Test
+    fun `a failed or timed-out renewal is retried within 2 s, then with backoff`() = runTest {
+        val agent = FakeAgent()
+        hold(agent).acquire(drone, url)
+        runCurrent()
+        agent.setErrors += listOf(timedOut, starting)
+        advanceTimeBy(18_001)
+        assertEquals(
+            "renewal at 10 s fails, retried at 12 s, fails, retried at 16 s and accepted",
+            listOf(0L, 10_000L, 12_000L, 16_000L),
+            agent.setStartedAt,
+        )
+        advanceTimeBy(2_000)
+        assertEquals("the schedule carries on at 20 s", 20_000L, agent.setStartedAt.last())
     }
 
     @Test
@@ -122,7 +162,7 @@ class HeroProfileHoldTest {
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS - 1_000)
         hold.acquire(drone, url)
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS * 2)
-        assertEquals(listOf("status", lease), agent.calls)
+        assertEquals("one promotion, then only the renewal at 10 s", listOf("status", lease, lease), agent.calls)
     }
 
     @Test
@@ -164,18 +204,50 @@ class HeroProfileHoldTest {
     }
 
     @Test
-    fun `rate-limited retries give up after the last backoff and stop once nobody holds the drone`() = runTest {
+    fun `failed promotions keep retrying every 15 s while held and stop once nobody holds the drone`() = runTest {
         val agent = FakeAgent()
-        repeat(10) { agent.statusErrors += tooMany }
+        repeat(100) { agent.statusErrors += tooMany }
         hold(agent).acquire(drone, url)
         advanceTimeBy(60_000)
-        assertEquals("one try and three retries", 4, agent.calls.size)
+        assertEquals("tries at 0, 1, 3, 7, 15, 30 and 45 s", 7, agent.calls.size)
 
         val released = FakeAgent()
-        repeat(10) { released.statusErrors += tooMany }
+        repeat(100) { released.statusErrors += tooMany }
         hold(released).acquire(drone, url)()
         advanceTimeBy(60_000)
         assertEquals("released before the first retry ran", 1, released.calls.size)
+    }
+
+    @Test
+    fun `a promotion refused while the video service starts, or timed out, is retried`() = runTest {
+        val agent = FakeAgent()
+        agent.statusErrors += starting
+        agent.setErrors += timedOut
+        hold(agent).acquire(drone, url)
+        runCurrent()
+        advanceTimeBy(3_001)
+        assertEquals(
+            "503 retried after 1 s, the timed-out POST after 2 s more",
+            listOf("status", "status", lease, "status", lease),
+            agent.calls,
+        )
+        advanceTimeBy(HeroProfileHold.RENEW_MS)
+        assertEquals("the won lease renews 10 s after it was taken", 3, agent.calls.count { it == lease })
+    }
+
+    @Test
+    fun `a refusal of the caller or the route is not retried`() = runTest {
+        val agent = FakeAgent()
+        agent.statusErrors += AgentError.Unauthorized
+        hold(agent).acquire(drone, url)
+        advanceTimeBy(60_000)
+        assertEquals(listOf("status"), agent.calls)
+
+        val noRoute = FakeAgent()
+        noRoute.setErrors += AgentError.FeatureAbsent
+        hold(noRoute).acquire(drone, url)
+        advanceTimeBy(60_000)
+        assertEquals(listOf("status", lease), noRoute.calls)
     }
 
     @Test

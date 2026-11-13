@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.PauseCircle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -18,6 +19,7 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.builtin.BuiltinIds
 import com.altnautica.gcs.feature.cockpit.chrome.RoundButton
 import com.altnautica.gcs.feature.cockpit.flow.specText
+import androidx.compose.runtime.derivedStateOf
 
 /**
  * Whether the left column offers Land instead of Take off: the pilot's state while its frame
@@ -26,12 +28,16 @@ import com.altnautica.gcs.feature.cockpit.flow.specText
  */
 internal fun leftColumnLands(pilot: PilotState?, bandArmed: Boolean?): Boolean = pilot?.possiblyAirborne ?: (bandArmed != false)
 
-/** Take off (opens the Launch sheet) or land, return home, pause: the built-ins' own gates and confirms apply. */
+/**
+ * Take off (opens the Launch sheet) or land, return home, pause: the built-ins' own gates and
+ * confirms apply. It reads only whether to offer Land, so pilot frames and band updates that
+ * leave that answer alone do not recompose the column.
+ */
 @Composable
 internal fun LeftColumn(vm: CockpitViewModel, size: Dp, gap: Dp) {
-    val pilot by vm.freshPilotState.collectAsStateWithLifecycle()
-    val band by vm.band.collectAsStateWithLifecycle()
-    val airborne = leftColumnLands(pilot, band.armed)
+    val pilot = vm.freshPilotState.collectAsStateWithLifecycle()
+    val band = vm.band.collectAsStateWithLifecycle()
+    val airborne by remember { derivedStateOf { leftColumnLands(pilot.value, band.value.armed) } }
     val labels = vm.cockpitSpec.builtins.builtins.associate { it.id to it.label }
     // Icon and a short word under it (`builtin.short.<id>`), so no action is icon-only.
     @Composable fun short(id: String) = specText("builtin.short.$id")

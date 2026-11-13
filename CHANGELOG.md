@@ -3,6 +3,30 @@
 All notable changes to ADOS Android GCS are recorded here. Versions follow the
 app's `versionName`.
 
+## [0.6.2]
+
+- **Full-rate video while flying.** A drone boots its camera at 320x180 and
+  1 fps until a viewer asks for more. The flight screen now holds a LAN drone
+  on its full-rate profile for as long as it is shown, and lets go 5 s after it
+  closes. The hold is a 30 s lease renewed every 10 s on a fixed schedule; a
+  failed or timed-out renewal is retried within 2 s. A promotion the drone
+  refuses while its video service starts, or that times out, is retried with
+  backoff for as long as the flight screen shows the drone.
+- **Smoother video on emulators.** Emulators decode WebRTC video into memory
+  instead of a shared texture, which lost most frames while the emulator's
+  slow buffer swap held the previous one. On a phone, a session that measures
+  frames going missing between the decoder and the screen for 5 s switches to
+  the same output and reconnects once.
+- **Lighter panel blur.** The blurred video behind the flight-screen panels is
+  sampled once a second instead of four times, and an emulator no longer reads
+  the video surface back for it.
+- **Video diagnostics.** Each WebRTC session logs, once a second under the
+  `VideoStats` tag, the frames per second received, decoded, dropped,
+  delivered to the app and shown, the mean frame interval and the decoder in
+  use. A debuggable build shows the same line over the main video after
+  `adb shell setprop debug.ados.video.overlay 1`, and
+  `debug.ados.video.bytebuffer` (`1` or `0`) forces the decoder output.
+
 ## [0.6.1] - 2026-11-13
 
 - When the flight controller refuses Take control, the flight screen shows its

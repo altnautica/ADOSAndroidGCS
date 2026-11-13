@@ -16,6 +16,7 @@ dependencies {
     implementation(projects.core.agent)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.okhttp)

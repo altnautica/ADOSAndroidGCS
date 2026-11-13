@@ -120,7 +120,7 @@ class VideoControllerHeroHoldTest {
         }
         assertEquals("never released while the view shows", 0, agent.calls.count { it == "DELETE" })
         assertEquals("one promotion", 1, agent.calls.count { it == "status" })
-        assertEquals("one POST, then a renewal at 15, 30 and 45 s only", 4, agent.calls.count { it == "POST hero" })
+        assertEquals("one POST, then a renewal every 10 s only", 6, agent.calls.count { it == "POST hero" })
     }
 
     @Test

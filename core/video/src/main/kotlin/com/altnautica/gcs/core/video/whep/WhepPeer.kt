@@ -18,8 +18,8 @@ interface WhepPeer {
 
     suspend fun applyAnswer(sdp: String)
 
-    /** Average jitter-buffer delay of the inbound video, when stats report it. */
-    suspend fun latencyMs(): Int?
+    /** Cumulative counters of the inbound video, when the stats report has them. */
+    suspend fun inboundStats(): InboundVideoStats?
 
     fun close()
 }

@@ -3,4 +3,6 @@
     <string name="video_no_source_all_failed">No video source responded. Check the radio link and the ground station.</string>
     <string name="video_no_source_needs_pairing">This node is not paired. Pair it from Connect to see its video.</string>
     <string name="video_no_source_no_network">No network. Connect the radio, the USB tether, or the ground station Wi-Fi.</string>
+    <!-- Diagnostics line over the main video in debuggable builds: decoder, then frames per second at each hop. -->
+    <string name="video_debug_rates" translatable="false">%1$s · received %2$s · decoded %3$s · delivered %4$s · shown %5$s fps</string>
 </resources>

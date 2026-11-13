@@ -7,6 +7,9 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
@@ -15,8 +18,10 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.model.VideoSource
@@ -76,8 +81,16 @@ fun VideoSurface(
             lease?.release()
         }
     }
+    val overlay = rememberRatesOverlayEnabled() && role == VideoSurfaceRole.Main
     val h = handle ?: return
-    VideoSessionView(h, role, modifier, onVideoView)
+    if (!overlay) {
+        VideoSessionView(h, role, modifier, onVideoView)
+        return
+    }
+    Box(modifier) {
+        VideoSessionView(h, role, Modifier.fillMaxSize(), onVideoView)
+        VideoRatesOverlay(h, Modifier.align(Alignment.TopCenter).padding(top = 56.dp))
+    }
 }
 
 /**

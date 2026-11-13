@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -33,15 +34,20 @@ interface VideoProfileAgent {
  * flood the shared channel, and waits to be promoted. The hold is a lease on the agent's
  * `POST /api/video/profile`:
  * - this app takes the lease under one holder id ([holderId]), renews it every
- *   [RENEW_MS] (half the lease), and releases it with `DELETE` when the last viewer goes,
- *   so a closed or crashed app expires on its own and never strands the drone on hero;
+ *   [RENEW_MS] (a third of the lease) on a fixed cadence, and releases it with `DELETE`
+ *   when the last viewer goes, so a closed or crashed app expires on its own and never
+ *   strands the drone on hero;
+ * - a failed renewal is retried after each of [RENEW_RETRY_MS] (then every last step)
+ *   until the next scheduled renewal replaces it, so one lost or timed-out request never
+ *   lets the lease lapse;
  * - viewers of the same agent share one lease, counted per agent base URL;
  * - the release waits [RELEASE_GRACE_MS], so leaving and re-entering the flight view does
  *   not respawn the encoder twice;
- * - a ground station is never promoted, nor an agent that does not report a profile;
- * - a promotion refused for the request budget (429) is retried after each of
- *   [RATE_LIMIT_BACKOFF_MS] while a viewer still holds the drone; any other failure leaves
- *   the drone on whatever profile is live.
+ * - a ground station is never promoted, nor an agent that does not report a profile or
+ *   does not serve the route;
+ * - any other failed promotion (the request budget, a 503 while the video service
+ *   starts, a timeout) is retried after each of [PROMOTE_BACKOFF_MS], then every last
+ *   step, for as long as a viewer still holds the drone.
  * An agent that predates leases answers without a `leases` list; there the hold falls back
  * to a plain set, promoting only a drone it saw on `thumbnail` and demoting only what it
  * promoted.
@@ -105,24 +111,24 @@ class HeroProfileHold(
                 }
                 return Promoted(agent, outcome)
             }
-            val wait = RATE_LIMIT_BACKOFF_MS.getOrNull(attempt++) ?: return Promoted(agent, Outcome.None)
-            delay(wait)
+            delay(PROMOTE_BACKOFF_MS[attempt.coerceAtMost(PROMOTE_BACKOFF_MS.lastIndex)])
+            attempt++
             if (!synchronized(holds) { current(agentUrl, hold) }) return Promoted(agent, Outcome.None)
         }
     }
 
-    /** One promotion; null when the agent refused it for its request budget. */
+    /** One promotion; null when it failed in a way worth retrying. */
     private suspend fun attemptPromote(agent: VideoProfileAgent): Outcome? {
         val full = when (val r = agent.statusFull()) {
             is AgentResult.Ok -> r.value
-            is AgentResult.Err -> return if (r.error.isRateLimit()) null else Outcome.None
+            is AgentResult.Err -> return if (r.error.isTransient()) null else Outcome.None
         }
         if (full.profile == GROUND_STATION) return Outcome.None
         val observed = full.telemetry?.videoProfile
         if (observed != HERO && observed != THUMBNAIL) return Outcome.None
         val applied = when (val r = agent.setVideoProfile(HERO, holderId, LEASE_S)) {
             is AgentResult.Ok -> r.value
-            is AgentResult.Err -> return if (r.error.isRateLimit()) null else Outcome.None
+            is AgentResult.Err -> return if (r.error.isTransient()) null else Outcome.None
         }
         if (applied.leases != null) return Outcome.Lease
         // A pre-lease agent applied a plain set, a no-op on a drone already on hero, so only a
@@ -130,10 +136,25 @@ class HeroProfileHold(
         return if (observed == THUMBNAIL) Outcome.Legacy else Outcome.None
     }
 
-    private suspend fun renew(agent: VideoProfileAgent) {
+    /**
+     * Renews every [RENEW_MS] counted from the previous renewal's start, not its answer, so a
+     * slow or timed-out request does not push the schedule back. Each scheduled renewal
+     * retries its failures until it succeeds or the next one replaces it.
+     */
+    private suspend fun renew(agent: VideoProfileAgent) = coroutineScope {
+        var attempt: Job? = null
         while (true) {
             delay(RENEW_MS)
-            agent.setVideoProfile(HERO, holderId, LEASE_S)
+            attempt?.cancel()
+            attempt = launch { renewUntilAccepted(agent) }
+        }
+    }
+
+    private suspend fun renewUntilAccepted(agent: VideoProfileAgent) {
+        var retry = 0
+        while (agent.setVideoProfile(HERO, holderId, LEASE_S) is AgentResult.Err) {
+            delay(RENEW_RETRY_MS[retry.coerceAtMost(RENEW_RETRY_MS.lastIndex)])
+            retry++
         }
     }
 
@@ -171,17 +192,24 @@ class HeroProfileHold(
         const val THUMBNAIL = "thumbnail"
         const val GROUND_STATION = "ground-station"
 
-        /** The lease this app asks for, in seconds; renewed at half of it. */
+        /** The lease this app asks for, in seconds; renewed every third of it. */
         const val LEASE_S = 30
-        const val RENEW_MS = LEASE_S * 1_000L / 2
+        const val RENEW_MS = LEASE_S * 1_000L / 3
+
+        /** The waits before each retry of a failed renewal; the last repeats. */
+        val RENEW_RETRY_MS: List<Long> = listOf(2_000L, 4_000L)
 
         /** How long the last released hold waits before releasing the lease. */
         const val RELEASE_GRACE_MS = 5_000L
 
-        /** The waits before each retry of a promotion the agent rate-limited (429). */
-        val RATE_LIMIT_BACKOFF_MS: List<Long> = listOf(1_000L, 2_000L, 4_000L)
+        /** The waits before each retry of a failed promotion; the last repeats while held. */
+        val PROMOTE_BACKOFF_MS: List<Long> = listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L)
 
-        private fun AgentError.isRateLimit() = this is AgentError.Server && code == 429
+        /**
+         * A failure that may pass: the request budget, a server error (the video service still
+         * starting), or an unreachable agent. Refusals of the caller or the route are final.
+         */
+        private fun AgentError.isTransient() = this is AgentError.Server || this is AgentError.Network
 
         private fun newHolderId(): String = "android:" + UUID.randomUUID().toString().replace("-", "").take(16)
     }

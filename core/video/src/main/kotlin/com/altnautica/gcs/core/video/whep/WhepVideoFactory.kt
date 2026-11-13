@@ -51,6 +51,7 @@ class WhepVideoFactory @Inject constructor(
             eglContext = { environment.eglBase.eglBaseContext },
             clock = VideoClock.Elapsed,
             recording = recordings.forSource(whep),
+            onHandoffLoss = environment::fallBackToByteBuffer,
         )
     }
 

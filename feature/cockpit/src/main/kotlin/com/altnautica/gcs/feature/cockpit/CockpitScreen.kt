@@ -5,9 +5,6 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
-import com.altnautica.gcs.core.skills.hud.SpecText
-import com.altnautica.gcs.core.skills.hud.linkLossLine
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -82,10 +79,8 @@ import com.altnautica.gcs.feature.cockpit.chrome.splitDivider
 import com.altnautica.gcs.core.skills.tips.TipsEngine
 import com.altnautica.gcs.feature.cockpit.tips.LocalTipAnchors
 import com.altnautica.gcs.feature.cockpit.tips.TipAnchorRegistry
-import com.altnautica.gcs.feature.cockpit.tips.TipLayer
 import com.altnautica.gcs.feature.cockpit.tips.rememberTipsHandle
 import com.altnautica.gcs.feature.cockpit.tips.tipAnchor
-import com.altnautica.gcs.feature.cockpit.tips.tipsRepository
 import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.chrome.LocalChromeBackdrop
 import com.altnautica.gcs.feature.cockpit.chrome.SwitchCard
@@ -93,12 +88,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.TopBarOverflow
 import com.altnautica.gcs.feature.cockpit.chrome.ZoneRect
 import com.altnautica.gcs.feature.cockpit.chrome.flightSizes
 import com.altnautica.gcs.feature.cockpit.flow.GateRing
-import com.altnautica.gcs.feature.cockpit.flow.HandoverBanner
-import com.altnautica.gcs.feature.cockpit.flow.LinkLossBanner
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
-import com.altnautica.gcs.feature.cockpit.flow.LowBatteryBanner
-import com.altnautica.gcs.feature.cockpit.flow.LaunchProgressBanner
-import com.altnautica.gcs.feature.cockpit.flow.SticksWithBanner
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.hud.HEADING_READOUT_HEIGHT
 import com.altnautica.gcs.feature.cockpit.hud.HEADING_READOUT_LIFT
@@ -178,7 +168,7 @@ internal fun CockpitScreen(
             }
             Overlays(vm, width, status)
             // Last, so a tip draws above the chrome; the layer itself takes no touch.
-            TipLayer(tipFacts(vm, status), tipsRepository(LocalContext.current), tipsEngine, Modifier.zIndex(Z.SHEETS), handle = tips)
+            TipHost(vm, status, tipsEngine, tips, Modifier.zIndex(Z.SHEETS))
         }
     }
 }
@@ -446,23 +436,6 @@ private fun OnScreenSticksRow(vm: CockpitViewModel, modifier: Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.SpaceBetween) {
         ThumbPad(specText("cockpit.sticks.left_aria"), sticks::setLeft, sticks::touch)
         ThumbPad(specText("cockpit.sticks.right_aria"), sticks::setRight, sticks::touch)
-    }
-}
-
-/** Handover banner, another surface holding the sticks, link-loss and low-battery countdowns. */
-@Composable
-private fun FlowBanners(vm: CockpitViewModel, modifier: Modifier) {
-    val flow by vm.flow.collectAsStateWithLifecycle()
-    val pilot by vm.pilotState.collectAsStateWithLifecycle()
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        flow.launch?.let { LaunchProgressBanner(it, onAbort = vm::abortLaunch) }
-        flow.banner?.let { HandoverBanner(it) }
-        flow.sticksWith?.let { SticksWithBanner(it, vm::takeSticks) }
-        flow.linkLossInS?.let { s ->
-            // The configured action in words ("Return home", "Land", "Hold"); a dash when unknown.
-            SpecText(vm.cockpitSpec.setupStrings).linkLossLine(s, pilot?.linkLossAction ?: pilot?.banner?.args?.get("action"))?.let { LinkLossBanner(it) }
-        }
-        flow.rthCountdownS?.let { LowBatteryBanner(it, vm::cancelRthCountdown) }
     }
 }
 

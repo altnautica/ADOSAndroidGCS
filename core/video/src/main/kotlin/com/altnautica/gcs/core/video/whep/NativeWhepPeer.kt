@@ -31,8 +31,6 @@ class NativeWhepPeer(
 
     private val gathered = CompletableDeferred<Unit>()
     private var remoteTrack: VideoTrack? = null
-    private var lastDelayS = 0.0
-    private var lastEmitted = 0L
 
     private val pc: PeerConnection = requireNotNull(
         environment.factory.createPeerConnection(
@@ -62,23 +60,8 @@ class NativeWhepPeer(
         sdpCall<Unit> { pc.setRemoteDescription(it, SessionDescription(SessionDescription.Type.ANSWER, sdp)) }
     }
 
-    override suspend fun latencyMs(): Int? = suspendCancellableCoroutine { cont ->
-        pc.getStats { report ->
-            val inbound = report.statsMap.values.firstOrNull {
-                it.type == "inbound-rtp" && it.members["kind"] == "video"
-            }
-            val delay = (inbound?.members?.get("jitterBufferDelay") as? Number)?.toDouble()
-            val emitted = (inbound?.members?.get("jitterBufferEmittedCount") as? Number)?.toLong()
-            val ms = if (delay != null && emitted != null && emitted > lastEmitted) {
-                ((delay - lastDelayS) / (emitted - lastEmitted) * 1000).toInt().also {
-                    lastDelayS = delay
-                    lastEmitted = emitted
-                }
-            } else {
-                null
-            }
-            if (cont.isActive) cont.resume(ms)
-        }
+    override suspend fun inboundStats(): InboundVideoStats? = suspendCancellableCoroutine { cont ->
+        pc.getStats { report -> if (cont.isActive) cont.resume(InboundVideoStats.from(report)) }
     }
 
     override fun close() {

@@ -48,6 +48,7 @@ import com.altnautica.gcs.core.designsystem.theme.AdosFonts
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.skills.spec.ChromeTokensSpec
 import com.altnautica.gcs.core.skills.spec.SpecColor
+import com.altnautica.gcs.core.video.whep.isEmulatorDevice
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -161,9 +162,9 @@ val LocalChrome = staticCompositionLocalOf { Chrome.Default }
 val BackdropBlurSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 /**
- * A low-resolution copy of the main video, sampled a few times a second, that the panels
- * draw blurred behind themselves. Compose cannot read the video view's pixels in its draw
- * pass, so [BackdropSampler] copies them (PixelCopy for a SurfaceView, `getBitmap` for a
+ * A low-resolution copy of the main video, sampled once a second, that the panels draw
+ * blurred behind themselves. Compose cannot read the video view's pixels in its draw pass,
+ * so [BackdropSampler] copies them (PixelCopy for a SurfaceView, `getBitmap` for a
  * TextureView).
  */
 @Stable
@@ -181,7 +182,10 @@ class ChromeBackdrop {
 
 val LocalChromeBackdrop = staticCompositionLocalOf<ChromeBackdrop?> { null }
 
-/** Copies the main video into [backdrop] every [SAMPLE_MS] at 1/[DOWNSCALE] size; nothing below API 31. */
+/**
+ * Copies the main video into [backdrop] every [BACKDROP_SAMPLE_MS] at 1/[DOWNSCALE] size;
+ * nothing below API 31. On an emulator a SurfaceView is not copied (see [copiesBackdrop]).
+ */
 @Composable
 fun BackdropSampler(backdrop: ChromeBackdrop) {
     if (!BackdropBlurSupported) return
@@ -191,9 +195,10 @@ fun BackdropSampler(backdrop: ChromeBackdrop) {
         var spare: Bitmap? = null
         var shown: Bitmap? = null
         while (isActive) {
-            delay(SAMPLE_MS)
+            delay(BACKDROP_SAMPLE_MS)
             val view = backdrop.view ?: continue
             if (view.width <= 0 || view.height <= 0) continue
+            if (!copiesBackdrop(view is SurfaceView, isEmulatorDevice)) continue
             val w = (view.width / DOWNSCALE).coerceAtLeast(1)
             val h = (view.height / DOWNSCALE).coerceAtLeast(1)
             val target = spare?.takeIf { it.width == w && it.height == h } ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -217,7 +222,16 @@ fun BackdropSampler(backdrop: ChromeBackdrop) {
     }
 }
 
-private const val SAMPLE_MS = 250L
+/** How often the backdrop is copied; the blur hides detail, so once a second is enough. */
+internal const val BACKDROP_SAMPLE_MS = 1_000L
+
+/**
+ * Whether the sampler copies the video view. An emulator's PixelCopy of a SurfaceView reads
+ * the video back through the same host-GPU pipe the video renderer swaps on, so there the
+ * panels keep the last copy (or the opaque tint) instead.
+ */
+internal fun copiesBackdrop(surfaceView: Boolean, emulator: Boolean): Boolean = !(surfaceView && emulator)
+
 private const val DOWNSCALE = 12
 
 /**

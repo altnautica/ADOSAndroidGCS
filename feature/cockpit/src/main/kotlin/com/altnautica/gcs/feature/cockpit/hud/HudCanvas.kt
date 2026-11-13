@@ -29,7 +29,8 @@ import kotlinx.coroutines.flow.merge
 /**
  * The instrument HUD as one canvas. Telemetry is read inside the draw pass
  * from the per-topic flows' current values; a new sample only bumps a draw-phase
- * counter (at most once per frame), so telemetry never recomposes this composable.
+ * counter, at most every [HUD_REDRAW_MS], so telemetry never recomposes this composable
+ * and redraws the flight screen at most 10 times a second however many topics update.
  * Readouts are not interactive: input passes through to the video below.
  */
 @Composable
@@ -64,6 +65,8 @@ fun HudCanvas(
             // (frame-clock awaiter, recomposer pass) runs for a telemetry tick.
             frame.longValue++
             invalidationProbe?.invoke()
+            // Samples landing meanwhile conflate into the next redraw.
+            delay(HUD_REDRAW_MS)
         }
     }
     val colors = AdosTheme.colors
@@ -91,6 +94,9 @@ fun HudCanvas(
             },
     )
 }
+
+/** The shortest gap between two telemetry redraws of the HUD: 10 Hz. */
+internal const val HUD_REDRAW_MS = 100L
 
 private const val STALE_REDRAW_MS = 500L
 

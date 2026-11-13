@@ -2,11 +2,17 @@ package com.altnautica.gcs.feature.cockpit
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.skills.tips.TipsEngine
 import com.altnautica.gcs.feature.cockpit.tips.TipFacts
+import com.altnautica.gcs.feature.cockpit.tips.TipLayer
+import com.altnautica.gcs.feature.cockpit.tips.TipsHandle
+import com.altnautica.gcs.feature.cockpit.tips.tipsRepository
 
 /** The flight facts the tip queue gates on; a null arm or airborne fact is unknown. */
 internal data class FlightTipFacts(val armed: Boolean?, val airborne: Boolean?, val gotoOffered: Boolean)
@@ -50,4 +56,13 @@ internal fun tipFacts(vm: CockpitViewModel, status: StatusListState): TipFacts {
         alertBannerVisible = alerts.any { it.level == AlertLevel.Critical } ||
             flow.launch != null || flow.banner != null || flow.sticksWith != null || flow.linkLossInS != null || flow.rthCountdownS != null,
     )
+}
+
+/**
+ * The tip layer with its facts. Its own restartable scope: the facts follow every pilot frame
+ * and band change, which recomposes only this host, and [TipLayer] only when a fact changed.
+ */
+@Composable
+internal fun TipHost(vm: CockpitViewModel, status: StatusListState, engine: TipsEngine, handle: TipsHandle, modifier: Modifier) {
+    TipLayer(tipFacts(vm, status), tipsRepository(LocalContext.current), engine, modifier, handle = handle)
 }

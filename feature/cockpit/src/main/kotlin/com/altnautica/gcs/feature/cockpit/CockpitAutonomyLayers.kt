@@ -257,8 +257,10 @@ internal fun radarDiameter(width: WidthClass): Dp = when (width) {
 }
 
 /**
- * The minimap in its local frame, sampled at 2 Hz plus every pose. A tap runs [onClick]; a
- * long-press flies to the point under it, as an offset from the drone ([CockpitViewModel.pickLocalPoint]).
+ * The minimap in its local frame, sampled at 2 Hz plus every pose; the drone's own local
+ * position and attitude at most every [MINIMAP_POSE_MS], so a 10 Hz attitude stream does
+ * not recompose the map ten times a second. A tap runs [onClick]; a long-press flies to the
+ * point under it, as an offset from the drone ([CockpitViewModel.pickLocalPoint]).
  */
 @Composable
 internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {
@@ -271,8 +273,13 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onCl
     val follow by a.feed.follow.collectAsStateWithLifecycle()
     val pin by a.minimapPin.collectAsStateWithLifecycle()
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
-    val local by produceState<com.altnautica.gcs.core.model.LocalPosition?>(null, telemetry) { telemetry?.localPosition?.collect { value = it } }
-    val attitude by produceState<com.altnautica.gcs.core.model.Attitude?>(null, telemetry) { telemetry?.attitude?.collect { value = it } }
+    val local by produceState<com.altnautica.gcs.core.model.LocalPosition?>(null, telemetry) {
+        // A StateFlow conflates on its own: values landing during the pause collapse to the newest.
+        telemetry?.localPosition?.collect { value = it; delay(MINIMAP_POSE_MS) }
+    }
+    val attitude by produceState<com.altnautica.gcs.core.model.Attitude?>(null, telemetry) {
+        telemetry?.attitude?.collect { value = it; delay(MINIMAP_POSE_MS) }
+    }
     val fresh = follow?.takeIf { now - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value
     Box(modifier) {
         LocalMinimap(
@@ -285,3 +292,6 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onCl
         )
     }
 }
+
+/** The shortest gap between two drone-pose updates of the local minimap: 5 Hz. */
+internal const val MINIMAP_POSE_MS = 200L

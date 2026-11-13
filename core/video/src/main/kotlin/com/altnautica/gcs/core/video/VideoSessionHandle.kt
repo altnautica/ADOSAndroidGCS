@@ -4,6 +4,7 @@ import android.view.Surface
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.webrtc.EglBase
 import org.webrtc.VideoSink
@@ -38,6 +39,8 @@ sealed interface VideoOutput {
     }
 }
 
+private val NoVideoRates: StateFlow<VideoRates?> = MutableStateFlow(null)
+
 /** One running video session for one source. */
 interface VideoSessionHandle {
     val source: VideoSource
@@ -46,6 +49,9 @@ interface VideoSessionHandle {
 
     /** Recording for this session, or null when the path cannot record. */
     val recording: VideoRecording?
+
+    /** The last second's frame rates at each hop, for diagnostics; null where the path does not measure them. */
+    val rates: StateFlow<VideoRates?> get() = NoVideoRates
 
     /** Starts dialling; idempotent. */
     fun start()

@@ -96,9 +96,15 @@ internal class CockpitVideoController(
     private val shownSource: StateFlow<VideoSource?> = combine(mainSource, noCamera) { src, none -> src.takeUnless { none } }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
+    /**
+     * The shown source's state, without the live latency: that figure changes every second and
+     * nothing on the flight screen shows it, so carrying it would recompose every reader of the
+     * state (video stage, layers, top band) once a second for nothing.
+     */
     val videoState: StateFlow<VideoState> = shownSource.flatMapLatest { src ->
         if (src == null) flowOf(VideoState.NoSource) else videoSessions.state(src)
-    }.stateIn(scope, SharingStarted.Eagerly, VideoState.NoSource)
+    }.map { if (it is VideoState.Live) LIVE else it }
+        .stateIn(scope, SharingStarted.Eagerly, VideoState.NoSource)
 
     private val streams: StateFlow<List<StreamDescriptor>> = mainSource.flatMapLatest { src ->
         if (src is VideoSource.AgentWhep) streamCatalog.streams(src.node) else flowOf(emptyList())
@@ -273,3 +279,6 @@ internal fun heroTarget(node: NodeSummary?, candidates: List<VideoSource>, shown
     val whep = candidates.firstOrNull { it is VideoSource.AgentWhep && it.node == node.id } as? VideoSource.AgentWhep
     return whep?.let { HeroTarget(it.node, it.baseUrl) }
 }
+
+/** A live video as the flight screen sees it: no latency figure. */
+private val LIVE = VideoState.Live(null)

@@ -1,10 +1,5 @@
 package com.altnautica.gcs.feature.cockpit.chrome
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,7 +25,10 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -60,6 +58,7 @@ import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.alerts.alertDetail
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
+import kotlinx.coroutines.delay
 
 /** Top-bar items that move into the Menu when the row runs out of room (`top_bar.overflow`). */
 enum class TopBarItem(val specId: String) {
@@ -234,7 +233,9 @@ private const val MIN_PILL_PX = 96
 
 /**
  * The status pill: "All systems OK", the one alert's text, or "n warnings"; flashes while
- * unacknowledged. The flash is read only in the draw phase, so it never recomposes or
+ * unacknowledged. The flash steps between two looks every [FLASH_HALF_MS] rather than
+ * fading, so a long-unacknowledged alert redraws the flight screen twice a second instead
+ * of on every display frame; it is read only in the draw phase, so it never recomposes or
  * re-lays out the pill.
  */
 @Composable
@@ -243,8 +244,14 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
     val tint = severityColor(ui.severity)
     val reduced = rememberReducedMotion()
     val flash: State<Float>? = if (ui.flashing && !reduced) {
-        val t = rememberInfiniteTransition(label = "status-flash")
-        t.animateFloat(1f, 0.25f, infiniteRepeatable(tween(FLASH_HALF_MS), RepeatMode.Reverse), label = "status-flash-alpha")
+        val alpha = remember { mutableFloatStateOf(1f) }
+        LaunchedEffect(alpha) {
+            while (true) {
+                delay(FLASH_HALF_MS.toLong())
+                alpha.floatValue = if (alpha.floatValue == 1f) FLASH_DIM_ALPHA else 1f
+            }
+        }
+        alpha
     } else {
         null
     }
@@ -479,3 +486,6 @@ fun StopButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 private const val FLASH_HALF_MS = 450
+
+/** The dot's alpha in the dim half of a flash. */
+private const val FLASH_DIM_ALPHA = 0.25f

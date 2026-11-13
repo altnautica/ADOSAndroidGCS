@@ -111,10 +111,14 @@ class StatusPillFlashTest {
         nextFrame()
         compose.onNodeWithText("Battery low").assertExists()
         assertTrue("the counter sees the pill compose", pillCompositions() > before)
-        // The transition's own start-up (running flag) settles within its first frames.
+        // The flash's first step lands within its first half period.
         compose.mainClock.advanceTimeBy(SETTLE_MS)
         val composed = pillCompositions()
-        assertTrue("an unacknowledged alert flashes", pillFramesOverOnePeriod().size > 1)
+        assertEquals(
+            "an unacknowledged alert flashes between two looks, not a fade redrawn every frame",
+            2,
+            pillFramesOverOnePeriod().size,
+        )
         assertEquals("the flash is drawn, never recomposed", composed, pillCompositions())
 
         // Opening the list acknowledges the alert: the list shows and the pill holds steady.

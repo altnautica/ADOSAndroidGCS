@@ -55,14 +55,23 @@ class HudCanvasTest {
         compose.waitForIdle()
         val composedOnce = recompositions
         val invalidationsBefore = invalidations
-        repeat(20) { i ->
+        // Two topics updating every frame (about 60 Hz each) for one second.
+        val frames = 60
+        val startMs = compose.mainClock.currentTime
+        repeat(frames) { i ->
             telemetry.attitude.value = Attitude(rollRad = i * 0.01f, pitchRad = 0.02f, yawRad = 0.5f, tMs = 1_000L)
             telemetry.position.value = PositionFix(47.0, 8.0, 420f, i.toFloat(), 3f, 0f, -0.5f, 1_000L)
             compose.mainClock.advanceTimeByFrame()
             compose.waitForIdle()
         }
+        val elapsedMs = compose.mainClock.currentTime - startMs
+        val redraws = invalidations - invalidationsBefore
         assertEquals("no recomposition per telemetry tick", composedOnce, recompositions)
-        assertTrue("new samples invalidate the draw pass", invalidations - invalidationsBefore >= 10)
+        assertTrue("new samples invalidate the draw pass ($redraws)", redraws >= 5)
+        assertTrue(
+            "at most one redraw per ${HUD_REDRAW_MS} ms: $redraws in $elapsedMs ms",
+            redraws <= elapsedMs / HUD_REDRAW_MS + 1,
+        )
         // Rendering the frame runs the draw pass, still without recomposing.
         compose.onRoot().captureToImage()
         assertTrue("the draw pass ran", draws > 0)

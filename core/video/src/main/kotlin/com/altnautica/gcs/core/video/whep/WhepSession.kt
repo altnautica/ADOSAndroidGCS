@@ -1,14 +1,18 @@
 package com.altnautica.gcs.core.video.whep
 
+import android.util.Log
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.video.FrameFanout
 import com.altnautica.gcs.core.video.FrameWatchdog
+import com.altnautica.gcs.core.video.HandoffLossMonitor
 import com.altnautica.gcs.core.video.RedialBackoff
 import com.altnautica.gcs.core.video.VideoClock
 import com.altnautica.gcs.core.video.VideoOutput
+import com.altnautica.gcs.core.video.VideoRates
 import com.altnautica.gcs.core.video.VideoRecording
 import com.altnautica.gcs.core.video.VideoSessionHandle
+import com.altnautica.gcs.core.video.VideoStatsMeter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -29,7 +33,10 @@ import org.webrtc.EglBase
  * - `failed` or a refused offer re-dials with 1→10 s backoff;
  * - no frame for 2.5 s marks the picture [VideoState.Frozen] and re-dials once;
  *   a second freeze before frames flow again backs off like a failure;
- * - [VideoState.Live] only while frames reach a renderer on screen.
+ * - [VideoState.Live] only while frames reach a renderer on screen;
+ * - once a second the peer's counters become [rates], logged under `VideoStats`; when
+ *   frames go missing between decoder and sink for 5 s in a row, [onHandoffLoss] may move
+ *   the decoder to another output, and the session re-dials at once to take it.
  * Every session resource is DELETEd before the next dial and on [stop].
  */
 class WhepSession(
@@ -41,10 +48,14 @@ class WhepSession(
     eglContext: () -> EglBase.Context,
     private val clock: VideoClock,
     override val recording: VideoRecording?,
+    private val onHandoffLoss: () -> Boolean = { false },
 ) : VideoSessionHandle {
 
     private val _state = MutableStateFlow<VideoState>(VideoState.Idle)
     override val state: StateFlow<VideoState> = _state
+
+    private val _rates = MutableStateFlow<VideoRates?>(null)
+    override val rates: StateFlow<VideoRates?> = _rates
 
     private val frames = FrameFanout(clock)
     private val backoff = RedialBackoff()
@@ -67,6 +78,7 @@ class WhepSession(
         withContext(NonCancellable) { teardown() }
         frames.clear()
         _state.value = VideoState.Idle
+        _rates.value = null
     }
 
     private suspend fun run() {
@@ -83,7 +95,7 @@ class WhepSession(
                 false
             }
             val outcome = if (dialed) monitor() else Outcome.Failed
-            if (outcome == Outcome.Flowed) freezeRedialUsed = false
+            if (outcome == Outcome.Flowed || outcome == Outcome.Redecode) freezeRedialUsed = false
             teardown()
             when (outcome) {
                 Outcome.Frozen -> if (!freezeRedialUsed) {
@@ -92,7 +104,7 @@ class WhepSession(
                 } else {
                     delay(backoff.nextDelayMs())
                 }
-                Outcome.Lost, Outcome.Flowed -> Unit
+                Outcome.Lost, Outcome.Flowed, Outcome.Redecode -> Unit
                 Outcome.Failed -> {
                     if (_state.value !is VideoState.Failed) _state.value = VideoState.Failed("Connection failed")
                     delay(backoff.nextDelayMs())
@@ -114,7 +126,8 @@ class WhepSession(
 
     /**
      * Watches one dialled peer until it needs replacing. [Outcome.Flowed] means
-     * frames flowed before the link dropped, which refills the freeze budget.
+     * frames flowed before the link dropped, which refills the freeze budget;
+     * [Outcome.Redecode] means the decoder output changed and the next dial takes it.
      */
     private suspend fun monitor(): Outcome {
         val p = peer ?: return Outcome.Failed
@@ -123,6 +136,8 @@ class WhepSession(
         var flowed = false
         var lastStatsAt = Long.MIN_VALUE
         var latency: Int? = null
+        val meter = VideoStatsMeter()
+        val handoff = HandoffLossMonitor()
         while (true) {
             val now = clock.nowMs()
             when (p.connection.value) {
@@ -145,7 +160,13 @@ class WhepSession(
                     }
                     if (lastStatsAt == Long.MIN_VALUE || now - lastStatsAt >= STATS_INTERVAL_MS) {
                         lastStatsAt = now
-                        latency = p.latencyMs() ?: latency
+                        val rates = meter.update(now, p.inboundStats(), frames.decoded.frameCount, frames.shown.frameCount)
+                        if (rates != null) {
+                            _rates.value = rates
+                            latency = rates.latencyMs ?: latency
+                            Log.i(TAG, rates.logLine())
+                        }
+                        if (handoff.onRates(rates) && onHandoffLoss()) return Outcome.Redecode
                     }
                     _state.value = frames.flowingState(latency)
                 }
@@ -169,12 +190,13 @@ class WhepSession(
         peer = null
     }
 
-    private enum class Outcome { Flowed, Lost, Failed, Frozen }
+    private enum class Outcome { Flowed, Lost, Failed, Frozen, Redecode }
 
     companion object {
         const val DISCONNECT_GRACE_MS = 3_000L
         const val FIRST_FRAME_TIMEOUT_MS = 10_000L
         private const val STATS_INTERVAL_MS = 1_000L
+        private const val TAG = "VideoStats"
         private const val TICK_MS = 250L
     }
 }

@@ -46,7 +46,10 @@ class WhepSessionTest {
     private val http = FakeWhepEndpoint()
     private val node = DeviceId("drone-1")
 
-    private inner class FakePeer(val sink: VideoSink, val createdAtMs: Long) : WhepPeer {
+    /** The stats every fake peer reports at a virtual time; null keeps the default. */
+    private var peerStats: ((nowMs: Long) -> InboundVideoStats)? = null
+
+    private inner class FakePeer(val sink: VideoSink, val createdAtMs: Long, private val now: () -> Long) : WhepPeer {
         override val connection = MutableStateFlow(PeerLinkState.New)
         var answer: String? = null
         var closed = false
@@ -58,7 +61,16 @@ class WhepSessionTest {
             answer = sdp
             connection.value = PeerLinkState.Connected
         }
-        override suspend fun latencyMs(): Int? = 42
+        private var statsCalls = 0
+
+        /** Ten frames per stats read, each 42 ms in the jitter buffer, unless [peerStats] says otherwise. */
+        override suspend fun inboundStats(): InboundVideoStats {
+            statsCalls++
+            return peerStats?.invoke(now()) ?: InboundVideoStats(
+                jitterBufferDelayS = statsCalls * 10 * 0.042,
+                jitterBufferEmittedCount = statsCalls * 10L,
+            )
+        }
         override fun close() {
             closed = true
             requestsAtClose = http.requests.size
@@ -76,16 +88,19 @@ class WhepSessionTest {
     private fun answer(location: String = "/whep/abc?camera=main") =
         MockResponse.Builder().code(201).addHeader("Location", location).body("v=0 answer").build()
 
-    private fun TestScope.session(peers: MutableList<FakePeer>) =
+    private fun TestScope.session(peers: MutableList<FakePeer>, onHandoffLoss: () -> Boolean = { false }) =
         WhepSession(
             source = VideoSource.AgentWhep(node, BASE_URL, "main"),
             scope = backgroundScope,
             signaling = WhepSignaling(http.client, StandardTestDispatcher(testScheduler)),
-            peerFactory = { sink -> FakePeer(sink, testScheduler.currentTime).also { peers += it } },
+            peerFactory = { sink ->
+                FakePeer(sink, testScheduler.currentTime) { testScheduler.currentTime }.also { peers += it }
+            },
             apiKey = { "secret-key" },
             eglContext = { mockk() },
             clock = VideoClock { testScheduler.currentTime },
             recording = null,
+            onHandoffLoss = onHandoffLoss,
         )
 
     /** Every state the session passes through, stamped with virtual time. */
@@ -186,7 +201,7 @@ class WhepSessionTest {
         peers[0].sink.onFrame(mockk<VideoFrame>(relaxed = true))
         advanceTimeBy(250)
         runCurrent()
-        assertEquals(VideoState.Live(42), s.state.value)
+        assertTrue(s.state.value is VideoState.Live)
 
         advanceTimeBy(2_249)
         runCurrent()
@@ -277,6 +292,90 @@ class WhepSessionTest {
         runCurrent()
         assertEquals(2, http.requests.size)
         assertEquals(1, peers.size)
+    }
+
+    /** Frames at [received] fps on the wire, decoded alike; the test feeds the sink itself. */
+    private fun wire(received: Int) = { nowMs: Long ->
+        val frames = nowMs * received / 1_000
+        InboundVideoStats(
+            framesReceived = frames,
+            framesDecoded = frames,
+            framesDropped = 0,
+            decoderImplementation = "c2.example.avc.decoder",
+            totalInterFrameDelayS = frames / received.toDouble(),
+        )
+    }
+
+    /** Feeds the newest peer's sink one frame every [frameEveryMs], for [forMs]. */
+    private suspend fun feed(peers: List<FakePeer>, frameEveryMs: Long, forMs: Long) {
+        var t = 0L
+        while (t < forMs) {
+            peers.last().sink.onFrame(mockk(relaxed = true))
+            delay(frameEveryMs)
+            t += frameEveryMs
+        }
+    }
+
+    @Test
+    fun `rates give received, decoded, delivered and shown fps once a second`() = runTest {
+        http.answer("/whep/only?camera=main")
+        http.enqueue(200)
+        peerStats = wire(received = 30)
+        val peers = mutableListOf<FakePeer>()
+        val s = session(peers)
+        s.start()
+        (s.output as VideoOutput.Sinks).addSink(mockk(relaxed = true))
+        runCurrent()
+        feed(peers, frameEveryMs = 50, forMs = 3_000)
+        val rates = s.rates.value!!
+        assertEquals(30.0, rates.receivedFps!!, 0.5)
+        assertEquals(30.0, rates.decodedFps!!, 0.5)
+        assertEquals(20.0, rates.deliveredFps, 0.5)
+        assertEquals(20.0, rates.shownFps, 0.5)
+        assertEquals(33.3, rates.interFrameMs!!, 0.5)
+        assertEquals("c2.example.avc.decoder", rates.decoder)
+        s.stop()
+        assertEquals(null, s.rates.value)
+    }
+
+    @Test
+    fun `frames lost between decoder and sink for 5 s change the decoder output and redial at once`() = runTest {
+        http.answer("/whep/first?camera=main")
+        http.enqueue(200)
+        http.answer("/whep/second?camera=main")
+        peerStats = wire(received = 30)
+        val peers = mutableListOf<FakePeer>()
+        var asked = 0
+        val s = session(peers) { asked++; true }
+        s.start()
+        (s.output as VideoOutput.Sinks).addSink(mockk(relaxed = true))
+        runCurrent()
+        // 10 of 30 fps reach the sink: two thirds are lost after decode.
+        feed(peers, frameEveryMs = 100, forMs = 5_000)
+        assertEquals("not before 5 lossy seconds", 0, asked)
+        assertEquals(1, peers.size)
+        feed(peers, frameEveryMs = 100, forMs = 1_500)
+        assertEquals(1, asked)
+        assertEquals("re-dialled without a backoff", 2, peers.size)
+        assertTrue(peers[0].closed)
+        s.stop()
+    }
+
+    @Test
+    fun `a loss the decoder output cannot fix keeps the session`() = runTest {
+        http.answer("/whep/only?camera=main")
+        http.enqueue(200)
+        peerStats = wire(received = 30)
+        val peers = mutableListOf<FakePeer>()
+        var asked = 0
+        val s = session(peers) { asked++; false }
+        s.start()
+        (s.output as VideoOutput.Sinks).addSink(mockk(relaxed = true))
+        runCurrent()
+        feed(peers, frameEveryMs = 100, forMs = 10_000)
+        assertTrue("asked again while the loss lasts", asked >= 2)
+        assertEquals(1, peers.size)
+        s.stop()
     }
 
     private companion object {
