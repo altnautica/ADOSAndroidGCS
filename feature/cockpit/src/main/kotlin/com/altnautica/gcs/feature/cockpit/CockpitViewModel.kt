@@ -3,10 +3,8 @@ package com.altnautica.gcs.feature.cockpit
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
-import com.altnautica.gcs.core.agent.video.StreamCatalog
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
@@ -56,8 +54,6 @@ import com.altnautica.gcs.core.skills.input.PadSnapshot
 import com.altnautica.gcs.core.skills.input.controller.ControllerManager
 import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
-import com.altnautica.gcs.core.video.VideoSessionManager
-import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
 import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.CockpitAlertsController
@@ -104,6 +100,7 @@ import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerActions
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerUi
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.video.CockpitVideoController
+import com.altnautica.gcs.feature.cockpit.video.CockpitVideoServices
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -160,10 +157,7 @@ class CockpitViewModel @AssistedInject constructor(
     controllerSettings: ControllerSettingsRepository,
     controllerManager: ControllerManager,
     private val summaries: CockpitSummaryRegistry,
-    videoSelector: VideoSourceSelector,
-    videoSessions: VideoSessionManager,
-    endpoints: AgentEndpoints,
-    streamCatalog: StreamCatalog,
+    videoServices: CockpitVideoServices,
     private val announcer: AlertAnnouncer,
     private val clock: MonotonicClock,
     activator: SkillActivator,
@@ -276,7 +270,9 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Video ------------------------------------------------------------------------
 
-    private val videoCtl = CockpitVideoController(viewModelScope, nodeFlows.vehicleNode, videoSelector, videoSessions, endpoints, streamCatalog, _events)
+    private val videoCtl = videoServices.let { s ->
+        CockpitVideoController(viewModelScope, nodeFlows.vehicleNode, s.selector, s.sessions, s.heroHold, s.endpoints, s.streamCatalog, _events)
+    }
     val videoState: StateFlow<VideoState> = videoCtl.videoState
     val video: StateFlow<VideoUi> = videoCtl.video
     fun selectStream(streamId: String) = videoCtl.selectStream(streamId)

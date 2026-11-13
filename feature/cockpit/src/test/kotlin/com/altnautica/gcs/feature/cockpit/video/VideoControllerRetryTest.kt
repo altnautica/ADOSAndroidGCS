@@ -42,6 +42,7 @@ class VideoControllerRetryTest {
             MutableStateFlow<NodeSummary?>(testDroneNode()),
             selector,
             sessions,
+            mockk(relaxed = true),
             mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns null },
             mockk(relaxed = true),
             MutableSharedFlow<CockpitEvent>(),

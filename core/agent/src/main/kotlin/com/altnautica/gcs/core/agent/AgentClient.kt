@@ -23,6 +23,8 @@ import com.altnautica.gcs.core.agent.model.ConfigWrite
 import com.altnautica.gcs.core.agent.model.PinStatus
 import com.altnautica.gcs.core.agent.model.StatusFull
 import com.altnautica.gcs.core.agent.model.TelemetrySnapshot
+import com.altnautica.gcs.core.agent.model.VideoProfileRequest
+import com.altnautica.gcs.core.agent.model.VideoProfileState
 import com.altnautica.gcs.core.agent.model.WsTicket
 import com.altnautica.gcs.core.agent.pairing.ClaimRequest
 import com.altnautica.gcs.core.agent.pairing.ClaimResponse
@@ -158,6 +160,24 @@ class AgentClient internal constructor(
 
     suspend fun stopVideoRecording(): AgentResult<RecordingStopResponse> =
         sendJson("POST", "api/video/record/stop", null, RecordingStopResponse.serializer())
+
+    /**
+     * `POST /api/video/profile`. With [holder], `hero` creates or renews that holder's lease
+     * for [leaseS] seconds (5-120) and `thumbnail` releases it; without, a plain set of the
+     * drone's base profile. Answers the state the encoder actually applied.
+     */
+    suspend fun setVideoProfile(profile: String, holder: String? = null, leaseS: Int? = null): AgentResult<VideoProfileState> =
+        send(
+            "POST",
+            "api/video/profile",
+            VideoProfileRequest.serializer(),
+            VideoProfileRequest(profile, holder, leaseS),
+            VideoProfileState.serializer(),
+        )
+
+    /** `DELETE /api/video/profile?holder=<id>`: release [holder]'s hero lease (idempotent). */
+    suspend fun releaseVideoProfile(holder: String): AgentResult<VideoProfileState> =
+        sendJson("DELETE", "api/video/profile", null, VideoProfileState.serializer(), query = mapOf("holder" to holder))
 
     // ---- pairing and access --------------------------------------------------
 

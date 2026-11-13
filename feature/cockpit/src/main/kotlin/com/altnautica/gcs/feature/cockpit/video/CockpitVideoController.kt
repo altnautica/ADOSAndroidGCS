@@ -12,6 +12,7 @@ import com.altnautica.gcs.core.model.StreamSwitchKind
 import com.altnautica.gcs.core.model.VideoSource
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.video.RecordingState
+import com.altnautica.gcs.core.video.HeroProfileHold
 import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.CockpitEvent
@@ -20,12 +21,14 @@ import com.altnautica.gcs.feature.cockpit.VideoUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -34,6 +37,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import javax.inject.Inject
+
+/** The app-wide video services the cockpit's [CockpitVideoController] plays through. */
+class CockpitVideoServices @Inject constructor(
+    internal val selector: VideoSourceSelector,
+    internal val sessions: VideoSessionManager,
+    internal val heroHold: HeroProfileHold,
+    internal val endpoints: AgentEndpoints,
+    internal val streamCatalog: StreamCatalog,
+)
 
 /**
  * Cockpit video: source selection with failover, stream tabs and switching,
@@ -45,6 +58,7 @@ internal class CockpitVideoController(
     vehicleNode: StateFlow<NodeSummary?>,
     private val videoSelector: VideoSourceSelector,
     private val videoSessions: VideoSessionManager,
+    private val heroHold: HeroProfileHold,
     private val endpoints: AgentEndpoints,
     private val streamCatalog: StreamCatalog,
     private val events: MutableSharedFlow<CockpitEvent>,
@@ -108,6 +122,19 @@ internal class CockpitVideoController(
             combine(mainSource, videoState) { src, state -> src to state }.collect { (src, state) ->
                 if (src != null && state is VideoState.Failed && candidates.value.any { it !in failedSources.value && it != src }) {
                     failedSources.update { it + src }
+                }
+            }
+        }
+        // While the flight view plays a drone's own WHEP stream, hold that drone on its
+        // full-rate profile; a WFB drone otherwise stays on the 1 fps thumbnail profile.
+        scope.launch {
+            combine(vehicleNode, shownSource, videoState, ::heroTarget).distinctUntilChanged().collectLatest { target ->
+                if (target == null) return@collectLatest
+                val release = heroHold.acquire(target.node, target.baseUrl)
+                try {
+                    awaitCancellation()
+                } finally {
+                    release()
                 }
             }
         }
@@ -222,4 +249,19 @@ internal class CockpitVideoController(
 internal fun pickPip(list: List<StreamDescriptor>, selected: String?, preferred: String?): StreamDescriptor? {
     val eligible = list.filter { it.id != selected && it.live && it.switchKind == StreamSwitchKind.Concurrent }
     return eligible.firstOrNull { it.id == preferred } ?: eligible.firstOrNull()
+}
+
+/** The agent the flight view holds on the full-rate profile. */
+internal data class HeroTarget(val node: DeviceId, val baseUrl: String)
+
+/**
+ * The drone to hold on `hero`: the flown [node]'s own WHEP stream while its session runs.
+ * A stream served by a ground station carrying the drone, a cloud path or the phone's own
+ * radio holds nothing.
+ */
+internal fun heroTarget(node: NodeSummary?, src: VideoSource?, state: VideoState): HeroTarget? {
+    val whep = src as? VideoSource.AgentWhep ?: return null
+    if (node == null || whep.node != node.id) return null
+    val playing = state is VideoState.Connecting || state is VideoState.Live || state is VideoState.Frozen
+    return if (playing) HeroTarget(whep.node, whep.baseUrl) else null
 }

@@ -39,6 +39,7 @@ import com.altnautica.gcs.core.skills.input.controller.ControllerManager
 import com.altnautica.gcs.core.video.VideoSessionManager
 import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
+import com.altnautica.gcs.feature.cockpit.video.CockpitVideoServices
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -103,10 +104,13 @@ internal fun TestScope.testCockpitVm(
             every { active } returns MutableStateFlow<ControllerInfo?>(null)
         },
         summaries = CockpitSummaryRegistry(),
-        videoSelector = VideoSourceSelector(emptySet()),
-        videoSessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns false },
-        endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns null },
-        streamCatalog = mockk(relaxed = true),
+        videoServices = CockpitVideoServices(
+            selector = VideoSourceSelector(emptySet()),
+            sessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns false },
+            heroHold = mockk(relaxed = true),
+            endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns null },
+            streamCatalog = mockk(relaxed = true),
+        ),
         announcer = mockk<AlertAnnouncer>(relaxed = true),
         clock = clock,
         activator = activator,

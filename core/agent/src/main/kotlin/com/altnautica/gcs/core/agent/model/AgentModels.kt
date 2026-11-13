@@ -101,6 +101,38 @@ data class TelemetrySnapshot(
     @SerialName("mavlink_alive") val mavlinkAlive: Boolean? = null,
     @SerialName("fc_connected") val fcConnected: Boolean? = null,
     @SerialName("heartbeat_age_s") val heartbeatAgeS: Double? = null,
+    /** The drone's live attention profile, `hero` or `thumbnail`; absent on an agent that predates profiles. */
+    @SerialName("video_profile") val videoProfile: String? = null,
+)
+
+/**
+ * `POST /api/video/profile` body. Without [holder] a plain set of the base profile; with it,
+ * `hero` creates or renews that holder's lease for [leaseS] seconds and `thumbnail` releases it.
+ */
+@Serializable
+data class VideoProfileRequest(
+    val profile: String,
+    val holder: String? = null,
+    @SerialName("lease_s") val leaseS: Int? = null,
+)
+
+/** The encoder state `/api/video/profile` answers with: what the drone actually applied. */
+@Serializable
+data class VideoProfileState(
+    val profile: String? = null,
+    @SerialName("base_profile") val baseProfile: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val fps: Int? = null,
+    @SerialName("bitrate_kbps") val bitrateKbps: Int? = null,
+    /** The live hero leases; null on an agent that predates leases. */
+    val leases: List<VideoProfileLease>? = null,
+)
+
+@Serializable
+data class VideoProfileLease(
+    val holder: String,
+    @SerialName("expires_in_s") val expiresInS: Double? = null,
 )
 
 @Serializable

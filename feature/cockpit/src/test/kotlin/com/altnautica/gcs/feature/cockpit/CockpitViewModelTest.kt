@@ -47,6 +47,7 @@ import com.altnautica.gcs.core.video.VideoSourceSelector
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
 import com.altnautica.gcs.feature.cockpit.pilot.StickRoute
+import com.altnautica.gcs.feature.cockpit.video.CockpitVideoServices
 import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.data.controller.ControllerSettingsRepository
 import io.mockk.coEvery
@@ -154,10 +155,13 @@ class CockpitViewModelTest {
             controllerSettings = ControllerSettingsRepository(dataStore),
             controllerManager = controllers,
             summaries = summaries,
-            videoSelector = VideoSourceSelector(emptySet()),
-            videoSessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns (endpoint != null) },
-            endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns endpoint },
-            streamCatalog = streamCatalog,
+            videoServices = CockpitVideoServices(
+                selector = VideoSourceSelector(emptySet()),
+                sessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns (endpoint != null) },
+                heroHold = mockk(relaxed = true),
+                endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns endpoint },
+                streamCatalog = streamCatalog,
+            ),
             announcer = mockk<AlertAnnouncer>(relaxed = true),
             clock = clock,
             activator = activator,
