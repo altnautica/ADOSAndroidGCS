@@ -47,6 +47,7 @@ class RedrawBeatTest {
         val vehicle = FakeVehicle()
         vehicle.heartbeatAt(testScheduler.currentTime, armed = true)
         val vm = testCockpitVm(vehicle)
+        vm.setFlightViewShown(true)
         val beats = HashMap<Long, Long>()
         backgroundScope.launch { vm.redrawBeat.ticks.collect { beats[testScheduler.currentTime] = it } }
         val changes = ArrayList<Long>()
@@ -66,6 +67,51 @@ class RedrawBeatTest {
             val n = beats[t]
             assertTrue("a readout changed at $t ms, off the beat (beat $n)", n != null && n % 5 == 0L)
         }
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a hidden beat is silent and steps its cadence 500 ms at a time, then resumes when shown`() = runTest(dispatcher) {
+        val beat = RedrawBeat(shown = false)
+        val ticks = ArrayList<Long>()
+        val cadence = ArrayList<Pair<Long, Long>>()
+        backgroundScope.launch { beat.run() }
+        backgroundScope.launch { beat.ticks.collect { ticks += it } }
+        backgroundScope.launch { beat.cadence.collect { cadence += it to testScheduler.currentTime } }
+        advanceTimeBy(1_550)
+        assertEquals("no redraw beat while hidden", emptyList<Long>(), ticks)
+        assertEquals(listOf(5L to 500L, 10L to 1_000L, 15L to 1_500L), cadence)
+        beat.setShown(true)
+        runCurrent()
+        advanceTimeBy(250)
+        assertEquals("beats resume at once when shown", listOf(16L, 17L), ticks)
+        beat.setShown(false)
+        advanceTimeBy(1_000)
+        assertEquals(listOf(16L, 17L), ticks)
+        assertEquals("the hidden steps land on every fifth beat", listOf(18L, 20L), cadence.drop(5).map { it.first })
+    }
+
+    @Test
+    fun `the hidden flight screen runs no beat, while the view model's 2 Hz readouts keep up`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.heartbeatAt(testScheduler.currentTime, armed = true)
+        val vm = testCockpitVm(vehicle)
+        val beats = ArrayList<Long>()
+        backgroundScope.launch { vm.redrawBeat.ticks.collect { beats += it } }
+        val changes = ArrayList<Long>()
+        backgroundScope.launch { vm.flightValues.collect { changes += testScheduler.currentTime } }
+        runCurrent()
+        repeat(90) { i ->
+            val t = testScheduler.currentTime
+            vehicle.telemetry.position.value = PositionFix(47.0, 8.0, 430f, 10f + i, 3f, 1f, 0f, t)
+            vehicle.telemetry.vfr.value = Vfr(3f, 3f + i * 0.1f, 90f, 40, 0.1f * i, t)
+            advanceTimeBy(33)
+            runCurrent()
+        }
+        assertEquals("no redraw beat (HUD, layers, minimap, pill flash) while hidden", emptyList<Long>(), beats)
+        val moved = changes.drop(1)
+        assertTrue("the 2 Hz readouts still follow the telemetry: $moved", moved.size >= 5)
+        assertTrue("readouts change only on 500 ms steps: $moved", moved.all { it % 500 == 0L })
         vm.viewModelScope.cancel()
     }
 }

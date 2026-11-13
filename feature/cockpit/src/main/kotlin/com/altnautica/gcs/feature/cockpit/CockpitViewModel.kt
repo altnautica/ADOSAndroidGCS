@@ -244,18 +244,18 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Clocks -----------------------------------------------------------------------
 
-    /** The flight screen's one redraw clock ([RedrawBeat]); the 2 Hz state below changes on it too. */
-    val redrawBeat: RedrawBeat = RedrawBeat().also { beat -> viewModelScope.launch { beat.run() } }
+    /** The flight screen's one redraw clock ([RedrawBeat]), beating while it is shown; the 2 Hz state below changes on it too. */
+    val redrawBeat: RedrawBeat = RedrawBeat(shown = false).also { beat -> viewModelScope.launch { beat.run() } }
 
     /**
      * Re-evaluation trigger for age-based state, and the one 2 Hz clock the band, alerts,
-     * telemetry strip and minimap sample on: every fifth beat of [redrawBeat], so their
+     * telemetry strip and minimap sample on: every fifth beat of [redrawBeat] (500 ms steps while hidden), so their
      * changes land in the same UI frame as the HUD's instead of one frame each. Its value is
      * only a trigger: a combine that also fires on fresh telemetry reads
      * [MonotonicClock.nowMs] itself, because a heartbeat stamped after the last tick would
      * otherwise get a negative age.
      */
-    private val tick500: StateFlow<Long> = redrawBeat.ticks.filter { it % TICK_BEATS == 0L }.map { clock.nowMs() }
+    private val tick500: StateFlow<Long> = redrawBeat.cadence.filter { it % TICK_BEATS == 0L }.map { clock.nowMs() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, clock.nowMs())
 
     // ---- STATUSTEXT tracking ----------------------------------------------------------
@@ -285,7 +285,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** Dials the failed video again (the placeholder's Retry). */
     fun retryVideo() = videoCtl.retry()
     fun swapPip() = videoCtl.swapPip()
-    fun setFlightViewShown(shown: Boolean) = videoCtl.setFlightViewShown(shown)
+    fun setFlightViewShown(shown: Boolean) = videoCtl.setFlightViewShown(shown).also { redrawBeat.setShown(shown) }
 
     /** True when the current feed can record. */
     val canRecord: StateFlow<Boolean> = videoCtl.canRecord

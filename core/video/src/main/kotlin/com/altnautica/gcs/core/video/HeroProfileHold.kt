@@ -47,7 +47,8 @@ interface VideoProfileAgent {
  *   does not serve the route;
  * - any other failed promotion (the request budget, a 503 while the video service
  *   starts, a timeout) is retried after each of [PROMOTE_BACKOFF_MS], then every last
- *   step, for as long as a viewer still holds the drone.
+ *   step, until the hold is dropped: a view that leaves and returns within the release
+ *   grace finds its promotion still retrying.
  * An agent that predates leases answers without a `leases` list; there the hold falls back
  * to a plain set, promoting only a drone it saw on `thumbnail` and demoting only what it
  * promoted.
@@ -97,7 +98,8 @@ class HeroProfileHold(
         }
     }
 
-    private fun current(agentUrl: String, hold: Hold): Boolean = holds[agentUrl] === hold && hold.count > 0
+    /** The hold is still the agent's; a release in its grace leaves it so until the grace ends. */
+    private fun current(agentUrl: String, hold: Hold): Boolean = holds[agentUrl] === hold
 
     private suspend fun promote(node: DeviceId, agentUrl: String, hold: Hold): Promoted {
         val agent = agentFor(node) ?: return Promoted(null, Outcome.None)

@@ -204,7 +204,7 @@ class HeroProfileHoldTest {
     }
 
     @Test
-    fun `failed promotions keep retrying every 15 s while held and stop once nobody holds the drone`() = runTest {
+    fun `failed promotions keep retrying every 15 s while held and stop once the hold is dropped`() = runTest {
         val agent = FakeAgent()
         repeat(100) { agent.statusErrors += tooMany }
         hold(agent).acquire(drone, url)
@@ -215,7 +215,26 @@ class HeroProfileHoldTest {
         repeat(100) { released.statusErrors += tooMany }
         hold(released).acquire(drone, url)()
         advanceTimeBy(60_000)
-        assertEquals("released before the first retry ran", 1, released.calls.size)
+        assertEquals("retried at 1 and 3 s inside the grace, then dropped at 5 s", 3, released.calls.size)
+    }
+
+    @Test
+    fun `a failing promotion resumes when the view returns inside the grace`() = runTest {
+        val agent = FakeAgent()
+        repeat(2) { agent.statusErrors += starting }
+        val hold = hold(agent)
+        val first = hold.acquire(drone, url)
+        runCurrent()
+        advanceTimeBy(500)
+        first()
+        advanceTimeBy(1_000)
+        assertEquals("the retry at 1 s ran while nobody held the drone", listOf("status", "status"), agent.calls)
+        hold.acquire(drone, url)
+        advanceTimeBy(2_000)
+        assertEquals("the retry at 3 s takes the lease", listOf("status", "status", "status", lease), agent.calls)
+        advanceTimeBy(HeroProfileHold.RENEW_MS)
+        assertEquals("the lease is taken once, then renewed", 2, agent.calls.count { it == lease })
+        assertEquals(0, agent.calls.count { it.startsWith("DELETE") })
     }
 
     @Test

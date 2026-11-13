@@ -11,7 +11,8 @@ app's `versionName`.
   closes. The hold is a 30 s lease renewed every 10 s on a fixed schedule; a
   failed or timed-out renewal is retried within 2 s. A promotion the drone
   refuses while its video service starts, or that times out, is retried with
-  backoff for as long as the flight screen shows the drone.
+  backoff for as long as the flight screen shows the drone, and keeps retrying
+  when the pilot leaves the flight screen and returns within those 5 s.
 - **Smoother video on emulators.** Emulators decode WebRTC video into memory
   instead of a shared texture, which lost most frames while the emulator's
   slow buffer swap held the previous one. On a phone, a session that measures
@@ -37,7 +38,9 @@ app's `versionName`.
   bar no longer redraws with every battery or link sample: the link age moves
   on the 2 Hz tick, and a heartbeat updates it at once only when it changes the
   arm state or mode. The AR overlay keeps placing items for the moment it
-  draws, so it moves in 10 Hz steps without falling behind the video.
+  draws, so it moves in 10 Hz steps without falling behind the video. The beat,
+  the status-pill flash and the local minimap stop while the flight screen is
+  hidden; the 2 Hz readouts, alerts and voice keep running.
 
 ## [0.6.1] - 2026-11-13
 

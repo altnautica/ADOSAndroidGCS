@@ -145,6 +145,8 @@ class FlightScreenRedrawTest {
                 vehicle.heartbeatAt(now(), armed = true, mode = "LOITER")
                 // The bench's card: the local minimap, which follows the drone's pose.
                 vm.autonomy.setMinimapPin(CockpitSettingsRepository.MINIMAP_LOCAL)
+                // CockpitRoute marks the flight view shown on start; the beat runs only then.
+                vm.setFlightViewShown(true)
                 runCurrent()
                 val hiltActivity = Robolectric.buildActivity(RedrawTestActivity::class.java).create().get()
                 var draws = 0
