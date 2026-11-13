@@ -2,9 +2,13 @@ package com.altnautica.gcs.core.skills
 
 import com.altnautica.gcs.core.skills.builtin.OperatorRecovery
 import com.altnautica.gcs.core.model.CommandResult
+import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.HeartbeatState
+import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotLink
+import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillContext
 import com.altnautica.gcs.core.model.SkillSource
@@ -157,8 +161,10 @@ class SkillSession internal constructor(
 
     /**
      * The context as skill states read it: a pilot frame re-merges every skill only when it
-     * changes a pilot field a state reads ([statePilotKey]), not on each 10 Hz frame. The
-     * vehicle's reach and modes, read through [SkillContext.vehicle], are part of the key.
+     * changes a pilot field a state reads ([StatePilotKey]: the vehicle class, mission state,
+     * profile, control mode, FC failsafe, arm and landed state, and offered operations), not on
+     * each 10 Hz frame. The vehicle's reach and modes, read through [SkillContext.vehicle], are
+     * part of the key.
      */
     private val stateContext: Flow<SkillContext> = contextInputs
         .map { ctx -> ctx to ctx.vehicle?.let { it.reach.value to it.control.availableModes.value } }
@@ -357,8 +363,23 @@ class SkillSessionFactory @Inject constructor(
 const val REASON_STOPPED = "stopped"
 
 /**
- * The pilot fields skill states read (the vehicle class, the mission state and the profile);
- * null without a pilot. Frames equal in these re-merge no skill state.
+ * The pilot fields skill states read: the vehicle class (picker and class gate), the mission
+ * state (Resume), the profile (profile toggles), the control mode (routing to the pilot or the
+ * FC), the FC failsafe (Pause, Fly Here), the arm and landed state (Disarm, Fly Here) and the
+ * offered operations (Fly Here). Frames equal in these re-merge no skill state.
  */
-internal fun statePilotKey(p: PilotState?): Triple<Any?, Any?, Any?>? =
-    p?.let { Triple(it.vehicleClass, it.mission?.state, it.profile) }
+internal data class StatePilotKey(
+    val vehicleClass: PilotVehicleClass?,
+    val missionState: MissionState?,
+    val profile: PilotProfile?,
+    val controlMode: ControlMode?,
+    val fcFailsafe: Boolean,
+    val armed: Boolean?,
+    val landed: Boolean?,
+    val surfaceOps: Set<String>,
+)
+
+/** The [StatePilotKey] of [p]; null without a pilot. */
+internal fun statePilotKey(p: PilotState?): StatePilotKey? = p?.let {
+    StatePilotKey(it.vehicleClass, it.mission?.state, it.profile, it.controlMode, it.fcFailsafe, it.armed, it.landed, it.surfaceOps)
+}
