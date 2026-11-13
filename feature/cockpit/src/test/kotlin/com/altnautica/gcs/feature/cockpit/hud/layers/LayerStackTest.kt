@@ -143,7 +143,7 @@ class LayerStackTest {
     }
 
     @Test
-    fun `moving targets are stepped by the canvas loop and redraw without recomposing`() {
+    fun `moving targets are stepped on the beat and redraw without recomposing`() {
         val c = controller()
         val t = FakeTargets(receivedAt = clock, moving = true)
         compose.mainClock.autoAdvance = false
@@ -151,17 +151,19 @@ class LayerStackTest {
         compose.mainClock.advanceTimeBy(100)
         val compositions = LayerStackDebug.compositions.get()
         val ticks = LayerStackDebug.ticks.get()
+        val steps = t.steps
+        // 30 display frames, 480 ms: four or five beats, so four or five steps and redraws.
         repeat(30) {
             clock += 16
             t.receivedAt = clock
             compose.mainClock.advanceTimeBy(16)
         }
-        assertTrue("steps ${t.steps}", t.steps >= 25)
-        assertTrue(LayerStackDebug.ticks.get() - ticks >= 25)
+        assertTrue("steps ${t.steps - steps}", t.steps - steps in 4..5)
+        assertTrue(LayerStackDebug.ticks.get() - ticks in 4..5)
         assertEquals(compositions, LayerStackDebug.compositions.get())
     }
 
-    private fun ticksOverOneSecond(presentation: LayerPresentation): Long {
+    private fun ticksOverOneSecond(presentation: LayerPresentation, push: LayerController.() -> Unit = {}): Long {
         val c = controller()
         val t = FakeTargets(receivedAt = clock, moving = true)
         compose.mainClock.autoAdvance = false
@@ -171,21 +173,34 @@ class LayerStackTest {
         repeat(60) {
             clock += 16
             t.receivedAt = clock
+            c.push()
             compose.mainClock.advanceTimeBy(16)
         }
         return LayerStackDebug.ticks.get() - start
     }
 
     @Test
-    fun `the tv class caps the overlay at 30 fps`() {
-        val capped = ticksOverOneSecond(LayerPresentation(fpsCap = 30))
-        assertTrue("capped at 30 fps: $capped redraws in ~1 s", capped in 25..33)
+    fun `moving layers and a 60 Hz frame stream redraw once a beat, not once a frame`() {
+        val ar = LayerParse.ar(arText())
+        var n = 0L
+        val ticks = ticksOverOneSecond(LayerPresentation()) { store.push(LayerFrame.Ar(ar.copy(tsMs = ar.tsMs + n++)), clock) }
+        assertTrue("$ticks redraws in ~1 s", ticks in 9..10)
     }
 
     @Test
-    fun `other classes redraw at the display rate`() {
-        val free = ticksOverOneSecond(LayerPresentation())
-        assertTrue("uncapped: $free redraws in ~1 s", free >= 50)
+    fun `the tv class's 30 fps cap never redraws faster than the beat`() {
+        val capped = ticksOverOneSecond(LayerPresentation(fpsCap = 30))
+        assertTrue("$capped redraws in ~1 s", capped in 9..10)
+    }
+
+    @Test
+    fun `a cap below the beat skips whole beats`() {
+        assertEquals(1L, beatsPerRedraw(30))
+        assertEquals(1L, beatsPerRedraw(10))
+        assertEquals(2L, beatsPerRedraw(5))
+        assertEquals(4L, beatsPerRedraw(3))
+        val capped = ticksOverOneSecond(LayerPresentation(fpsCap = 5))
+        assertTrue("$capped redraws in ~1 s", capped in 4..5)
     }
 
     @Test

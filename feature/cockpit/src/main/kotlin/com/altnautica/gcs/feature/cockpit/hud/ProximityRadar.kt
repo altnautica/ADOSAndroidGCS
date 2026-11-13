@@ -43,7 +43,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.ProximityWord
 import com.altnautica.gcs.feature.cockpit.autonomy.RadarScale
 import com.altnautica.gcs.feature.cockpit.autonomy.ScanFrame
 import com.altnautica.gcs.feature.cockpit.autonomy.Stamped
-import kotlinx.coroutines.delay
+import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 
@@ -84,11 +84,10 @@ fun ProximityRadar(
     val hasScan by produceState(false, scanFlow) { scanFlow.collect { if (it != null) value = true } }
     if (!hasSectors && !hasScan) return
     val frame = remember { mutableLongStateOf(0L) }
-    LaunchedEffect(telemetry, scanFlow) {
-        while (true) {
-            frame.longValue++
-            delay(100)
-        }
+    // Redraws on the flight screen's beat (10 Hz), in the same window frame as the HUD.
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(telemetry, scanFlow, beat) {
+        beat.ticks.collect { frame.longValue++ }
     }
     var scale by remember { mutableStateOf(RadarScale.Auto) }
     val colors = AdosTheme.colors

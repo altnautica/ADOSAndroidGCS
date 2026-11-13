@@ -10,7 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameMillis
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
@@ -23,6 +23,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import com.altnautica.gcs.feature.cockpit.chrome.RedrawBeat
+import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -76,7 +78,7 @@ object LayerStackDebug {
 
 /**
  * The targets layer as the canvas drives it: the video's detection boxes and follow
- * symbology. The canvas's frame loop calls [step] and redraws while it reports motion;
+ * symbology. The canvas calls [step] on every beat and redraws while it reports motion;
  * the layer dims and hides by the age of the camera's newest detection batch.
  */
 interface CanvasTargets {
@@ -91,7 +93,8 @@ interface CanvasTargets {
 
 /**
  * How the window's layout class (`layout.json`) shapes the layers: [fpsCap] caps the
- * redraw rate (the TV class draws at 30 fps), and [distanceOnly] keeps only distances
+ * redraw rate below the flight screen's 10 Hz [RedrawBeat] when it is lower (the TV class's
+ * 30 fps cap never binds), and [distanceOnly] keeps only distances
  * in the labels (no waypoint ETA). [reducedRate] marks layers fed by the 2 Hz status
  * poll because the navigation socket cannot open (a radio link). [chipInset] keeps the
  * layer chips (a hidden layer's "unavailable", "Depth unscaled") off the chrome drawn over
@@ -108,12 +111,14 @@ data class LayerPresentation(
  * Every data layer of one video in a single canvas, in the spec's z order: depth,
  * surfaces, obstacles, targets ([targets] draws them), the AR route and motion items.
  *
- * New frames, interpolation and staleness only invalidate the draw phase: the frames
- * live in [LayerController.store], read only inside the draw lambda, and a frame-clock
- * loop bumps a draw tick only while items move or a layer's freshness changes. The tree
- * recomposes only when the camera or frame size changes. While the lifecycle is at least
- * STARTED the surface holds the view and demand leases for [cameraId]; below it the loop
- * stops and the leases drop.
+ * New frames, interpolation and staleness only invalidate the draw phase of the canvas's
+ * own render node: the frames live in [LayerController.store], read only inside the draw
+ * lambda, and on each beat of the flight screen's [RedrawBeat] the canvas bumps a draw tick
+ * when a frame arrived, items move or a layer's freshness changed. So streaming layers
+ * redraw at most at the beat (10 Hz), in the same window frame as the HUD, never once per
+ * layer frame or per display frame, and the tree recomposes only when the camera or frame
+ * size changes. While the lifecycle is at least STARTED the surface holds the view and
+ * demand leases for [cameraId]; below it the loop stops and the leases drop.
  *
  * [frameW]×[frameH] is the video frame the canvas letterboxes (0 takes the AR frame size).
  */
@@ -142,29 +147,31 @@ fun LayerStack(
     val currentPresentation by rememberUpdatedState(presentation)
     val store = controller.store
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(controller, cameraId, lifecycle) {
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(controller, cameraId, lifecycle, beat) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             val release = controller.attach(cameraId)
             try {
                 var bucket = -1
-                var lastTickFrame = Long.MIN_VALUE
-                while (true) {
-                    val frameMs = withFrameMillis { it }
-                    // The TV class caps the redraw rate; frames inside the cap are skipped whole.
-                    val minGap = currentPresentation.fpsCap?.takeIf { it > 0 }?.let { 1000L / it - FRAME_SLACK_MS } ?: 0L
-                    if (minGap > 0 && lastTickFrame != Long.MIN_VALUE && frameMs - lastTickFrame < minGap) continue
+                var version = -1
+                var lastTickBeat = Long.MIN_VALUE
+                beat.ticks.collect { n ->
+                    // A layout class may cap the rate below the beat; beats inside the cap are skipped whole.
+                    val capBeats = currentPresentation.fpsCap?.takeIf { it > 0 }?.let { beatsPerRedraw(it) } ?: 1L
+                    if (lastTickBeat != Long.MIN_VALUE && n - lastTickBeat < capBeats) return@collect
                     val now = controller.now()
                     val t = currentTargets
                     val targetsMoving = t?.step(now) == true
                     val animating = store.animating(now) || targetsMoving
                     val b = freshnessBucket(store, t, now)
-                    if (animating || b != bucket) {
+                    val v = store.version
+                    if (animating || b != bucket || v != version) {
                         bucket = b
-                        lastTickFrame = frameMs
+                        version = v
+                        lastTickBeat = n
                         tick.intValue++
                         LayerStackDebug.ticks.incrementAndGet()
                     }
-                    if (!animating) delay(IDLE_POLL_MS)
                 }
             } finally {
                 release()
@@ -187,16 +194,23 @@ fun LayerStack(
         }
     }
     Spacer(
-        modifier.fillMaxSize().drawWithCache {
-            onDrawBehind {
-                tick.intValue // a draw-only read: interpolation and staleness redraw without recomposing
-                val t0 = System.nanoTime()
-                with(canvas) { draw(controller, cameraId, frameW, frameH, flags.value, depth.value, currentPresentation, currentTargets) }
-                LayerStackDebug.recordDraw(System.nanoTime() - t0)
-            }
-        },
+        modifier
+            .fillMaxSize()
+            // Its own render node: a layer redraw re-records only this canvas, not the screen around it.
+            .graphicsLayer()
+            .drawWithCache {
+                onDrawBehind {
+                    tick.intValue // a draw-only read: new frames, interpolation and staleness redraw without recomposing
+                    val t0 = System.nanoTime()
+                    with(canvas) { draw(controller, cameraId, frameW, frameH, flags.value, depth.value, currentPresentation, currentTargets) }
+                    LayerStackDebug.recordDraw(System.nanoTime() - t0)
+                }
+            },
     )
 }
+
+/** Beats between two redraws at most [fps] times a second (at least one). */
+internal fun beatsPerRedraw(fps: Int): Long = maxOf(1L, (1_000L + fps * RedrawBeat.BEAT_MS - 1) / (fps * RedrawBeat.BEAT_MS))
 
 /**
  * The draw phase of [LayerStack]: every enabled layer in z order. It keeps the
@@ -245,7 +259,6 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
         targets: CanvasTargets?,
     ) {
         val store = controller.store
-        store.version
         val now = controller.now()
         val arCam = store.ar.cur?.cameras?.get(cameraId)
         val fw = if (frameW > 0f) frameW else arCam?.frameW ?: DEFAULT_W
@@ -356,7 +369,6 @@ private fun freshnessBucket(store: LayerStore, targets: CanvasTargets?, now: Lon
         27 * freshness(store.surfaces, now, SURFACES_HIDE_MS).ordinal +
         81 * (targets?.let { targetsFreshness(it, now).ordinal } ?: 0)
 
-private const val IDLE_POLL_MS = 100L
 private const val DEBUG_WINDOW_MS = 10_000L
 private const val DIM_ALPHA = 0.5f
 private const val MID_MAX_M = 5f
@@ -364,9 +376,6 @@ private const val DEFAULT_W = 1280f
 private const val DEFAULT_H = 720f
 private const val CHIP_INSET_DP = 8f
 private const val CHIP_STEP_DP = 24f
-
-/** A display frame lands a little before or after its nominal slot; the cap allows for that. */
-private const val FRAME_SLACK_MS = 3L
 
 /** Surfaces arrive at 1 Hz, so they hide after three missed frames rather than 2 s. */
 private const val SURFACES_HIDE_MS = 3_000L

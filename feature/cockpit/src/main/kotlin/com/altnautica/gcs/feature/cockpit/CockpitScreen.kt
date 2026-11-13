@@ -155,6 +155,7 @@ internal fun CockpitScreen(
         LocalChromeBackdrop provides backdrop,
         LocalTipAnchors provides anchors,
         LocalShownVideo provides shownVideo,
+        com.altnautica.gcs.feature.cockpit.chrome.LocalRedrawBeat provides vm.redrawBeat,
     ) {
         BackdropSampler(backdrop)
         // Inside the providers: it reads the spec words for its toasts.
@@ -584,7 +585,6 @@ private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Un
 private const val MINIMAP_ZOOM = 16.0
 
 @Composable
-
 private fun Pip(vm: CockpitViewModel, modifier: Modifier) {
     val video by vm.video.collectAsStateWithLifecycle()
     val pip = video.pip ?: return

@@ -203,7 +203,7 @@ fun BackdropSampler(backdrop: ChromeBackdrop) {
             val h = (view.height / DOWNSCALE).coerceAtLeast(1)
             val target = spare?.takeIf { it.width == w && it.height == h } ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
             val ok = when (view) {
-                is SurfaceView -> view.holder.surface.isValid && suspendCancellableCoroutine { cont ->
+                is SurfaceView -> view.holder.surface?.isValid == true && suspendCancellableCoroutine { cont ->
                     runCatching {
                         PixelCopy.request(view, target, { result -> if (cont.isActive) cont.resume(result == PixelCopy.SUCCESS) }, handler)
                     }.onFailure { if (cont.isActive) cont.resume(false) }

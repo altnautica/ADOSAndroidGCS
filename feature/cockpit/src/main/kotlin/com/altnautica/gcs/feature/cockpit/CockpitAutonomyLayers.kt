@@ -29,12 +29,15 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamSwitchKind
+import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowEvent
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.TargetState
 import com.altnautica.gcs.feature.cockpit.band.NavSourceChip
+import com.altnautica.gcs.feature.cockpit.chrome.RedrawBeat
+import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import com.altnautica.gcs.feature.cockpit.hud.DesignatorState
 import com.altnautica.gcs.feature.cockpit.hud.FollowRail
 import com.altnautica.gcs.feature.cockpit.hud.FollowRangePanel
@@ -51,7 +54,6 @@ import com.altnautica.gcs.feature.cockpit.hud.rememberTargetDrawer
 import com.altnautica.gcs.feature.cockpit.hud.rememberMotionPrefs
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.skillbar.isWide
-import kotlinx.coroutines.delay
 
 /** Below this surface width candidate tags are hidden and tracked tags shorten to `#id`. */
 private val COMPACT_SURFACE = 600.dp
@@ -122,18 +124,18 @@ internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
     NavSourceChip(chip, inputs, compact = width == WidthClass.Compact, onUseSet = vm.autonomy::useSourceSet)
 }
 
-/** A 500 ms clock for age-based chrome (stale panels, coast countdowns). */
+/** A 500 ms clock for age-based chrome (stale panels, coast countdowns), on every fifth beat of the flight screen. */
 @Composable
 private fun rememberTick(a: CockpitAutonomy): Long {
     val tick = remember { mutableLongStateOf(a.nowMs()) }
-    LaunchedEffect(a) {
-        while (true) {
-            tick.longValue = a.nowMs()
-            delay(500)
-        }
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(a, beat) {
+        beat.ticks.collect { n -> if (n % AGE_BEATS == 0L) tick.longValue = a.nowMs() }
     }
     return tick.longValue
 }
+
+private const val AGE_BEATS = 500L / RedrawBeat.BEAT_MS
 
 /**
  * Following-mode chrome over the video: the what's-locked chip (top centre), the range
@@ -257,33 +259,30 @@ internal fun radarDiameter(width: WidthClass): Dp = when (width) {
 }
 
 /**
- * The minimap in its local frame, sampled at 2 Hz plus every pose; the drone's own local
- * position and attitude at most every [MINIMAP_POSE_MS], so a 10 Hz attitude stream does
- * not recompose the map ten times a second. A tap runs [onClick]; a long-press flies to the
- * point under it, as an offset from the drone ([CockpitViewModel.pickLocalPoint]).
+ * The minimap in its local frame. Its inputs (the SLAM pose, trail, scan, occupancy and
+ * follow lock, and the drone's own local position and attitude) are sampled together on
+ * every [MINIMAP_BEATS]th beat of the flight screen, and recompose the map only when one
+ * changed, or every 500 ms so ages advance: a pose or attitude stream at the video rate
+ * redraws the map at most 5 times a second, in the same frame as the HUD. A tap runs
+ * [onClick]; a long-press flies to the point under it, as an offset from the drone
+ * ([CockpitViewModel.pickLocalPoint]).
  */
 @Composable
 internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {
     val a = vm.autonomy
-    val now = rememberTick(a)
-    val pose by a.feed.pose.collectAsStateWithLifecycle()
-    val trail by a.feed.trail.collectAsStateWithLifecycle()
-    val scan by a.feed.scan.collectAsStateWithLifecycle()
-    val occupancy by a.feed.occupancy.collectAsStateWithLifecycle()
-    val follow by a.feed.follow.collectAsStateWithLifecycle()
     val pin by a.minimapPin.collectAsStateWithLifecycle()
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
-    val local by produceState<com.altnautica.gcs.core.model.LocalPosition?>(null, telemetry) {
-        // A StateFlow conflates on its own: values landing during the pause collapse to the newest.
-        telemetry?.localPosition?.collect { value = it; delay(MINIMAP_POSE_MS) }
+    val beat = rememberRedrawBeat()
+    val inputs by produceState(localMapInputs(a, telemetry), a, telemetry, beat) {
+        beat.ticks.collect { n ->
+            if (n % MINIMAP_BEATS != 0L) return@collect
+            val next = localMapInputs(a, telemetry)
+            if (n % AGE_BEATS == 0L || next.copy(nowMs = value.nowMs) != value) value = next
+        }
     }
-    val attitude by produceState<com.altnautica.gcs.core.model.Attitude?>(null, telemetry) {
-        telemetry?.attitude?.collect { value = it; delay(MINIMAP_POSE_MS) }
-    }
-    val fresh = follow?.takeIf { now - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value
     Box(modifier) {
         LocalMinimap(
-            LocalMapInputs(pose, local, attitude, trail, scan, occupancy, fresh, a.nowMs()),
+            inputs,
             pin,
             a::setMinimapPin,
             Modifier.fillMaxSize(),
@@ -293,5 +292,13 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onCl
     }
 }
 
-/** The shortest gap between two drone-pose updates of the local minimap: 5 Hz. */
-internal const val MINIMAP_POSE_MS = 200L
+/** What the local minimap shows now: the follow lock only while fresh. */
+private fun localMapInputs(a: CockpitAutonomy, telemetry: VehicleTelemetry?): LocalMapInputs {
+    val now = a.nowMs()
+    val f = a.feed
+    val fresh = f.follow.value?.takeIf { now - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value
+    return LocalMapInputs(f.pose.value, telemetry?.localPosition?.value, telemetry?.attitude?.value, f.trail.value, f.scan.value, f.occupancy.value, fresh, now)
+}
+
+/** The local minimap's sampling: every second beat, 5 Hz. */
+internal const val MINIMAP_BEATS = 2L

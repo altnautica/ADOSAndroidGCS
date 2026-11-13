@@ -71,6 +71,7 @@ import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipUi
 import com.altnautica.gcs.feature.cockpit.chrome.CardPage
 import com.altnautica.gcs.feature.cockpit.chrome.FlightValues
 import com.altnautica.gcs.feature.cockpit.chrome.GimbalRateController
+import com.altnautica.gcs.feature.cockpit.chrome.RedrawBeat
 import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmController
@@ -109,7 +110,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -120,6 +120,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -133,6 +134,9 @@ import kotlinx.coroutines.launch
 
 /** How long UI-only flows keep running after their last collector leaves. */
 internal const val UI_STOP_MS = 5_000L
+
+/** The view model's 2 Hz tick, in beats of the flight screen's [RedrawBeat]. */
+private const val TICK_BEATS = 500L / RedrawBeat.BEAT_MS
 
 /** The cockpit views Triangle (or `V`) cycles through. */
 enum class CockpitView(val id: String) { Pilot("pilot"), Map("map"), Split("split"), Vision("vision") }
@@ -240,21 +244,19 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Clocks -----------------------------------------------------------------------
 
-    private fun ticker(periodMs: Long): Flow<Long> = flow {
-        while (true) {
-            emit(clock.nowMs())
-            delay(periodMs)
-        }
-    }
+    /** The flight screen's one redraw clock ([RedrawBeat]); the 2 Hz state below changes on it too. */
+    val redrawBeat: RedrawBeat = RedrawBeat().also { beat -> viewModelScope.launch { beat.run() } }
 
     /**
      * Re-evaluation trigger for age-based state, and the one 2 Hz clock the band, alerts,
-     * telemetry strip and minimap sample on, so their changes land in the same UI frame
-     * instead of one frame each. Its value is only a trigger: a combine that also fires on
-     * fresh telemetry reads [MonotonicClock.nowMs] itself, because a heartbeat stamped after
-     * the last tick would otherwise get a negative age.
+     * telemetry strip and minimap sample on: every fifth beat of [redrawBeat], so their
+     * changes land in the same UI frame as the HUD's instead of one frame each. Its value is
+     * only a trigger: a combine that also fires on fresh telemetry reads
+     * [MonotonicClock.nowMs] itself, because a heartbeat stamped after the last tick would
+     * otherwise get a negative age.
      */
-    private val tick500: StateFlow<Long> = ticker(500).stateIn(viewModelScope, SharingStarted.Eagerly, clock.nowMs())
+    private val tick500: StateFlow<Long> = redrawBeat.ticks.filter { it % TICK_BEATS == 0L }.map { clock.nowMs() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, clock.nowMs())
 
     // ---- STATUSTEXT tracking ----------------------------------------------------------
 

@@ -1,7 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.hud.layers
 
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.mutableIntStateOf
 
 /** The last two frames of one layer kind with their local receive times. */
 class LayerSlot<T : Any> {
@@ -74,9 +73,9 @@ class LayerSlot<T : Any> {
 enum class Freshness { Fresh, Dim, Hidden }
 
 /**
- * The overlay frames a surface draws. A plain mutable holder, never React-style UI state:
- * a new frame bumps [version], which only the draw phase reads, so a frame redraws the
- * canvas without recomposing anything.
+ * The overlay frames a surface draws. A plain mutable holder, never snapshot state: a new
+ * frame bumps [version], which the canvas checks on the flight screen's beat, so a stream
+ * of frames redraws the canvas at most once a beat and never recomposes anything.
  */
 @Stable
 class LayerStore {
@@ -85,10 +84,9 @@ class LayerStore {
     val depth = LayerSlot<DepthFrame>()
     val surfaces = LayerSlot<SurfacesFrame>()
 
-    private val _version = mutableIntStateOf(0)
-
-    /** Bumped on every new frame; read it inside a draw lambda only. */
-    val version: Int get() = _version.intValue
+    /** Bumped on every new frame and on [clear]. */
+    var version: Int = 0
+        private set
 
     /** Frames received so far, by kind (for tests and the vision panel). */
     var received = 0L
@@ -102,7 +100,7 @@ class LayerStore {
             is LayerFrame.Surfaces -> surfaces.push(frame.frame, frame.frame.tsMs, atMs)
         }
         received++
-        _version.intValue++
+        version++
     }
 
     fun clear() {
@@ -110,7 +108,7 @@ class LayerStore {
         obstacles.clear()
         depth.clear()
         surfaces.clear()
-        _version.intValue++
+        version++
     }
 
     fun animating(now: Long): Boolean = ar.animating(now) || obstacles.animating(now) || depth.animating(now) || surfaces.animating(now)

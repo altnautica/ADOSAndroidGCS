@@ -26,6 +26,18 @@ app's `versionName`.
   use. A debuggable build shows the same line over the main video after
   `adb shell setprop debug.ados.video.overlay 1`, and
   `debug.ados.video.bytebuffer` (`1` or `0`) forces the decoder output.
+- **Steadier flight screen while video plays.** The data layers over the
+  video (AR route, obstacles, depth, targets) redrew the whole flight screen on
+  every display frame while their frames streamed, and the HUD, the local
+  minimap, the status-pill flash and the 2 Hz readouts each redrew it again at
+  their own moments. On an emulator those window redraws took the video's
+  place. Everything on the flight screen that changes on its own now changes on
+  one shared 10 Hz beat, so the window redraws at most 10 times a second
+  whatever streams in, and the layers redraw only their own canvas. The top
+  bar no longer redraws with every battery or link sample: the link age moves
+  on the 2 Hz tick, and a heartbeat updates it at once only when it changes the
+  arm state or mode. The AR overlay keeps placing items for the moment it
+  draws, so it moves in 10 Hz steps without falling behind the video.
 
 ## [0.6.1] - 2026-11-13
 

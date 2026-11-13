@@ -58,7 +58,6 @@ import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import com.altnautica.gcs.feature.cockpit.alerts.alertDetail
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.preflight.preflightItemLabel
-import kotlinx.coroutines.delay
 
 /** Top-bar items that move into the Menu when the row runs out of room (`top_bar.overflow`). */
 enum class TopBarItem(val specId: String) {
@@ -233,10 +232,10 @@ private const val MIN_PILL_PX = 96
 
 /**
  * The status pill: "All systems OK", the one alert's text, or "n warnings"; flashes while
- * unacknowledged. The flash steps between two looks every [FLASH_HALF_MS] rather than
- * fading, so a long-unacknowledged alert redraws the flight screen twice a second instead
- * of on every display frame; it is read only in the draw phase, so it never recomposes or
- * re-lays out the pill.
+ * unacknowledged. The flash steps between two looks about every [FLASH_HALF_MS] rather than
+ * fading, on the flight screen's [RedrawBeat], so a long-unacknowledged alert redraws the
+ * flight screen twice a second, in frames the HUD draws anyway, instead of on every display
+ * frame; it is read only in the draw phase, so it never recomposes or re-lays out the pill.
  */
 @Composable
 fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifier) {
@@ -245,10 +244,14 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
     val reduced = rememberReducedMotion()
     val flash: State<Float>? = if (ui.flashing && !reduced) {
         val alpha = remember { mutableFloatStateOf(1f) }
-        LaunchedEffect(alpha) {
-            while (true) {
-                delay(FLASH_HALF_MS.toLong())
-                alpha.floatValue = if (alpha.floatValue == 1f) FLASH_DIM_ALPHA else 1f
+        val beat = rememberRedrawBeat()
+        LaunchedEffect(alpha, beat) {
+            var start = -1L
+            beat.ticks.collect { n ->
+                if (start < 0) start = n
+                // Whole beats, so each step is 400 or 500 ms and they average FLASH_HALF_MS.
+                val dim = (n - start) * RedrawBeat.BEAT_MS / FLASH_HALF_MS % 2 == 1L
+                alpha.floatValue = if (dim) FLASH_DIM_ALPHA else 1f
             }
         }
         alpha

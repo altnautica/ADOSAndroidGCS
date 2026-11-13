@@ -70,11 +70,14 @@ internal fun FakeVehicle.heartbeatAt(now: Long, armed: Boolean, mode: String = "
 /**
  * A cockpit for [vehicle] on the test scheduler with in-memory collaborators, its
  * screen-only flows kept hot like a visible cockpit. The caller sets the main dispatcher.
+ * Without [videoSessions] no source can play.
  */
 internal fun TestScope.testCockpitVm(
     vehicle: com.altnautica.gcs.core.model.Vehicle,
     localApis: Set<LocalNodeApis> = emptySet(),
     nodes: List<NodeSummary> = listOf(testDroneNode(vehicle.id.value)),
+    videoSelector: VideoSourceSelector = VideoSourceSelector(emptySet()),
+    videoSessions: VideoSessionManager = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns false },
 ): CockpitViewModel {
     val clock = MonotonicClock { testScheduler.currentTime }
     val dataStore = MemoryPreferences()
@@ -86,6 +89,7 @@ internal fun TestScope.testCockpitVm(
         every { snapshot } returns MutableStateFlow(PadSnapshot.Neutral)
     }
     val activator = SkillActivator(clock)
+    val extensionRepo = mockk<ExtensionRepository> { coEvery { api(any()) } returns null }
     val vm = CockpitViewModel(
         nodeIdValue = vehicle.id.value,
         nodeSources = setOf(object : NodeSource { override val nodes = flowOf(nodes) }),
@@ -105,8 +109,8 @@ internal fun TestScope.testCockpitVm(
         },
         summaries = CockpitSummaryRegistry(),
         videoServices = CockpitVideoServices(
-            selector = VideoSourceSelector(emptySet()),
-            sessions = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns false },
+            selector = videoSelector,
+            sessions = videoSessions,
             heroHold = mockk(relaxed = true),
             endpoints = mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns null },
             streamCatalog = mockk(relaxed = true),
@@ -115,11 +119,10 @@ internal fun TestScope.testCockpitVm(
         clock = clock,
         activator = activator,
         extensionSkills = mockk<ExtensionSkillContributor> { every { targetActions } returns flowOf(emptyList()) },
-        extensions = mockk<ExtensionRepository> { coEvery { api(any()) } returns null },
-        perception = mockk<PerceptionFeed> {
-            every { acquire(any()) } returns {}
-            every { batches(any()) } returns null
-        },
+        extensions = extensionRepo,
+        // A real feed: a mocked one's `() -> Unit` release could not be stubbed reliably once
+        // other tests had loaded the class (mockk failed instantiating Function0).
+        perception = PerceptionFeed(extensionRepo, backgroundScope),
         localApis = localApis,
         spec = testSpec,
         controls = ControlsRepository(dataStore, testSpec, flowOf(emptyList())),

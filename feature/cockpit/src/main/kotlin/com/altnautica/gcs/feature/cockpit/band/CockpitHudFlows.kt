@@ -82,10 +82,13 @@ internal class CockpitHudFlows(
     }
 
     val band: StateFlow<BandState> = telemetry.flatMapLatest { t ->
+        // Ages advance on the 2 Hz tick only, and a heartbeat re-evaluates the band at once only
+        // when it changes the arm state or mode: reading the clock or the heartbeat's time on
+        // every sample would change the band (and recompose the top bar) at the telemetry rate.
         val coarse = if (t == null) flowOf(BandTelemetry.Empty) else combine(
-            t.heartbeat, t.battery, t.linkQuality, tick500,
-        ) { hb, batt, lq, _ ->
-            val now = clock.nowMs()
+            t.heartbeat.map { it?.armed to it?.mode }.distinctUntilChanged(), t.battery, t.linkQuality, tick500.map { clock.nowMs() },
+        ) { _, batt, lq, now ->
+            val hb = t.heartbeat.value
             val age = hb?.let { heartbeatAgeMs(it.tMs, now) }
             // A stale heartbeat no longer tells the arm state or mode: show them as unknown.
             val fresh = age != null && age <= SkillTiming.LINK_STALE_MS

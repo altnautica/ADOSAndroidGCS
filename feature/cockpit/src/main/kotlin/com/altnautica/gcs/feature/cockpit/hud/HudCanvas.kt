@@ -20,18 +20,18 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
 import com.altnautica.gcs.core.data.cockpit.CockpitDensity
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.flow
+import com.altnautica.gcs.feature.cockpit.chrome.RedrawBeat
+import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.launch
 
 /**
  * The instrument HUD as one canvas. Telemetry is read inside the draw pass
- * from the per-topic flows' current values; a new sample only bumps a draw-phase
- * counter, at most every [HUD_REDRAW_MS], so telemetry never recomposes this composable
- * and redraws the flight screen at most 10 times a second however many topics update.
- * Readouts are not interactive: input passes through to the video below.
+ * from the per-topic flows' current values; a new sample only marks the HUD dirty, and the
+ * flight screen's [RedrawBeat] bumps a draw-phase counter when it is, so telemetry never
+ * recomposes this composable and redraws the flight screen at most once a beat (10 Hz),
+ * in the same window frame as everything else that changed in that beat, however many
+ * topics update. Readouts are not interactive: input passes through to the video below.
  */
 @Composable
 fun HudCanvas(
@@ -48,25 +48,21 @@ fun HudCanvas(
 ) {
     recompositionProbe?.let { probe -> SideEffect { probe() } }
     val frame = remember { mutableLongStateOf(0L) }
-    LaunchedEffect(telemetry) {
+    val beat = rememberRedrawBeat()
+    LaunchedEffect(telemetry, beat) {
         if (telemetry == null) return@LaunchedEffect
-        val staleTicks: Flow<Any?> = flow {
-            while (true) {
-                emit(Unit)
-                delay(STALE_REDRAW_MS)
-            }
+        var dirty = true
+        launch {
+            merge(telemetry.attitude, telemetry.position, telemetry.vfr, telemetry.wind, telemetry.home, telemetry.heartbeat)
+                .collect { dirty = true }
         }
-        merge(
-            telemetry.attitude, telemetry.position, telemetry.vfr, telemetry.wind,
-            telemetry.home, telemetry.heartbeat, staleTicks,
-        ).conflate().collect {
-            // A plain snapshot write: the draw pass that reads it is invalidated once per
-            // frame however many samples land before the vsync, and no composition frame
-            // (frame-clock awaiter, recomposer pass) runs for a telemetry tick.
+        beat.ticks.collect { n ->
+            // Every few beats regardless, so instruments go stale on time when telemetry stops.
+            if (!dirty && n % STALE_BEATS != 0L) return@collect
+            dirty = false
+            // A plain snapshot write: only the draw pass reads it, so no composition runs for it.
             frame.longValue++
             invalidationProbe?.invoke()
-            // Samples landing meanwhile conflate into the next redraw.
-            delay(HUD_REDRAW_MS)
         }
     }
     val colors = AdosTheme.colors
@@ -95,9 +91,7 @@ fun HudCanvas(
     )
 }
 
-/** The shortest gap between two telemetry redraws of the HUD: 10 Hz. */
-internal const val HUD_REDRAW_MS = 100L
-
-private const val STALE_REDRAW_MS = 500L
+/** Without new telemetry the HUD still redraws every 500 ms, so stale readouts dim on time. */
+private const val STALE_BEATS = 500L / RedrawBeat.BEAT_MS
 
 internal const val TEXT_CACHE_SIZE = 96

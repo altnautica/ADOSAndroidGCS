@@ -9,6 +9,7 @@ import com.altnautica.gcs.core.model.Attitude
 import com.altnautica.gcs.core.model.PositionFix
 import androidx.compose.runtime.CompositionLocalProvider
 import com.altnautica.gcs.feature.cockpit.FakeTelemetry
+import com.altnautica.gcs.feature.cockpit.chrome.RedrawBeat
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.testSpec
 import com.altnautica.gcs.core.data.cockpit.AltitudeReference
@@ -69,8 +70,8 @@ class HudCanvasTest {
         assertEquals("no recomposition per telemetry tick", composedOnce, recompositions)
         assertTrue("new samples invalidate the draw pass ($redraws)", redraws >= 5)
         assertTrue(
-            "at most one redraw per ${HUD_REDRAW_MS} ms: $redraws in $elapsedMs ms",
-            redraws <= elapsedMs / HUD_REDRAW_MS + 1,
+            "at most one redraw per ${RedrawBeat.BEAT_MS} ms: $redraws in $elapsedMs ms",
+            redraws <= elapsedMs / RedrawBeat.BEAT_MS + 1,
         )
         // Rendering the frame runs the draw pass, still without recomposing.
         compose.onRoot().captureToImage()
