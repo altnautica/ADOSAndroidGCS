@@ -7,8 +7,10 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * One shutter press. The screen copies the shown frame when it receives this, at the press,
@@ -52,7 +55,12 @@ internal class CockpitCamera(private val scope: CoroutineScope, private val cont
         _frameGrabs.tryEmit(FrameGrab(keep))
     }
 
-    /** The vehicle's camera zooms when it can; otherwise the video zooms digitally 1× → 2× → 4×. */
+    /**
+     * The vehicle's camera zooms when it can: a press zooms continuously for [ZOOM_BURST_MS] and
+     * then stops it (rate 0). Otherwise the video zooms digitally 1× → 2× → 4×. The stop goes out
+     * whatever happened to the start (refused, lost ack, timeout, no link) and when the screen
+     * closes mid-press, so a camera that did start never runs to its limit.
+     */
     fun zoom(step: Int) {
         if (zoomJob?.isActive == true) return
         val c = control()
@@ -61,13 +69,24 @@ internal class CockpitCamera(private val scope: CoroutineScope, private val cont
             return
         }
         zoomJob = scope.launch {
-            if (!c.run(VehicleCommand.CameraZoom(step)).cameraTookIt()) _digitalZoom.update { digitalZoomStep(it, step) }
+            try {
+                if (c.run(VehicleCommand.CameraZoom(step.coerceIn(-1, 1))).cameraTookIt()) {
+                    delay(ZOOM_BURST_MS)
+                } else {
+                    _digitalZoom.update { digitalZoomStep(it, step) }
+                }
+            } finally {
+                withContext(NonCancellable) { c.run(VehicleCommand.CameraZoom(0)) }
+            }
         }
     }
 
     private companion object {
         /** Quick presses queue while the screen is still copying the previous frame. */
         const val GRAB_BUFFER = 4
+
+        /** How long one press zooms the vehicle's camera before the stop. */
+        const val ZOOM_BURST_MS = 400L
     }
 }
 

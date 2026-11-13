@@ -102,7 +102,7 @@ class CommandService(
                 long(CMD_GIMBAL_MANAGER_PITCHYAW, Float.NaN, Float.NaN, command.pitchDps, command.yawDps, 0f, 0f, 0f)
             VehicleCommand.GimbalRecenter ->
                 long(CMD_GIMBAL_MANAGER_PITCHYAW, 0f, 0f, Float.NaN, Float.NaN, 0f, 0f, 0f)
-            is VehicleCommand.CameraZoom -> long(CMD_SET_CAMERA_ZOOM, ZOOM_TYPE_STEP, command.step.toFloat())
+            is VehicleCommand.CameraZoom -> long(CMD_SET_CAMERA_ZOOM, ZOOM_TYPE_CONTINUOUS, command.rate.coerceIn(-1, 1).toFloat())
             VehicleCommand.CapturePhoto -> long(CMD_IMAGE_START_CAPTURE, 0f, 0f, 1f)
         }
     }
@@ -283,8 +283,8 @@ class CommandService(
         const val CMD_SET_CAMERA_ZOOM = 531
         const val CMD_IMAGE_START_CAPTURE = 2000
 
-        /** `ZOOM_TYPE_STEP`: param2 is a step direction. */
-        const val ZOOM_TYPE_STEP = 0f
+        /** `ZOOM_TYPE_CONTINUOUS`: param2 is a rate (-1 out, 0 stop, 1 in); step type is refused by autopilots. */
+        const val ZOOM_TYPE_CONTINUOUS = 1f
 
         /** `param2` magic of MAV_CMD_COMPONENT_ARM_DISARM that bypasses arming checks. */
         const val FORCE_ARM = 2989f

@@ -50,7 +50,15 @@ class StreamCatalog @Inject constructor(
     private val rosterRefresh = MutableStateFlow(0)
 
     fun streams(node: DeviceId): Flow<List<StreamDescriptor>> =
-        combine(status.observe(node), roster(node)) { poll, roster -> describe(poll.status, roster) }
+        combine(status.observe(node), roster(node)) { poll, roster -> describe(poll.status, roster.orEmpty()) }
+            .distinctUntilChanged()
+
+    /**
+     * True while [node] has no camera at all: its video pipeline reports an error and its
+     * roster read back empty. An unreadable roster is not proof of no camera.
+     */
+    fun noCamera(node: DeviceId): Flow<Boolean> =
+        combine(status.observe(node), roster(node)) { poll, roster -> poll.status?.video?.state == "error" && roster?.isEmpty() == true }
             .distinctUntilChanged()
 
     suspend fun switch(node: DeviceId, streamId: String): AgentResult<StreamSwitchOutcome> {
@@ -74,12 +82,12 @@ class StreamCatalog @Inject constructor(
         }
     }
 
-    /** The roster, re-read every [ROSTER_INTERVAL_MS] and right after a switch. */
+    /** The roster, re-read every [ROSTER_INTERVAL_MS] and right after a switch; null when unreadable. */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private fun roster(node: DeviceId): Flow<List<JsonObject>> = rosterRefresh.flatMapLatest {
+    private fun roster(node: DeviceId): Flow<List<JsonObject>?> = rosterRefresh.flatMapLatest {
         flow {
             while (true) {
-                emit(clients.forNode(node)?.cameraRoster()?.getOrNull() ?: emptyList())
+                emit(clients.forNode(node)?.cameraRoster()?.getOrNull())
                 delay(ROSTER_INTERVAL_MS)
             }
         }

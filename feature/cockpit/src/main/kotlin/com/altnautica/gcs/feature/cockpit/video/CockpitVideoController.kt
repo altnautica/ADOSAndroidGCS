@@ -72,7 +72,16 @@ internal class CockpitVideoController(
         list.firstOrNull { it !in failed } ?: list.firstOrNull()
     }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, null)
 
-    val videoState: StateFlow<VideoState> = mainSource.flatMapLatest { src ->
+    /** The vehicle reports no camera at all (pipeline error, empty roster). */
+    private val noCamera: StateFlow<Boolean> = mainSource.flatMapLatest { src ->
+        if (src is VideoSource.AgentWhep) streamCatalog.noCamera(src.node) else flowOf(false)
+    }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    /** The source on screen: none while the vehicle has no camera, so no stale frame stays up. */
+    private val shownSource: StateFlow<VideoSource?> = combine(mainSource, noCamera) { src, none -> src.takeUnless { none } }
+        .stateIn(scope, SharingStarted.Eagerly, null)
+
+    val videoState: StateFlow<VideoState> = shownSource.flatMapLatest { src ->
         if (src == null) flowOf(VideoState.NoSource) else videoSessions.state(src)
     }.stateIn(scope, SharingStarted.Eagerly, VideoState.NoSource)
 
@@ -82,7 +91,7 @@ internal class CockpitVideoController(
 
     private val selection = combine(selectedStream, pipPreferred) { s, p -> s to p }
 
-    val video: StateFlow<VideoUi> = combine(mainSource, streams, selection, switchingStream, pipVisible) { main, list, (sel, pref), switching, pip ->
+    val video: StateFlow<VideoUi> = combine(shownSource, streams, selection, switchingStream, pipVisible) { main, list, (sel, pref), switching, pip ->
         val selected = sel ?: list.firstOrNull { it.live }?.id
         val pipStream = if (pip && main is VideoSource.AgentWhep) pickPip(list, selected, pref) else null
         VideoUi(

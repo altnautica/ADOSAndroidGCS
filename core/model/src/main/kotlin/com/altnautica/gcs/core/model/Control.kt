@@ -26,8 +26,12 @@ sealed interface VehicleCommand {
     /** Gimbal back to level and forward. */
     data object GimbalRecenter : VehicleCommand
 
-    /** One zoom step in ([step] > 0) or out (`MAV_CMD_SET_CAMERA_ZOOM`, step type). */
-    data class CameraZoom(val step: Int) : VehicleCommand
+    /**
+     * Continuous zoom (`MAV_CMD_SET_CAMERA_ZOOM`, continuous type): in at [rate] > 0, out at
+     * [rate] < 0, and stop at 0. Autopilots refuse the step type, so a press zooms at a rate
+     * and the sender stops it with rate 0.
+     */
+    data class CameraZoom(val rate: Int) : VehicleCommand
 
     /** One still image (`MAV_CMD_IMAGE_START_CAPTURE`). */
     data object CapturePhoto : VehicleCommand

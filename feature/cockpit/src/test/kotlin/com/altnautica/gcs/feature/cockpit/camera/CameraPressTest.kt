@@ -18,6 +18,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -96,6 +97,59 @@ class CameraPressTest {
         runCurrent()
         assertEquals("the refused zoom steps the video once", 2, vm.digitalZoom.value)
         vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a zoom press the camera takes zooms at a rate and then stops it`() = runTest(dispatcher) {
+        val vehicle = GatedVehicle()
+        val vm = testCockpitVm(vehicle)
+        backgroundScope.launch { vm.vehicle.collect {} }
+        runCurrent()
+
+        vm.zoomOut()
+        runCurrent()
+        vehicle.control.answers.single().complete(CommandResult.Accepted)
+        runCurrent()
+        assertEquals("zooming until the burst ends", 1, vehicle.control.sent.size)
+        advanceTimeBy(500)
+        runCurrent()
+
+        assertEquals(listOf(VehicleCommand.CameraZoom(-1), VehicleCommand.CameraZoom(0)), vehicle.control.sent)
+        assertEquals("the camera zoomed itself", 1, vm.digitalZoom.value)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a zoom start with no final ack still sends the stop`() = runTest(dispatcher) {
+        for (lost in listOf(CommandResult.Timeout, CommandResult.Denied("no link"))) {
+            val vehicle = GatedVehicle()
+            val vm = testCockpitVm(vehicle)
+            backgroundScope.launch { vm.vehicle.collect {} }
+            runCurrent()
+
+            vm.zoomIn()
+            runCurrent()
+            vehicle.control.answers.single().complete(lost)
+            runCurrent()
+
+            assertEquals("$lost", listOf(VehicleCommand.CameraZoom(1), VehicleCommand.CameraZoom(0)), vehicle.control.sent)
+            vm.viewModelScope.cancel()
+        }
+    }
+
+    @Test
+    fun `leaving the screen mid-press stops the zoom`() = runTest(dispatcher) {
+        val vehicle = GatedVehicle()
+        val vm = testCockpitVm(vehicle)
+        backgroundScope.launch { vm.vehicle.collect {} }
+        runCurrent()
+
+        vm.zoomIn()
+        runCurrent()
+        vm.viewModelScope.cancel()
+        runCurrent()
+
+        assertEquals(listOf(VehicleCommand.CameraZoom(1), VehicleCommand.CameraZoom(0)), vehicle.control.sent)
     }
 
     @Test

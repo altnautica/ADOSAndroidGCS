@@ -27,6 +27,7 @@ import com.altnautica.gcs.core.model.PositionFix
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.core.model.VehicleProvider
+import com.altnautica.gcs.core.model.VideoState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import com.altnautica.gcs.core.skills.SkillActivator
 import com.altnautica.gcs.core.skills.SkillReason
@@ -507,6 +508,7 @@ class CockpitViewModelTest {
         every { catalog.streams(any()) } returns flowOf(
             listOf("cam-a", "cam-b", "cam-c").map { StreamDescriptor(it, "main", "h264", live = true, switchKind = StreamSwitchKind.Switchable) },
         )
+        every { catalog.noCamera(any()) } returns flowOf(false)
         coEvery { catalog.switch(drone, "cam-b") } coAnswers {
             delay(2_000)
             AgentResult.Ok(StreamSwitchOutcome.Switched)
@@ -527,6 +529,26 @@ class CockpitViewModelTest {
 
         assertEquals("cam-c", vm.video.value.selectedStreamId)
         assertNull(vm.video.value.switchingStreamId)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a vehicle that reports no camera shows no source and drops the last frame`() = runTest(dispatcher) {
+        val noCamera = MutableStateFlow(false)
+        val catalog = mockk<StreamCatalog> {
+            every { streams(any()) } returns flowOf(emptyList())
+            every { noCamera(any()) } returns noCamera
+        }
+        val vm = vm(listOf(node("drone-1")), vehicle = null, streamCatalog = catalog, agentBaseUrl = "http://10.0.0.2:8080/")
+        backgroundScope.launch { vm.videoState.collect {} }
+        runCurrent()
+        assertNotNull("a camera: the stream is dialled", vm.video.value.main)
+
+        noCamera.value = true
+        runCurrent()
+
+        assertNull("no camera: nothing stays on screen", vm.video.value.main)
+        assertEquals(VideoState.NoSource, vm.videoState.value)
         vm.viewModelScope.cancel()
     }
 

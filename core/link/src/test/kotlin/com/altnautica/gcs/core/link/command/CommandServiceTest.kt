@@ -138,6 +138,18 @@ class CommandServiceTest {
     }
 
     @Test
+    fun `camera zoom is continuous at a rate, never the step type autopilots refuse`() = runTest {
+        val link = ScriptedLink { m -> if (m is CommandLong) reply(m.ack) }
+        val service = service(link, backgroundScope)
+        service.run(VehicleCommand.CameraZoom(1))
+        service.run(VehicleCommand.CameraZoom(0))
+        val sent = link.sent.map { it as CommandLong }
+        assertEquals(listOf(531, 531), sent.map { it.command })
+        assertEquals("ZOOM_TYPE_CONTINUOUS", listOf(1f, 1f), sent.map { it.param1 })
+        assertEquals(listOf(1f, 0f), sent.map { it.param2 })
+    }
+
+    @Test
     fun `reboot autopilot sends PREFLIGHT_REBOOT_SHUTDOWN with param1 one`() = runTest {
         val link = ScriptedLink { m -> if (m is CommandLong) reply(m.ack) }
         service(link, backgroundScope).run(VehicleCommand.RebootAutopilot)
