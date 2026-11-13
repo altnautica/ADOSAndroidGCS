@@ -3,7 +3,29 @@
 All notable changes to ADOS Android GCS are recorded here. Versions follow the
 app's `versionName`.
 
-## [Unreleased]
+## [0.6.0] - 2026-11-13
+
+This release covers everything since 0.5.0: eleven commits over 2026-11-12 and
+2026-11-13, from a whole-app audit of the Android app, Mission Control and the
+drone's own cockpit. Three threads run through it.
+
+The first is a sharper, quieter flight screen. Panels use smaller radii and
+hairline borders, every top-bar control has one height, the flight-state chip
+and status pill are outlines with a status dot, and their words come from the
+shared spec in sentence case. Navigation is unchanged: the flight screen is
+still its own full-screen route.
+
+The second is safety. An unknown arm state is treated as possibly airborne,
+and a stale pilot frame or heartbeat no longer decides it. Manual stick input
+follows the controller's stick mode, calibration and dead zone. A cancelled
+controller press never clicks, so a pad disconnect cannot complete a slide to
+start a mission. Missions cannot be uploaded or started over a running one,
+and calibrations that could leave the motors armed are no longer offered.
+
+The third is the rest of the app: Fly Here on the local map without GNSS, a
+link popover, video Retry, the missing Menu rows, stale readings marked on
+every node page, radio calibration that checks the sticks the vehicle uses,
+and screens that read as words instead of ids.
 
 ### Added
 
@@ -25,7 +47,6 @@ app's `versionName`.
 - **Sentence-case flight states.** The flight-state chip reads `Link`,
   `Pilot · Normal` and `Follow · Orbit 8 m` as the shared cockpit spec words them,
   and a Fly Here long-press with no flight controller link says so.
-
 - **Sharper, quieter flight screen.** Smaller radii, near-opaque panels with
   a light blur, hairline borders and one control height across the top bar.
   The flight-state chip and the status pill are outlines with a coloured dot,
@@ -66,10 +87,8 @@ app's `versionName`.
   text instead of the newest four.
 - **Parameter confirmations.** A saved or clamped value reads at the precision
   the list shows (0.135), not the widened float.
-
 - **Demo Fly Here.** A LAND picked while a demo goto still shows is no longer
   switched back to GUIDED when the goto window ends.
-
 - **Unknown arm state.** Without a flight-controller link the pilot's arm
   state is unknown and is treated as possibly airborne: no tips, Land rather
   than Take off, pre-flight items hidden.
@@ -102,9 +121,9 @@ app's `versionName`.
   the area and drop zero-length passes.
 - **Calibration.** Compass-motor calibration is no longer offered, and ESC
   calibration only on PX4 multirotors. Airspeed calibration works on
-  ArduPilot planes that have an airspeed sensor configured, PX4 compass calibration follows the flight controller's
-  progress and Cancel stops it on the vehicle, and the reboot prompt appears
-  only on ArduPilot.
+  ArduPilot planes that have an airspeed sensor configured. PX4 compass
+  calibration follows the flight controller's progress and Cancel stops it on
+  the vehicle, and the reboot prompt appears only on ArduPilot.
 - **Radio calibration Save** checks the sticks the vehicle actually maps, on
   PX4 and ArduPilot, rovers and boats included (channels 1-4 while PX4 has no
   stick map yet; throttle plus a steering stick on a PX4 rover or boat), and
@@ -114,9 +133,10 @@ app's `versionName`.
   whose write was not confirmed; counter and sensor-ID parameters stay
   read-only even when their documentation does not flag them; setup steps
   recover on their own after a reconnect.
-- **Logs.** Sharing a log whose file is gone removes it from the list, a failed
-  onboard-log download offers Retry and a share of the part that arrived, and a flight record is written once even
-  if the first write fails at arm. Skipped import items show their row number,
+- **Logs.** Sharing a log whose file is gone removes it from the list, a
+  failed onboard-log download offers Retry and a share of the part that
+  arrived, and a flight record is written once even if the first write fails
+  at arm. Skipped import items show their row number,
   and loading the plan the drone reports has its own button label.
 - **Disclaimer and licences.** The disclaimer must be accepted before the app
   opens (pair links wait for it), and each licence row opens its bundled text.
