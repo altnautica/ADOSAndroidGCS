@@ -71,7 +71,7 @@ fun AdosSheet(
     title: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Overlay {
+    Overlay(onDismiss = onDismiss) {
         SheetFrame(onDismiss, modifier, title, content)
     }
 }

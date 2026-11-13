@@ -8,6 +8,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.focus.FocusDirection
@@ -138,6 +139,67 @@ class OverlayTest {
         compose.runOnIdle { open = false }
         compose.waitForIdle()
         // Not "Behind", the first control the window would fall back to.
+        compose.onNodeWithText("Opener").assertIsFocused()
+    }
+
+    @Test
+    fun anExclusiveLayerHidesOpenOverlaysInTheFrameItOpensAndClosesThem() {
+        val menu = AdosMenuState().apply { expanded = true }
+        val exclusive = mutableStateOf(false)
+        show {
+            OverlayExclusiveLayer(exclusive)
+            AdosMenu(menu, listOf(AdosMenuItem("Row") {}))
+            if (exclusive.value) CompositionLocalProvider(LocalOverlayHost provides null) { AdosButton("Layer", onClick = {}) }
+        }
+        compose.onNodeWithText("Row").assertExists()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle {
+            exclusive.value = true
+            Snapshot.sendApplyNotifications()
+        }
+        compose.mainClock.advanceTimeByFrame()
+        // The frame that first draws the layer draws no menu.
+        compose.onNodeWithText("Layer").assertExists()
+        compose.onNodeWithText("Row").assertDoesNotExist()
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertEquals(false, menu.expanded) }
+        compose.runOnIdle {
+            exclusive.value = false
+            Snapshot.sendApplyNotifications()
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithText("Row").assertDoesNotExist()
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Test
+    fun closingAnExclusiveLayerReturnsFocusToTheControlThatHeldIt() {
+        val open = mutableStateOf(false)
+        compose.setContent {
+            LocalInputModeManager.current.requestInputMode(InputMode.Keyboard)
+            CompositionLocalProvider(LocalControllerUi provides ControllerUi(active = true)) {
+                AdosTheme {
+                    ProvideOverlayHost {
+                        OverlayExclusiveLayer(open)
+                        Column {
+                            AdosButton("Behind", onClick = {})
+                            AdosButton("Opener", onClick = {})
+                            if (open.value) {
+                                // Drawn in place, as the flight screen draws its confirm sheet.
+                                CompositionLocalProvider(LocalOverlayHost provides null) {
+                                    AdosSheet(onDismiss = { open.value = false }) { AdosButton("Inside", onClick = {}) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Opener").requestFocus()
+        compose.runOnIdle { open.value = true }
+        compose.onNodeWithText("Inside").assertIsFocused()
+        compose.runOnIdle { open.value = false }
+        compose.waitForIdle()
         compose.onNodeWithText("Opener").assertIsFocused()
     }
 

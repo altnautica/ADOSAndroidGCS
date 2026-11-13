@@ -11,15 +11,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.overlay.LocalOverlayHost
 import com.altnautica.gcs.core.designsystem.component.overlay.LocalOverlayTopInset
+import com.altnautica.gcs.core.designsystem.component.overlay.OverlayExclusiveLayer
 import com.altnautica.gcs.core.extensions.ui.ExtensionParametersPanel
 import com.altnautica.gcs.core.extensions.ui.ExtensionSlotHost
 import com.altnautica.gcs.core.model.Skill
@@ -90,6 +94,11 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
         previous[0] = open
     }
     val top = SheetStack.visible(open)
+    // The confirm sheet (STOP, Land, Return home) owns the window while it is open: the host
+    // draws no menu or popover above it and closes every open one, in the frame it appears.
+    OverlayExclusiveLayer(isOpen(vm.confirm.state.collectAsStateWithLifecycle()))
+    // Where this layer starts in the window: the confirm sheet draws here, in place.
+    val layerTop = remember { mutableFloatStateOf(0f) }
 
     if (top == CockpitSheet.Status) {
         val density = LocalDensity.current
@@ -102,7 +111,7 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
             )
         }
     }
-    Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
+    Box(Modifier.fillMaxSize().zIndex(Z.SHEETS).onGloballyPositioned { layerTop.floatValue = it.positionInRoot().y }) {
         QuickSettingsPanel(
             open = top == CockpitSheet.Quick,
             settings = settings,
@@ -117,6 +126,13 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
             onStickAllModes = vm::setStickAllModes,
             panels = { extNode?.let { ExtensionSlotHost(it, "cockpit.panel", Modifier.fillMaxWidth()) } },
         )
+    }
+    tourStep?.let { step ->
+        // No scrim and no touch handler outside the card: STOP and both columns stay usable.
+        // Placed before the sheets, so a confirm sheet draws over it.
+        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS), contentAlignment = Alignment.Center) {
+            ControllerTourCard(step, vm::nextTourStep, vm::finishTour)
+        }
     }
     when (top) {
         CockpitSheet.Picker -> picker?.let { ui ->
@@ -143,7 +159,7 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
                 )
             }
         }
-        CockpitSheet.Confirm -> ConfirmLayer(vm)
+        CockpitSheet.Confirm -> ConfirmLayer(vm, layerTop)
         CockpitSheet.Camera -> Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
             val videoState by vm.videoState.collectAsStateWithLifecycle()
             val zoom by vm.digitalZoom.collectAsStateWithLifecycle()
@@ -166,29 +182,28 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
         }
         CockpitSheet.Status, CockpitSheet.Quick, null -> Unit
     }
-    tourStep?.let { step ->
-        // No scrim and no touch handler outside the card: STOP and both columns stay usable.
-        Box(Modifier.fillMaxSize().zIndex(Z.SHEETS), contentAlignment = Alignment.Center) {
-            ControllerTourCard(step, vm::nextTourStep, vm::finishTour)
-        }
-    }
 }
 
 /**
  * The confirm sheet (STOP, Land, RTH and every other confirmed skill), drawn in place at the
  * sheets' level rather than through the window's overlay host: the host adds an overlay after
  * the frame that opened it, so a sheet through it would first show one frame after the tap.
+ * The host's overlays stay hidden while it is open ([OverlayExclusiveLayer]). It starts below
+ * the top bar: the window inset less where this layer starts in the window ([layerTop]).
  */
 @Composable
-private fun ConfirmLayer(vm: CockpitViewModel) {
+private fun ConfirmLayer(vm: CockpitViewModel, layerTop: State<Float>) {
     val confirm by vm.confirm.state.collectAsStateWithLifecycle()
     // A debuggable build times the tap-to-sheet response from here (the frame this composes in).
     DisposableEffect(Unit) {
         com.altnautica.gcs.feature.cockpit.chrome.FlightFrames.responded()
         onDispose {}
     }
+    val inset = LocalOverlayTopInset.current - with(LocalDensity.current) { layerTop.value.toDp() }
     Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
-        CompositionLocalProvider(LocalOverlayHost provides null) { ConfirmHost(confirm, vm.confirm) }
+        CompositionLocalProvider(LocalOverlayHost provides null, LocalOverlayTopInset provides inset.coerceAtLeast(0.dp)) {
+            ConfirmHost(confirm, vm.confirm)
+        }
     }
 }
 

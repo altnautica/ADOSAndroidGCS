@@ -53,7 +53,7 @@ fun AdosDialog(
     dismiss: (@Composable RowScope.() -> Unit)? = null,
     text: (@Composable () -> Unit)? = null,
 ) {
-    Overlay {
+    Overlay(onDismiss = onDismiss) {
         val colors = AdosTheme.colors
         val trap = remember { FocusRequester() }
         val confirmFocus = remember { FocusRequester() }

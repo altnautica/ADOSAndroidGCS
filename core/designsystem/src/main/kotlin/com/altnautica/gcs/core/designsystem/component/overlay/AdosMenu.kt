@@ -75,7 +75,7 @@ data class AdosMenuItem(
 @Composable
 fun AdosMenu(state: AdosMenuState, items: List<AdosMenuItem>) {
     if (!state.expanded) return
-    Overlay(key = state) {
+    Overlay(key = state, onDismiss = { state.expanded = false }) {
         val colors = AdosTheme.colors
         val requester = remember { FocusRequester() }
         val close = { state.expanded = false }
