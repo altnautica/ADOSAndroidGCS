@@ -162,22 +162,30 @@ class LayerPainter(private val measurer: TextMeasurer) {
         val fade = ((now - slot.curAt).toFloat() / LayerSlot.FADE_MS).coerceIn(0f, 1f)
         val items = cur?.items
         if (items != null) {
+            val blocked = pathBlocked(items)
             for (i in items.indices) {
                 val item = items[i]
                 if (!ArRules.include(item, flags, route)) continue
                 val before = prevByKey[item.key]
                 val a = if (before == null && slot.prev != null) fade else 1f
-                item(item, before, f, view, route, layerAlpha * a)
+                item(item, before, f, view, route, blocked, layerAlpha * a)
             }
         }
         val gone = prev?.items
         if (fade < 1f && gone != null) {
+            val blocked = pathBlocked(gone)
             for (i in gone.indices) {
                 val g = gone[i]
                 if (curByKey.containsKey(g.key) || !ArRules.include(g, flags, route)) continue
-                item(g, null, 1f, view, route, layerAlpha * (1f - fade))
+                item(g, null, 1f, view, route, blocked, layerAlpha * (1f - fade))
             }
         }
+    }
+
+    /** Whether the camera's own `fpath` item reads blocked: the agent gives it the pilot's avoid state. */
+    private fun pathBlocked(items: List<ArItem>): Boolean {
+        for (i in items.indices) if (items[i].t == "fpath") return items[i].state == "blocked"
+        return false
     }
 
     /** [b] eased from [a] by [f]; NaN when [b] is absent. A plain float, so no interpolated value is boxed. */
@@ -208,7 +216,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
         return true
     }
 
-    private fun DrawScope.item(it: ArItem, before: ArItem?, f: Float, view: Rect, route: RouteStyle?, alpha: Float) {
+    /** Draws [it]; [wayBlocked] is whether its camera's `fpath` reads blocked, which the goal ring follows. */
+    private fun DrawScope.item(it: ArItem, before: ArItem?, f: Float, view: Rect, route: RouteStyle?, wayBlocked: Boolean, alpha: Float) {
         if (alpha <= 0.01f) return
         val x = lerp(before?.x, it.x, f)
         val y = lerp(before?.y, it.y, f)
@@ -311,9 +320,11 @@ class LayerPainter(private val measurer: TextMeasurer) {
             "fgoal" -> {
                 if (x.isNaN() || y.isNaN()) return
                 val c = pt(view, x, y)
+                // A blocked way reads blocked at the goal too.
+                val color = if (wayBlocked) LayerColors.Blocked else LayerColors.Follow
                 drawCircle(LayerColors.Halo, px(9f), c, alpha = alpha, style = stroke(px(4f)))
-                drawCircle(LayerColors.Follow, px(9f), c, alpha = alpha, style = stroke(px(2f)))
-                drawCircle(LayerColors.Follow, px(2.5f), c, alpha = alpha)
+                drawCircle(color, px(9f), c, alpha = alpha, style = stroke(px(2f)))
+                drawCircle(color, px(2.5f), c, alpha = alpha)
             }
             "orbit" -> {
                 if (!polyline(it, before, f, view, close = it.pts.size > 8)) return

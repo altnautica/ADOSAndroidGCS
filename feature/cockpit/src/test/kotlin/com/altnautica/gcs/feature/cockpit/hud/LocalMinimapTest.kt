@@ -40,6 +40,17 @@ class LocalMinimapTest {
     }
 
     @Test
+    fun `a go-to the planner finds blocked keeps its straight way and goal, blocked`() {
+        // The agent's frame for a blocked go-to: the commanded goal and the straight way to it.
+        val frame = pilot("""{"owner":"goto","avoid_state":"blocked","goal_ned":[5,2,-5],"plan_ned":[[0,0],[5,2]]}""")
+        val plan = LocalPlan.of(frame)!!
+        assertTrue(plan.blocked)
+        assertEquals(listOf(0f to 0f, 5f to 2f), plan.points)
+        assertEquals(5f to 2f, plan.goal)
+        assertEquals(ScreenPlan(listOf(Offset(100f, 100f), Offset(120f, 50f)), Offset(120f, 50f), true), screenPlan(plan, ::pt))
+    }
+
+    @Test
     fun `a stale pilot frame plans nothing`() {
         val p = pilot("""{"owner":"goto","plan_ned":[[0,0],[5,0]],"goal_ned":[5,0,-5]}""", receivedAtMs = 1_000L)
         assertEquals(LocalPlan(listOf(0f to 0f, 5f to 0f), 5f to 0f, false), LocalPlan.of(freshPilot(p, 1_500L)))

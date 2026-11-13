@@ -17,7 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -280,31 +280,24 @@ internal fun radarDiameter(width: WidthClass): Dp = when (width) {
 }
 
 /**
- * The minimap in its local frame. Its inputs (the SLAM pose, trail, scan, occupancy and
- * follow lock, and the drone's own local position and attitude) are sampled together on
- * every [MINIMAP_BEATS]th beat of the flight screen, and recompose the map only when one
- * changed, or every 500 ms so ages advance: a pose or attitude stream at the video rate
- * redraws the map at most 5 times a second, in the same frame as the HUD. A tap runs
- * [onClick]; a long-press flies to the point under it, as an offset from the drone
- * ([CockpitViewModel.pickLocalPoint]). The sample is read only by the map's draw pass.
+ * The minimap in its local frame, drawn from a [LocalMinimapSample] taken on the flight
+ * screen's beat: a pose, attitude or pilot stream at the video rate redraws the map at most
+ * 5 times a second, in the same frame as the HUD. A tap runs [onClick]; a long-press flies
+ * to the point under it, as an offset from the drone ([CockpitViewModel.pickLocalPoint]).
+ * The sample is read only by the map's draw pass.
  */
 @Composable
 internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Unit)? = null) {
     val a = vm.autonomy
     val pin by a.minimapPin.collectAsStateWithLifecycle()
-    val telemetry by vm.telemetry.collectAsStateWithLifecycle()
+    val telemetry = vm.telemetry.collectAsStateWithLifecycle()
     val beat = rememberRedrawBeat()
-    val inputs by produceState(localMapInputs(a, telemetry), a, telemetry, beat) {
-        beat.ticks.collect { n ->
-            if (n % MINIMAP_BEATS != 0L) return@collect
-            val next = localMapInputs(a, telemetry)
-            if (n % AGE_BEATS == 0L || next.copy(nowMs = value.nowMs) != value) value = next
-        }
-    }
+    val sample = remember(a) { LocalMinimapSample(a) { telemetry.value } }
+    LaunchedEffect(sample, beat) { beat.ticks.collect(sample::onBeat) }
     Box(modifier) {
         // Read inside the map's draw pass: a new sample redraws the map without recomposing this card.
         LocalMinimap(
-            { inputs },
+            { sample.inputs },
             pin,
             a::setMinimapPin,
             Modifier.fillMaxSize(),
@@ -314,13 +307,34 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onCl
     }
 }
 
-/** What the local minimap shows now: the follow lock and the pilot's plan only while fresh. */
-private fun localMapInputs(a: CockpitAutonomy, telemetry: VehicleTelemetry?): LocalMapInputs {
-    val now = a.nowMs()
-    val f = a.feed
-    val fresh = f.follow.value?.takeIf { now - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value
-    val plan = LocalPlan.of(freshPilot(f.pilot.value, now))
-    return LocalMapInputs(f.pose.value, telemetry?.localPosition?.value, telemetry?.attitude?.value, f.trail.value, f.scan.value, f.occupancy.value, fresh, now, plan)
+/**
+ * The local minimap's inputs as of its last beat: the SLAM pose, trail, scan, occupancy,
+ * follow lock and the pilot's planned path and goal, with the drone's own local position and
+ * attitude, read together on every [MINIMAP_BEATS]th beat. Frames arriving between samples
+ * change nothing the map draws; a sample replaces the last only when something in it
+ * changed, or every 500 ms so ages (and a pilot frame going stale) advance.
+ */
+@Stable
+internal class LocalMinimapSample(private val a: CockpitAutonomy, private val telemetry: () -> VehicleTelemetry?) {
+    var inputs: LocalMapInputs by mutableStateOf(read())
+        private set
+
+    /** Beat [n] of the flight screen's [RedrawBeat]. */
+    fun onBeat(n: Long) {
+        if (n % MINIMAP_BEATS != 0L) return
+        val next = read()
+        if (n % AGE_BEATS == 0L || next.copy(nowMs = inputs.nowMs) != inputs) inputs = next
+    }
+
+    /** What the local minimap shows now: the follow lock and the pilot's plan only while fresh. */
+    private fun read(): LocalMapInputs {
+        val now = a.nowMs()
+        val f = a.feed
+        val fresh = f.follow.value?.takeIf { now - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value
+        val plan = LocalPlan.of(freshPilot(f.pilot.value, now))
+        val t = telemetry()
+        return LocalMapInputs(f.pose.value, t?.localPosition?.value, t?.attitude?.value, f.trail.value, f.scan.value, f.occupancy.value, fresh, now, plan)
+    }
 }
 
 /** The local minimap's sampling: every second beat, 5 Hz. */

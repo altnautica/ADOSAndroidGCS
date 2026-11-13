@@ -69,6 +69,16 @@ app's `versionName`.
   and p90, the mean of each frame stage and each confirm sheet's tap-to-frame
   time; `adb shell setprop debug.ados.cockpit.probe 1` adds the busiest
   composables.
+- **Planned path on the local minimap.** While a go-to or a skill flies and
+  the pilot's frame is fresh, the local minimap draws the pilot's planned path
+  as a dashed line and a ring on its goal, in the go-to colour, or in the
+  blocked colour while the pilot reports the way blocked, as the drone's own
+  cockpit and Mission Control do. A go-to the drone finds blocked keeps its
+  straight way and goal on the map in the blocked colour. The path is read
+  with the rest of the map on every second beat, so pilot frames at any rate
+  redraw the map at most 5 times a second and never recompose the card.
+- **Blocked goal in the AR view.** The AR goal ring turns the blocked colour
+  while the way to it is blocked, as the path does.
 
 ## [0.6.1] - 2026-11-13
 
