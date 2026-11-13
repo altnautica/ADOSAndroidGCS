@@ -281,4 +281,42 @@ class HeroProfileHoldTest {
         advanceTimeBy(60_000)
         assertEquals("a drone already on hero is not demoted", listOf("status", lease), alreadyHero.calls)
     }
+
+    @Test
+    fun `a drone that moves to another address keeps its lease there when the old address is released`() = runTest {
+        val atA = FakeAgent()
+        val atB = FakeAgent()
+        var reachable = atA
+        val hold = HeroProfileHold(backgroundScope, holder) { reachable }
+        val releaseA = hold.acquire(drone, url)
+        runCurrent()
+        assertEquals(listOf("status", lease), atA.calls)
+
+        reachable = atB
+        hold.acquire(drone, "http://192.168.1.50:8080/")
+        runCurrent()
+        releaseA()
+        advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS + 1)
+        assertEquals("the old address gets no release and no further renewal", listOf("status", lease), atA.calls)
+        assertEquals("the lease is renewed at the new address at once, never released", listOf(lease), atB.calls)
+        advanceTimeBy(HeroProfileHold.RENEW_MS)
+        assertEquals("renewals carry on at the new address", listOf(lease, lease), atB.calls)
+    }
+
+    @Test
+    fun `a pre-lease drone that moves to another address is not demoted while still held`() = runTest {
+        val agent = FakeAgent(leases = false)
+        val hold = hold(agent)
+        val releaseA = hold.acquire(drone, url)
+        runCurrent()
+        agent.videoProfile = "hero"
+        val releaseB = hold.acquire(drone, "http://192.168.1.50:8080/")
+        runCurrent()
+        releaseA()
+        advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS + 1)
+        assertEquals("one promotion, no demotion while held", listOf("status", lease), agent.calls)
+        releaseB()
+        advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS + 1)
+        assertEquals("demoted once the last viewer goes", listOf("status", lease, "POST thumbnail"), agent.calls)
+    }
 }

@@ -40,7 +40,9 @@ interface VideoProfileAgent {
  * - a failed renewal is retried after each of [RENEW_RETRY_MS] (then every last step)
  *   until the next scheduled renewal replaces it, so one lost or timed-out request never
  *   lets the lease lapse;
- * - viewers of the same agent share one lease, counted per agent base URL;
+ * - viewers of the same drone share one lease, counted per [DeviceId]; a drone whose agent
+ *   moves to another base URL keeps that one hold, which follows it there (renewals and the
+ *   release go to the new address), so the old address never releases or demotes it;
  * - the release waits [RELEASE_GRACE_MS], so leaving and re-entering the flight view does
  *   not respawn the encoder twice;
  * - a ground station is never promoted, nor an agent that does not report a profile or
@@ -51,7 +53,7 @@ interface VideoProfileAgent {
  *   grace finds its promotion still retrying.
  * An agent that predates leases answers without a `leases` list; there the hold falls back
  * to a plain set, promoting only a drone it saw on `thumbnail` and demoting only what it
- * promoted.
+ * promoted, once its last viewer goes.
  */
 @Singleton
 class HeroProfileHold(
@@ -66,56 +68,84 @@ class HeroProfileHold(
 
     private enum class Outcome { Lease, Legacy, None }
 
-    private class Promoted(val agent: VideoProfileAgent?, val outcome: Outcome)
-
-    private class Hold {
+    /** One drone's hold; its fields change under the [holds] lock. */
+    private class Hold(var agentUrl: String) {
         var count = 1
         var releaseJob: Job? = null
         var renewJob: Job? = null
-        lateinit var promoted: Deferred<Promoted>
+        var moveJob: Job? = null
+
+        /** The agent the promotion or the latest move reached; renewals and the release use it. */
+        var agent: VideoProfileAgent? = null
+        lateinit var promoted: Deferred<Outcome>
     }
 
-    private val holds = HashMap<String, Hold>()
+    private val holds = HashMap<DeviceId, Hold>()
 
     /**
-     * Holds the agent [node] serving at [agentUrl] on `hero`. Returns the release; calling it
-     * more than once releases once.
+     * Holds the agent [node] serving at [agentUrl] on `hero`. A node already held at another
+     * URL keeps its hold, which moves to [agentUrl]. Returns the release; calling it more than
+     * once releases once.
      */
     fun acquire(node: DeviceId, agentUrl: String): () -> Unit {
         val hold = synchronized(holds) {
-            holds[agentUrl]?.apply {
+            holds[node]?.apply {
                 releaseJob?.cancel()
                 releaseJob = null
                 count++
-            } ?: Hold().also { created ->
-                holds[agentUrl] = created
-                created.promoted = scope.async { promote(node, agentUrl, created) }
+                if (this.agentUrl != agentUrl) {
+                    this.agentUrl = agentUrl
+                    moveJob?.cancel()
+                    moveJob = scope.launch { move(node, this@apply) }
+                }
+            } ?: Hold(agentUrl).also { created ->
+                holds[node] = created
+                created.promoted = scope.async { promote(node, created) }
             }
         }
         val released = AtomicBoolean(false)
         return {
-            if (released.compareAndSet(false, true)) release(agentUrl, hold)
+            if (released.compareAndSet(false, true)) release(node, hold)
         }
     }
 
-    /** The hold is still the agent's; a release in its grace leaves it so until the grace ends. */
-    private fun current(agentUrl: String, hold: Hold): Boolean = holds[agentUrl] === hold
+    /** The hold is still the node's; a release in its grace leaves it so until the grace ends. */
+    private fun current(node: DeviceId, hold: Hold): Boolean = holds[node] === hold
 
-    private suspend fun promote(node: DeviceId, agentUrl: String, hold: Hold): Promoted {
-        val agent = agentFor(node) ?: return Promoted(null, Outcome.None)
+    /** Each attempt resolves the node's agent again, so a retry follows a node that moved. */
+    private suspend fun promote(node: DeviceId, hold: Hold): Outcome {
         var attempt = 0
         while (true) {
+            val agent = agentFor(node) ?: return Outcome.None
             attemptPromote(agent)?.let { outcome ->
-                if (outcome == Outcome.Lease) {
-                    synchronized(holds) {
-                        if (holds[agentUrl] === hold) hold.renewJob = scope.launch { renew(agent) }
-                    }
+                synchronized(holds) {
+                    hold.agent = agent
+                    if (outcome == Outcome.Lease && current(node, hold)) hold.renewJob = scope.launch { renew(agent, immediately = false) }
                 }
-                return Promoted(agent, outcome)
+                return outcome
             }
             delay(PROMOTE_BACKOFF_MS[attempt.coerceAtMost(PROMOTE_BACKOFF_MS.lastIndex)])
             attempt++
-            if (!synchronized(holds) { current(agentUrl, hold) }) return Promoted(agent, Outcome.None)
+            if (!synchronized(holds) { current(node, hold) }) return Outcome.None
+        }
+    }
+
+    /**
+     * Points a hold at the node's new address once its promotion has settled. A held lease is
+     * renewed there at once and then on the usual cadence; a pre-lease promotion is demoted
+     * there when the hold ends. Nothing is sent to the old address.
+     */
+    private suspend fun move(node: DeviceId, hold: Hold) {
+        val outcome = hold.promoted.await()
+        if (outcome == Outcome.None) return
+        val agent = agentFor(node) ?: return
+        synchronized(holds) {
+            if (!current(node, hold)) return
+            hold.agent = agent
+            if (outcome == Outcome.Lease) {
+                hold.renewJob?.cancel()
+                hold.renewJob = scope.launch { renew(agent, immediately = true) }
+            }
         }
     }
 
@@ -141,10 +171,11 @@ class HeroProfileHold(
     /**
      * Renews every [RENEW_MS] counted from the previous renewal's start, not its answer, so a
      * slow or timed-out request does not push the schedule back. Each scheduled renewal
-     * retries its failures until it succeeds or the next one replaces it.
+     * retries its failures until it succeeds or the next one replaces it. [immediately] adds a
+     * renewal now, before the first scheduled one.
      */
-    private suspend fun renew(agent: VideoProfileAgent) = coroutineScope {
-        var attempt: Job? = null
+    private suspend fun renew(agent: VideoProfileAgent, immediately: Boolean) = coroutineScope {
+        var attempt: Job? = if (immediately) launch { renewUntilAccepted(agent) } else null
         while (true) {
             delay(RENEW_MS)
             attempt?.cancel()
@@ -160,21 +191,22 @@ class HeroProfileHold(
         }
     }
 
-    private fun release(agentUrl: String, hold: Hold) = synchronized(holds) {
+    private fun release(node: DeviceId, hold: Hold) = synchronized(holds) {
         hold.count--
         if (hold.count > 0) return@synchronized
         hold.releaseJob = scope.launch {
             delay(RELEASE_GRACE_MS)
             val drop = synchronized(holds) {
-                if (hold.count > 0 || holds[agentUrl] !== hold) return@synchronized false
-                holds.remove(agentUrl)
+                if (hold.count > 0 || !current(node, hold)) return@synchronized false
+                holds.remove(node)
                 hold.renewJob?.cancel()
+                hold.moveJob?.cancel()
                 true
             }
             if (!drop) return@launch
-            val promoted = hold.promoted.await()
-            val agent = promoted.agent ?: return@launch
-            when (promoted.outcome) {
+            val outcome = hold.promoted.await()
+            val agent = synchronized(holds) { hold.agent } ?: return@launch
+            when (outcome) {
                 Outcome.Lease -> agent.releaseVideoProfile(holderId)
                 Outcome.Legacy -> agent.setVideoProfile(THUMBNAIL)
                 Outcome.None -> Unit
