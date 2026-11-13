@@ -12,6 +12,10 @@ import com.altnautica.gcs.core.extensions.data.PerceptionFeed
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.MonotonicClock
+import com.altnautica.gcs.feature.cockpit.hud.layers.ArFrame
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerFrame
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerSlot
+import com.altnautica.gcs.feature.cockpit.hud.layers.LayerSpec
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +57,8 @@ internal class AutonomyFeed(
     private val layers: LayerStore,
     /** Client frames for the nav-stream socket: the view lease. */
     private val outbound: Flow<String>,
+    /** The camera the flight-state chip reads the mission ETA from while a mission runs, else null. */
+    private val etaCamera: () -> String?,
 ) {
     private val _batches = MutableStateFlow<Map<String, DetectionBatch>>(emptyMap())
     val batches: StateFlow<Map<String, DetectionBatch>> = _batches.asStateFlow()
@@ -97,6 +103,12 @@ internal class AutonomyFeed(
     /** The latest view lease sent to the agent, re-sent as `?view=` by the poll. */
     @Volatile private var lease: String? = null
 
+    /**
+     * The `ar` frames of the chip's ETA lease: the next waypoint's ETA on [etaCamera],
+     * whichever camera the overlay follows.
+     */
+    val etaAr = LayerSlot<ArFrame>()
+
     /** The in-process source for [id], if any. */
     fun local(id: DeviceId): AutonomyFeedApi? = localApis.firstNotNullOfOrNull { it.autonomy(id) }
 
@@ -118,6 +130,7 @@ internal class AutonomyFeed(
                         }
                     }
                     launch { pollStatus(id) }
+                    launch { pollEta(id) }
                     launch { pollMap(id) }
                 }
             }
@@ -136,6 +149,7 @@ internal class AutonomyFeed(
         _pilot.value = null
         _reducedRate.value = false
         lastStreamMs = NEVER
+        etaAr.clear()
         layers.clear()
         tileCache.clear()
         mapSeq = 0L
@@ -169,6 +183,35 @@ internal class AutonomyFeed(
                 onNavText(f.text, clock.nowMs() - f.ageMs)
             }
             _reducedRate.value = frames.isNotEmpty()
+        }
+    }
+
+    /**
+     * The `?view=` lease the chip's mission ETA needs beyond the socket's own, or null when
+     * no mission runs or the socket already leases `ar_route` on [etaCamera].
+     */
+    internal fun etaView(): String? {
+        val camera = etaCamera() ?: return null
+        val held = lease
+        if (held != null && held.substringBefore(':') == camera && ETA_LAYER in held.substringAfter(':').split(',')) return null
+        return "$camera:$ETA_LAYER"
+    }
+
+    /**
+     * Holds the chip's ETA lease while [etaView] names one. The agent keeps one lease per
+     * socket, and that one names the camera the overlay follows (a belly leg, say, with no
+     * waypoint in frame), so the ETA camera is leased through the status route every
+     * [ETA_POLL_MS] and its `ar` frame kept in [etaAr], stamped with its agent-side age.
+     */
+    private suspend fun pollEta(id: DeviceId) {
+        while (true) {
+            delay(ETA_POLL_MS)
+            val view = etaView() ?: continue
+            val body = api(id)?.let { runCatching { it.navStatus(view) }.getOrNull() }?.getOrNull() ?: continue
+            val polled = statusFrames(body).firstOrNull { it.kind == AR_KIND } ?: continue
+            val at = clock.nowMs() - polled.ageMs
+            val frame = ((AutonomyParse.navFrame(polled.text, at) as? NavFrame.Layer)?.frame as? LayerFrame.Ar)?.frame ?: continue
+            etaAr.push(frame, frame.tsMs, at)
         }
     }
 
@@ -249,6 +292,9 @@ internal class AutonomyFeed(
         /** Above the agent socket's 5 s keepalive, so a healthy but quiet socket never starts the poll. */
         const val STREAM_QUIET_MS = 6_000L
         const val STATUS_FRESH_MS = 2_000L
+        const val ETA_POLL_MS = 1_000L
+        private const val ETA_LAYER = LayerSpec.AR_ROUTE
+        private const val AR_KIND = "ar"
         private const val NEVER = Long.MIN_VALUE
 
         /** A `{"type":"view","camera_id","layers":[…]}` lease as the status route's `<camera_id>:<layer,…>` query. */

@@ -19,7 +19,6 @@ import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipResolver
 import com.altnautica.gcs.feature.cockpit.chip.FlightStateChipUi
 import com.altnautica.gcs.feature.cockpit.chrome.FlightValues
 import com.altnautica.gcs.feature.cockpit.flow.FlowUi
-import com.altnautica.gcs.feature.cockpit.hud.layers.ArRules
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +71,7 @@ internal class CockpitFacts(
                 missionCompleteSinceMs = done,
                 homeDistM = homeDistanceM(map),
                 goalDistM = p?.goalNed?.let { goalDistanceM(it, telemetry.value?.localPosition?.value) },
-                missionEtaS = autonomy.layers.store.ar.let { ArRules.nextWaypointEtaS(it.cur, it.ageMs(autonomy.nowMs())) },
+                missionEtaS = autonomy.missionEtaS(),
                 vtolTransitioning = telemetry.value?.vtolTransitioning?.value == true,
                 fcModeName = b.modeName,
                 modeDetail = p?.let { FlightStateChipResolver.modeDetail(it.ownerLabel, it.skill?.label) },

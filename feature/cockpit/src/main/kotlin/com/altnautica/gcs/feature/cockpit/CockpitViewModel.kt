@@ -601,7 +601,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** Detections, follow and navigation state, designation, nav-source chip, minimap frame and data layers. */
     internal val autonomy = CockpitAutonomy(
         viewModelScope, clock, vehicleNodeId, telemetry, nodeFlows.vehicleServices, video, session.allSkills, tick500,
-        extensions, perception, localApis, settingsRepo, _events, ::activate,
+        extensions, perception, localApis, settingsRepo, _events, ::activate, pilot.state,
     )
 
     private val widthClass = MutableStateFlow<WidthClass?>(null)

@@ -13,6 +13,8 @@ import com.altnautica.gcs.core.extensions.data.WriteOutcome
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.GpsFix
+import com.altnautica.gcs.core.model.MissionState
+import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.model.VideoSource
@@ -26,6 +28,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import com.altnautica.gcs.feature.cockpit.hud.layers.ArRules
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerController
 import com.altnautica.gcs.feature.cockpit.hud.layers.VisionEngine
 import kotlinx.coroutines.flow.Flow
@@ -71,6 +74,8 @@ internal class CockpitAutonomy(
     private val settings: CockpitSettingsRepository,
     private val events: MutableSharedFlow<CockpitEvent>,
     private val activate: (String, Map<String, Any?>) -> Unit,
+    /** The onboard pilot's state as the flight-state chip reads it. */
+    private val pilotState: StateFlow<PilotState?>,
 ) {
     /** The video data layers: frames, flags, view and compute leases. */
     val layers: LayerController = LayerController(
@@ -101,7 +106,29 @@ internal class CockpitAutonomy(
     /** The flight controller's arm state from a fresh heartbeat; null when unknown. */
     private fun fcArmed(): Boolean? = freshHeartbeatArmed(telemetry.value?.heartbeat?.value, clock.nowMs())
 
-    val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound)
+    val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound, ::etaCamera)
+
+    /**
+     * The camera the chip reads the mission ETA from while a mission runs or is paused, else
+     * null: the vehicle's first leg that does not look down, whichever camera the overlay
+     * follows. The agent puts the ETA on the next waypoint only where it is in frame, which a
+     * belly leg rarely has.
+     */
+    private fun etaCamera(): String? {
+        val state = freshPilot(pilotState.value, clock.nowMs())?.mission?.state
+        if (state != MissionState.Active && state != MissionState.Paused) return null
+        return video.value.streams.firstOrNull { it.role != ROLE_DOWN }?.id ?: PRIMARY_CAMERA
+    }
+
+    /**
+     * Seconds to the next waypoint for the flight-state chip: from the overlay's `ar` frame
+     * when its camera carries it, else from the chip's own ETA lease ([AutonomyFeed.etaAr]).
+     */
+    fun missionEtaS(): Float? {
+        val now = clock.nowMs()
+        val ar = layers.store.ar
+        return ArRules.nextWaypointEtaS(ar.cur, ar.ageMs(now)) ?: ArRules.nextWaypointEtaS(feed.etaAr.cur, feed.etaAr.ageMs(now))
+    }
 
     /** The node's vision routes: in-process for a simulated node, else its agent. */
     private suspend fun engineApi(id: DeviceId): com.altnautica.gcs.core.agent.nav.AutonomyFeedApi? = feed.local(id) ?: repository.api(id)
