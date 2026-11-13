@@ -20,6 +20,7 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.model.SpeedCap
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -143,6 +144,9 @@ object PilotWire {
             setupStep = data.str("setup_step"),
             fcFailsafe = data.bool("fc_failsafe") == true,
             failsafeCause = data.str("failsafe_cause"),
+            speedCap = (data["speed_cap"] as? JsonObject)?.let { c ->
+                SpeedCap(c.str("reason") ?: return@let null, c.float("v_h_mps") ?: return@let null)
+            },
         )
     }
 

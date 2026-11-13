@@ -190,6 +190,8 @@ data class PilotState(
     val fcFailsafe: Boolean = false,
     /** What raised the failsafe (`rc_or_failsafe`, `fc`), while [fcFailsafe] holds. */
     val failsafeCause: String? = null,
+    /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`), or null. */
+    val speedCap: SpeedCap? = null,
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
@@ -211,6 +213,9 @@ data class PilotState(
 
 /** One FC status text relayed by the pilot: MAVLink [severity] (0 emergency … 7 debug), [ageMs] since the FC sent it. */
 data class PilotStatusText(val severity: Int, val text: String, val ageMs: Long?)
+
+/** The pilot's horizontal speed cap: why ([reason], e.g. `gnss-denied`) and the limit [vHMps] in m/s. */
+data class SpeedCap(val reason: String, val vHMps: Float)
 
 /**
  * One stick frame for the onboard pilot. Axes are in [-1, 1] after the surface's mode

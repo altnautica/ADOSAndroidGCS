@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.skills.spec.FlightStateMatchSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateSpec
 import com.altnautica.gcs.core.skills.spec.SpecColor
 import com.altnautica.gcs.core.skills.spec.TokensSpec
+import java.util.Locale
 
 /** A button the chip offers beside its text. */
 enum class ChipButton { SetUpAircraft, Resume, TakeControl, Abort }
@@ -171,10 +172,13 @@ class FlightStateChipResolver(
         return strings[key] ?: step.wire
     }
 
-    /** The secondary line in the spec's order (FC failsafe, paused mission, hold reason, avoidance, control mode). */
+    /** The secondary line in the spec's order (FC failsafe, speed cap, paused mission, hold reason, avoidance, control mode). */
     private fun secondary(p: PilotState, ctx: ChipContext, stale: Boolean): List<ChipText> = spec.secondary.order.mapNotNull { part ->
         when (part) {
             "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
+            "speed_cap" -> p.speedCap?.let { cap ->
+                spec.secondary.speedCap?.let { chipText(it.text.replace("{v}", String.format(Locale.ROOT, "%.0f", cap.vHMps)), it.color) }
+            }
             "mission_paused_line" -> spec.secondary.missionPausedLine?.takeIf { matches(it.match, p, ctx, stale) }?.let {
                 chipText(fill(it.text, values(p, ctx)), it.color)
             }

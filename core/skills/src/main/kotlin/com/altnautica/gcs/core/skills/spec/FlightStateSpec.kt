@@ -62,6 +62,7 @@ data class FlightStateSecondarySpec(
     @SerialName("hold_reason") val holdReason: SecondaryTextSpec,
     @SerialName("control_mode") val controlMode: Map<String, String>,
     @SerialName("fc_failsafe") val fcFailsafe: SecondaryTextSpec? = null,
+    @SerialName("speed_cap") val speedCap: SecondaryTextSpec? = null,
     @SerialName("mission_paused_line") val missionPausedLine: MatchedTextSpec? = null,
 )
 
