@@ -19,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -132,7 +133,12 @@ private fun WizardPane(
     Text(wizardTitle(focus.wizard), style = MaterialTheme.typography.headlineSmall, color = AdosTheme.colors.fgPrimary)
     when {
         state.showResults -> {
-            Text(stringResource(R.string.cfg_setup_wizard_done), color = AdosTheme.colors.statusSuccess)
+            val failed = failedSteps(wizard)
+            if (failed > 0) {
+                Text(pluralStringResource(R.plurals.cfg_setup_wizard_steps_failed, failed, failed), color = AdosTheme.colors.statusWarning)
+            } else {
+                Text(stringResource(R.string.cfg_setup_wizard_done), color = AdosTheme.colors.statusSuccess)
+            }
             wizard?.steps?.forEach { s ->
                 s.result?.takeIf { it.isNotEmpty() }?.let {
                     Text(text.format(s.titleKey, s.args.textArgs()), style = MaterialTheme.typography.titleSmall, color = AdosTheme.colors.fgPrimary)
@@ -176,7 +182,15 @@ private fun WizardList(
     listOf(FcSetupApi.WIZARD_GROUND, FcSetupApi.WIZARD_AIR).forEach { id ->
         val wizard: SetupWizard = state.setup.wizard(id) ?: return@forEach
         SectionHeader(wizardTitle(id))
-        Text(wizardStateLabel(wizard.state), color = if (wizard.completed) colors.statusSuccess else colors.fgSecondary)
+        val failed = failedSteps(wizard)
+        Text(
+            if (failed > 0) pluralStringResource(R.plurals.cfg_setup_wizard_steps_failed, failed, failed) else wizardStateLabel(wizard.state),
+            color = when {
+                failed > 0 -> colors.statusWarning
+                wizardSucceeded(wizard) -> colors.statusSuccess
+                else -> colors.fgSecondary
+            },
+        )
         wizard.blockers.forEach { Text(text.format(it, emptyMap()), color = colors.statusError) }
         Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             val resumable = wizard.state == SetupWizardState.Running

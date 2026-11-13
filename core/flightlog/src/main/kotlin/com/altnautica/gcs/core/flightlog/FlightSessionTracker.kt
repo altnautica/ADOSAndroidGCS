@@ -68,10 +68,6 @@ class FlightSessionTracker internal constructor(
         transaction: IndexTransaction,
     ) : this(tlogRecorder, flightSessionDao, tlogFileDao, transaction, CoroutineScope(SupervisorJob() + Dispatchers.IO))
 
-    init {
-        scope.launch { reconcileOnce() }
-    }
-
     private companion object {
         const val TAG = "FlightSessionTracker"
         const val EARTH_RADIUS_M = 6371000.0
@@ -84,6 +80,11 @@ class FlightSessionTracker internal constructor(
 
     private val reconcileLock = Mutex()
     private var reconciled = false
+
+    // Declared after every field reconcileOnce reads: an immediate dispatcher runs it inside init.
+    init {
+        scope.launch { reconcileOnce() }
+    }
 
     private sealed interface Sample {
         data class Position(val fix: PositionFix) : Sample

@@ -156,6 +156,10 @@
     <string name="cfg_setup_wizard_not_started">Not started</string>
     <string name="cfg_setup_wizard_aborted">Aborted</string>
     <string name="cfg_setup_wizard_done">Setup complete</string>
+    <plurals name="cfg_setup_wizard_steps_failed">
+        <item quantity="one">%d step failed</item>
+        <item quantity="other">%d steps failed</item>
+    </plurals>
     <string name="cfg_setup_state_pending">Pending</string>
     <string name="cfg_setup_state_running">Running</string>
     <string name="cfg_setup_state_waiting">Waiting for you</string>

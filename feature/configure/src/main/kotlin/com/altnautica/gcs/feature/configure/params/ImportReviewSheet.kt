@@ -82,7 +82,7 @@ internal fun ImportReviewSheet(
                 }
                 AdosListItem(
                     headline = d.name,
-                    supporting = "${ParamFile.formatValue(d.current)} → ${ParamFile.formatValue(d.fromFile)}",
+                    supporting = "${ParamFile.displayValue(d.current)} → ${ParamFile.displayValue(d.fromFile)}",
                     onClick = { onToggle(d.name) },
                     enabled = !review.running && refused == null,
                     // The row is the one toggle target; the box only shows the state.

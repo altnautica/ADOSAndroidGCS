@@ -23,6 +23,7 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -405,6 +406,17 @@ class DemoPilotTest {
         // The pill keeps one PreArm text at a time, so only the others count towards the eight.
         val listed = texts.map { it.str("text")!! }.filterNot { it.startsWith("PreArm") }.toSet()
         assertTrue(listed.toString(), listed.size >= 8)
+    }
+
+    @Test
+    fun `the status text pin keeps every text inside the cockpit's ten second hold`() {
+        scenarios.pin(DemoScenario.StatusTexts)
+        val pinnedAt = t
+        for (since in 0L until 30_000L step 700) {
+            t = pinnedAt + since
+            val ages = state()["statustext"]!!.jsonArray.map { it.jsonObject["age_ms"]!!.jsonPrimitive.long }
+            assertTrue("at +$since ms: $ages", ages.size >= 8 && ages.all { it < 10_000L })
+        }
     }
 
     @Test

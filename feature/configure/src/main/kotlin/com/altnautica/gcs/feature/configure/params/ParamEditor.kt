@@ -38,8 +38,8 @@ import com.altnautica.gcs.feature.configure.R
 fun invalidReasonText(reason: ParamInvalidReason, meta: ParamMeta?): String = when (reason) {
     ParamInvalidReason.NotANumber -> stringResource(R.string.cfg_param_invalid_number)
     ParamInvalidReason.NotInteger -> stringResource(R.string.cfg_param_invalid_integer)
-    ParamInvalidReason.BelowMin -> stringResource(R.string.cfg_param_invalid_min, ParamFile.formatValue(meta?.min ?: 0.0))
-    ParamInvalidReason.AboveMax -> stringResource(R.string.cfg_param_invalid_max, ParamFile.formatValue(meta?.max ?: 0.0))
+    ParamInvalidReason.BelowMin -> stringResource(R.string.cfg_param_invalid_min, ParamFile.displayValue(meta?.min ?: 0.0))
+    ParamInvalidReason.AboveMax -> stringResource(R.string.cfg_param_invalid_max, ParamFile.displayValue(meta?.max ?: 0.0))
     ParamInvalidReason.NotAnOption -> stringResource(R.string.cfg_param_invalid_option)
     ParamInvalidReason.UnknownBits -> stringResource(R.string.cfg_param_invalid_bits)
     ParamInvalidReason.ReadOnly -> stringResource(R.string.cfg_param_read_only)
@@ -48,7 +48,7 @@ fun invalidReasonText(reason: ParamInvalidReason, meta: ParamMeta?): String = wh
 /** Label for a value: the enum option name when documented, plus units. */
 fun ParamRow.displayValue(): String {
     val option = meta?.options?.firstOrNull { it.value == value }?.label
-    val number = ParamFile.formatValue(value)
+    val number = ParamFile.displayValue(value)
     return when {
         option != null -> "$option ($number)"
         meta?.units != null -> "$number ${meta.units}"
@@ -95,14 +95,14 @@ fun ParamEditorContent(row: ParamRow, onSubmit: (String) -> Unit, modifier: Modi
 
 @Composable
 internal fun NumberEditor(row: ParamRow, meta: ParamMeta?, writing: String?, onSubmit: (String) -> Unit) {
-    var text by remember(row.name) { mutableStateOf(ParamFile.formatValue(row.value)) }
+    var text by remember(row.name) { mutableStateOf(ParamFile.displayValue(row.value)) }
     val validation = ParamValidator.validate(row.name, meta, text)
     val error = (validation as? ParamValidation.Invalid)?.reason
     val hint = listOfNotNull(
-        meta?.min?.let { stringResource(R.string.cfg_param_min, ParamFile.formatValue(it)) },
-        meta?.max?.let { stringResource(R.string.cfg_param_max, ParamFile.formatValue(it)) },
+        meta?.min?.let { stringResource(R.string.cfg_param_min, ParamFile.displayValue(it)) },
+        meta?.max?.let { stringResource(R.string.cfg_param_max, ParamFile.displayValue(it)) },
         meta?.units,
-        meta?.defaultValue?.let { stringResource(R.string.cfg_param_default, ParamFile.formatValue(it)) },
+        meta?.defaultValue?.let { stringResource(R.string.cfg_param_default, ParamFile.displayValue(it)) },
     ).joinToString(" · ")
     OutlinedTextField(
         value = text,
@@ -116,8 +116,8 @@ internal fun NumberEditor(row: ParamRow, meta: ParamMeta?, writing: String?, onS
     meta?.options?.takeIf { it.isNotEmpty() }?.let { options ->
         options.forEach { o ->
             Text(
-                "${ParamFile.formatValue(o.value)} — ${o.label}",
-                modifier = Modifier.fillMaxWidth().clickable { text = ParamFile.formatValue(o.value) }
+                "${ParamFile.displayValue(o.value)} — ${o.label}",
+                modifier = Modifier.fillMaxWidth().clickable { text = ParamFile.displayValue(o.value) }
                     .heightIn(min = AdosTheme.touchMin).wrapContentHeight(Alignment.CenterVertically)
                     .testTag("param-suggestion"),
                 style = MaterialTheme.typography.bodySmall,
@@ -137,17 +137,17 @@ private fun EnumEditor(value: Double, meta: ParamMeta, writing: String?, onSubmi
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(selected = selected == o.value, onClick = { selected = o.value })
-                Text("${o.label} (${ParamFile.formatValue(o.value)})")
+                Text("${o.label} (${ParamFile.displayValue(o.value)})")
             }
         }
     }
-    WriteButton(writing, onClick = { onSubmit(ParamFile.formatValue(selected)) }, enabled = !ParamFile.sameValue(selected, value))
+    WriteButton(writing, onClick = { onSubmit(ParamFile.displayValue(selected)) }, enabled = !ParamFile.sameValue(selected, value))
 }
 
 @Composable
 private fun BitmaskEditor(value: Double, meta: ParamMeta, writing: String?, onSubmit: (String) -> Unit) {
     var current by remember(meta.name, value) { mutableDoubleStateOf(value) }
-    Text(stringResource(R.string.cfg_param_value, ParamFile.formatValue(current)), color = AdosTheme.colors.fgSecondary)
+    Text(stringResource(R.string.cfg_param_value, ParamFile.displayValue(current)), color = AdosTheme.colors.fgSecondary)
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
         meta.bits.forEach { b ->
             Row(
@@ -162,7 +162,7 @@ private fun BitmaskEditor(value: Double, meta: ParamMeta, writing: String?, onSu
     }
     val invalid = ParamValidator.validate(meta.name, meta, current) as? ParamValidation.Invalid
     invalid?.let { Text(invalidReasonText(it.reason, meta), color = AdosTheme.colors.statusError) }
-    WriteButton(writing, onClick = { onSubmit(ParamFile.formatValue(current)) }, enabled = invalid == null)
+    WriteButton(writing, onClick = { onSubmit(ParamFile.displayValue(current)) }, enabled = invalid == null)
 }
 
 /** The write action; while a write waits for the flight controller's echo it names it and stays disabled. */

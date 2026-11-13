@@ -133,6 +133,16 @@ class FlightSessionTrackerTest {
     private fun frameOf(bytes: ByteArray): MavlinkFrame = MavlinkFrameParser().parse(bytes).single()
 
     @Test
+    fun `the tracker starts its reconcile on an immediate dispatcher without crashing`() = runTest {
+        val dir = tmp.newFolder("tlogs-immediate")
+        java.io.File(dir, "2026-01-02_03-04-05_orphan.tlog").writeBytes(ByteArray(8))
+        val daos = Daos()
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
+        FlightSessionTracker(TlogRecorder({ dir }, StandardTestDispatcher(testScheduler)), daos.sessionDao, daos.fileDao, daos.transaction, scope)
+        assertEquals(1, daos.files.size)
+    }
+
+    @Test
     fun `an armed period becomes a session row with a tlog of every received frame`() = runTest {
         val dir = tmp.newFolder("tlogs")
         val recorder = TlogRecorder({ dir }, StandardTestDispatcher(testScheduler))

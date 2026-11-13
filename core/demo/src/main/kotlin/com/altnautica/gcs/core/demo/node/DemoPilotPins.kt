@@ -235,8 +235,9 @@ internal class DemoPilotPins(
 
         /** MAV_SEVERITY_WARNING. */
         private const val SEVERITY_WARNING = 4
-        private const val STATUS_TEXT_SPACING_MS = 1_500L
-        private const val STATUS_TEXT_WRAP_MS = 20_000L
+        // Every text stays younger than the cockpit's 10 s status-text hold, so all nine stay listed.
+        private const val STATUS_TEXT_SPACING_MS = 500L
+        private const val STATUS_TEXT_WRAP_MS = 1_000L
 
         /**
          * Nine warnings the pill lists side by side, one of them long. None is a PreArm text:

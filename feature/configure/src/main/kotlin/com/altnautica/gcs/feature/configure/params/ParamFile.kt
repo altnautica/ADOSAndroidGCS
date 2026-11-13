@@ -67,6 +67,17 @@ object ParamFile {
         return if (e < 0) trimmed else trimmed + text.substring(e)
     }
 
+    /**
+     * A value for display: MAVLink parameters are float32, so the shortest text that reads back
+     * as the same float (0.135, not the widened 0.135000005). Files keep [formatValue].
+     */
+    fun displayValue(value: Double): String {
+        if (value % 1.0 == 0.0 && kotlin.math.abs(value) < 1e15) return value.toLong().toString()
+        val f = value.toFloat()
+        if (f.isNaN() || f.isInfinite()) return f.toString()
+        return java.math.BigDecimal(f.toString()).stripTrailingZeros().toPlainString()
+    }
+
     /** Differences between the vehicle's values and a file; names absent on the vehicle are listed separately. */
     fun compare(vehicle: Map<String, Double>, file: List<ParamFileEntry>): ParamComparison {
         val changed = mutableListOf<ParamDiff>()

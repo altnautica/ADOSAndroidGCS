@@ -110,4 +110,13 @@ class ParamValidatorAndFileTest {
             assertTrue(ParamFile.sameValue(v, ParamFile.formatValue(v).toDouble()))
         }
     }
+
+    @Test
+    fun `the list shows a float32 value at float precision`() {
+        assertEquals("0.135", ParamRow("ATC_RAT_RLL_P", 0.135f.toDouble(), 9, null).displayValue())
+        assertEquals("0.0036", ParamRow("ATC_ACCEL_P", 0.0036f.toDouble(), 9, null).displayValue())
+        assertEquals("0.018", ParamRow("ATC_RAT_RLL_D", 0.018f.toDouble(), 9, null).displayValue())
+        assertEquals("1500", ParamRow("RC1_TRIM", 1500.0, 4, null).displayValue())
+        assertEquals("0.135000005", ParamFile.formatValue(0.135f.toDouble()))
+    }
 }
