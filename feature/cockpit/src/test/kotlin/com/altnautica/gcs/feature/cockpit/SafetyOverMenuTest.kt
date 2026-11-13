@@ -60,7 +60,8 @@ class SafetyOverMenuTest {
 
     @Test
     fun `STOP pressed with the Menu open stops the drone on the first hold`() = flightScreen(menuOpen = true) {
-        tap("stop")
+        // The top bar's STOP, by the tag its tip anchor gives the button's node.
+        tap("tip-anchor-stop")
         holdFirstTime(strings.format("stop.hold_label"), holdMs = 3_000)
         assertEquals(listOf<VehicleCommand>(VehicleCommand.Kill), vehicle.control.sent)
         assertMenuClosed()
