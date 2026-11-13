@@ -3,7 +3,7 @@
 All notable changes to ADOS Android GCS are recorded here. Versions follow the
 app's `versionName`.
 
-## [0.6.2]
+## [0.6.2] - 2026-11-14
 
 - **Full-rate video while flying.** A drone boots its camera at 320x180 and
   1 fps until a viewer asks for more. The flight screen now holds a LAN drone
@@ -54,6 +54,13 @@ app's `versionName`.
 - **Faster STOP and Land.** The confirm sheet now draws in the frame after the
   tap; through the window's overlay layer it showed one frame later. An open
   STOP sheet no longer recomposes 60 times a second while it waits for the hold.
+- **STOP, Land and Return home over any open menu.** Their confirm sheet now
+  takes the top layer of the flight screen whatever is open: an open Menu, link
+  popover, layer menu or target menu closes as the sheet appears, so the first
+  hold on the sheet confirms. The controller tour card stays under the sheet,
+  the sheet's scrim starts right under the top bar on screens with a top safe
+  area, and after a controller-driven confirm closes, focus returns to the
+  control that held it.
 - **Sticks off the main thread.** The stick and pad loops, the controller light
   bar, and the parsing of pilot, navigation and detection frames run off the
   main thread, so a busy frame no longer delays a stick update. A batched pad
@@ -73,12 +80,26 @@ app's `versionName`.
   the pilot's frame is fresh, the local minimap draws the pilot's planned path
   as a dashed line and a ring on its goal, in the go-to colour, or in the
   blocked colour while the pilot reports the way blocked, as the drone's own
-  cockpit and Mission Control do. A go-to the drone finds blocked keeps its
-  straight way and goal on the map in the blocked colour. The path is read
-  with the rest of the map on every second beat, so pilot frames at any rate
-  redraw the map at most 5 times a second and never recompose the card.
+  cockpit and Mission Control do. With a drone agent that sends the plan of a
+  blocked go-to, the go-to keeps its straight way and goal on the map in the
+  blocked colour; an agent that clears the plan while blocked shows none. The
+  path is read with the rest of the map on every second beat, so pilot frames
+  at any rate redraw the map at most 5 times a second and never recompose the
+  card.
 - **Blocked goal in the AR view.** The AR goal ring turns the blocked colour
   while the way to it is blocked, as the path does.
+- **Skill states follow the pilot.** The Mode sheet, the skill picker and
+  Disarm now update when only the pilot's control mode, flight controller
+  failsafe, arm state, landed state or offered operations change; they waited
+  for another pilot field to change.
+- **Full-rate video when the drone's address changes.** A drone reached at a
+  new address while the flight screen shows keeps its full-rate hold there.
+  Releasing the old address no longer ended the new hold's lease, which dropped
+  the drone to its thumbnail profile until the next renewal.
+- **Debug video switches read once.** A debuggable build reads its
+  `debug.ados.video.*` properties once per app start, only for the main video,
+  and no longer leaves a `getprop` process behind for each video surface; a
+  changed property takes effect on the next start.
 
 ## [0.6.1] - 2026-11-13
 
