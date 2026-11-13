@@ -58,9 +58,12 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.Attitude
+import com.altnautica.gcs.core.model.AvoidState
 import com.altnautica.gcs.core.model.LocalPosition
+import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
+import com.altnautica.gcs.core.designsystem.tokens.AdosCockpitColors
 import com.altnautica.gcs.core.designsystem.tokens.AdosHudTarget
 import androidx.compose.ui.platform.LocalDensity
 import com.altnautica.gcs.feature.cockpit.autonomy.AutonomyFeed
@@ -91,11 +94,42 @@ internal data class LocalMapInputs(
     val occupancy: OccupancyLayer?,
     val follow: FollowState?,
     val nowMs: Long,
+    /** The pilot's planned path and goal, from a fresh pilot frame; null hides it. */
+    val plan: LocalPlan?,
 )
+
+/**
+ * The pilot's plan in map NED metres (north, east): the path from the drone to the goal and
+ * the goal, while a go-to or a skill flies. A port of the shared web `localPlan`.
+ */
+internal data class LocalPlan(
+    val points: List<Pair<Float, Float>>,
+    val goal: Pair<Float, Float>?,
+    /** The pilot reports the way blocked: drawn in `tokens.json` `state.blocked`. */
+    val blocked: Boolean,
+) {
+    companion object {
+        /** The plan [pilot] reports, or null when it reports none; pass null for a stale frame. */
+        fun of(pilot: PilotState?): LocalPlan? {
+            if (pilot == null) return null
+            val goal = pilot.goalNed?.takeIf { it.size >= 2 }?.let { it[0] to it[1] }
+            if (pilot.planNed.isEmpty() && goal == null) return null
+            return LocalPlan(pilot.planNed, goal, pilot.avoidState == AvoidState.Blocked)
+        }
+    }
+}
+
+/** A [LocalPlan] in screen pixels. */
+internal data class ScreenPlan(val points: List<Offset>, val goal: Offset?, val blocked: Boolean)
+
+/** Projects [plan] through [pt] (north, east metres to a screen point). */
+internal fun screenPlan(plan: LocalPlan, pt: (Float, Float) -> Offset): ScreenPlan =
+    ScreenPlan(plan.points.map { (n, e) -> pt(n, e) }, plan.goal?.let { (n, e) -> pt(n, e) }, plan.blocked)
 
 /**
  * Minimap local frame (north up, east right, metres): grid, live occupancy tiles, the
  * SLAM trail (dashed while degraded, broken across lost), scan returns, the origin, the
+ * pilot's planned path and goal (dashed, `state.goto`, `state.blocked` while blocked), the
  * followed target and the drone. The header carries `LOCAL · N/E m`, `FC POS` when the
  * drone falls back to LOCAL_POSITION_NED, the AUTO | LOCAL | MAP pin and a scale bar.
  */
@@ -206,6 +240,7 @@ internal fun LocalMinimap(
             drawLine(c.hudInk, Offset(o.x - arm, o.y), Offset(o.x + arm, o.y), 1.dp.toPx())
             drawLine(c.hudInk, Offset(o.x, o.y - arm), Offset(o.x, o.y + arm), 1.dp.toPx())
             drawText(measurer.measure(originLabel, small.copy(fontSize = 9.sp)), topLeft = Offset(o.x + arm, o.y + 2))
+            inputs.plan?.let { planPath(screenPlan(it, ::pt)) }
             inputs.follow?.let { target(it, ::pt, c) }
             drone(pt(droneN, droneE), yaw, c)
         }
@@ -294,6 +329,23 @@ private fun DrawScope.trail(points: List<TrailPoint>, pt: (Float, Float) -> Offs
             color, pt(a.north, a.east), pt(b.north, b.east), 1.5.dp.toPx(),
             pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())) else null,
         )
+    }
+}
+
+private fun DrawScope.planPath(p: ScreenPlan) {
+    val colour = if (p.blocked) AdosCockpitColors.StateBlocked else AdosCockpitColors.StateGoto
+    val dash = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()))
+    if (p.points.size >= 2) {
+        val line = Path().apply {
+            moveTo(p.points[0].x, p.points[0].y)
+            for (i in 1 until p.points.size) lineTo(p.points[i].x, p.points[i].y)
+        }
+        drawPath(line, AdosHudTarget.OutlineColor, style = Stroke(3.5.dp.toPx(), pathEffect = dash))
+        drawPath(line, colour, style = Stroke(1.5.dp.toPx(), pathEffect = dash))
+    }
+    p.goal?.let { g ->
+        drawCircle(AdosHudTarget.OutlineColor, 5.dp.toPx(), g, style = Stroke(3.5.dp.toPx()))
+        drawCircle(colour, 5.dp.toPx(), g, style = Stroke(1.5.dp.toPx()))
     }
 }
 

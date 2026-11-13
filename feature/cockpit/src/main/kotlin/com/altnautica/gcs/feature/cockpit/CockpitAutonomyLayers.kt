@@ -31,6 +31,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.StreamSwitchKind
 import com.altnautica.gcs.core.model.VehicleTelemetry
 import com.altnautica.gcs.core.model.VideoState
+import com.altnautica.gcs.core.skills.hud.freshPilot
 import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowEvent
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
@@ -42,6 +43,7 @@ import com.altnautica.gcs.feature.cockpit.hud.DesignatorState
 import com.altnautica.gcs.feature.cockpit.hud.FollowRail
 import com.altnautica.gcs.feature.cockpit.hud.FollowRangePanel
 import com.altnautica.gcs.feature.cockpit.hud.LocalMapInputs
+import com.altnautica.gcs.feature.cockpit.hud.LocalPlan
 import com.altnautica.gcs.feature.cockpit.hud.LocalMinimap
 import com.altnautica.gcs.feature.cockpit.hud.LockChip
 import com.altnautica.gcs.feature.cockpit.hud.ProximityRadar
@@ -292,12 +294,13 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onCl
     }
 }
 
-/** What the local minimap shows now: the follow lock only while fresh. */
+/** What the local minimap shows now: the follow lock and the pilot's plan only while fresh. */
 private fun localMapInputs(a: CockpitAutonomy, telemetry: VehicleTelemetry?): LocalMapInputs {
     val now = a.nowMs()
     val f = a.feed
     val fresh = f.follow.value?.takeIf { now - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value
-    return LocalMapInputs(f.pose.value, telemetry?.localPosition?.value, telemetry?.attitude?.value, f.trail.value, f.scan.value, f.occupancy.value, fresh, now)
+    val plan = LocalPlan.of(freshPilot(f.pilot.value, now))
+    return LocalMapInputs(f.pose.value, telemetry?.localPosition?.value, telemetry?.attitude?.value, f.trail.value, f.scan.value, f.occupancy.value, fresh, now, plan)
 }
 
 /** The local minimap's sampling: every second beat, 5 Hz. */

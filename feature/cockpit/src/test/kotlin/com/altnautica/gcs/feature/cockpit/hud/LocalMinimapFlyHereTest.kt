@@ -68,7 +68,7 @@ class LocalMinimapFlyHereTest {
                 runCurrent()
 
                 val pose = PoseFrame(50f, 50f, 0f, PoseHealth.Good, receivedAtMs = 1_000L)
-                val inputs = LocalMapInputs(pose, fcLocal, null, emptyList(), null, null, null, nowMs = 1_000L)
+                val inputs = LocalMapInputs(pose, fcLocal, null, emptyList(), null, null, null, nowMs = 1_000L, plan = null)
                 val presses = mutableListOf<Pair<Float, Float>>()
                 compose.setContent {
                     AdosTheme {
