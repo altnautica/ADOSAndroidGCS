@@ -109,12 +109,21 @@ internal class CockpitAutonomy(
     val feed: AutonomyFeed = AutonomyFeed(scope, clock, node, repository, perception, localApis, layers.store, layers.outbound, ::etaCamera)
 
     /**
-     * The camera the chip reads the mission ETA from while a mission runs or is paused, else
-     * null: the vehicle's first leg that does not look down, whichever camera the overlay
-     * follows. The agent puts the ETA on the next waypoint only where it is in frame, which a
-     * belly leg rarely has.
+     * Whether the cockpit is started (on screen). The chip's ETA lease, like every overlay
+     * lease, is held only while it is: hidden, no `?view=` poll goes out and the agent drops
+     * the lease once its TTL runs out.
+     */
+    @Volatile
+    var shown: Boolean = false
+
+    /**
+     * The camera the chip reads the mission ETA from while the cockpit is shown and a mission
+     * runs or is paused, else null: the vehicle's first leg that does not look down, whichever
+     * camera the overlay follows. The agent puts the ETA on the next waypoint only where it is
+     * in frame, which a belly leg rarely has.
      */
     private fun etaCamera(): String? {
+        if (!shown) return null
         val state = freshPilot(pilotState.value, clock.nowMs())?.mission?.state
         if (state != MissionState.Active && state != MissionState.Paused) return null
         return video.value.streams.firstOrNull { it.role != ROLE_DOWN }?.id ?: PRIMARY_CAMERA

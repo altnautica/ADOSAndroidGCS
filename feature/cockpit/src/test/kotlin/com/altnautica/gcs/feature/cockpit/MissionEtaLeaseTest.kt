@@ -124,6 +124,7 @@ class MissionEtaLeaseTest {
         vehicle.heartbeatAt(testScheduler.currentTime, armed = true, mode = "AUTO")
         val agent = MissionAgent(this)
         val vm = testCockpitVm(vehicle, agent.apis)
+        vm.autonomy.shown = true
         val layers = vm.autonomy.layers
 
         // The overlay shows the forward camera: its own frames carry the ETA.
@@ -159,12 +160,41 @@ class MissionEtaLeaseTest {
         vehicle.heartbeatAt(testScheduler.currentTime, armed = true, mode = "AUTO")
         val agent = MissionAgent(this)
         val vm = testCockpitVm(vehicle, agent.apis)
+        vm.autonomy.shown = true
         val release = vm.autonomy.layers.attach(MAIN)
         advanceTimeBy(4_000)
         runCurrent()
         assertTrue("ETA ${vm.chip.value.primary.text}", "ETA" in vm.chip.value.primary.text)
         assertEquals(emptyList<String?>(), agent.polls)
         release()
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the ETA lease stops while the cockpit is hidden and resumes when it is shown`() = runTest(dispatcher) {
+        val vehicle = FakeVehicle()
+        vehicle.heartbeatAt(testScheduler.currentTime, armed = true, mode = "AUTO")
+        val agent = MissionAgent(this)
+        val vm = testCockpitVm(vehicle, agent.apis)
+        vm.autonomy.shown = true
+        advanceTimeBy(3_000)
+        runCurrent()
+        assertTrue("shown, the chip leases the forward route", "$MAIN:ar_route" in agent.polls)
+
+        // Backgrounded: the overlay has no lease and the chip polls none either, well past the
+        // agent's 6 s lease TTL, so the agent drops it.
+        vm.autonomy.shown = false
+        runCurrent()
+        agent.polls.clear()
+        advanceTimeBy(8_000)
+        runCurrent()
+        assertEquals(emptyList<String>(), agent.polls.filterNotNull())
+
+        // Shown again: the poll resumes.
+        vm.autonomy.shown = true
+        advanceTimeBy(3_000)
+        runCurrent()
+        assertTrue("shown again, the lease resumes", "$MAIN:ar_route" in agent.polls)
         vm.viewModelScope.cancel()
     }
 

@@ -101,7 +101,11 @@ fun CockpitRoute(
         vm.cockpitSpec.layout.orientationLock[com.altnautica.gcs.feature.cockpit.chrome.FLIGHT_SCREEN_LOCK_KEY],
     )
     MaxBrightness(maxBrightness)
-    HardwareInput(onAttach = vm::attachInput, onDetach = vm::detachInput)
+    // Started: hardware input and the chip's ETA lease; stopped: both released.
+    HardwareInput(
+        onAttach = { vm.autonomy.shown = true; vm.attachInput() },
+        onDetach = { vm.autonomy.shown = false; vm.detachInput() },
+    )
     val palette = AdosTheme.colors
     LaunchedEffect(palette) { vm.setControllerPalette(palette) }
     WindowFocusLoss(vm::onWindowFocusLost)

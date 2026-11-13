@@ -60,7 +60,8 @@ app's `versionName`.
 - **Mission ETA.** The flight-state chip keeps the next waypoint's ETA when
   the video follows a camera without the waypoint in frame (a belly camera)
   or no camera at all: the chip holds its own route lease on the forward
-  camera while a mission runs.
+  camera while a mission runs and the cockpit is on screen, and releases it
+  when the app goes to the background.
 - **FC warnings.** The status pill lists every held flight-controller warning
   text instead of the newest four.
 - **Parameter confirmations.** A saved or clamped value reads at the precision
