@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.currentStateAsState
@@ -93,6 +94,12 @@ fun CockpitRoute(
     DisposableEffect(leaveGuard) {
         leaveGuard.intercept = { proceed -> guardLeave(proceed) }
         onDispose { leaveGuard.intercept = null }
+    }
+    // The drone stays on its full-rate video profile while this screen is started; stream
+    // drops and retries inside it do not let go.
+    LifecycleStartEffect(vm) {
+        vm.setFlightViewShown(true)
+        onStopOrDispose { vm.setFlightViewShown(false) }
     }
 
     KeepScreenOn()

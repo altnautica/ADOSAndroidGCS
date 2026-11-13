@@ -283,6 +283,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** Dials the failed video again (the placeholder's Retry). */
     fun retryVideo() = videoCtl.retry()
     fun swapPip() = videoCtl.swapPip()
+    fun setFlightViewShown(shown: Boolean) = videoCtl.setFlightViewShown(shown)
 
     /** True when the current feed can record. */
     val canRecord: StateFlow<Boolean> = videoCtl.canRecord

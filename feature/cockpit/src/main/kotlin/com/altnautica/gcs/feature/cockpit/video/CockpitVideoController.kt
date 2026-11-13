@@ -73,6 +73,7 @@ internal class CockpitVideoController(
     private val switchingStream = MutableStateFlow<String?>(null)
     private val failedSources = MutableStateFlow<Set<VideoSource>>(emptySet())
     private val pipVisible = MutableStateFlow(false)
+    private val flightViewShown = MutableStateFlow(false)
 
     /** The leg the PiP shows when it can: the one swapped out of the main view. */
     private val pipPreferred = MutableStateFlow<String?>(null)
@@ -125,10 +126,12 @@ internal class CockpitVideoController(
                 }
             }
         }
-        // While the flight view plays a drone's own WHEP stream, hold that drone on its
-        // full-rate profile; a WFB drone otherwise stays on the 1 fps thumbnail profile.
+        // While the flight view is shown for a drone it can reach over the LAN, hold that drone
+        // on its full-rate profile; a WFB drone otherwise stays on the 1 fps thumbnail profile.
+        // The hold follows the view, not the stream: a hero switch respawns the encoder and
+        // drops the stream, and letting go then would bounce the drone between profiles.
         scope.launch {
-            combine(vehicleNode, shownSource, videoState, ::heroTarget).distinctUntilChanged().collectLatest { target ->
+            combine(vehicleNode, candidates, flightViewShown, ::heroTarget).distinctUntilChanged().collectLatest { target ->
                 if (target == null) return@collectLatest
                 val release = heroHold.acquire(target.node, target.baseUrl)
                 try {
@@ -210,6 +213,11 @@ internal class CockpitVideoController(
         pipVisible.update { !it }
     }
 
+    /** The flight view is on screen and started ([shown]), or it left or the app went to the background. */
+    fun setFlightViewShown(shown: Boolean) {
+        flightViewShown.value = shown
+    }
+
     val recording: StateFlow<RecordingState?> = mainSource.flatMapLatest { src ->
         if (src == null) flowOf(null)
         else videoSessions.state(src).map { videoSessions.running(src)?.recording }.distinctUntilChanged()
@@ -255,13 +263,13 @@ internal fun pickPip(list: List<StreamDescriptor>, selected: String?, preferred:
 internal data class HeroTarget(val node: DeviceId, val baseUrl: String)
 
 /**
- * The drone to hold on `hero`: the flown [node]'s own WHEP stream while its session runs.
- * A stream served by a ground station carrying the drone, a cloud path or the phone's own
- * radio holds nothing.
+ * The drone to hold on `hero` while the flight view is [shown]: the flown [node]'s own WHEP
+ * endpoint among the video [candidates], whichever source is on screen or failing right now.
+ * A drone reached only through a ground station, a cloud path or the phone's own radio holds
+ * nothing.
  */
-internal fun heroTarget(node: NodeSummary?, src: VideoSource?, state: VideoState): HeroTarget? {
-    val whep = src as? VideoSource.AgentWhep ?: return null
-    if (node == null || whep.node != node.id) return null
-    val playing = state is VideoState.Connecting || state is VideoState.Live || state is VideoState.Frozen
-    return if (playing) HeroTarget(whep.node, whep.baseUrl) else null
+internal fun heroTarget(node: NodeSummary?, candidates: List<VideoSource>, shown: Boolean): HeroTarget? {
+    if (!shown || node == null) return null
+    val whep = candidates.firstOrNull { it is VideoSource.AgentWhep && it.node == node.id } as? VideoSource.AgentWhep
+    return whep?.let { HeroTarget(it.node, it.baseUrl) }
 }

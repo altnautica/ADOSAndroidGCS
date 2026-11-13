@@ -51,17 +51,22 @@ class VideoControllerHeroHoldTest {
         }
     }
 
-    /** A controller flying `drone-1` whose only video candidate is [source], in session state [state]. */
-    private fun TestScope.controller(source: VideoSource, state: MutableStateFlow<VideoState>, agent: RecordingAgent, asked: MutableList<DeviceId>) {
+    /** A controller flying `drone-1` whose video candidates are [sources], every session in state [state]. */
+    private fun TestScope.controller(
+        sources: List<VideoSource>,
+        state: MutableStateFlow<VideoState>,
+        agent: RecordingAgent,
+        asked: MutableList<DeviceId> = mutableListOf(),
+    ): CockpitVideoController {
         val sessions = mockk<VideoSessionManager> {
             every { canPlay(any()) } returns true
             every { state(any()) } returns state
             every { running(any()) } returns null
         }
-        CockpitVideoController(
+        return CockpitVideoController(
             backgroundScope,
             MutableStateFlow<NodeSummary?>(testDroneNode()),
-            mockk<VideoSourceSelector> { every { candidates(any(), any(), any()) } returns listOf(source) },
+            mockk<VideoSourceSelector> { every { candidates(any(), any(), any()) } returns sources },
             sessions,
             HeroProfileHold(backgroundScope, holder) { node -> asked += node; agent },
             mockk<AgentEndpoints> { coEvery { endpointFor(any()) } returns null },
@@ -70,37 +75,59 @@ class VideoControllerHeroHoldTest {
         )
     }
 
+    private val droneWhep = VideoSource.AgentWhep(DeviceId("drone-1"), "http://drone.local:8080/", null)
+
     @Test
-    fun `starting the drone's WHEP stream takes the hold and stopping it releases it`() = runTest {
+    fun `showing the flight view takes the hold and leaving it releases it`() = runTest {
         val agent = RecordingAgent()
         val asked = mutableListOf<DeviceId>()
         val state = MutableStateFlow<VideoState>(VideoState.Idle)
-        controller(VideoSource.AgentWhep(DeviceId("drone-1"), "http://drone.local:8080/", null), state, agent, asked)
+        val ctl = controller(listOf(droneWhep), state, agent, asked)
         runCurrent()
-        assertEquals("nothing is held before the stream starts", emptyList<String>(), agent.calls)
+        assertEquals("nothing is held before the flight view shows", emptyList<String>(), agent.calls)
 
-        state.value = VideoState.Connecting
+        ctl.setFlightViewShown(true)
         runCurrent()
-        assertEquals("the drone is promoted as the stream starts", listOf("status", "POST hero"), agent.calls)
+        assertEquals("the drone is promoted as the view shows", listOf("status", "POST hero"), agent.calls)
         assertEquals(listOf(DeviceId("drone-1")), asked)
 
-        state.value = VideoState.Live(80)
         advanceTimeBy(HeroProfileHold.RENEW_MS + 1)
-        assertEquals("the lease renews while the stream plays", listOf("status", "POST hero", "POST hero"), agent.calls)
+        assertEquals("the lease renews while the view shows", listOf("status", "POST hero", "POST hero"), agent.calls)
 
-        state.value = VideoState.Idle
+        ctl.setFlightViewShown(false)
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS + 1)
-        assertEquals("the lease is released after the stream stops", "DELETE", agent.calls.last())
+        assertEquals("the lease is released after the view leaves", "DELETE", agent.calls.last())
         val settled = agent.calls.size
         advanceTimeBy(60_000)
         assertEquals("nothing more once released", settled, agent.calls.size)
     }
 
     @Test
-    fun `a stream served by the ground station carrying the drone takes no hold`() = runTest {
+    fun `stream failures, restarts and failover while the view shows keep the one lease`() = runTest {
+        val agent = RecordingAgent()
+        val state = MutableStateFlow<VideoState>(VideoState.Connecting)
+        // A cloud fallback too, so a failed WHEP session fails over off the drone's own stream.
+        val ctl = controller(listOf(droneWhep, VideoSource.CloudRelay(DeviceId("drone-1"))), state, agent)
+        ctl.setFlightViewShown(true)
+        runCurrent()
+        // The hero switch respawns the encoder: the stream drops, the session restarts, and so on.
+        val cycle = listOf(VideoState.Live(80), VideoState.Failed("ice"), VideoState.Idle, VideoState.Connecting)
+        repeat(6) {
+            for (s in cycle) {
+                state.value = s
+                advanceTimeBy(2_500)
+            }
+        }
+        assertEquals("never released while the view shows", 0, agent.calls.count { it == "DELETE" })
+        assertEquals("one promotion", 1, agent.calls.count { it == "status" })
+        assertEquals("one POST, then a renewal at 15, 30 and 45 s only", 4, agent.calls.count { it == "POST hero" })
+    }
+
+    @Test
+    fun `a drone reached only through the ground station carrying it takes no hold`() = runTest {
         val agent = RecordingAgent()
         val state = MutableStateFlow<VideoState>(VideoState.Live(80))
-        controller(VideoSource.AgentWhep(DeviceId("ground-1"), "http://ground.local:8080/", null), state, agent, mutableListOf())
+        controller(listOf(VideoSource.AgentWhep(DeviceId("ground-1"), "http://ground.local:8080/", null)), state, agent).setFlightViewShown(true)
         advanceTimeBy(60_000)
         assertEquals(emptyList<String>(), agent.calls)
     }
@@ -109,7 +136,7 @@ class VideoControllerHeroHoldTest {
     fun `a cloud stream takes no hold`() = runTest {
         val agent = RecordingAgent()
         val state = MutableStateFlow<VideoState>(VideoState.Live(80))
-        controller(VideoSource.CloudRelay(DeviceId("drone-1")), state, agent, mutableListOf())
+        controller(listOf(VideoSource.CloudRelay(DeviceId("drone-1"))), state, agent).setFlightViewShown(true)
         advanceTimeBy(60_000)
         assertEquals(emptyList<String>(), agent.calls)
     }
