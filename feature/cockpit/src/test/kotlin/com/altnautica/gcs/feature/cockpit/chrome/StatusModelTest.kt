@@ -194,4 +194,17 @@ class StatusModelTest {
         assertEquals(CardPage.Map, CardPage.Obstacles.step(1))
         assertEquals(CardPage.Obstacles, CardPage.Map.step(-1))
     }
+
+    @Test
+    fun `every held FC warning text is listed, with no count cap`() {
+        val texts = com.altnautica.gcs.feature.cockpit.alerts.FcTexts()
+        val now = 100_000L
+        // Nine relayed warnings half a second apart, as the pilot relays a burst.
+        repeat(9) { i -> texts.onStatusText(4, "Warning text $i", now - i * 500L, relayed = true) }
+        val got = items(emptyList(), texts = texts.warnings.value).filter { it.source == StatusSource.FcStatusText }
+        assertEquals(9, got.size)
+        // A text past the hold ages out of the list when the next one arrives.
+        texts.onStatusText(4, "Later text", now + StatusModel.WARNING_TEXT_HOLD_MS + 1L, relayed = true)
+        assertEquals(listOf("Later text"), texts.warnings.value.map { it.text })
+    }
 }

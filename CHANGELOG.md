@@ -39,8 +39,18 @@ app's `versionName`.
 - **Per-vehicle layout.** The split ratio and view are remembered per vehicle.
 - **Demo.** The demo flight controller's mode follows the pinned state, and
   the demo uses varied warning texts.
+- **Shared spec.** Follow chips and phases read in sentence case, and a setup
+  step, an unlisted owner or control mode reads as words ("Autotune roll")
+  rather than capitals.
+- **Link age.** The link cell follows the shared age format: one decimal
+  under 10 s, then whole seconds rounded half up.
 
 ### Fixed
+
+- **FC warnings.** The status pill lists every held flight-controller warning
+  text instead of the newest four.
+- **Parameter confirmations.** A saved or clamped value reads at the precision
+  the list shows (0.135), not the widened float.
 
 - **Demo Fly Here.** A LAND picked while a demo goto still shows is no longer
   switched back to GUIDED when the goto window ends.

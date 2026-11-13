@@ -185,7 +185,10 @@ private fun linkText(band: BandState, spec: ZoneLinkSpec?): String {
     val age = band.linkAgeDeciS
     return when {
         band.link == LinkHealth.None -> specText(spec?.never ?: "cockpit.link.never")
-        age != null -> specText(spec?.text ?: "cockpit.link.age", "s" to linkAgeSeconds(age))
+        age != null -> specText(
+            spec?.text ?: "cockpit.link.age",
+            "s" to linkAgeSeconds(age * 100L, spec?.ageFormat ?: com.altnautica.gcs.core.skills.spec.LinkAgeFormatSpec()),
+        )
         else -> "—"
     }
 }

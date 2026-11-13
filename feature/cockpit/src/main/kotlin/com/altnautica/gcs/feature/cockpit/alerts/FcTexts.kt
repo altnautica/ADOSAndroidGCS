@@ -43,8 +43,10 @@ class FcTexts {
             severity <= StatusModel.MAV_SEVERITY_WARNING -> _warnings.update { list ->
                 val held = list.firstOrNull { it.text == text }
                 if (relayed && held != null && atMs - held.atMs <= DUPLICATE_TEXT_MS) list
-                else (list.filter { it.text != text } + ReceivedText(text, atMs, severity, relayedOnly(held, text, relayed)))
-                    .sortedBy { it.atMs }.takeLast(StatusModel.WARNING_TEXT_MAX)
+                // No count cap (the shared pill lists every held FC text); texts past the hold age out.
+                else (list.filter { it.text != text && atMs - it.atMs <= StatusModel.WARNING_TEXT_HOLD_MS } +
+                    ReceivedText(text, atMs, severity, relayedOnly(held, text, relayed)))
+                    .sortedBy { it.atMs }
             }
         }
     }

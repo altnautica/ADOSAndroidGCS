@@ -2,6 +2,8 @@ package com.altnautica.gcs.feature.cockpit.chrome
 
 import com.altnautica.gcs.feature.cockpit.alerts.LinkHealth
 import com.altnautica.gcs.feature.cockpit.testSpec
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -22,11 +24,15 @@ class LinkCellTest {
     }
 
     @Test
-    fun `the link age reads one decimal under ten seconds and whole seconds above`() {
-        assertEquals("0.4", linkAgeSeconds(4))
-        assertEquals("9.9", linkAgeSeconds(99))
-        assertEquals("12", linkAgeSeconds(123))
-        assertEquals("0.4 s", testSpec.setupStrings.format(topBar.link!!.text, mapOf("s" to linkAgeSeconds(4))))
+    fun `the link age reproduces every spec age_format case`() {
+        val link = topBar.link!!
+        val cases = link.ageFormat.cases
+        assertEquals(5, cases.size)
+        for (case in cases) {
+            val ageMs = case[0].jsonPrimitive.long
+            val want = case[1].jsonPrimitive.content
+            assertEquals("age $ageMs", want, testSpec.setupStrings.format(link.text, mapOf("s" to linkAgeSeconds(ageMs, link.ageFormat))))
+        }
     }
 
     @Test

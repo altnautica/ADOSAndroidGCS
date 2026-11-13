@@ -65,7 +65,7 @@ class FlightStateChipResolver(
         val rule = spec.rules.firstOrNull { matches(it.match, pilot, ctx, stale) }
             ?: return FlightStateChipUi(
                 ruleId = RULE_NONE,
-                primary = chipText(pilot.owner.wire.uppercase(), FC_KEY),
+                primary = chipText(wordLabel(pilot.owner.wire), FC_KEY),
                 dim = false,
                 button = null,
                 secondary = secondary(pilot, ctx, stale),
@@ -131,7 +131,7 @@ class FlightStateChipResolver(
         "mode_detail" to (ctx.modeDetail?.takeIf { p.owner == PilotOwner.Skill } ?: DEFAULT_MODE_DETAIL),
         "dist_m" to num(ctx.goalDistM),
         "home_dist_m" to num(ctx.homeDistM),
-        "setup_step" to p.setupStep.orEmpty().uppercase(),
+        "setup_step" to wordLabel(p.setupStep.orEmpty()),
         "seq" to num(p.mission?.seq),
         "total" to num(p.mission?.total),
         "eta" to formatEta(ctx.missionEtaS),
@@ -183,7 +183,7 @@ class FlightStateChipResolver(
                 chipText(fill(hold.text, mapOf("hold_reason_label" to holdReasonLabel(reason))), hold.color)
             }
             "avoid_state" -> p.avoidState?.let { spec.secondary.avoidState[it.wire] }?.let { chipText(it.text, it.color) }
-            "control_mode" -> p.controlMode?.let { chipText(spec.secondary.controlMode[it.wire] ?: it.wire.uppercase(), FC_KEY) }
+            "control_mode" -> p.controlMode?.let { chipText(spec.secondary.controlMode[it.wire] ?: wordLabel(it.wire), FC_KEY) }
             else -> null
         }
     }
@@ -217,19 +217,25 @@ class FlightStateChipResolver(
         private val PLACEHOLDER = Regex("\\{([a-z_]+)\\}")
 
         /**
-         * The part of the pilot's owner label after the skill label (`FOLLOW · ORBIT 8 m` →
-         * `ORBIT 8 m`): a source for [ChipContext.modeDetail].
+         * The part of the pilot's owner label after the skill label, matched in any case
+         * (`Follow · Orbit 8 m` → `Orbit 8 m`): a source for [ChipContext.modeDetail].
          */
-        fun modeDetail(ownerLabel: String?, skillLabelUpper: String?): String? {
+        fun modeDetail(ownerLabel: String?, skillLabel: String?): String? {
             val label = ownerLabel?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-            if (skillLabelUpper == null) return null
-            val prefix = skillLabelUpper + SEPARATOR
+            if (skillLabel == null) return null
+            val prefix = skillLabel + SEPARATOR
             return when {
-                label.uppercase().startsWith(prefix) -> label.substring(prefix.length).takeIf { it.isNotBlank() }
-                label.equals(skillLabelUpper, ignoreCase = true) -> null
+                label.startsWith(prefix, ignoreCase = true) -> label.substring(prefix.length).takeIf { it.isNotBlank() }
+                label.equals(skillLabel, ignoreCase = true) -> null
                 else -> label
             }
         }
+
+        /** A wire identifier (`autotune_roll`) as a sentence-case word ("Autotune roll"). */
+        fun wordLabel(s: String): String =
+            s.replace(WORD_SEPARATORS, " ").lowercase().replaceFirstChar { it.uppercaseChar() }
+
+        private val WORD_SEPARATORS = Regex("[-_]+")
 
         /** Fills `{name}` placeholders (an unknown one reads empty), then drops one trailing ` · `. */
         fun fill(template: String, values: Map<String, String>): String =

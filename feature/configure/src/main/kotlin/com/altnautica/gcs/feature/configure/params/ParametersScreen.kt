@@ -214,15 +214,26 @@ fun RebootBanner(armed: Boolean, linkFresh: Boolean, onReboot: () -> Unit, modif
     }
 }
 
+/**
+ * The values a write confirmation shows, at the precision the list and editor read
+ * ([ParamFile.displayValue]), never the FC echo's widened float: `[value]` for a save,
+ * `[requested, actual]` for a clamp, empty for any other message.
+ */
+internal fun paramMessageValues(message: ParamMessage): List<String> = when (message) {
+    is ParamMessage.Saved -> listOf(ParamFile.displayValue(message.value))
+    is ParamMessage.Clamped -> listOf(ParamFile.displayValue(message.requested), ParamFile.displayValue(message.actual))
+    else -> emptyList()
+}
+
 /** Operator text and status level for a [ParamMessage]; shared by the parameter and setup pages. */
 @Composable
 internal fun paramMessageText(message: ParamMessage, rows: Map<String, ParamRow>): Pair<String, StatusLevel> = when (message) {
     is ParamMessage.Saved -> stringResource(
         if (message.rebootRequired) R.string.cfg_param_saved_reboot else R.string.cfg_param_saved,
-        message.name, ParamFile.formatValue(message.value),
+        message.name, *paramMessageValues(message).toTypedArray(),
     ) to StatusLevel.Success
     is ParamMessage.Clamped -> stringResource(
-        R.string.cfg_param_clamped, message.name, ParamFile.formatValue(message.requested), ParamFile.formatValue(message.actual),
+        R.string.cfg_param_clamped, message.name, *paramMessageValues(message).toTypedArray(),
     ) to StatusLevel.Warning
     is ParamMessage.WriteFailed -> stringResource(
         when (message.reason) {
@@ -280,7 +291,7 @@ fun PendingWriteSheet(p: PendingWrite, onDismiss: () -> Unit, onConfirm: () -> U
     val (title, message) = pendingWriteTextRes(p)
     AdosConfirmSheet(
         title = stringResource(title),
-        message = stringResource(message, p.name, ParamFile.formatValue(p.value)),
+        message = stringResource(message, p.name, ParamFile.displayValue(p.value)),
         onDismiss = onDismiss,
         danger = true,
     ) {

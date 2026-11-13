@@ -75,7 +75,7 @@ internal class CockpitFacts(
                 missionEtaS = autonomy.layers.store.ar.let { ArRules.nextWaypointEtaS(it.cur, it.ageMs(autonomy.nowMs())) },
                 vtolTransitioning = telemetry.value?.vtolTransitioning?.value == true,
                 fcModeName = b.modeName,
-                modeDetail = p?.let { FlightStateChipResolver.modeDetail(it.ownerLabel, it.skill?.label?.uppercase()) },
+                modeDetail = p?.let { FlightStateChipResolver.modeDetail(it.ownerLabel, it.skill?.label) },
             ),
         )
     }.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), chipResolver.resolve(null, ChipContext(clock.nowMs())))

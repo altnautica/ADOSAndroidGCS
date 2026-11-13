@@ -194,9 +194,6 @@ object StatusModel {
 
     /** How long a WARNING status text stays in the pill's list. */
     const val WARNING_TEXT_HOLD_MS = 60_000L
-
-    /** At most this many WARNING status texts are kept. */
-    const val WARNING_TEXT_MAX = 4
 }
 
 /**

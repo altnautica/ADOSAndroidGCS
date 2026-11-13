@@ -444,18 +444,17 @@ class CockpitViewModelTest {
     }
 
     @Test
-    fun `five relayed warnings keep the newest four in the pill`() = runTest(dispatcher) {
+    fun `nine relayed warnings are all listed in the pill`() = runTest(dispatcher) {
         val vehicle = FakeVehicle()
         vehicle.beat(armed = true, now = testScheduler.currentTime)
-        // The pilot relays newest first.
-        val texts = (5 downTo 1).joinToString(",") { n -> """{"severity":4,"text":"warn $n","age_ms":${(6 - n) * 100}}""" }
+        // The pilot relays newest first, half a second apart.
+        val texts = (9 downTo 1).joinToString(",") { n -> """{"severity":4,"text":"warn $n","age_ms":${(9 - n) * 500}}""" }
         val vm = vm(listOf(node("drone-1")), vehicle, localApis = pilotAgent("""{"owner":"pilot","armed":true,"landed":false,"statustext":[$texts]}"""))
         backgroundScope.launch { vm.statusItems.collect {} }
         advanceTimeBy(600)
         runCurrent()
         val shown = vm.statusItems.value.toString()
-        for (n in 2..5) assertTrue("warn $n in $shown", "warn $n" in shown)
-        assertFalse("the oldest leaves the pill: $shown", "warn 1" in shown)
+        for (n in 1..9) assertTrue("warn $n in $shown", "warn $n" in shown)
         vm.viewModelScope.cancel()
     }
 

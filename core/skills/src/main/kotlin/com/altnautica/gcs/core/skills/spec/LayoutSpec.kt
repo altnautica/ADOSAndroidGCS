@@ -110,6 +110,18 @@ data class ZoneLinkSpec(
     val text: String,
     val never: String,
     @SerialName("icon_color") val iconColor: LinkIconColorSpec,
+    @SerialName("age_format") val ageFormat: LinkAgeFormatSpec = LinkAgeFormatSpec(),
+)
+
+/**
+ * `{s}` for the link text: the age in seconds with [decimals] places below [decimalsBelowS],
+ * else whole seconds rounded half up. [cases] are `[age_ms, text]` golden rows.
+ */
+@Serializable
+data class LinkAgeFormatSpec(
+    @SerialName("decimals_below_s") val decimalsBelowS: Int = 10,
+    val decimals: Int = 1,
+    val cases: List<kotlinx.serialization.json.JsonArray> = emptyList(),
 )
 
 /** Below [okBelowMs] the link icon is ok, below [warningBelowMs] warning, else critical. */

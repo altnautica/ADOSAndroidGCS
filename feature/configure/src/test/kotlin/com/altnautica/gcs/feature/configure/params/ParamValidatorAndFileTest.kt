@@ -119,4 +119,14 @@ class ParamValidatorAndFileTest {
         assertEquals("1500", ParamRow("RC1_TRIM", 1500.0, 4, null).displayValue())
         assertEquals("0.135000005", ParamFile.formatValue(0.135f.toDouble()))
     }
+
+    @Test
+    fun `write confirmations show the FC echo at float precision`() {
+        val echo = 0.135f.toDouble()
+        assertEquals(listOf("0.135"), paramMessageValues(ParamMessage.Saved("ATC_RAT_RLL_P", echo, rebootRequired = false)))
+        assertEquals(
+            listOf("0.2", "0.15"),
+            paramMessageValues(ParamMessage.Clamped("ATC_RAT_RLL_P", 0.2, 0.15f.toDouble())),
+        )
+    }
 }

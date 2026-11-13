@@ -189,9 +189,15 @@ fun TopBar(
     }
 }
 
-/** Link age for the link cell: one decimal under 10 s ("0.4"), whole seconds above ("12"). */
-internal fun linkAgeSeconds(deciS: Int): String =
-    if (deciS < 100) String.format(java.util.Locale.ROOT, "%.1f", deciS / 10f) else (deciS / 10).toString()
+/**
+ * Link age `{s}` for the link cell (`top_bar.link.age_format`): `decimals` places below
+ * `decimals_below_s` ("0.4"), else whole seconds rounded half up ("13").
+ */
+internal fun linkAgeSeconds(ageMs: Long, format: com.altnautica.gcs.core.skills.spec.LinkAgeFormatSpec): String {
+    val seconds = java.math.BigDecimal.valueOf(ageMs).movePointLeft(3)
+    val places = if (ageMs < format.decimalsBelowS * 1_000L) format.decimals else 0
+    return seconds.setScale(places, java.math.RoundingMode.HALF_UP).toPlainString()
+}
 
 /**
  * The link icon's colour band from the newest frame's age (`top_bar.link.icon_color`): ok
