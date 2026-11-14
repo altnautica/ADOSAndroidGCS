@@ -3,6 +3,33 @@
 All notable changes to ADOS Android GCS are recorded here. Versions follow the
 app's `versionName`.
 
+## [0.6.3] - 2026-11-14
+
+- **Stale or missing obstacle data.** When avoidance is on and the drone's
+  lidar stops reporting, the pilot holds position and refuses motion until
+  fresh scans arrive, and reports the `stale` avoid state with the hold reason
+  `obstacle-data-stale`: the flight-state chip reads "Holding: no fresh
+  obstacle data · Obstacle data stale" in the warning colour and the AR path
+  draws amber. A drone with no lidar reports `unavailable`, read as "No
+  obstacle sensor" in the warning colour; its sticks fly and Fly Here is
+  refused.
+- **Optical flow yaw in centidegrees.** The parameter editor and import
+  review hold `FLOW_ORIENT_YAW` to -17999..18000 in steps of 10 (centidegrees)
+  with or without the firmware's documentation. A value off the 10 step is
+  refused, such as an old 1..7 setting from the 45° scale some ground stations
+  used, which ArduPilot reads as 0.01..0.07°.
+- **Speed cap to one decimal.** The flight-state chip shows the GNSS-denied
+  speed cap rounded to one decimal, such as "GNSS-denied: 2.5 m/s max".
+- **Resume and Take control during a flight-controller failsafe.** While the
+  flight controller flies its own failsafe return or landing, Resume and Take
+  control are disabled with the failsafe text, as Pause already was, in the
+  skill gate, on the flight-state chip button and in the Mode sheet. A flight
+  controller mode the pilot has not heard yet reads as unknown. The demo pilot
+  refuses Take control, Resume and Launch in the same state.
+- **Copter return and brake modes on the chip.** Copter AUTO_RTL reads as the
+  flight controller's return. Copter BRAKE, which holds position, reads as the
+  flight controller's mode with a Take control button instead of as a landing.
+
 ## [0.6.2] - 2026-11-14
 
 - **Full-rate video while flying.** A drone boots its camera at 320x180 and
@@ -103,19 +130,6 @@ app's `versionName`.
   `debug.ados.video.*` properties once per app start, only for the main video,
   and no longer leaves a `getprop` process behind for each video surface; a
   changed property takes effect on the next start.
-- **Stale or missing obstacle data.** When avoidance is on and the drone's
-  lidar stops reporting, the pilot holds position and refuses motion until
-  fresh scans arrive, and reports the `stale` avoid state with the hold reason
-  `obstacle-data-stale`: the flight-state chip reads "Holding: no fresh
-  obstacle data · Obstacle data stale" in the warning colour and the AR path
-  draws amber. A drone with no lidar reports `unavailable`, read as "No
-  obstacle sensor" in the warning colour; its sticks fly and Fly Here is
-  refused.
-- **Optical flow yaw in centidegrees.** The parameter editor and import
-  review hold `FLOW_ORIENT_YAW` to -17999..18000 in steps of 10 (centidegrees)
-  with or without the firmware's documentation. A value off the 10 step is
-  refused, such as an old 1..7 setting from the 45° scale some ground stations
-  used, which ArduPilot reads as 0.01..0.07°.
 
 ## [0.6.1] - 2026-11-13
 
