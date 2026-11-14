@@ -55,11 +55,17 @@ enum class AvoidMode(val wire: String) {
     }
 }
 
-/** What the planner is doing about obstacles right now. */
+/**
+ * What the planner is doing about obstacles right now. [Stale]: avoidance is on and the
+ * lidar stopped reporting, so the pilot holds and refuses motion until fresh scans arrive.
+ * [Unavailable]: avoidance is on but the drone has no lidar; sticks fly, Fly Here is refused.
+ */
 enum class AvoidState(val wire: String) {
     Clear("clear"),
     Detour("detour"),
     Blocked("blocked"),
+    Stale("stale"),
+    Unavailable("unavailable"),
     Off("off");
 
     companion object {

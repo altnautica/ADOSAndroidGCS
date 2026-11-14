@@ -300,7 +300,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
             "fpath" -> {
                 if (!polyline(it, before, f, view)) return
                 val color = when (it.state) {
-                    "detour" -> LayerColors.Detour
+                    // Stale obstacle data, or none at all, is a warning, like a detour: amber.
+                    "detour", "stale", "unavailable" -> LayerColors.Detour
                     "blocked" -> LayerColors.Blocked
                     else -> LayerColors.Follow
                 }

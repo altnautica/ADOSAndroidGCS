@@ -103,6 +103,14 @@ app's `versionName`.
   `debug.ados.video.*` properties once per app start, only for the main video,
   and no longer leaves a `getprop` process behind for each video surface; a
   changed property takes effect on the next start.
+- **Stale or missing obstacle data.** When avoidance is on and the drone's
+  lidar stops reporting, the pilot holds position and refuses motion until
+  fresh scans arrive, and reports the `stale` avoid state with the hold reason
+  `obstacle-data-stale`: the flight-state chip reads "Holding: no fresh
+  obstacle data · Obstacle data stale" in the warning colour and the AR path
+  draws amber. A drone with no lidar reports `unavailable`, read as "No
+  obstacle sensor" in the warning colour; its sticks fly and Fly Here is
+  refused.
 
 ## [0.6.1] - 2026-11-13
 

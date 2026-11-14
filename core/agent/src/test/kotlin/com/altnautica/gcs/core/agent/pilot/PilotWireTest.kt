@@ -79,6 +79,24 @@ class PilotWireTest {
     }
 
     @Test
+    fun `stale obstacle data parses as the stale avoid state with its hold reason`() {
+        val stale = JsonObject(data + mapOf(
+            "avoid_state" to JsonPrimitive("stale"),
+            "hold_reason" to JsonPrimitive("obstacle-data-stale"),
+        ))
+        val s = checkNotNull(PilotWire.parseState(stale, 0L))
+        assertEquals(AvoidState.Stale, s.avoidState)
+        assertEquals("obstacle-data-stale", s.holdReason)
+    }
+
+    @Test
+    fun `a drone with no lidar parses as the unavailable avoid state`() {
+        val none = JsonObject(data + mapOf("avoid_state" to JsonPrimitive("unavailable")))
+        val s = checkNotNull(PilotWire.parseState(none, 0L))
+        assertEquals(AvoidState.Unavailable, s.avoidState)
+    }
+
+    @Test
     fun `link loss action, VTOL transition and setup step parse from the pilot frame`() {
         val golden = checkNotNull(PilotWire.parseState(data, 0L))
         assertEquals("rth", golden.linkLossAction)
