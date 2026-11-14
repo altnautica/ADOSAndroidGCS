@@ -54,4 +54,14 @@ class CockpitInputMapperTest {
         assertFalse(CockpitInputMapper.consumesChord("q", loadout))
         assertTrue(CockpitInputMapper.consumesChord("space", loadout))
     }
+
+    @Test
+    fun `the focused waiting prompt's bare keys are left to it, every other chord stays the cockpit's`() {
+        val prompt = setOf("r", "p", "h", "l", "x")
+        assertTrue("P is picture-in-picture while the prompt is not focused", CockpitInputMapper.consumesChord("p", loadout))
+        for (k in prompt) assertFalse(k, CockpitInputMapper.consumesChord(k, loadout, promptKeys = prompt))
+        assertTrue(CockpitInputMapper.consumesChord("shift+l", loadout, promptKeys = prompt))
+        assertTrue(CockpitInputMapper.consumesChord("space", loadout, promptKeys = prompt))
+        assertTrue(CockpitInputMapper.consumesChord("v", loadout, promptKeys = prompt))
+    }
 }

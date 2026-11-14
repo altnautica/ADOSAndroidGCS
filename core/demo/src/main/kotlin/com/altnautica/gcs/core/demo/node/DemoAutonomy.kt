@@ -51,7 +51,7 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
     override fun detections(): Flow<String> = flow {
         var frame = 0L
         while (true) {
-            emit(follow.detections(t(), frame++, pilot.view().followRunning).toString())
+            emit(follow.detections(t(), frame++, follow.tracking(pilot.view().followRunning)).toString())
             delay(TICK_MS)
         }
     }
@@ -65,7 +65,9 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
             val snapshot = pilot.snapshot()
             val view = snapshot.view
             val s = follow.step(now)
-            val following = view.followRunning
+            // A stopped follow reports idle until the follow skill flies again.
+            val following = follow.tracking(view.followRunning)
+            follow.takeStopEvent()?.let { (topic, data) -> emit(event(topic, data, now)) }
             follow.event(last, now, following)?.let { (topic, data) -> emit(event(topic, data, now)) }
             last = if (following) s else null
             val searching = following && follow.searching(s)
@@ -75,7 +77,11 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
             val yaw = (angle + PI / 2).toFloat()
             emit(frame("pose", pose(north, east, -view.heightM.toFloat(), yaw, if (searching) "degraded" else "good"), now))
             emit(frame("scan", scan(north, east, yaw), now))
-            if (following) emit(frame("follow", follow.follow(s, now, yaw, view.heightM), now))
+            if (following) {
+                emit(frame("follow", follow.follow(s, now, yaw, view.heightM), now))
+            } else if (view.followRunning) {
+                emit(frame("follow", follow.stoppedState(), now))
+            }
             if (n++ % 5 == 0) emit(frame("nav", nav(searching), now))
             layers.frames(now, view) { kind, data -> frame(kind, data, now) }.forEach { emit(it) }
             snapshot.frame?.let { emit(it) }
@@ -203,10 +209,7 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
         AgentResult.Ok(buildJsonObject { put("designated", true) })
 
     override suspend fun putPluginConfig(pluginId: String, key: String, value: JsonElement): AgentResult<JsonElement> {
-        when (key) {
-            "reacquire_mode" -> (value as? JsonPrimitive)?.content?.let { follow.reacquireMode = it }
-            "operator_resume_seq" -> (value as? JsonPrimitive)?.content?.toIntOrNull()?.let { follow.operatorResumeSeq = it }
-        }
+        (value as? JsonPrimitive)?.let { follow.configure(key, it) }
         return AgentResult.Ok(buildJsonObject { put("ok", true) })
     }
 

@@ -686,11 +686,12 @@ class DemoPilotTest {
     }
 
     @Test
-    fun `the demo follow walks every recovery phase and ends waiting for the operator`() {
+    fun `the demo follow walks every recovery phase and ends waiting for the operator, then with the camera lost`() {
         val feed = DemoFollowFeed()
-        val phases = (0 until DemoFollowFeed.STEPS).map { feed.follow(it, it * DemoFollowFeed.STEP_MS + 1_000L, 0f, 10.0) }
+        val phases = (0..9).map { feed.follow(it, it * DemoFollowFeed.STEP_MS + 1_000L, 0f, 10.0) }
+        assertEquals(10, DemoFollowFeed.STEPS)
         assertEquals(
-            listOf("predicting", "repositioning", "searching", "following", "holding-await-operator"),
+            listOf("predicting", "repositioning", "searching", "following", "holding-await-operator", "holding-await-operator"),
             phases.drop(4).map { it.str("phase") },
         )
         val searching = phases[6]
@@ -701,6 +702,11 @@ class DemoPilotTest {
         val waiting = phases[8]
         assertEquals("search-exhausted", waiting.str("hold_reason"))
         assertTrue(waiting["search_area"] == null)
+        val cameraLost = phases[9]
+        assertEquals("camera-lost", cameraLost.str("hold_reason"))
+        assertEquals(waiting["hold_ne"], cameraLost["hold_ne"])
+        val silent = feed.detections(9 * DemoFollowFeed.STEP_MS + 1_000L, 0, following = true)["detections"]!!.jsonArray
+        assertTrue("the follow camera sends no detections while it is lost", silent.isEmpty())
 
         val events = mutableListOf<Pair<String, JsonObject>>()
         var last: Int? = null
@@ -711,6 +717,25 @@ class DemoPilotTest {
         val lost = events.single { it.first == "follow.lost" }.second
         assertEquals("true", lost["awaiting_operator"]!!.jsonPrimitive.content)
         assertEquals("search_exhausted", lost.str("reason"))
+    }
+
+    @Test
+    fun `stop following ends the demo follow until the follow skill flies again, and the rail settings echo`() {
+        val feed = DemoFollowFeed()
+        assertTrue(feed.tracking(pilotFollowing = true))
+        feed.configure("active", JsonPrimitive(false))
+        assertFalse("stopped while the pilot still flies the follow skill", feed.tracking(pilotFollowing = true))
+        assertEquals("follow.stopped", feed.takeStopEvent()?.first)
+        assertNull("the stop is announced once", feed.takeStopEvent())
+        // The follow skill ends; the next time it flies, the follow runs again.
+        assertFalse(feed.tracking(pilotFollowing = false))
+        assertTrue(feed.tracking(pilotFollowing = true))
+
+        feed.configure("uncertain_mode", JsonPrimitive("hold"))
+        feed.configure("predictive_search", JsonPrimitive(false))
+        val state = feed.follow(3, 3 * DemoFollowFeed.STEP_MS, 0f, 10.0)
+        assertEquals("hold", state.str("uncertain_mode"))
+        assertEquals(false, state["predictive_search"]!!.jsonPrimitive.boolean)
     }
 
     @Test

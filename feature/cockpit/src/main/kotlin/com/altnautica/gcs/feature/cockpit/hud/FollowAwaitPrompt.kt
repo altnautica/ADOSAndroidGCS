@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.cockpit.hud
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -21,13 +22,20 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -36,6 +44,8 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -44,6 +54,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.GLOVE_TOUCH_SCALE
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPrompt
@@ -53,6 +67,8 @@ import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
 import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /** Test tag of the waiting prompt, and of each action as `follow-prompt-<wire>`. */
 internal const val FOLLOW_PROMPT_TAG = "follow-prompt"
@@ -61,13 +77,22 @@ internal const val FOLLOW_PROMPT_TAG = "follow-prompt"
  * The waiting-for-instructions prompt: while follow-me holds at its latched point for the
  * operator, a panel under the follow strip names why and offers the actions [prompt] allows
  * (search again, pick a target, return home, land, stop following). It is not modal, so the
- * video and the columns stay live. The first action takes focus when the prompt appears, so a
- * D-pad or controller reaches it at once; a hardware keyboard runs R, P, H, L and X while the
- * prompt holds focus (bare keys only). Touch targets grow with the width class and glove mode.
+ * video and the columns stay live. It never takes focus by itself: focus moves in on a
+ * [focusRequests] emission (the controller's select) or when the operator moves it there (Tab,
+ * the arrow keys). While focus is inside, [onFocusedChange] reports it (the controller then
+ * navigates the prompt), a hardware keyboard runs R, P, H, L and X (bare keys only), and Back
+ * moves focus out again. Touch targets grow with the width class and glove mode.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun FollowAwaitPrompt(prompt: FollowPrompt, width: WidthClass, onAction: (FollowPromptAction) -> Unit, modifier: Modifier = Modifier) {
+internal fun FollowAwaitPrompt(
+    prompt: FollowPrompt,
+    width: WidthClass,
+    onAction: (FollowPromptAction) -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequests: Flow<Unit> = emptyFlow(),
+    onFocusedChange: (Boolean) -> Unit = {},
+) {
     val c = AdosTheme.colors
     val chrome = LocalChrome.current
     val base = when (width) {
@@ -77,13 +102,39 @@ internal fun FollowAwaitPrompt(prompt: FollowPrompt, width: WidthClass, onAction
     }
     val target = if (AdosTheme.gloveMode) base * GLOVE_TOUCH_SCALE else base
     val first = remember { FocusRequester() }
-    LaunchedEffect(prompt.titleKey, prompt.actions) { runCatching { first.requestFocus() } }
+    val inputMode = LocalInputModeManager.current
+    val focusManager = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    val reportFocus by rememberUpdatedState(onFocusedChange)
+    LaunchedEffect(focusRequests) {
+        focusRequests.collect {
+            // A controller press leaves touch mode only through the UI bridge; the buttons take focus only outside it.
+            inputMode.requestInputMode(InputMode.Keyboard)
+            runCatching { first.requestFocus() }
+        }
+    }
+    // A prompt that goes away with focus inside hands the controller back to flight.
+    DisposableEffect(Unit) { onDispose { if (focused) reportFocus(false) } }
+    if (LocalNavigationEventDispatcherOwner.current != null) {
+        NavigationBackHandler(
+            state = rememberNavigationEventState(NavigationEventInfo.None),
+            isBackEnabled = focused,
+            onBackCompleted = { focusManager.clearFocus() },
+        )
+    }
     ChromePanel(
         modifier
             .widthIn(max = 720.dp)
             .border(1.dp, c.hudCrit.copy(alpha = 0.7f), RoundedCornerShape(chrome.radius))
             .testTag(FOLLOW_PROMPT_TAG)
             .semantics { liveRegion = LiveRegionMode.Assertive }
+            .onFocusChanged { s ->
+                if (s.hasFocus != focused) {
+                    focused = s.hasFocus
+                    reportFocus(s.hasFocus)
+                }
+            }
+            .focusGroup()
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val modified = e.isShiftPressed || e.isCtrlPressed || e.isAltPressed || e.isMetaPressed

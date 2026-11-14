@@ -55,7 +55,16 @@ enum class FollowPhase(val wire: String) {
     val wordKey: String get() = "follow.phase.$wire"
 
     companion object {
-        fun of(wire: String?): FollowPhase? = entries.firstOrNull { it.wire == wire }
+        /**
+         * The phase [wire] names. Follow-me 0.4.9 and older report `coasting` (flying on the
+         * prediction of a lost lock) and `lost` (holding): they read as [Predicting] and
+         * [Holding], never as a follow, and never as the hold that waits for the operator.
+         */
+        fun of(wire: String?): FollowPhase? = entries.firstOrNull { it.wire == wire } ?: when (wire) {
+            "coasting" -> Predicting
+            "lost" -> Holding
+            else -> null
+        }
     }
 }
 

@@ -34,8 +34,14 @@ object CockpitInputMapper {
         else -> loadout.slotForChord(chord)?.skillId?.let { CockpitAction.ActivateSkill(flip(it, armed)) }
     }
 
-    /** True when the cockpit handles [chord], so the key event is consumed. */
-    fun consumesChord(chord: String, loadout: Loadout): Boolean =
-        chord in STREAM_DIGITS || chord == "`" || chord == "p" || chord == "v" || chord == "o" ||
-            chord in QUICK_SETTINGS_CHORDS || chord in PICKER_CHORDS || loadout.slotForChord(chord) != null
+    /**
+     * True when the cockpit handles [chord], so the key event is consumed. [promptKeys] are the
+     * bare keys of the follow waiting prompt while focus is inside it: they are left to the
+     * prompt (P picks a target there instead of toggling picture-in-picture).
+     */
+    fun consumesChord(chord: String, loadout: Loadout, promptKeys: Set<String> = emptySet()): Boolean =
+        chord !in promptKeys && (
+            chord in STREAM_DIGITS || chord == "`" || chord == "p" || chord == "v" || chord == "o" ||
+                chord in QUICK_SETTINGS_CHORDS || chord in PICKER_CHORDS || loadout.slotForChord(chord) != null
+            )
 }

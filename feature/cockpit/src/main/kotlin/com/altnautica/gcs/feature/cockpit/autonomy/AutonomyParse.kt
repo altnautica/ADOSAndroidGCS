@@ -142,7 +142,7 @@ internal object AutonomyParse {
         return Occluder(pair(o["ne"]) ?: return null, kind)
     }
 
-    /** A follow phase the agent no longer sends (`coasting`, `lost`) is unknown: the frame is dropped. */
+    /** A frame with no phase [FollowPhase.of] knows is dropped. */
     fun follow(o: JsonObject): FollowState? {
         val phase = FollowPhase.of(o["phase"].str()) ?: return null
         val predicted = o["predicted_bbox"].obj()?.let { p ->

@@ -78,16 +78,10 @@ internal fun TestScope.testCockpitVm(
     nodes: List<NodeSummary> = listOf(testDroneNode(vehicle.id.value)),
     videoSelector: VideoSourceSelector = VideoSourceSelector(emptySet()),
     videoSessions: VideoSessionManager = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns false },
+    router: AdosInputRouter = testRouter(),
 ): CockpitViewModel {
     val clock = MonotonicClock { testScheduler.currentTime }
     val dataStore = MemoryPreferences()
-    val router = mockk<AdosInputRouter>(relaxed = true) {
-        every { axes } returns MutableStateFlow(GamepadAxes.Neutral)
-        every { buttons } returns MutableStateFlow(0)
-        every { gamepadConnected } returns MutableStateFlow(false)
-        every { events } returns MutableSharedFlow<InputEvent>(extraBufferCapacity = 16)
-        every { snapshot } returns MutableStateFlow(PadSnapshot.Neutral)
-    }
     val activator = SkillActivator(clock)
     val extensionRepo = mockk<ExtensionRepository> { coEvery { api(any()) } returns null }
     val vm = CockpitViewModel(
@@ -134,6 +128,15 @@ internal fun TestScope.testCockpitVm(
     // A failed assertion skips the test's own cancel; the VM's tickers must not outlive the test.
     backgroundScope.coroutineContext[Job]!!.invokeOnCompletion { vm.viewModelScope.cancel() }
     return vm
+}
+
+/** A relaxed input router with no pad: the cockpit's [AdosInputRouter.capture] is recorded but nothing is routed. */
+internal fun testRouter(): AdosInputRouter = mockk<AdosInputRouter>(relaxed = true) {
+    every { axes } returns MutableStateFlow(GamepadAxes.Neutral)
+    every { buttons } returns MutableStateFlow(0)
+    every { gamepadConnected } returns MutableStateFlow(false)
+    every { events } returns MutableSharedFlow<InputEvent>(extraBufferCapacity = 16)
+    every { snapshot } returns MutableStateFlow(PadSnapshot.Neutral)
 }
 
 /**

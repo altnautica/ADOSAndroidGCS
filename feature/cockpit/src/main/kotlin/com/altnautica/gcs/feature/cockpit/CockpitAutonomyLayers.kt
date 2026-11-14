@@ -179,7 +179,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
     val lastReacquired by rememberOnBeat {
         if (designation == null) null else a.feed.events.value.lastOrNull { it is FollowEvent.Reacquired } as FollowEvent.Reacquired?
     }
-    val pending by a.reacquirePending.collectAsStateWithLifecycle()
+    val pending by a.followSettingsPending.collectAsStateWithLifecycle()
     val video by vm.video.collectAsStateWithLifecycle()
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
@@ -220,7 +220,10 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 }
             }
             if (prompt != null && state != null) {
-                FollowAwaitPrompt(prompt, width, onAction = { vm.followPrompt.run(it, state.operatorResumeSeq) })
+                FollowAwaitPrompt(
+                    prompt, width, onAction = { vm.followPrompt.run(it, state.operatorResumeSeq) },
+                    focusRequests = vm.followPromptFocus, onFocusedChange = vm::setFollowPromptFocused,
+                )
             } else if (followingMode && state != null && expanded) {
                 val panelWidth = if (width.isWide() && !short) 320.dp else Dp.Unspecified
                 FollowRangePanel(
@@ -248,7 +251,9 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 followActive = active,
                 followEnabled = skillStates[CockpitAutonomy.FOLLOW_SKILL_ID]?.enabled ?: true,
                 reacquireMode = state?.reacquireMode,
-                pendingMode = pending,
+                uncertainMode = state?.uncertainMode,
+                predictiveSearch = state?.predictiveSearch,
+                pending = pending,
                 swapLabels = swap,
                 canRecord = canRecord,
                 recording = recording,
@@ -256,7 +261,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
             width = width,
             safeHeight = maxHeight - topInset,
             onFollow = { vm.activate(CockpitAutonomy.FOLLOW_SKILL_ID) },
-            onReacquireMode = a::setReacquireMode,
+            onSetting = a::setFollowSetting,
             onSwap = {
                 // With the PiP shown the legs trade places; without it the other leg takes the main view.
                 if (video.pip != null) {

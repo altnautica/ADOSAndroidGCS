@@ -5,18 +5,22 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.cos
 import kotlin.math.sin
 
 /**
  * The demo's scripted follow target: a person walks across the front camera while the
  * follow skill cycles through acquiring, following, predicting, moving to look, searching,
- * re-acquired and holding for the operator ([STEP_MS] each). Tracks and locks, the `follow`
- * state and the follow events exist only while the pilot reports the follow skill flying
- * ([DemoPilotView.followRunning]); otherwise the detector reports untracked candidates.
+ * re-acquired, holding for the operator and holding for the operator with the camera lost
+ * ([STEP_MS] each). Tracks and locks, the `follow` state and the follow events exist only
+ * while the follow tracks ([tracking]): the pilot reports the follow skill flying
+ * ([DemoPilotView.followRunning]) and no surface stopped it. Otherwise the detector reports
+ * untracked candidates.
  */
 internal class DemoFollowFeed {
     @Volatile var reacquireMode = "smart"
@@ -24,9 +28,61 @@ internal class DemoFollowFeed {
     /** The resume sequence the waiting prompt's search again writes; echoed in the state. */
     @Volatile var operatorResumeSeq = 0
 
+    /** What the follow does while unsure of the lock (`follow` or `hold`); echoed in the state. */
+    @Volatile var uncertainMode = "follow"
+
+    /** Predictive search for this flight; echoed in the state. */
+    @Volatile var predictiveSearch = true
+
+    /** A surface wrote `active = false` (Stop following) while the follow skill flies. */
+    @Volatile private var stopped = false
+    private val stopDue = AtomicBoolean(false)
+
+    /** A follow-me config write from a surface (the rail's settings, the waiting prompt's search again and stop). */
+    fun configure(key: String, value: JsonPrimitive) {
+        when (key) {
+            "reacquire_mode" -> reacquireMode = value.content
+            "operator_resume_seq" -> value.content.toIntOrNull()?.let { operatorResumeSeq = it }
+            "uncertain_mode" -> value.content.takeIf { it == "follow" || it == "hold" }?.let { uncertainMode = it }
+            "predictive_search" -> value.booleanOrNull?.let { predictiveSearch = it }
+            "active" -> when (value.booleanOrNull) {
+                false -> if (!stopped) {
+                    stopped = true
+                    stopDue.set(true)
+                }
+                true -> stopped = false
+                null -> Unit
+            }
+        }
+    }
+
+    /**
+     * True while the follow tracks and reports: the pilot flies the follow skill
+     * ([pilotFollowing]) and no stop came since it started. Once the skill stops flying, the
+     * next flight follows afresh.
+     */
+    fun tracking(pilotFollowing: Boolean): Boolean {
+        if (!pilotFollowing) stopped = false
+        return pilotFollowing && !stopped
+    }
+
+    /** The `follow.stopped` event a stop left to send, once; null with none. */
+    fun takeStopEvent(): Pair<String, JsonObject>? =
+        if (stopDue.getAndSet(false)) "follow.stopped" to buildJsonObject { put("reason", "operator") } else null
+
+    /** The `follow` state of a stopped follow while the pilot still flies the skill. */
+    fun stoppedState(): JsonObject = buildJsonObject {
+        put("active", false)
+        put("phase", "idle")
+        put("reacquire_mode", reacquireMode)
+        put("uncertain_mode", uncertainMode)
+        put("predictive_search", predictiveSearch)
+        put("operator_resume_seq", operatorResumeSeq)
+    }
+
     /**
      * 0 candidate, 1 tracked, 2 acquiring, 3 following, 4 predicting, 5 moving to look,
-     * 6 searching, 7 re-acquired, 8 holding for the operator.
+     * 6 searching, 7 re-acquired, 8 holding for the operator, 9 the same with the camera lost.
      */
     fun step(now: Long) = ((now / STEP_MS) % STEPS).toInt()
 
@@ -40,6 +96,8 @@ internal class DemoFollowFeed {
         val s = step(now)
         val x = personX(now)
         val items = buildJsonArray {
+            // The lost follow camera sends nothing at all.
+            if (following && s == 9) return@buildJsonArray
             // A second walker that never gets a track: always a candidate.
             add(det(980f, 330f, 40f, 104f, 0.64f, null, null))
             when {
@@ -135,12 +193,20 @@ internal class DemoFollowFeed {
             put("vantage_state", if (step == 5) "enroute" else "arrived")
         }
         if (step == 6) putJsonObject("occluder") { putJsonArray("ne") { add(JsonPrimitive(4.5)); add(JsonPrimitive(1.0)) }; put("kind", "narrow") }
-        if (step == 8) putJsonArray("hold_ne") { add(JsonPrimitive(1.0)); add(JsonPrimitive(0.5)) }
-        put("uncertain_mode", "follow")
-        put("predictive_search", true)
+        if (step >= 8) putJsonArray("hold_ne") { add(JsonPrimitive(1.0)); add(JsonPrimitive(0.5)) }
+        put("uncertain_mode", uncertainMode)
+        put("predictive_search", predictiveSearch)
         put("operator_resume_seq", operatorResumeSeq)
         put("pipeline_latency_ms", 85)
-        put("hold_reason", if (step == 8) JsonPrimitive("search-exhausted") else JsonNull)
+        put(
+            "hold_reason",
+            when (step) {
+                8 -> JsonPrimitive("search-exhausted")
+                // The follow camera stopped while waiting: still holding at the latched point.
+                9 -> JsonPrimitive("camera-lost")
+                else -> JsonNull
+            },
+        )
         put("bearing_deg", 64.0)
         put("depression_deg", 22.0)
         putJsonArray("target_ned") { add(JsonPrimitive(5.5)); add(JsonPrimitive(1.5)) }
@@ -165,7 +231,7 @@ internal class DemoFollowFeed {
         const val FRAME_W = 1280
         const val FRAME_H = 720
         const val STEP_MS = 4_000L
-        const val STEPS = 9
+        const val STEPS = 10
         const val SEARCH_BUDGET_S = 25.0
     }
 }

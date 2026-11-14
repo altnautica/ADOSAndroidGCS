@@ -20,18 +20,27 @@ internal class CockpitOverlays(private val confirm: ConfirmController) {
     /** The controller tour card on screen (0-based), or null. It opens only on the ground. */
     val tour = MutableStateFlow<Int?>(null)
 
+    /**
+     * True while focus is inside the follow waiting prompt: the operator moved it there (the
+     * controller's select, Tab, the arrow keys). Its keys and the controller then answer the
+     * prompt; Back (Circle) moves focus out again.
+     */
+    val followPrompt = MutableStateFlow(false)
+
     /** Called when Back closes the tour, so it is marked seen like its Done button. */
     var onTourClosed: () -> Unit = {}
 
     /**
      * True while an overlay that navigates like the rest of the app is open (Mode sheet,
-     * launch, preflight, quick settings, camera settings, the controller tour) and no confirm sheet is:
-     * controller buttons then move focus and activate controls instead of firing cockpit
-     * actions. The skill picker is driven by the controller bindings (D-pad focus, Cross
-     * GO, Circle Stop), so it is not one of them.
+     * launch, preflight, quick settings, camera settings, the controller tour), or focus is in
+     * the follow waiting prompt, and no confirm sheet is: controller buttons then move focus and
+     * activate controls instead of firing cockpit actions, while the sticks keep flying. The
+     * skill picker is driven by the controller bindings (D-pad focus, Cross GO, Circle Stop),
+     * so it is not one of them.
      */
     val uiNavigation: Boolean
-        get() = !confirm.isOpen && (quickSettings.value || camera.value || preflight.value || modePicker.value || launch.value || tour.value != null)
+        get() = !confirm.isOpen &&
+            (quickSettings.value || camera.value || preflight.value || modePicker.value || launch.value || tour.value != null || followPrompt.value)
 
     private fun flag(sheet: CockpitSheet): MutableStateFlow<Boolean>? = when (sheet) {
         CockpitSheet.Status -> statusList

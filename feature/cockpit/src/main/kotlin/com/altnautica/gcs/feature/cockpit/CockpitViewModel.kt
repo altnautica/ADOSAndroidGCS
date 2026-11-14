@@ -593,8 +593,35 @@ class CockpitViewModel @AssistedInject constructor(
         extensions, perception, localApis, settingsRepo, _events, ::activate, pilot.state, work,
     )
 
-    /** The follow waiting prompt's actions: follow-me config writes, pilot actions and pick a target. */
-    internal val followPrompt = com.altnautica.gcs.feature.cockpit.autonomy.FollowPromptRunner(viewModelScope, autonomy, { pilotAction(PilotAction(it)) }, _events)
+    /**
+     * The follow waiting prompt's actions: follow-me config writes, return home and land through
+     * [activate] (the left column's built-ins, with their gates, hold-to-confirm and flight
+     * controller fallback) and pick a target.
+     */
+    internal val followPrompt = com.altnautica.gcs.feature.cockpit.autonomy.FollowPromptRunner(viewModelScope, autonomy, { activate(it) }, _events)
+
+    private val _followPromptFocus = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Requests to move focus into the follow waiting prompt (the controller's select while it is shown). */
+    val followPromptFocus: SharedFlow<Unit> = _followPromptFocus.asSharedFlow()
+
+    /** The prompt reports whether focus is inside it. */
+    fun setFollowPromptFocused(focused: Boolean) {
+        overlays.followPrompt.value = focused
+    }
+
+    /** The controller's select while the waiting prompt is shown: focus moves into it. False with no prompt shown. */
+    internal fun enterFollowPrompt(): Boolean {
+        if (autonomy.followPrompt() == null) return false
+        _followPromptFocus.tryEmit(Unit)
+        return true
+    }
+
+    /** The bare keys the waiting prompt answers while focus is inside it; empty otherwise, so they stay the cockpit's. */
+    internal fun followPromptKeys(): Set<String> {
+        if (!overlays.followPrompt.value) return emptySet()
+        return autonomy.followPrompt()?.actions?.mapTo(HashSet()) { it.key.toString() }.orEmpty()
+    }
 
     private val widthClass = MutableStateFlow<WidthClass?>(null)
 

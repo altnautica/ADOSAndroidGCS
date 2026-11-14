@@ -16,8 +16,8 @@ sealed interface CockpitEvent {
     /** Pick a target from the waiting prompt: the designation is dropped and the next box tapped designates afresh. */
     data object PickTarget : CockpitEvent
 
-    /** A re-acquire mode write was not echoed by follow-me within the timeout. */
-    data object ReacquireModeNotApplied : CockpitEvent
+    /** A follow-me setting write ([key]: `reacquire_mode`, `uncertain_mode`, `predictive_search`) was not echoed within the timeout. */
+    data class FollowSettingNotApplied(val key: String) : CockpitEvent
 
     /** The minimap switched to the local frame on its own. */
     data object MinimapLocal : CockpitEvent

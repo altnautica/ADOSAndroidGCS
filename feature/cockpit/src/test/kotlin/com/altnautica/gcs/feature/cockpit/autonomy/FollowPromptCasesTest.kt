@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.autonomy
 
+import com.altnautica.gcs.core.skills.builtin.BuiltinIds
 import com.altnautica.gcs.feature.cockpit.testSpec
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -28,7 +29,7 @@ class FollowPromptCasesTest {
 
     @Test
     fun `every shared case yields the expected prompt`() {
-        assertEquals(6, cases.size)
+        assertEquals(7, cases.size)
         for (c in cases) {
             val name = c.getValue("name").jsonPrimitive.content
             val state = requireNotNull(AutonomyParse.follow(c.getValue("state").jsonObject)) { name }
@@ -56,12 +57,13 @@ class FollowPromptCasesTest {
         for (p in FollowPhase.entries) assertTrue(p.wordKey, strings[p.wordKey].orEmpty().isNotBlank())
         for (v in listOf("enroute", "arrived", "no-vantage")) assertTrue(v, strings["follow.vantage.$v"].orEmpty().isNotBlank())
         for (k in listOf("narrow", "wide")) assertTrue(k, strings["follow.occluder.$k"].orEmpty().isNotBlank())
+        assertEquals("Camera lost", strings["follow.hold_reason.camera-lost"])
         assertEquals("Target lost: holding, waiting for instructions", strings[FollowPrompts.TITLE_KEY])
     }
 
     private class Recorder : FollowActionTransport {
         val writes = mutableListOf<Pair<String, JsonPrimitive>>()
-        val pilot = mutableListOf<String>()
+        val flight = mutableListOf<String>()
         var picks = 0
         var accept = true
 
@@ -70,8 +72,8 @@ class FollowPromptCasesTest {
             return accept
         }
 
-        override fun pilot(action: String) {
-            pilot += action
+        override fun flight(builtinId: String) {
+            flight += builtinId
         }
 
         override fun startPick() {
@@ -87,7 +89,7 @@ class FollowPromptCasesTest {
         assertEquals(listOf("operator_resume_seq" to JsonPrimitive(4), "active" to JsonPrimitive(false)), t.writes)
         assertTrue(runFollowAction(FollowPromptAction.Rth, 3, t))
         assertTrue(runFollowAction(FollowPromptAction.Land, 3, t))
-        assertEquals(listOf("rth", "land"), t.pilot)
+        assertEquals("return home and land run the left column's built-ins", listOf(BuiltinIds.RTH, BuiltinIds.LAND), t.flight)
         assertTrue(runFollowAction(FollowPromptAction.Redesignate, 3, t))
         assertEquals(1, t.picks)
         t.accept = false

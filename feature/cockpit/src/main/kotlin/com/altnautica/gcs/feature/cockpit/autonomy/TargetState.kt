@@ -55,6 +55,8 @@ data class ResolveOptions(
     val cameraIsDown: Boolean = false,
     /** Last drawn rect of the followed track, for the waiting-for-you mark. */
     val lastFollowedRect: Box? = null,
+    /** When [lastFollowedRect] was last seen, on the surface clock; the mark draws only while that box is fresh. */
+    val lastFollowedAtMs: Long? = null,
     /** When the follow went lost (phase change or `follow.lost`), on the surface clock. */
     val lostAtMs: Long? = null,
     /** Followed feet points over the second before the prediction began, oldest first. */
@@ -124,7 +126,10 @@ object TargetState {
         val lostEventAt = events.lastOrNull { it is FollowEvent.Lost }?.atMs
         val lostPhaseAt = opts.lostAtMs?.takeIf { fresh && follow?.phase == FollowPhase.HoldingAwaitOperator }
         val lostStart = listOfNotNull(lostEventAt, lostPhaseAt).maxOrNull()
-        if (lostStart != null && nowMs - lostStart in 0..LOST_VISIBLE_MS && opts.lastFollowedRect != null) {
+        // The mark sits where the subject was last seen, so only a box seen within the fade counts:
+        // after a search of many seconds the last box no longer shows where the subject is.
+        val boxFresh = opts.lastFollowedAtMs?.let { nowMs - it in 0..LOST_VISIBLE_MS } == true
+        if (lostStart != null && nowMs - lostStart in 0..LOST_VISIBLE_MS && opts.lastFollowedRect != null && boxFresh) {
             out += DrawItem(TargetKind.AwaitOperator, opts.lastFollowedRect, TargetTag.Awaiting, emptyList(), emptySet(), follow?.trackId, 0f)
         }
         val ranked = out.sortedWith(compareBy<DrawItem> { priority(it.kind) }.thenByDescending { it.confidence }).take(MAX_ITEMS)

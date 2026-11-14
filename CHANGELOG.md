@@ -90,9 +90,35 @@ app's `versionName`.
   search area, the subject's predicted path and the vantage point. When the
   search ends, follow-me holds and the flight screen shows "Target lost:
   holding, waiting for instructions" with the reason and its actions: search
-  again, pick a target, return home, land and stop following (keys R, P, H, L
-  and X on a hardware keyboard). Holding for the operator keeps the target
-  designated; a stopped follow drops it.
+  again, pick a target, return home, land and stop following. Holding for the
+  operator keeps the target designated; a stopped follow drops it.
+- **Waiting prompt input.** Return home and Land on the prompt run the same
+  built-in as the left column: they open its hold-to-confirm, keep its gates
+  and fall back to the flight controller when the pilot channel is down. The
+  prompt never takes focus when it appears. The keys R, P, H, L and X act only
+  while focus is in the prompt (Tab or the arrow keys move it there); P then
+  picks a target instead of toggling picture-in-picture, and H and L open the
+  confirm. With a game controller, Cross (the select button) moves focus into
+  the prompt while it is shown instead of opening the skill picker; the D-pad
+  then moves between its actions, Cross presses the focused one and Circle
+  leaves the prompt. The sticks keep flying and the brake, return and kill
+  buttons keep working throughout.
+- **Camera lost while waiting.** When the follow camera stops sending frames
+  while follow-me waits for the operator, the prompt stays up, says the camera
+  stopped and offers no search again. A follow hold names its reason from the
+  shared labels, for example "Holding · Camera lost".
+- **Older follow-me.** Follow-me 0.4.9 and older report `coasting` and `lost`.
+  The flight screen reads them as Predicting and Holding with no waiting
+  prompt, never as a follow.
+- **Follow rail settings.** The rail adds When unsure (Follow | Hold) and the
+  Predictive search switch beside Strict | Smart. Each writes follow-me's
+  setting and stays outlined until follow-me reports it back. On a short
+  phone screen they sit behind More.
+- **Waiting mark.** The "Waiting for you" mark at the subject's last box is
+  drawn only when that box is less than 0.9 s old.
+- **Demo follow.** In demo mode Stop following stops the scripted follow
+  until the follow skill flies again. The script also waits with the camera
+  lost, and it echoes the rail's settings.
 
 ## [0.6.4] - 2026-11-16
 

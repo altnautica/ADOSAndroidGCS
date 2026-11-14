@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.launch
@@ -148,6 +149,10 @@ internal class CockpitAutonomy(
     /** The clock every feed timestamp is on. */
     fun nowMs(): Long = clock.nowMs()
 
+    /** The waiting prompt a fresh follow state asks for (`holding-await-operator`), or null. */
+    fun followPrompt(): FollowPrompt? =
+        feed.follow.value?.takeIf { clock.nowMs() - it.atMs <= TargetState.FOLLOW_STALE_MS }?.let { FollowPrompts.of(it.value) }
+
     /** Camera of the main video; the agent's primary camera when no tab is selected. */
     fun mainCamera(v: VideoUi = video.value): String = v.selectedStreamId ?: PRIMARY_CAMERA
 
@@ -181,6 +186,7 @@ internal class CockpitAutonomy(
     // ---- Target memory (waiting mark rect, prediction ghost) ---------------------------
 
     private var lastFollowedRect: Box? = null
+    private var lastFollowedAtMs: Long? = null
     private var lostAtMs: Long? = null
     private var lastPhase: FollowPhase? = null
     private val feet = ArrayDeque<Triple<Long, Float, Float>>()
@@ -227,6 +233,7 @@ internal class CockpitAutonomy(
                 vehicleYawDeg = vehicleYawDeg,
                 cameraIsDown = isDownCamera(cameraId),
                 lastFollowedRect = lastFollowedRect,
+                lastFollowedAtMs = lastFollowedAtMs,
                 lostAtMs = lostAtMs,
                 ghost = ghost,
                 cameraHfovDeg = hfov,
@@ -241,8 +248,9 @@ internal class CockpitAutonomy(
             feed.batches.collect { all ->
                 val d = _designation.value ?: return@collect
                 val box = all[d.cameraId]?.items?.firstOrNull { it.trackId != null && it.trackId == d.trackId }?.box ?: return@collect
-                lastFollowedRect = box
                 val now = clock.nowMs()
+                lastFollowedRect = box
+                lastFollowedAtMs = now
                 feet.addLast(Triple(now, box.cx, box.bottom))
                 while (feet.isNotEmpty() && (now - feet.first().first > GHOST_WINDOW_MS || feet.size > GHOST_MAX)) feet.removeFirst()
             }
@@ -266,7 +274,7 @@ internal class CockpitAutonomy(
                 if (tracking && _designation.value?.trackId != f.trackId) {
                     _designation.value = Designation(f.predicted?.cameraId ?: mainCamera(), f.trackId, null)
                 }
-                pendingMode.value?.let { want -> if (f.reacquireMode == want) settlePending() }
+                settleEchoed(f)
             }
         }
         scope.launch {
@@ -344,24 +352,29 @@ internal class CockpitAutonomy(
         return (r.value as? kotlinx.serialization.json.JsonObject)?.get("designated")?.let { (it as? JsonPrimitive)?.booleanOrNull } == true
     }
 
-    // ---- Re-acquire mode --------------------------------------------------------------
+    // ---- Follow-me settings (re-acquire mode, when unsure, predictive search) ---------
 
-    private val pendingMode = MutableStateFlow<String?>(null)
+    private val pendingSettings = MutableStateFlow<Map<String, JsonPrimitive>>(emptyMap())
 
-    /** A requested mode not yet echoed by `follow.state.reacquire_mode`; shown dashed. */
-    val reacquirePending: StateFlow<String?> = pendingMode.asStateFlow()
-    private var pendingJob: Job? = null
+    /** Written follow-me settings not yet echoed by `follow.state`, by config key; the rail outlines them dashed. */
+    val followSettingsPending: StateFlow<Map<String, JsonPrimitive>> = pendingSettings.asStateFlow()
+    private val pendingJobs = HashMap<String, Job>()
 
-    fun setReacquireMode(mode: String) {
+    /**
+     * Writes follow-me setting [key] = [value] (`reacquire_mode`, `uncertain_mode`,
+     * `predictive_search`). It shows pending until `follow.state` echoes it; a refused write or
+     * no echo within [ECHO_TIMEOUT_MS] clears it with [CockpitEvent.FollowSettingNotApplied].
+     */
+    fun setFollowSetting(key: String, value: JsonPrimitive) {
         node.value ?: return
-        pendingMode.value = mode
-        pendingJob?.cancel()
-        pendingJob = scope.launch {
-            val ok = writeFollowConfig(REACQUIRE_KEY, JsonPrimitive(mode))
+        pendingSettings.update { it + (key to value) }
+        pendingJobs.remove(key)?.cancel()
+        pendingJobs[key] = scope.launch {
+            val ok = writeFollowConfig(key, value)
             if (ok) delay(ECHO_TIMEOUT_MS)
-            if (pendingMode.value == mode) {
-                pendingMode.value = null
-                events.tryEmit(CockpitEvent.ReacquireModeNotApplied)
+            if (pendingSettings.value[key] == value) {
+                pendingSettings.update { it - key }
+                events.tryEmit(CockpitEvent.FollowSettingNotApplied(key))
             }
         }
     }
@@ -377,9 +390,22 @@ internal class CockpitAutonomy(
         }
     }
 
-    private fun settlePending() {
-        pendingJob?.cancel()
-        pendingMode.value = null
+    /** Clears the pending settings [f] echoes. */
+    private fun settleEchoed(f: FollowState) {
+        val pending = pendingSettings.value
+        if (pending.isEmpty()) return
+        val echoed = pending.filter { (key, want) -> echo(f, key) == want }.keys
+        if (echoed.isEmpty()) return
+        echoed.forEach { pendingJobs.remove(it)?.cancel() }
+        pendingSettings.update { it - echoed }
+    }
+
+    /** The value `follow.state` reports for setting [key], as written. */
+    private fun echo(f: FollowState, key: String): JsonPrimitive? = when (key) {
+        REACQUIRE_KEY -> f.reacquireMode?.let(::JsonPrimitive)
+        UNCERTAIN_KEY -> f.uncertainMode?.let(::JsonPrimitive)
+        PREDICTIVE_KEY -> f.predictiveSearch?.let(::JsonPrimitive)
+        else -> null
     }
 
     // ---- Nav source -------------------------------------------------------------------
@@ -455,6 +481,8 @@ internal class CockpitAutonomy(
         const val FOLLOW_PLUGIN_ID = "com.altnautica.follow-me"
         const val FOLLOW_SKILL_ID = "$FOLLOW_PLUGIN_ID:follow-me"
         const val REACQUIRE_KEY = "reacquire_mode"
+        const val UNCERTAIN_KEY = "uncertain_mode"
+        const val PREDICTIVE_KEY = "predictive_search"
         const val STRICT = "strict"
         const val SMART = "smart"
         const val ECHO_TIMEOUT_MS = 3_000L

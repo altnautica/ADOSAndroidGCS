@@ -80,10 +80,12 @@ internal class CockpitPadInput(
     fun holdProgress(): Float = progress
 
     private val capture = object : InputCapture {
-        override fun consumesChord(chord: String) = CockpitInputMapper.consumesChord(chord, vm.loadout.value)
+        // The waiting prompt's bare keys are its own only while focus is inside it.
+        override fun consumesChord(chord: String) = CockpitInputMapper.consumesChord(chord, vm.loadout.value, vm.followPromptKeys())
         override val capturesEnter: Boolean get() = confirm.isOpen
 
-        // Sheets other than the skill picker navigate like the app; a confirm sheet takes the buttons.
+        // Sheets other than the skill picker, and the waiting prompt once focus is in it, navigate
+        // like the app; a confirm sheet takes the buttons.
         override val uiNavigation: Boolean get() = overlays.uiNavigation
     }
 
@@ -159,10 +161,11 @@ internal class CockpitPadInput(
             }
             is CockpitControllerAction.Pilot -> vm.pilotAction(a.action)
             is CockpitControllerAction.Skill -> vm.activate(a.skillId)
-            CockpitControllerAction.SkillSelect -> if (overlays.picker.value) {
-                picker.selected.value?.let { picker.actions.onGo(it) }
-            } else {
-                picker.setOpen(true)
+            // Select opens the skill picker, or moves focus into the waiting prompt while it is shown.
+            CockpitControllerAction.SkillSelect -> when {
+                overlays.picker.value -> picker.selected.value?.let { picker.actions.onGo(it) }
+                vm.enterFollowPrompt() -> Unit
+                else -> picker.setOpen(true)
             }
             CockpitControllerAction.SkillStop -> vm.stopOrBack()
             is CockpitControllerAction.PickerFocus -> if (overlays.picker.value) picker.moveFocus(a.delta)

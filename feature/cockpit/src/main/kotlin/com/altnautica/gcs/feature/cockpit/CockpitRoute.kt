@@ -50,6 +50,7 @@ import com.altnautica.gcs.core.designsystem.component.overlay.ProvideOverlayTopB
 import com.altnautica.gcs.core.designsystem.component.overlay.rememberOverlayTopBar
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
+import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 import com.altnautica.gcs.core.extensions.ui.ExtensionCockpitEffect
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.feature.cockpit.skillbar.widthClassFor
@@ -138,7 +139,13 @@ fun CockpitRoute(
                     snackbar.showSnackbar(reasonTextOf(vm.specStrings, event.reasonKey))
                 is CockpitEvent.Reacquired -> snackbar.showSnackbar(reacquiredText(vm.specStrings, event))
                 CockpitEvent.PickTarget -> snackbar.showSnackbar(vm.specStrings.format("follow.prompt.action.redesignate"))
-                CockpitEvent.ReacquireModeNotApplied -> snackbar.showSnackbar(vm.specStrings.format("follow.reacquire_not_applied"))
+                is CockpitEvent.FollowSettingNotApplied -> snackbar.showSnackbar(
+                    if (event.key == CockpitAutonomy.REACQUIRE_KEY) {
+                        vm.specStrings.format("follow.reacquire_not_applied")
+                    } else {
+                        vm.specStrings.format("skill.did_not_respond", mapOf("skill" to vm.specStrings.format("follow.chip")))
+                    },
+                )
                 CockpitEvent.MinimapLocal -> snackbar.showSnackbar(vm.specStrings.format("minimap.toast_local"))
                 CockpitEvent.PilotUnavailable -> snackbar.showSnackbar(vm.specStrings.format("cockpit.pilot.unavailable"))
                 is CockpitEvent.PilotRefused -> snackbar.showSnackbar(

@@ -161,7 +161,7 @@ class TargetStateTest {
 
     @Test
     fun `T13 holding for the operator marks the last rect for 900 ms`() {
-        val opts = ResolveOptions(lastFollowedRect = box12, lostAtMs = now - 100)
+        val opts = ResolveOptions(lastFollowedRect = box12, lastFollowedAtMs = now - 100, lostAtMs = now - 100)
         val waiting = follow(FollowPhase.HoldingAwaitOperator, hold = "awaiting-operator")
         val item = resolve(batch(), null, waiting, opts = opts).single()
         assertEquals(TargetKind.AwaitOperator, item.kind)
@@ -174,8 +174,19 @@ class TargetStateTest {
     @Test
     fun `T13 a follow lost event alone also shows the waiting mark`() {
         val lost = FollowEvent.Lost(12, "lock_lost", now - 100, awaitingOperator = true, holdNe = 3f to 4f)
-        val items = resolve(batch(), events = listOf(lost), opts = ResolveOptions(lastFollowedRect = box12))
+        val items = resolve(batch(), events = listOf(lost), opts = ResolveOptions(lastFollowedRect = box12, lastFollowedAtMs = now - 100))
         assertEquals(listOf(TargetKind.AwaitOperator), items.map { it.kind })
+    }
+
+    @Test
+    fun `T13 the waiting mark draws only at a box seen in the last 900 ms`() {
+        val waiting = follow(FollowPhase.HoldingAwaitOperator, hold = "awaiting-operator")
+        // A search of about 25 s ran between the last box and the hold: that box is not where the subject is.
+        val old = ResolveOptions(lastFollowedRect = box12, lastFollowedAtMs = now - 25_000, lostAtMs = now - 100)
+        assertTrue(resolve(batch(), null, waiting, opts = old).none { it.kind == TargetKind.AwaitOperator })
+        assertTrue(resolve(batch(), null, waiting, opts = old.copy(lastFollowedAtMs = null)).none { it.kind == TargetKind.AwaitOperator })
+        val fresh = old.copy(lastFollowedAtMs = now - 500)
+        assertEquals(listOf(TargetKind.AwaitOperator), resolve(batch(), null, waiting, opts = fresh).map { it.kind })
     }
 
     @Test

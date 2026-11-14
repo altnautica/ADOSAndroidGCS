@@ -20,7 +20,7 @@ internal object FollowWords {
             val word = strings.format(f.phase.wordKey)
             f.reacquireRemainingS?.let { "$word ${secondsLeft(it)} s" } ?: word
         }
-        FollowPhase.Holding -> strings.format("lock.holding", mapOf("label" to (TargetState.holdReason(f.holdReason) ?: "")))
+        FollowPhase.Holding -> strings.format("lock.holding", mapOf("label" to holdLabel(f.holdReason, strings)))
         FollowPhase.HoldingAwaitOperator -> strings.format(f.phase.wordKey)
         FollowPhase.Idle -> ""
     }
@@ -38,6 +38,10 @@ internal object FollowWords {
 
     /** Whole seconds left, rounded up and never negative. */
     fun secondsLeft(s: Float): Int = ceil(s.coerceAtLeast(0f).toDouble()).toInt()
+
+    /** A follow hold reason's spec label (`follow.hold_reason.<reason>`, e.g. "Camera lost"); an unlabelled reason reads as its wire word. */
+    fun holdLabel(reason: String?, strings: SetupStringsSpec): String =
+        reason?.let { strings.strings["follow.hold_reason.$it"] } ?: TargetState.holdReason(reason).orEmpty()
 
     private fun sentence(word: String) = word.lowercase().replaceFirstChar(Char::uppercase)
 }

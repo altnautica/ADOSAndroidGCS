@@ -46,13 +46,19 @@ class AutonomyParseTest {
     }
 
     @Test
-    fun `every follow phase the agent sends parses, and the retired coasting and lost do not`() {
-        fun phase(p: String) = (AutonomyParse.navFrame("""{"kind":"follow","ts_ms":1,"data":{"phase":"$p"}}""", 0) as? NavFrame.Follow)?.follow?.phase?.toString()
+    fun `every follow phase the agent sends parses, and an older follow's coasting and lost read as predicting and holding`() {
+        fun follow(p: String) = (AutonomyParse.navFrame("""{"kind":"follow","ts_ms":1,"data":{"active":true,"phase":"$p","commanding":true}}""", 0) as? NavFrame.Follow)?.follow
+        fun phase(p: String) = follow(p)?.phase?.toString()
         assertEquals("Repositioning", phase("repositioning"))
         assertEquals("Searching", phase("searching"))
         assertEquals("HoldingAwaitOperator", phase("holding-await-operator"))
-        assertNull(phase("coasting"))
-        assertNull(phase("lost"))
+        // Follow-me 0.4.9 and older: never a follow while the lock is lost, and never the waiting prompt.
+        assertEquals("Predicting", phase("coasting"))
+        assertEquals("Holding", phase("lost"))
+        assertNull(FollowPrompts.of(follow("lost")!!))
+        assertNull(phase("drifting"))
+        val event = """{"kind":"follow_event","ts_ms":1,"topic":"follow.reacquired","data":{"track_id":15,"similarity":0.9,"phase":"coasting"}}"""
+        assertEquals(FollowPhase.Predicting, ((AutonomyParse.navFrame(event, 0) as NavFrame.Event).event as FollowEvent.Reacquired).phase)
     }
 
     @Test
