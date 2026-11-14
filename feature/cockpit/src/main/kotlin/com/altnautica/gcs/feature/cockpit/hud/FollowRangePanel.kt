@@ -31,6 +31,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.RangeCue
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 import com.altnautica.gcs.feature.cockpit.skillbar.isWide
@@ -80,6 +81,8 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
                 Spacer(Modifier.width(AdosSpacing.S4))
                 Text(phaseWord, style = small, color = phaseColor)
             }
+            // While the subject is sought: seconds left of the search budget, the vantage, what hides it.
+            if (!stale) FollowWords.recoveryLine(follow, LocalCockpitStrings.current)?.let { Text(it, style = small, color = c.hudCoast) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IntervalBar(range, sigma)
                 Spacer(Modifier.width(AdosSpacing.S2))
@@ -121,12 +124,10 @@ private fun phaseWord(phase: FollowPhase, stale: Boolean): Pair<String, Color> {
     val c = AdosTheme.colors
     if (stale) return specText("follow.phase.stale") to c.hudWarn
     return when (phase) {
-        FollowPhase.Following -> specText("follow.phase.following") to c.hudTrack
-        FollowPhase.Acquiring -> specText("follow.phase.acquiring") to c.hudTrack
-        FollowPhase.Coasting -> specText("follow.phase.coasting") to c.hudCoast
-        FollowPhase.Searching -> specText("follow.phase.searching") to c.hudCoast
-        FollowPhase.Holding -> specText("follow.phase.holding") to c.hudWarn
-        FollowPhase.Lost -> specText("follow.phase.lost") to c.hudCrit
+        FollowPhase.Following, FollowPhase.Acquiring -> specText(phase.wordKey) to c.hudTrack
+        FollowPhase.Predicting, FollowPhase.Repositioning, FollowPhase.Searching -> specText(phase.wordKey) to c.hudCoast
+        FollowPhase.Holding -> specText(phase.wordKey) to c.hudWarn
+        FollowPhase.HoldingAwaitOperator -> specText(phase.wordKey) to c.hudCrit
         FollowPhase.Idle -> DASH to c.hudMuted
     }
 }

@@ -44,7 +44,7 @@ class TargetDrawAllocTest {
             listOf(TargetTag.Range(14.5f), TargetTag.Sigma(1.2f)), emptySet(), trackId = 9, confidence = 0.91f,
         ),
         DrawItem(
-            TargetKind.Coasting, Box(900f, 200f, 80f, 140f), TargetTag.Tracked("car", 11, uncertain = false),
+            TargetKind.Predicting, Box(900f, 200f, 80f, 140f), TargetTag.Tracked("car", 11, uncertain = false),
             listOf(TargetTag.Estimate(30f)), emptySet(), trackId = 11, confidence = 0.5f,
             ghost = listOf(860f to 330f, 880f to 335f, 900f to 340f, 940f to 340f),
         ),

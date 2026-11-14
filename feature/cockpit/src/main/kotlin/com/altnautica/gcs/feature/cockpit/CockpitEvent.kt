@@ -10,8 +10,11 @@ sealed interface CockpitEvent {
     /** A target action refused before running; [reasonKey] is a skill reason key or extension text. */
     data class TargetRefused(val reasonKey: String) : CockpitEvent
 
-    /** Follow-me re-acquired the target on track [trackId] after a [gapS] s gap. */
-    data class Reacquired(val trackId: Int, val similarity: Float, val gapS: Float) : CockpitEvent
+    /** Follow-me re-acquired the target on track [trackId] after a [gapS] s gap; [occluder] is what hid it, when known. */
+    data class Reacquired(val trackId: Int, val similarity: Float, val gapS: Float, val occluder: String? = null) : CockpitEvent
+
+    /** Pick a target from the waiting prompt: the designation is dropped and the next box tapped designates afresh. */
+    data object PickTarget : CockpitEvent
 
     /** A re-acquire mode write was not echoed by follow-me within the timeout. */
     data object ReacquireModeNotApplied : CockpitEvent
@@ -38,12 +41,18 @@ sealed interface CockpitEvent {
     data object OpenControls : CockpitEvent
 }
 
-/** The re-acquired toast (`follow.reacquired_toast`): the new track, its similarity to two decimals and the gap to one. */
-internal fun reacquiredText(strings: com.altnautica.gcs.core.skills.spec.SetupStringsSpec, e: CockpitEvent.Reacquired): String = strings.format(
-    "follow.reacquired_toast",
-    mapOf(
-        "id" to e.trackId.toString(),
-        "sim" to String.format(java.util.Locale.ROOT, "%.2f", e.similarity),
-        "gap" to String.format(java.util.Locale.ROOT, "%.1f", e.gapS),
-    ),
-)
+/**
+ * The re-acquired toast (`follow.reacquired_toast`): the new track, its similarity to two
+ * decimals and the gap to one, then what hid the subject (`follow.occluder.*`) when the search knew.
+ */
+internal fun reacquiredText(strings: com.altnautica.gcs.core.skills.spec.SetupStringsSpec, e: CockpitEvent.Reacquired): String {
+    val text = strings.format(
+        "follow.reacquired_toast",
+        mapOf(
+            "id" to e.trackId.toString(),
+            "sim" to String.format(java.util.Locale.ROOT, "%.2f", e.similarity),
+            "gap" to String.format(java.util.Locale.ROOT, "%.1f", e.gapS),
+        ),
+    )
+    return e.occluder?.let { "$text · ${strings.format("follow.occluder.$it")}" } ?: text
+}

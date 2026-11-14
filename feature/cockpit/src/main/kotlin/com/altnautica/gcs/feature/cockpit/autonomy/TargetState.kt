@@ -1,7 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.autonomy
 
 /** HUD v2 target states, highest draw priority first within their group. */
-enum class TargetKind { Candidate, Tracked, Locked, Acquiring, Following, Holding, Coasting, Searching, SearchingOffFrame, Lost }
+enum class TargetKind { Candidate, Tracked, Locked, Acquiring, Following, Holding, Predicting, Searching, SearchingOffFrame, AwaitOperator }
 
 /** State modifiers. */
 enum class TargetModifier { Uncertain, FollowStale, Reacquired }
@@ -16,10 +16,13 @@ sealed interface TargetTag {
 
     /** [reason] is already shortened (`NO RANGE`); null reads `HOLD`. */
     data class Hold(val reason: String?) : TargetTag
-    data class Coast(val seconds: Float) : TargetTag
+    /** [seconds] left of the recovery's search budget. */
+    data class Predicting(val seconds: Float) : TargetTag
     data object Searching : TargetTag
     data class SearchingBearing(val deg: Int) : TargetTag
-    data object Lost : TargetTag
+    data object Repositioning : TargetTag
+    data class RepositioningBearing(val deg: Int) : TargetTag
+    data object Awaiting : TargetTag
     data object FollowStale : TargetTag
     data class Range(val m: Float) : TargetTag
     data class Sigma(val twoSigmaM: Float) : TargetTag
@@ -37,7 +40,7 @@ data class DrawItem(
     val confidence: Float,
     /** Off-frame arrow: bearing relative to the camera axis, degrees clockwise. */
     val relBearingDeg: Float? = null,
-    /** Coasting ghost path in frame px, oldest first, ending at the predicted feet point. */
+    /** Predicting ghost path in frame px, oldest first, ending at the predicted feet point. */
     val ghost: List<Pair<Float, Float>> = emptyList(),
     /** The detection behind this item, for designation. */
     val detection: Detection? = null,
@@ -50,11 +53,11 @@ data class ResolveOptions(
     val vehicleYawDeg: Float? = null,
     val cameraYawOffsetDeg: Float = 0f,
     val cameraIsDown: Boolean = false,
-    /** Last drawn rect of the followed track, for `LOST`. */
+    /** Last drawn rect of the followed track, for the waiting-for-you mark. */
     val lastFollowedRect: Box? = null,
     /** When the follow went lost (phase change or `follow.lost`), on the surface clock. */
     val lostAtMs: Long? = null,
-    /** Followed feet points over the second before the coast began, oldest first. */
+    /** Followed feet points over the second before the prediction began, oldest first. */
     val ghost: List<Pair<Float, Float>> = emptyList(),
     /** Camera horizontal and vertical field of view in degrees, when the leg reports them. */
     val cameraHfovDeg: Float? = null,
@@ -119,10 +122,10 @@ object TargetState {
         }
         follow?.takeIf { fresh }?.let { f -> phaseItem(f, cameraId, opts)?.let(out::add) }
         val lostEventAt = events.lastOrNull { it is FollowEvent.Lost }?.atMs
-        val lostPhaseAt = opts.lostAtMs?.takeIf { fresh && follow?.phase == FollowPhase.Lost }
+        val lostPhaseAt = opts.lostAtMs?.takeIf { fresh && follow?.phase == FollowPhase.HoldingAwaitOperator }
         val lostStart = listOfNotNull(lostEventAt, lostPhaseAt).maxOrNull()
         if (lostStart != null && nowMs - lostStart in 0..LOST_VISIBLE_MS && opts.lastFollowedRect != null) {
-            out += DrawItem(TargetKind.Lost, opts.lastFollowedRect, TargetTag.Lost, emptyList(), emptySet(), follow?.trackId, 0f)
+            out += DrawItem(TargetKind.AwaitOperator, opts.lastFollowedRect, TargetTag.Awaiting, emptyList(), emptySet(), follow?.trackId, 0f)
         }
         val ranked = out.sortedWith(compareBy<DrawItem> { priority(it.kind) }.thenByDescending { it.confidence }).take(MAX_ITEMS)
         var candidateTags = 0
@@ -134,17 +137,23 @@ object TargetState {
     private fun phaseItem(follow: FollowState, cameraId: String, opts: ResolveOptions): DrawItem? {
         val p = follow.predicted?.takeIf { it.cameraId == cameraId }
         return when (follow.phase) {
-            FollowPhase.Coasting -> p?.let {
+            FollowPhase.Predicting -> p?.let {
                 val est = follow.rangeM?.let { r -> listOf(TargetTag.Estimate(r)) }.orEmpty()
                 DrawItem(
-                    TargetKind.Coasting, it.box, TargetTag.Coast(follow.coastRemainingS ?: 0f), est, emptySet(), follow.trackId, 1f,
+                    TargetKind.Predicting, it.box, TargetTag.Predicting(follow.reacquireRemainingS ?: 0f), est, emptySet(), follow.trackId, 1f,
                     ghost = opts.ghost + (it.box.cx to it.box.bottom),
                 )
             }
-            FollowPhase.Searching -> when {
-                p != null -> DrawItem(TargetKind.Searching, p.box, TargetTag.Searching, emptyList(), emptySet(), follow.trackId, 1f)
-                follow.predicted == null -> offFrame(follow, opts, requireOutside = false)
-                else -> null
+            FollowPhase.Repositioning, FollowPhase.Searching -> {
+                val moving = follow.phase == FollowPhase.Repositioning
+                when {
+                    p != null -> DrawItem(
+                        TargetKind.Searching, p.box, if (moving) TargetTag.Repositioning else TargetTag.Searching,
+                        emptyList(), emptySet(), follow.trackId, 1f,
+                    )
+                    follow.predicted == null -> offFrame(follow, opts, requireOutside = false, moving = moving)
+                    else -> null
+                }
             }
             // A followed target whose bearing or depression leaves the camera's field of view.
             FollowPhase.Following -> if (p == null) offFrame(follow, opts, requireOutside = true) else null
@@ -157,14 +166,15 @@ object TargetState {
      * target lies outside the camera's field of view: relative bearing beyond half the
      * horizontal FOV, or depression beyond half the vertical FOV about the mount pitch.
      */
-    private fun offFrame(follow: FollowState, opts: ResolveOptions, requireOutside: Boolean): DrawItem? {
+    private fun offFrame(follow: FollowState, opts: ResolveOptions, requireOutside: Boolean, moving: Boolean = false): DrawItem? {
         if (opts.cameraIsDown) return null
         val bearing = follow.bearingDeg ?: return null
         val yaw = opts.vehicleYawDeg ?: return null
         val rel = wrap180(bearing - (yaw + opts.cameraYawOffsetDeg))
         if (requireOutside && !outsideFov(rel, follow.depressionDeg, opts)) return null
+        val deg = Math.floorMod(Math.round(bearing), 360)
         return DrawItem(
-            TargetKind.SearchingOffFrame, null, TargetTag.SearchingBearing(Math.floorMod(Math.round(bearing), 360)),
+            TargetKind.SearchingOffFrame, null, if (moving) TargetTag.RepositioningBearing(deg) else TargetTag.SearchingBearing(deg),
             emptyList(), emptySet(), follow.trackId, 1f, relBearingDeg = rel,
         )
     }
@@ -191,8 +201,8 @@ object TargetState {
 
     fun priority(kind: TargetKind): Int = when (kind) {
         TargetKind.Following, TargetKind.Acquiring, TargetKind.Holding -> 0
-        TargetKind.Locked -> 1
-        TargetKind.Coasting, TargetKind.Searching, TargetKind.SearchingOffFrame, TargetKind.Lost -> 2
+        TargetKind.Locked, TargetKind.AwaitOperator -> 1
+        TargetKind.Predicting, TargetKind.Searching, TargetKind.SearchingOffFrame -> 2
         TargetKind.Tracked -> 3
         TargetKind.Candidate -> 4
     }

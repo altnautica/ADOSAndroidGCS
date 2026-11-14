@@ -137,6 +137,7 @@ fun CockpitRoute(
                 is CockpitEvent.TargetRefused ->
                     snackbar.showSnackbar(reasonTextOf(vm.specStrings, event.reasonKey))
                 is CockpitEvent.Reacquired -> snackbar.showSnackbar(reacquiredText(vm.specStrings, event))
+                CockpitEvent.PickTarget -> snackbar.showSnackbar(vm.specStrings.format("follow.prompt.action.redesignate"))
                 CockpitEvent.ReacquireModeNotApplied -> snackbar.showSnackbar(vm.specStrings.format("follow.reacquire_not_applied"))
                 CockpitEvent.MinimapLocal -> snackbar.showSnackbar(vm.specStrings.format("minimap.toast_local"))
                 CockpitEvent.PilotUnavailable -> snackbar.showSnackbar(vm.specStrings.format("cockpit.pilot.unavailable"))

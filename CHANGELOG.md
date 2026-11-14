@@ -81,6 +81,18 @@ app's `versionName`.
 - **Lidar map heading.** The shared sensor-health spec carries the drone's
   new readiness item "Lidar map heading not confirmed". The preflight sheet
   and status pill show it as the drone sends it.
+- **Follow-me recovery.** When the lock on the subject is lost, follow-me now
+  predicts, moves to a vantage point and searches before it gives up. The
+  what's-locked chip, the range panel and the target marks read "Predicting",
+  "Moving to look" and "Searching" with the seconds left of the search budget;
+  the range panel adds the vantage state and what hides the subject, and the
+  re-acquired toast names it. The local minimap and the AR layer draw the
+  search area, the subject's predicted path and the vantage point. When the
+  search ends, follow-me holds and the flight screen shows "Target lost:
+  holding, waiting for instructions" with the reason and its actions: search
+  again, pick a target, return home, land and stop following (keys R, P, H, L
+  and X on a hardware keyboard). Holding for the operator keeps the target
+  designated; a stopped follow drops it.
 
 ## [0.6.4] - 2026-11-16
 

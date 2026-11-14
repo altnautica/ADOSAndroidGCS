@@ -42,6 +42,25 @@ class LayerRulesTest {
     }
 
     @Test
+    fun `the follow search area and vantage draw under the motion flag`() {
+        for (t in listOf("fsearch", "fvantage")) {
+            assertTrue(t, ArRules.include(item(t), route, RouteStyle.Normal))
+            assertFalse(t, ArRules.include(item(t), full.toggled(LayerSpec.AR_MOTION), RouteStyle.Normal))
+            assertFalse(t, ArRules.include(item(t), off, RouteStyle.Normal))
+        }
+    }
+
+    @Test
+    fun `the goal follows the vehicle path, never the subject's predicted one`() {
+        val predicted = ArItem(t = "fpath", k = ArRules.PREDICTED_PATH_KEY, state = "clear")
+        val vehicle = ArItem(t = "fpath", k = "fpath", state = "blocked")
+        assertTrue(ArRules.isPredictedPath(predicted))
+        assertFalse(ArRules.isPredictedPath(vehicle))
+        assertTrue(ArRules.wayBlocked(listOf(predicted, vehicle)))
+        assertFalse(ArRules.wayBlocked(listOf(predicted.copy(state = "blocked"))))
+    }
+
+    @Test
     fun `returning hides the route but keeps home and its edge`() {
         assertFalse(ArRules.include(item("wp", "next"), full, RouteStyle.Returning))
         assertFalse(ArRules.include(item("leg", "active"), full, RouteStyle.Returning))

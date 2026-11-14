@@ -39,9 +39,21 @@ object ArRules {
             "leg" -> flags.isOn(LayerSpec.AR_ROUTE) && routeShown && (full || item.role == "active" || item.role == "next")
             "home" -> flags.isOn(LayerSpec.AR_ROUTE)
             "edge" -> flags.isOn(LayerSpec.AR_ROUTE) && (item.of == "home" || routeShown)
-            "fpv", "fpath", "fgoal", "orbit" -> flags.isOn(LayerSpec.AR_MOTION)
+            "fpv", "fpath", "fgoal", "orbit", "fsearch", "fvantage" -> flags.isOn(LayerSpec.AR_MOTION)
             else -> false
         }
+    }
+
+    /** The `fpath` key the agent gives the followed subject's predicted path. */
+    const val PREDICTED_PATH_KEY = "fpath:predicted"
+
+    /** True for the subject's predicted path: the vehicle's avoid state says nothing about it. */
+    fun isPredictedPath(item: ArItem): Boolean = item.t == "fpath" && item.k == PREDICTED_PATH_KEY
+
+    /** Whether the camera's own vehicle `fpath` reads blocked (the agent gives it the pilot's avoid state); the goal ring follows it. */
+    fun wayBlocked(items: List<ArItem>): Boolean {
+        for (i in items.indices) if (items[i].t == "fpath" && !isPredictedPath(items[i])) return items[i].state == "blocked"
+        return false
     }
 
     /** `size` → marker px: `24 + 40·size` dp. */

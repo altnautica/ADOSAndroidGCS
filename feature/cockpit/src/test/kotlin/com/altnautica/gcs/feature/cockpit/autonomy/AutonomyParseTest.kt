@@ -14,12 +14,12 @@ import org.robolectric.annotation.Config
 class AutonomyParseTest {
     @Test
     fun `follow frame carries phase, range, cues and prediction`() {
-        val text = """{"kind":"follow","ts_ms":1,"data":{"phase":"coasting","track_id":12,"range_m":10.2,"range_sigma_m":0.3,
+        val text = """{"kind":"follow","ts_ms":1,"data":{"phase":"predicting","track_id":12,"range_m":10.2,"range_sigma_m":0.3,
             "range_cues":[{"kind":"ground","range_m":10.1,"sigma_m":0.4},{"kind":"lidar","range_m":10.0,"sigma_m":0.05}],
-            "agl_m":4.1,"agl_source":"rng","reacquire_mode":"smart","coast_remaining_s":1.4,"bearing_deg":64,
+            "agl_m":4.1,"agl_source":"rng","reacquire_mode":"smart","reacquire_remaining_s":18.4,"bearing_deg":64,
             "target_ned":[5.5,1.5],"predicted_bbox":{"camera_id":"main","frame_w":1280,"frame_h":720,"x":600,"y":300,"w":40,"h":98}}}"""
         val f = (AutonomyParse.navFrame(text, 5) as NavFrame.Follow).follow
-        assertEquals(FollowPhase.Coasting, f.phase)
+        assertEquals("Predicting", f.phase.toString())
         assertEquals(12, f.trackId)
         assertEquals(setOf(RangeCue.Ground, RangeCue.Lidar), f.rangeCues)
         assertEquals("smart", f.reacquireMode)
@@ -43,6 +43,70 @@ class AutonomyParseTest {
         val e = (AutonomyParse.navFrame(text, 7) as NavFrame.Event).event as FollowEvent.Reacquired
         assertEquals(15, e.trackId)
         assertEquals(7L, e.atMs)
+    }
+
+    @Test
+    fun `every follow phase the agent sends parses, and the retired coasting and lost do not`() {
+        fun phase(p: String) = (AutonomyParse.navFrame("""{"kind":"follow","ts_ms":1,"data":{"phase":"$p"}}""", 0) as? NavFrame.Follow)?.follow?.phase?.toString()
+        assertEquals("Repositioning", phase("repositioning"))
+        assertEquals("Searching", phase("searching"))
+        assertEquals("HoldingAwaitOperator", phase("holding-await-operator"))
+        assertNull(phase("coasting"))
+        assertNull(phase("lost"))
+    }
+
+    @Test
+    fun `the follow state carries the recovery fields`() {
+        val text = """{"kind":"follow","ts_ms":1,"data":{"phase":"searching","search_step":1,"reacquire_remaining_s":12.5,
+            "search_budget_s":25,"search_area":{"center_ne":[1,2],"semi_major_m":3,"semi_minor_m":1,"heading_deg":40},
+            "vantage_ne":[5,6],"vantage_state":"arrived","occluder":{"ne":[2,2],"kind":"narrow"},
+            "predicted_path_ne":[[1,2],[1.5,2.2]],"hold_ne":null,"uncertain_mode":"hold","predictive_search":false,
+            "operator_resume_seq":3,"outpaced":true,"speed_limit_mps":6}}"""
+        val f = (AutonomyParse.navFrame(text, 0) as NavFrame.Follow).follow
+        assertEquals(SearchArea(1f to 2f, 3f, 1f, 40f), f.searchArea)
+        assertEquals(Occluder(2f to 2f, "narrow"), f.occluder)
+        assertEquals(12.5f, f.reacquireRemainingS)
+        assertEquals(25f, f.searchBudgetS)
+        assertEquals(1, f.searchStep)
+        assertEquals(5f to 6f, f.vantageNe)
+        assertEquals("arrived", f.vantageState)
+        assertEquals(listOf(1f to 2f, 1.5f to 2.2f), f.predictedPathNe)
+        assertNull(f.holdNe)
+        assertEquals("hold", f.uncertainMode)
+        assertEquals(false, f.predictiveSearch)
+        assertEquals(3, f.operatorResumeSeq)
+        assertTrue(f.outpaced)
+        assertEquals(6f, f.speedLimitMps)
+    }
+
+    @Test
+    fun `malformed recovery fields are dropped, never guessed`() {
+        val text = """{"kind":"follow","ts_ms":1,"data":{"phase":"holding-await-operator",
+            "search_area":{"center_ne":[1],"semi_major_m":3,"semi_minor_m":1,"heading_deg":40},
+            "occluder":{"ne":[2,2],"kind":"tall"},"vantage_state":"parked","predicted_path_ne":[[1,2],["x",3],[4,5]],"hold_ne":[7.9,2.4]}}"""
+        val f = (AutonomyParse.navFrame(text, 0) as NavFrame.Follow).follow
+        assertNull(f.searchArea)
+        assertNull(f.occluder)
+        assertNull(f.vantageState)
+        assertEquals(listOf(1f to 2f, 4f to 5f), f.predictedPathNe)
+        assertEquals(7.9f to 2.4f, f.holdNe)
+        assertNull(f.searchStep)
+        assertEquals(0, f.operatorResumeSeq)
+    }
+
+    @Test
+    fun `the recovery events parse`() {
+        fun event(topic: String, data: String) =
+            (AutonomyParse.navFrame("""{"kind":"follow_event","ts_ms":1,"topic":"$topic","data":$data}""", 9) as NavFrame.Event).event
+        assertEquals(
+            FollowEvent.Reacquired(9, 0.81f, 4.2f, 9, mahalanobis = 1.3f, phase = FollowPhase.Searching),
+            event("follow.reacquired", """{"track_id":9,"similarity":0.81,"gap_s":4.2,"mahalanobis":1.3,"phase":"searching"}"""),
+        )
+        assertEquals(
+            FollowEvent.Lost(9, "search_exhausted", 9, awaitingOperator = true, holdNe = 7.9f to 2.4f),
+            event("follow.lost", """{"track_id":9,"reason":"search_exhausted","awaiting_operator":true,"hold_ne":[7.9,2.4]}"""),
+        )
+        assertEquals(FollowEvent.Stopped("lease-revoked", 9), event("follow.stopped", """{"reason":"lease-revoked"}"""))
     }
 
     @Test

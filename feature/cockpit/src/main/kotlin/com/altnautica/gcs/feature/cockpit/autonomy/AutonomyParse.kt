@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlin.math.atan2
 
@@ -118,21 +119,32 @@ internal object AutonomyParse {
         poseAgeMs = o["pose_age_ms"].num()?.toLong(),
     )
 
+    private fun JsonElement?.bool(): Boolean? = (this as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
+
+    private fun pair(e: JsonElement?): Pair<Float, Float>? {
+        val a = e.arr()?.mapNotNull { it.f() } ?: return null
+        return if (a.size >= 2) a[0] to a[1] else null
+    }
+
+    private fun searchArea(e: JsonElement?): SearchArea? {
+        val o = e.obj() ?: return null
+        return SearchArea(
+            pair(o["center_ne"]) ?: return null,
+            o["semi_major_m"].f() ?: return null,
+            o["semi_minor_m"].f() ?: return null,
+            o["heading_deg"].f() ?: return null,
+        )
+    }
+
+    private fun occluder(e: JsonElement?): Occluder? {
+        val o = e.obj() ?: return null
+        val kind = o["kind"].str()?.takeIf { it == "narrow" || it == "wide" } ?: return null
+        return Occluder(pair(o["ne"]) ?: return null, kind)
+    }
+
+    /** A follow phase the agent no longer sends (`coasting`, `lost`) is unknown: the frame is dropped. */
     fun follow(o: JsonObject): FollowState? {
-        val phase = when (o["phase"].str()) {
-            "idle" -> FollowPhase.Idle
-            "acquiring" -> FollowPhase.Acquiring
-            "following" -> FollowPhase.Following
-            "coasting" -> FollowPhase.Coasting
-            "searching" -> FollowPhase.Searching
-            "lost" -> FollowPhase.Lost
-            "holding" -> FollowPhase.Holding
-            else -> return null
-        }
-        fun pair(e: JsonElement?): Pair<Float, Float>? {
-            val a = e.arr()?.mapNotNull { it.f() } ?: return null
-            return if (a.size >= 2) a[0] to a[1] else null
-        }
+        val phase = FollowPhase.of(o["phase"].str()) ?: return null
         val predicted = o["predicted_bbox"].obj()?.let { p ->
             val cam = p["camera_id"].str() ?: return@let null
             PredictedBox(
@@ -160,7 +172,7 @@ internal object AutonomyParse {
             aglM = o["agl_m"].f(),
             aglSource = o["agl_source"].str(),
             reacquireMode = o["reacquire_mode"].str(),
-            coastRemainingS = o["coast_remaining_s"].f(),
+            reacquireRemainingS = o["reacquire_remaining_s"].f(),
             pipelineLatencyMs = o["pipeline_latency_ms"].f(),
             holdReason = o["hold_reason"].str(),
             bearingDeg = o["bearing_deg"].f(),
@@ -168,6 +180,19 @@ internal object AutonomyParse {
             targetNed = pair(o["target_ned"]),
             targetVelNed = pair(o["target_vel_ned"]),
             predicted = predicted,
+            searchBudgetS = o["search_budget_s"].f(),
+            searchStep = o["search_step"].int(),
+            searchArea = searchArea(o["search_area"]),
+            predictedPathNe = o["predicted_path_ne"].arr().orEmpty().mapNotNull(::pair),
+            vantageNe = pair(o["vantage_ne"]),
+            vantageState = o["vantage_state"].str()?.takeIf { it in VANTAGE_STATES },
+            occluder = occluder(o["occluder"]),
+            holdNe = pair(o["hold_ne"]),
+            uncertainMode = o["uncertain_mode"].str()?.takeIf { it == "follow" || it == "hold" },
+            predictiveSearch = o["predictive_search"].bool(),
+            operatorResumeSeq = (o["operator_resume_seq"].int() ?: 0).coerceAtLeast(0),
+            outpaced = o["outpaced"].bool() == true,
+            speedLimitMps = o["speed_limit_mps"].f(),
         )
     }
 
@@ -177,8 +202,17 @@ internal object AutonomyParse {
             o["similarity"].f() ?: return null,
             o["gap_s"].f() ?: 0f,
             at,
+            mahalanobis = o["mahalanobis"].f(),
+            phase = FollowPhase.of(o["phase"].str()),
         )
-        "follow.lost" -> FollowEvent.Lost(o["track_id"].int(), o["reason"].str(), at)
+        "follow.lost" -> FollowEvent.Lost(
+            o["track_id"].int(),
+            o["reason"].str(),
+            at,
+            awaitingOperator = o["awaiting_operator"].bool() == true,
+            holdNe = pair(o["hold_ne"]),
+        )
+        "follow.stopped" -> FollowEvent.Stopped(o["reason"].str() ?: "revoked", at)
         else -> null
     }
 
@@ -192,6 +226,8 @@ internal object AutonomyParse {
         }
         return OccupancyDelta(seq, o["res_m"].f() ?: return null, o["tile_cells"].int() ?: DEFAULT_TILE_CELLS, tiles)
     }
+
+    private val VANTAGE_STATES = setOf("enroute", "arrived", "no-vantage")
 
     const val DEFAULT_TILE_CELLS = 64
 }

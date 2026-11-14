@@ -26,7 +26,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.Detection
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowEvent
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
-import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.autonomy.LockState
 import com.altnautica.gcs.feature.cockpit.autonomy.TargetState
 import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
@@ -62,19 +62,13 @@ internal fun LockChip(
     val who = specText("lock.who", "label" to TargetState.classWord(detection?.classLabel ?: "").ifBlank { "—" }, "id" to (trackId ?: 0).toString())
     val word = when {
         !feedFresh -> specText("target.waiting_for_feed")
-        follow != null && followFresh && follow.phase != FollowPhase.Idle -> when (follow.phase) {
-            FollowPhase.Following -> specText("follow.phase.following").lowercase().replaceFirstChar(Char::uppercase)
-            FollowPhase.Acquiring -> specText("follow.phase.acquiring").lowercase().replaceFirstChar(Char::uppercase)
-            FollowPhase.Coasting -> specText("lock.coasting", "s" to HudGeometry.oneDecimal(follow.coastRemainingS ?: 0f))
-            FollowPhase.Searching -> specText("follow.phase.searching").lowercase().replaceFirstChar(Char::uppercase)
-            FollowPhase.Holding -> specText("lock.holding", "label" to (TargetState.holdReason(follow.holdReason) ?: ""))
-            else -> specText("follow.phase.lost").lowercase().replaceFirstChar(Char::uppercase)
-        }
+        follow != null && followFresh && follow.phase != FollowPhase.Idle -> FollowWords.lockWord(follow, LocalCockpitStrings.current)
         lastReacquired != null && nowMs - lastReacquired.atMs <= REACQUIRED_WORD_MS ->
             specText("lock.reacquired", "sim" to String.format(java.util.Locale.ROOT, "%.2f", lastReacquired.similarity))
         detection == null -> specText("lock.not_in_view")
         detection.lockState == LockState.Uncertain -> specText("lock.uncertain")
-        detection.lockState == LockState.Lost -> specText("follow.phase.lost").lowercase().replaceFirstChar(Char::uppercase)
+        // The tracker's own lost lock: the spec's one "Lost" word.
+        detection.lockState == LockState.Lost -> specText("nav_source.q.lost")
         else -> specText("lock.locked")
     }
     val chrome = LocalChrome.current

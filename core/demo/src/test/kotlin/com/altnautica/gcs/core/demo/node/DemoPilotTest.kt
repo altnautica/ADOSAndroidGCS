@@ -662,7 +662,7 @@ class DemoPilotTest {
         assertFalse(idle.followRunning)
         assertTrue(arItems(layers.ar(t, idle)).none { it.str("t") in followKinds })
         var last: Int? = null
-        for (now in 0L until 32_000L step 100) {
+        for (now in 0L until DemoFollowFeed.STEPS * DemoFollowFeed.STEP_MS step 100) {
             val detections = feed.detections(now, 0, idle.followRunning)["detections"]!!.jsonArray.map { it.jsonObject }
             assertTrue(detections.all { it["track_id"] is JsonNull && it["lock_state"] is JsonNull })
             assertNull(feed.event(last, now, idle.followRunning))
@@ -678,11 +678,39 @@ class DemoPilotTest {
         assertTrue(tracked.any { it.str("lock_state") == "locked" })
         val events = mutableListOf<String>()
         last = null
-        for (now in 0L until 32_000L step 100) {
+        for (now in 0L until DemoFollowFeed.STEPS * DemoFollowFeed.STEP_MS step 100) {
             feed.event(last, now, true)?.let { events += it.first }
             last = feed.step(now)
         }
         assertTrue("follow.reacquired" in events)
+    }
+
+    @Test
+    fun `the demo follow walks every recovery phase and ends waiting for the operator`() {
+        val feed = DemoFollowFeed()
+        val phases = (0 until DemoFollowFeed.STEPS).map { feed.follow(it, it * DemoFollowFeed.STEP_MS + 1_000L, 0f, 10.0) }
+        assertEquals(
+            listOf("predicting", "repositioning", "searching", "following", "holding-await-operator"),
+            phases.drop(4).map { it.str("phase") },
+        )
+        val searching = phases[6]
+        assertEquals(0L, searching["search_step"]!!.jsonPrimitive.content.toLong())
+        assertEquals("arrived", searching.str("vantage_state"))
+        assertTrue(searching["search_area"] is JsonObject)
+        assertEquals(16.0, searching["reacquire_remaining_s"]!!.jsonPrimitive.content.toDouble(), 1e-6)
+        val waiting = phases[8]
+        assertEquals("search-exhausted", waiting.str("hold_reason"))
+        assertTrue(waiting["search_area"] == null)
+
+        val events = mutableListOf<Pair<String, JsonObject>>()
+        var last: Int? = null
+        for (now in 0L until DemoFollowFeed.STEPS * DemoFollowFeed.STEP_MS step 100) {
+            feed.event(last, now, true)?.let { events += it }
+            last = feed.step(now)
+        }
+        val lost = events.single { it.first == "follow.lost" }.second
+        assertEquals("true", lost["awaiting_operator"]!!.jsonPrimitive.content)
+        assertEquals("search_exhausted", lost.str("reason"))
     }
 
     @Test

@@ -95,7 +95,7 @@ internal class TargetLayerState(val cameraId: String) : CanvasTargets {
             smooth[id] = next
             if (gap(next, rect) > CONVERGED_PX) animating = true
             eased += if (next == rect) item else item.copy(rect = next)
-            if (!m.reducedMotion && (item.kind == TargetKind.Searching || item.kind == TargetKind.Lost || TargetModifier.Reacquired in item.modifiers)) {
+            if (!m.reducedMotion && (item.kind == TargetKind.Searching || item.kind == TargetKind.AwaitOperator || TargetModifier.Reacquired in item.modifiers)) {
                 animating = true
             }
         }

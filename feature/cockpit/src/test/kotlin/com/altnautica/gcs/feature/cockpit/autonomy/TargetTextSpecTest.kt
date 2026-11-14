@@ -16,8 +16,12 @@ class TargetTextSpecTest {
     }
 
     @Test
-    fun `coast tag keeps its unit in lower case`() {
-        assertEquals("COAST 1.4 s", TargetText(testSpec.setupStrings).tag(TargetTag.Coast(1.4f)))
+    fun `predicting tag keeps its unit in lower case, and every recovery tag has spec text`() {
+        val text = TargetText(testSpec.setupStrings)
+        assertEquals("PREDICTING 1.4 s", text.tag(TargetTag.Predicting(1.4f)))
+        assertEquals("MOVING TO LOOK", text.tag(TargetTag.Repositioning))
+        assertEquals("MOVING TO LOOK · 064°", text.tag(TargetTag.RepositioningBearing(64)))
+        assertEquals("WAITING FOR YOU", text.tag(TargetTag.Awaiting))
     }
 
     @Test

@@ -27,10 +27,12 @@ internal class TargetText(private val strings: SetupStringsSpec) {
         is TargetTag.Acquiring -> q(up("hud.target.acquiring", "id" to tag.id), tag.uncertain)
         is TargetTag.Track -> q(up("hud.target.track", "pct" to tag.pct), tag.uncertain)
         is TargetTag.Hold -> tag.reason?.let { up("hud.target.hold", "label" to it) } ?: up("follow.phase.holding")
-        is TargetTag.Coast -> up("hud.target.coast", "s" to HudGeometry.oneDecimal(tag.seconds))
+        is TargetTag.Predicting -> up("hud.target.predicting", "s" to HudGeometry.oneDecimal(tag.seconds))
         TargetTag.Searching -> up("follow.phase.searching")
         is TargetTag.SearchingBearing -> up("hud.target.searching_bearing", "deg" to HudGeometry.bearing3(tag.deg.toFloat()))
-        TargetTag.Lost -> up("follow.phase.lost")
+        TargetTag.Repositioning -> up("hud.target.repositioning")
+        is TargetTag.RepositioningBearing -> up("hud.target.repositioning_bearing", "deg" to HudGeometry.bearing3(tag.deg.toFloat()))
+        TargetTag.Awaiting -> up("hud.target.awaiting")
         TargetTag.FollowStale -> up("hud.target.follow_stale")
         is TargetTag.Range -> s("hud.target.range", "m" to HudGeometry.formatNumber(tag.m))
         is TargetTag.Sigma -> s("hud.target.sigma", "m" to HudGeometry.oneDecimal(tag.twoSigmaM))
@@ -47,9 +49,9 @@ internal class TargetText(private val strings: SetupStringsSpec) {
                 TargetKind.Acquiring -> "follow.phase.acquiring"
                 TargetKind.Following -> "hud.target.state.tracking"
                 TargetKind.Holding -> "hud.target.state.holding"
-                TargetKind.Coasting -> "follow.phase.coasting"
+                TargetKind.Predicting -> "follow.phase.predicting"
                 TargetKind.Searching, TargetKind.SearchingOffFrame -> "follow.phase.searching"
-                TargetKind.Lost -> "follow.phase.lost"
+                TargetKind.AwaitOperator -> "follow.phase.holding-await-operator"
             },
         ).lowercase()
         val who = classLabel.orEmpty().replaceFirstChar { it.uppercase() }

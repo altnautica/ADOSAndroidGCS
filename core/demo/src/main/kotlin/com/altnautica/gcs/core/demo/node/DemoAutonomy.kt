@@ -203,7 +203,10 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
         AgentResult.Ok(buildJsonObject { put("designated", true) })
 
     override suspend fun putPluginConfig(pluginId: String, key: String, value: JsonElement): AgentResult<JsonElement> {
-        if (key == "reacquire_mode") (value as? JsonPrimitive)?.content?.let { follow.reacquireMode = it }
+        when (key) {
+            "reacquire_mode" -> (value as? JsonPrimitive)?.content?.let { follow.reacquireMode = it }
+            "operator_resume_seq" -> (value as? JsonPrimitive)?.content?.toIntOrNull()?.let { follow.operatorResumeSeq = it }
+        }
         return AgentResult.Ok(buildJsonObject { put("ok", true) })
     }
 

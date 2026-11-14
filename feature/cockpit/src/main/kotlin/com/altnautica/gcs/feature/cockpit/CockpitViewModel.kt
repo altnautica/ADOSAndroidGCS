@@ -593,6 +593,9 @@ class CockpitViewModel @AssistedInject constructor(
         extensions, perception, localApis, settingsRepo, _events, ::activate, pilot.state, work,
     )
 
+    /** The follow waiting prompt's actions: follow-me config writes, pilot actions and pick a target. */
+    internal val followPrompt = com.altnautica.gcs.feature.cockpit.autonomy.FollowPromptRunner(viewModelScope, autonomy, { pilotAction(PilotAction(it)) }, _events)
+
     private val widthClass = MutableStateFlow<WidthClass?>(null)
 
     /** The screen's width class, which decides whether the on-screen sticks show. */

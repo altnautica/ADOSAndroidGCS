@@ -178,13 +178,16 @@ internal class CockpitAutonomy(
             }
         }
 
-    // ---- Target memory (LOST rect, coast ghost) ------------------------------------
+    // ---- Target memory (waiting mark rect, prediction ghost) ---------------------------
 
     private var lastFollowedRect: Box? = null
     private var lostAtMs: Long? = null
     private var lastPhase: FollowPhase? = null
     private val feet = ArrayDeque<Triple<Long, Float, Float>>()
     private var ghost: List<Pair<Float, Float>> = emptyList()
+
+    /** What hid the subject in the current recovery (`narrow` or `wide`), for the re-acquired toast. */
+    private var recoveryOccluder: String? = null
 
     /** Leg geometry from the agent's camera roster: horizontal FOV and mount pitch, by camera id. */
     private val legs = MutableStateFlow<Map<String, Pair<Float?, Float?>>>(emptyMap())
@@ -248,12 +251,14 @@ internal class CockpitAutonomy(
             feed.follow.collect { stamped ->
                 val f = stamped?.value ?: return@collect
                 val now = clock.nowMs()
+                if (f.phase.recovering && lastPhase?.recovering != true) recoveryOccluder = null
+                if (f.phase.recovering) f.occluder?.let { recoveryOccluder = it.kind }
+                if (f.phase == FollowPhase.Idle) recoveryOccluder = null
                 if (f.phase != lastPhase) {
-                    if (f.phase == FollowPhase.Coasting) ghost = feet.map { it.second to it.third }
-                    if (f.phase == FollowPhase.Lost) {
-                        lostAtMs = now
-                        _designation.value = null
-                    }
+                    if (f.phase == FollowPhase.Predicting) ghost = feet.map { it.second to it.third }
+                    // Holding for the operator keeps the designation: searching again seeks the
+                    // same subject, and picking a target replaces it.
+                    if (f.phase == FollowPhase.HoldingAwaitOperator) lostAtMs = now
                     lastPhase = f.phase
                 }
                 // Follow-me designates on the agent; the host store mirrors its track.
@@ -270,12 +275,13 @@ internal class CockpitAutonomy(
                 for (e in list - seen) when (e) {
                     is FollowEvent.Reacquired -> {
                         _designation.value = Designation(_designation.value?.cameraId ?: mainCamera(), e.trackId, null)
-                        events.tryEmit(CockpitEvent.Reacquired(e.trackId, e.similarity, e.gapS))
+                        events.tryEmit(CockpitEvent.Reacquired(e.trackId, e.similarity, e.gapS, recoveryOccluder))
                     }
                     is FollowEvent.Lost -> {
                         lostAtMs = e.atMs
-                        _designation.value = null
+                        if (!e.awaitingOperator) _designation.value = null
                     }
+                    is FollowEvent.Stopped -> _designation.value = null
                 }
                 seen = list.toSet()
             }
@@ -347,22 +353,27 @@ internal class CockpitAutonomy(
     private var pendingJob: Job? = null
 
     fun setReacquireMode(mode: String) {
-        val id = node.value ?: return
+        node.value ?: return
         pendingMode.value = mode
         pendingJob?.cancel()
         pendingJob = scope.launch {
-            val value = JsonPrimitive(mode)
-            val local = feed.local(id)
-            val ok = if (local != null) {
-                (local as? AutonomyControlApi)?.putPluginConfig(FOLLOW_PLUGIN_ID, REACQUIRE_KEY, value) is AgentResult.Ok
-            } else {
-                repository.writeConfig(id, FOLLOW_PLUGIN_ID, REACQUIRE_KEY, value) == WriteOutcome.Done
-            }
+            val ok = writeFollowConfig(REACQUIRE_KEY, JsonPrimitive(mode))
             if (ok) delay(ECHO_TIMEOUT_MS)
             if (pendingMode.value == mode) {
                 pendingMode.value = null
                 events.tryEmit(CockpitEvent.ReacquireModeNotApplied)
             }
+        }
+    }
+
+    /** Writes one follow-me config key on the flown node; true once the node took it. */
+    suspend fun writeFollowConfig(key: String, value: JsonPrimitive): Boolean {
+        val id = node.value ?: return false
+        val local = feed.local(id)
+        return if (local != null) {
+            (local as? AutonomyControlApi)?.putPluginConfig(FOLLOW_PLUGIN_ID, key, value) is AgentResult.Ok
+        } else {
+            repository.writeConfig(id, FOLLOW_PLUGIN_ID, key, value) == WriteOutcome.Done
         }
     }
 
@@ -464,7 +475,10 @@ internal class CockpitAutonomy(
             if (under.isNotEmpty()) return under.minBy { it.box.w * it.box.h }
             return batch.items.minByOrNull { (it.box.cx - cx) * (it.box.cx - cx) + (it.box.cy - cy) * (it.box.cy - cy) }
         }
-        private val MIRRORED_PHASES = setOf(FollowPhase.Acquiring, FollowPhase.Following, FollowPhase.Coasting, FollowPhase.Searching, FollowPhase.Holding)
+        private val MIRRORED_PHASES = setOf(
+            FollowPhase.Acquiring, FollowPhase.Following, FollowPhase.Holding,
+            FollowPhase.Predicting, FollowPhase.Repositioning, FollowPhase.Searching, FollowPhase.HoldingAwaitOperator,
+        )
 
         fun fixType(f: GpsFix): Int = when (f) {
             GpsFix.NoGps -> 0

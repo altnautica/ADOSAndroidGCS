@@ -29,7 +29,7 @@ class FollowRangeNoAglTest {
     private val follow = FollowState(
         phase = FollowPhase.Following, trackId = 12, confidence = 0.8f, rangeM = 10.2f, rangeSigmaM = 0.3f,
         rangeCues = emptySet(), targetSpeedMps = 1.2f, aglM = 15f, aglSource = "rng", reacquireMode = null,
-        coastRemainingS = null, pipelineLatencyMs = null, holdReason = null, bearingDeg = 10f, depressionDeg = 20f,
+        reacquireRemainingS = null, pipelineLatencyMs = null, holdReason = null, bearingDeg = 10f, depressionDeg = 20f,
         targetNed = null, targetVelNed = null, predicted = null,
     )
 

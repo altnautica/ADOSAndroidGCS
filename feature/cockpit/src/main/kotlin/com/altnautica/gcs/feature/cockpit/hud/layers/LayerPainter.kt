@@ -162,7 +162,7 @@ class LayerPainter(private val measurer: TextMeasurer) {
         val fade = ((now - slot.curAt).toFloat() / LayerSlot.FADE_MS).coerceIn(0f, 1f)
         val items = cur?.items
         if (items != null) {
-            val blocked = pathBlocked(items)
+            val blocked = ArRules.wayBlocked(items)
             for (i in items.indices) {
                 val item = items[i]
                 if (!ArRules.include(item, flags, route)) continue
@@ -173,19 +173,13 @@ class LayerPainter(private val measurer: TextMeasurer) {
         }
         val gone = prev?.items
         if (fade < 1f && gone != null) {
-            val blocked = pathBlocked(gone)
+            val blocked = ArRules.wayBlocked(gone)
             for (i in gone.indices) {
                 val g = gone[i]
                 if (curByKey.containsKey(g.key) || !ArRules.include(g, flags, route)) continue
                 item(g, null, 1f, view, route, blocked, layerAlpha * (1f - fade))
             }
         }
-    }
-
-    /** Whether the camera's own `fpath` item reads blocked: the agent gives it the pilot's avoid state. */
-    private fun pathBlocked(items: List<ArItem>): Boolean {
-        for (i in items.indices) if (items[i].t == "fpath") return items[i].state == "blocked"
-        return false
     }
 
     /** [b] eased from [a] by [f]; NaN when [b] is absent. A plain float, so no interpolated value is boxed. */
@@ -299,6 +293,8 @@ class LayerPainter(private val measurer: TextMeasurer) {
             }
             "fpath" -> {
                 if (!polyline(it, before, f, view)) return
+                // The followed subject's predicted path: a thin cyan dash, never in the vehicle's avoid colours.
+                if (ArRules.isPredictedPath(it)) return haloStroke(path, LayerColors.Follow, px(1.5f), alpha * 0.7f, dotted)
                 val color = when (it.state) {
                     // Stale obstacle data, or none at all, is a warning, like a detour: amber.
                     "detour", "stale", "unavailable" -> LayerColors.Detour
@@ -317,6 +313,16 @@ class LayerPainter(private val measurer: TextMeasurer) {
                     path.lineTo(c.x - s, c.y + s)
                     haloStroke(path, LayerColors.Blocked, px(3f), alpha)
                 }
+            }
+            "fsearch" -> {
+                // The follow search area: a closed ring at 40 % with a faint fill.
+                if (!polyline(it, before, f, view, close = true)) return
+                drawPath(path, LayerColors.Follow, alpha = alpha * 0.12f)
+                haloStroke(path, LayerColors.Follow, px(2f), alpha * 0.4f, dashed)
+            }
+            "fvantage" -> {
+                if (x.isNaN() || y.isNaN()) return
+                drawCircle(LayerColors.Follow, px(9f), pt(view, x, y), alpha = alpha, style = stroke(px(2f), StrokeCap.Butt, dashed))
             }
             "fgoal" -> {
                 if (x.isNaN() || y.isNaN()) return

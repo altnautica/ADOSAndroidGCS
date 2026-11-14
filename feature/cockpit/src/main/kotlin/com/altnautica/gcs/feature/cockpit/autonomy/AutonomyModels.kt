@@ -30,8 +30,40 @@ data class DetectionBatch(
     val items: List<Detection>,
 )
 
-/** Follow-me phases (`follow.state.phase`). */
-enum class FollowPhase { Idle, Acquiring, Following, Coasting, Searching, Lost, Holding }
+/**
+ * Follow-me phases (`follow.state.phase`), [wire] as the agent sends them. Once the lock is
+ * lost the follow is [Predicting] (flying toward the predicted standoff), [Repositioning]
+ * (flying to a vantage point), [Searching] (sweeping from the vantage point, widening in
+ * steps), then [HoldingAwaitOperator] (stopped at a latched hover point, waiting for the
+ * operator).
+ */
+enum class FollowPhase(val wire: String) {
+    Idle("idle"),
+    Acquiring("acquiring"),
+    Following("following"),
+    Holding("holding"),
+    Predicting("predicting"),
+    Repositioning("repositioning"),
+    Searching("searching"),
+    HoldingAwaitOperator("holding-await-operator"),
+    ;
+
+    /** The lock is lost and the subject is being sought. */
+    val recovering: Boolean get() = this == Predicting || this == Repositioning || this == Searching
+
+    /** The spec key of the phase word (`follow.phase.<wire>`). */
+    val wordKey: String get() = "follow.phase.$wire"
+
+    companion object {
+        fun of(wire: String?): FollowPhase? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/** The search ellipse around the predicted subject position (map frame); [headingDeg] is the major axis as a bearing. */
+data class SearchArea(val centerNe: Pair<Float, Float>, val semiMajorM: Float, val semiMinorM: Float, val headingDeg: Float)
+
+/** What hides the subject from the vantage point: `narrow` (a trunk, a column) or `wide` (a wall, a corner). */
+data class Occluder(val ne: Pair<Float, Float>, val kind: String)
 
 /** Follow-me's prediction of the target box in one camera (frame px). */
 data class PredictedBox(val cameraId: String, val frameW: Float, val frameH: Float, val box: Box)
@@ -53,7 +85,8 @@ data class FollowState(
     val aglSource: String?,
     /** `strict` or `smart`; null when unreported. */
     val reacquireMode: String?,
-    val coastRemainingS: Float?,
+    /** Seconds left of the recovery's search budget. */
+    val reacquireRemainingS: Float?,
     val pipelineLatencyMs: Float?,
     val holdReason: String?,
     val bearingDeg: Float?,
@@ -62,14 +95,53 @@ data class FollowState(
     val targetNed: Pair<Float, Float>?,
     val targetVelNed: Pair<Float, Float>?,
     val predicted: PredictedBox?,
+    val searchBudgetS: Float? = null,
+    /** 0-based widening step while searching, else null. */
+    val searchStep: Int? = null,
+    val searchArea: SearchArea? = null,
+    /** The predicted subject path while recovering (north, east). */
+    val predictedPathNe: List<Pair<Float, Float>> = emptyList(),
+    val vantageNe: Pair<Float, Float>? = null,
+    /** `enroute`, `arrived` or `no-vantage`; null when unreported. */
+    val vantageState: String? = null,
+    val occluder: Occluder? = null,
+    /** The latched hover point while holding for the operator. */
+    val holdNe: Pair<Float, Float>? = null,
+    /** `follow` or `hold`; null when unreported. */
+    val uncertainMode: String? = null,
+    val predictiveSearch: Boolean? = null,
+    /** A surface writes `operatorResumeSeq + 1` to resume searching. */
+    val operatorResumeSeq: Int = 0,
+    /** The subject has been faster than [speedLimitMps] for a while. */
+    val outpaced: Boolean = false,
+    val speedLimitMps: Float? = null,
 )
 
 /** A follow event from the navigation stream, stamped with the local receive time. */
 sealed interface FollowEvent {
     val atMs: Long
 
-    data class Reacquired(val trackId: Int, val similarity: Float, val gapS: Float, override val atMs: Long) : FollowEvent
-    data class Lost(val trackId: Int?, val reason: String?, override val atMs: Long) : FollowEvent
+    /** [phase] is the phase the re-lock happened in; [mahalanobis] the position gate distance in sigmas. */
+    data class Reacquired(
+        val trackId: Int,
+        val similarity: Float,
+        val gapS: Float,
+        override val atMs: Long,
+        val mahalanobis: Float? = null,
+        val phase: FollowPhase? = null,
+    ) : FollowEvent
+
+    /** [awaitingOperator]: the follow holds at [holdNe] for the operator and keeps the designation. */
+    data class Lost(
+        val trackId: Int?,
+        val reason: String?,
+        override val atMs: Long,
+        val awaitingOperator: Boolean = false,
+        val holdNe: Pair<Float, Float>? = null,
+    ) : FollowEvent
+
+    /** Follow-me stopped (its lease revoked, or the operator stopped it). */
+    data class Stopped(val reason: String, override val atMs: Long) : FollowEvent
 }
 
 /** Extnav health vision-nav reports. */

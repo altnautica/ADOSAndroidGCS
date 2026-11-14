@@ -36,6 +36,7 @@ import com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowEvent
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
+import com.altnautica.gcs.feature.cockpit.autonomy.FollowPrompts
 import com.altnautica.gcs.feature.cockpit.autonomy.Stamped
 import com.altnautica.gcs.feature.cockpit.autonomy.TargetState
 import com.altnautica.gcs.feature.cockpit.band.NavSourceChip
@@ -43,6 +44,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.RedrawBeat
 import com.altnautica.gcs.feature.cockpit.chrome.rememberOnBeat
 import com.altnautica.gcs.feature.cockpit.chrome.rememberRedrawBeat
 import com.altnautica.gcs.feature.cockpit.hud.DesignatorState
+import com.altnautica.gcs.feature.cockpit.hud.FollowAwaitPrompt
 import com.altnautica.gcs.feature.cockpit.hud.FollowRail
 import com.altnautica.gcs.feature.cockpit.hud.FollowRangePanel
 import com.altnautica.gcs.feature.cockpit.hud.LocalMapInputs
@@ -133,7 +135,7 @@ internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
     }
 }
 
-/** A 500 ms clock for age-based chrome (stale panels, coast countdowns), on every fifth beat of the flight screen. */
+/** A 500 ms clock for age-based chrome (stale panels, search countdowns), on every fifth beat of the flight screen. */
 @Composable
 private fun rememberTick(a: CockpitAutonomy): Long {
     val tick = remember { mutableLongStateOf(a.nowMs()) }
@@ -182,7 +184,9 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
     val canRecord by vm.canRecord.collectAsStateWithLifecycle()
     val recording by vm.recordingActive.collectAsStateWithLifecycle()
     val skillStates by vm.skillStates.collectAsStateWithLifecycle()
-    val active = state != null && fresh && state.phase != FollowPhase.Idle && state.phase != FollowPhase.Lost
+    val active = state != null && fresh && state.phase != FollowPhase.Idle
+    // While follow-me holds for the operator, the waiting prompt drops from the strip in the range panel's place.
+    val prompt = state?.takeIf { fresh }?.let(FollowPrompts::of)
     val followingMode = (state != null && state.phase != FollowPhase.Idle) || (designation != null && installed)
     var expanded by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize()) {
@@ -215,7 +219,9 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                     FollowRangePanel(state, stale = !fresh, width = WidthClass.Compact, modifier = Modifier.clickable { expanded = true })
                 }
             }
-            if (followingMode && state != null && expanded) {
+            if (prompt != null && state != null) {
+                FollowAwaitPrompt(prompt, width, onAction = { vm.followPrompt.run(it, state.operatorResumeSeq) })
+            } else if (followingMode && state != null && expanded) {
                 val panelWidth = if (width.isWide() && !short) 320.dp else Dp.Unspecified
                 FollowRangePanel(
                     state, stale = !fresh, width = if (short) WidthClass.Compact else width,

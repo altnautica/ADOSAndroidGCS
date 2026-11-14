@@ -13,19 +13,25 @@ import kotlin.math.sin
 
 /**
  * The demo's scripted follow target: a person walks across the front camera while the
- * follow skill cycles through acquiring, following, coasting, searching, re-acquired and
- * lost ([STEP_MS] each). Tracks and locks, the `follow` state and the follow events exist
- * only while the pilot reports the follow skill flying ([DemoPilotView.followRunning]);
- * otherwise the detector reports untracked candidates.
+ * follow skill cycles through acquiring, following, predicting, moving to look, searching,
+ * re-acquired and holding for the operator ([STEP_MS] each). Tracks and locks, the `follow`
+ * state and the follow events exist only while the pilot reports the follow skill flying
+ * ([DemoPilotView.followRunning]); otherwise the detector reports untracked candidates.
  */
 internal class DemoFollowFeed {
     @Volatile var reacquireMode = "smart"
 
-    /** 0 candidate, 1 tracked, 2 acquiring, 3 following, 4 coasting, 5 searching, 6 re-acquired, 7 lost. */
+    /** The resume sequence the waiting prompt's search again writes; echoed in the state. */
+    @Volatile var operatorResumeSeq = 0
+
+    /**
+     * 0 candidate, 1 tracked, 2 acquiring, 3 following, 4 predicting, 5 moving to look,
+     * 6 searching, 7 re-acquired, 8 holding for the operator.
+     */
     fun step(now: Long) = ((now / STEP_MS) % STEPS).toInt()
 
     /** The follow phase degrades the position estimate while it searches. */
-    fun searching(step: Int) = step == 5
+    fun searching(step: Int) = step == 6
 
     private fun personX(now: Long) = 560f + 220f * sin(now / 3_000.0).toFloat()
 
@@ -40,7 +46,7 @@ internal class DemoFollowFeed {
                 !following -> add(det(x, 280f, 60f, 150f, 0.82f, null, null))
                 s == 0 -> add(det(x, 280f, 60f, 150f, 0.82f, null, null))
                 s in 1..3 -> add(det(x, 280f, 60f, 150f, 0.97f, 12, "locked"))
-                s == 6 -> add(det(x, 280f, 60f, 150f, 0.91f, 15, "locked"))
+                s == 7 -> add(det(x, 280f, 60f, 150f, 0.91f, 15, "locked"))
                 else -> Unit
             }
         }
@@ -77,8 +83,13 @@ internal class DemoFollowFeed {
         val s = step(now)
         if (!following || previousStep == null || s == previousStep) return null
         return when (s) {
-            6 -> "follow.reacquired" to buildJsonObject { put("track_id", 15); put("similarity", 0.862); put("gap_s", 1.8) }
-            7 -> "follow.lost" to buildJsonObject { put("track_id", 15); put("reason", "lock_lost") }
+            7 -> "follow.reacquired" to buildJsonObject {
+                put("track_id", 15); put("similarity", 0.862); put("gap_s", 13.8); put("mahalanobis", 1.2); put("phase", "searching")
+            }
+            8 -> "follow.lost" to buildJsonObject {
+                put("track_id", 15); put("reason", "search_exhausted"); put("awaiting_operator", true)
+                putJsonArray("hold_ne") { add(JsonPrimitive(1.0)); add(JsonPrimitive(0.5)) }
+            }
             else -> null
         }
     }
@@ -88,13 +99,16 @@ internal class DemoFollowFeed {
         val phase = when (step) {
             0, 1 -> "idle"
             2 -> "acquiring"
-            3, 6 -> "following"
-            4 -> "coasting"
-            5 -> "searching"
-            else -> "lost"
+            3, 7 -> "following"
+            4 -> "predicting"
+            5 -> "repositioning"
+            6 -> "searching"
+            else -> "holding-await-operator"
         }
+        val recovering = step in 4..6
+        val inPhase = (now % STEP_MS) / 1000.0
         put("phase", phase)
-        put("track_id", if (step >= 6) 15 else 12)
+        put("track_id", if (step >= 7) 15 else 12)
         put("confidence", 0.97)
         put("range_m", 10.2)
         put("range_sigma_m", 0.3)
@@ -106,14 +120,32 @@ internal class DemoFollowFeed {
         put("agl_m", aglM)
         put("agl_source", "rng")
         put("reacquire_mode", reacquireMode)
-        put("coast_remaining_s", if (step == 4) (STEP_MS - now % STEP_MS) / 1000.0 else 0.0)
+        put("reacquire_remaining_s", if (recovering) SEARCH_BUDGET_S - (step - 4) * STEP_MS / 1000.0 - inPhase else 0.0)
+        put("search_budget_s", if (recovering) JsonPrimitive(SEARCH_BUDGET_S) else JsonNull)
+        put("search_step", if (step == 6) JsonPrimitive(minOf(2, (inPhase / 1.5).toInt())) else JsonNull)
+        if (recovering) {
+            putJsonObject("search_area") {
+                putJsonArray("center_ne") { add(JsonPrimitive(5.5)); add(JsonPrimitive(1.5)) }
+                put("semi_major_m", 2 + inPhase); put("semi_minor_m", 1 + inPhase / 3); put("heading_deg", 30.0)
+            }
+            putJsonArray("predicted_path_ne") { for (k in 0..3) add(buildJsonArray { add(JsonPrimitive(5.5 + 0.6 * k)); add(JsonPrimitive(1.5 + 0.35 * k)) }) }
+        }
+        if (step == 5 || step == 6) {
+            putJsonArray("vantage_ne") { add(JsonPrimitive(2.5)); add(JsonPrimitive(3.0)) }
+            put("vantage_state", if (step == 5) "enroute" else "arrived")
+        }
+        if (step == 6) putJsonObject("occluder") { putJsonArray("ne") { add(JsonPrimitive(4.5)); add(JsonPrimitive(1.0)) }; put("kind", "narrow") }
+        if (step == 8) putJsonArray("hold_ne") { add(JsonPrimitive(1.0)); add(JsonPrimitive(0.5)) }
+        put("uncertain_mode", "follow")
+        put("predictive_search", true)
+        put("operator_resume_seq", operatorResumeSeq)
         put("pipeline_latency_ms", 85)
-        put("hold_reason", JsonNull)
+        put("hold_reason", if (step == 8) JsonPrimitive("search-exhausted") else JsonNull)
         put("bearing_deg", 64.0)
         put("depression_deg", 22.0)
         putJsonArray("target_ned") { add(JsonPrimitive(5.5)); add(JsonPrimitive(1.5)) }
         putJsonArray("target_vel_ned") { add(JsonPrimitive(1.2 * cos(yaw))); add(JsonPrimitive(1.2 * sin(yaw))) }
-        if (step == 4) {
+        if (step == 4 || step == 6) {
             putJsonObject("predicted_bbox") {
                 put("camera_id", CAMERA)
                 put("frame_w", FRAME_W)
@@ -133,6 +165,7 @@ internal class DemoFollowFeed {
         const val FRAME_W = 1280
         const val FRAME_H = 720
         const val STEP_MS = 4_000L
-        const val STEPS = 8
+        const val STEPS = 9
+        const val SEARCH_BUDGET_S = 25.0
     }
 }

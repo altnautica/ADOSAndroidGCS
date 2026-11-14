@@ -29,11 +29,11 @@ class TargetStateTest {
         range: Float? = null,
         sigma: Float? = null,
         hold: String? = null,
-        coast: Float? = null,
+        remaining: Float? = null,
         predicted: PredictedBox? = null,
         bearing: Float? = null,
     ) = FollowState(
-        phase, track, null, range, sigma, emptySet(), null, null, null, null, coast, null, hold, bearing, null, null, null, predicted,
+        phase, track, null, range, sigma, emptySet(), null, null, null, null, remaining, null, hold, bearing, null, null, null, predicted,
     )
 
     private fun resolve(
@@ -111,12 +111,24 @@ class TargetStateTest {
     }
 
     @Test
-    fun `T10 coasting draws at the predicted box`() {
+    fun `T10 predicting draws at the predicted box with the search time left`() {
         val p = PredictedBox("main", 1280f, 720f, Box(600f, 300f, 40f, 98f))
-        val item = resolve(batch(), designated, follow(FollowPhase.Coasting, coast = 1.43f, predicted = p)).single()
-        assertEquals(TargetKind.Coasting, item.kind)
+        val item = resolve(batch(), designated, follow(FollowPhase.Predicting, remaining = 18.43f, range = 9.6f, predicted = p)).single()
+        assertEquals(TargetKind.Predicting, item.kind)
         assertEquals(p.box, item.rect)
-        assertEquals("COAST 1.4 s", text.tag(item.top!!))
+        assertEquals("PREDICTING 18.4 s", text.tag(item.top!!))
+        assertEquals(listOf(TargetTag.Estimate(9.6f)), item.bottom)
+    }
+
+    @Test
+    fun `T10 moving to look draws the ring on frame and the arrow off frame`() {
+        val p = PredictedBox("main", 1280f, 720f, Box(600f, 300f, 40f, 98f))
+        val on = resolve(batch(), null, follow(FollowPhase.Repositioning, predicted = p)).single()
+        assertEquals(TargetKind.Searching, on.kind)
+        assertEquals("MOVING TO LOOK", text.tag(on.top!!))
+        val off = resolve(batch(), null, follow(FollowPhase.Repositioning, bearing = 64f), opts = ResolveOptions(vehicleYawDeg = 10f)).single()
+        assertEquals(TargetKind.SearchingOffFrame, off.kind)
+        assertEquals("MOVING TO LOOK · 064°", text.tag(off.top!!))
     }
 
     @Test
@@ -132,7 +144,7 @@ class TargetStateTest {
 
     @Test
     fun `T12 re-acquired snaps the new track`() {
-        val ev = FollowEvent.Reacquired(15, 0.862f, 1.8f, now - 100)
+        val ev = FollowEvent.Reacquired(15, 0.862f, 1.8f, now - 100, mahalanobis = 0.9f, phase = FollowPhase.Searching)
         val item = resolve(batch(det(15, 0.9f, LockState.Locked)), events = listOf(ev)).single()
         assertTrue(TargetModifier.Reacquired in item.modifiers)
         val toast = com.altnautica.gcs.feature.cockpit.reacquiredText(
@@ -140,17 +152,30 @@ class TargetStateTest {
             com.altnautica.gcs.feature.cockpit.CockpitEvent.Reacquired(15, 0.862f, 1.8f),
         )
         assertEquals("Re-acquired #15 · 0.86 · 1.8 s gap", toast)
+        val behind = com.altnautica.gcs.feature.cockpit.reacquiredText(
+            com.altnautica.gcs.feature.cockpit.testSpec.setupStrings,
+            com.altnautica.gcs.feature.cockpit.CockpitEvent.Reacquired(15, 0.862f, 1.8f, occluder = "narrow"),
+        )
+        assertEquals("Re-acquired #15 · 0.86 · 1.8 s gap · Behind a trunk or column", behind)
     }
 
     @Test
-    fun `T13 lost shows at the last rect for 900 ms`() {
+    fun `T13 holding for the operator marks the last rect for 900 ms`() {
         val opts = ResolveOptions(lastFollowedRect = box12, lostAtMs = now - 100)
-        val item = resolve(batch(), null, follow(FollowPhase.Lost), opts = opts).single()
-        assertEquals(TargetKind.Lost, item.kind)
+        val waiting = follow(FollowPhase.HoldingAwaitOperator, hold = "awaiting-operator")
+        val item = resolve(batch(), null, waiting, opts = opts).single()
+        assertEquals(TargetKind.AwaitOperator, item.kind)
         assertEquals(box12, item.rect)
-        assertEquals("LOST", text.tag(item.top!!))
-        val later = TargetState.resolveTargets(batch(), "main", null, follow(FollowPhase.Lost), 100, emptyList(), now + 900, opts)
+        assertEquals("WAITING FOR YOU", text.tag(item.top!!))
+        val later = TargetState.resolveTargets(batch(), "main", null, waiting, 100, emptyList(), now + 900, opts)
         assertTrue(later.isEmpty())
+    }
+
+    @Test
+    fun `T13 a follow lost event alone also shows the waiting mark`() {
+        val lost = FollowEvent.Lost(12, "lock_lost", now - 100, awaitingOperator = true, holdNe = 3f to 4f)
+        val items = resolve(batch(), events = listOf(lost), opts = ResolveOptions(lastFollowedRect = box12))
+        assertEquals(listOf(TargetKind.AwaitOperator), items.map { it.kind })
     }
 
     @Test

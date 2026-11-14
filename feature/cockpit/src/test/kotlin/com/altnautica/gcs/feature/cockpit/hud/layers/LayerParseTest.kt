@@ -28,7 +28,9 @@ class LayerParseTest {
         val cam = f.cameras.getValue("main")
         assertEquals(1280f, cam.frameW)
         assertEquals(720f, cam.frameH)
-        assertEquals(setOf("wp", "leg", "home", "fpv", "fpath", "fgoal", "orbit", "edge"), cam.items.map { it.t }.toSet())
+        assertEquals(setOf("wp", "leg", "home", "fpv", "fpath", "fgoal", "orbit", "fsearch", "fvantage", "edge"), cam.items.map { it.t }.toSet())
+        assertEquals(4, cam.items.first { it.t == "fsearch" }.pts.size)
+        assertTrue(ArRules.isPredictedPath(cam.items.single { it.k == ArRules.PREDICTED_PATH_KEY }))
         val next = cam.items.first { it.t == "wp" && it.role == "next" }
         assertEquals("wp:4", next.key)
         assertEquals(0.52f, next.x!!, 1e-6f)

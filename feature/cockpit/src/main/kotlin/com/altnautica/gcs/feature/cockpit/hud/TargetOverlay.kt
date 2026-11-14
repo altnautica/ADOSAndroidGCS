@@ -60,7 +60,7 @@ import kotlin.math.max
 
 /**
  * HUD v2 target symbology over one video: hairline candidates, corner brackets, the TRACK
- * tag, reticle, feet tick, coast ghost, search ring, off-frame arrow and the LOST fade.
+ * tag, reticle, feet tick, coast ghost, search ring, off-frame arrow and the waiting-for-you fade.
  * The `targets` layer of the video canvas calls [draw] from its draw phase, so a new
  * resolve redraws without recomposing.
  */
@@ -244,7 +244,7 @@ private class TargetPainter(
         }
         val rect = toView(item.rect ?: return)
         val alpha = when {
-            item.kind == TargetKind.Lost -> lostAlpha()
+            item.kind == TargetKind.AwaitOperator -> lostAlpha()
             TargetModifier.Uncertain in item.modifiers -> 0.55f
             else -> 1f
         }
@@ -254,15 +254,15 @@ private class TargetPainter(
                 TargetKind.Candidate -> hairline(rect, c.hudInk.copy(alpha = 0.7f))
                 TargetKind.Tracked -> brackets(rect, c.hudPrimary.copy(alpha = alpha), null)
                 TargetKind.Locked, TargetKind.Acquiring, TargetKind.Following, TargetKind.Holding -> brackets(rect, c.hudTrack.copy(alpha = alpha), null)
-                TargetKind.Coasting -> brackets(rect, c.hudCoast, coastDash)
-                TargetKind.Lost -> brackets(rect, c.hudCrit.copy(alpha = alpha), null)
+                TargetKind.Predicting -> brackets(rect, c.hudCoast, coastDash)
+                TargetKind.AwaitOperator -> brackets(rect, c.hudCrit.copy(alpha = alpha), null)
                 TargetKind.Searching -> searchRing(item, rect)
                 TargetKind.SearchingOffFrame -> Unit
             }
         }
         if (item.kind == TargetKind.Following || item.kind == TargetKind.Holding) reticle(rect)
         if (item.kind == TargetKind.Following) feetTick(rect)
-        if (item.kind == TargetKind.Coasting && !motion.lowPower) ghost(item)
+        if (item.kind == TargetKind.Predicting && !motion.lowPower) ghost(item)
         topTag(item, rect, pip, compact, placed, alpha)
         bottomTags(item, rect)
     }
@@ -384,7 +384,7 @@ private class TargetPainter(
     private fun bottomInk(item: DrawItem, t: TargetTag): Color = when {
         t is TargetTag.FollowStale -> c.hudWarn
         t is TargetTag.Sigma -> c.hudMuted
-        item.kind == TargetKind.Coasting -> c.hudCoast
+        item.kind == TargetKind.Predicting -> c.hudCoast
         else -> c.hudInk
     }
 
@@ -421,8 +421,8 @@ private class TargetPainter(
         tag is TargetTag.Track || tag is TargetTag.Hold -> Color.Black
         kind == TargetKind.Candidate -> c.hudInk
         kind == TargetKind.Tracked -> c.hudPrimary
-        kind == TargetKind.Coasting -> c.hudCoast
-        kind == TargetKind.Lost -> c.hudCrit
+        kind == TargetKind.Predicting -> c.hudCoast
+        kind == TargetKind.AwaitOperator -> c.hudCrit
         else -> c.hudTrack
     }
 

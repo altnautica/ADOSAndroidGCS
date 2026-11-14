@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -72,7 +73,6 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosCockpitColors
 import com.altnautica.gcs.core.designsystem.tokens.AdosHudTarget
 import androidx.compose.ui.platform.LocalDensity
 import com.altnautica.gcs.feature.cockpit.autonomy.AutonomyFeed
-import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.LocalFrame
 import com.altnautica.gcs.feature.cockpit.autonomy.OccupancyLayer
@@ -150,7 +150,9 @@ internal fun screenPlan(plan: LocalPlan, pt: (Float, Float) -> Offset): ScreenPl
  * Minimap local frame (north up, east right, metres): grid, live occupancy tiles, the
  * SLAM trail (dashed while degraded, broken across lost), scan returns, the origin, the
  * pilot's planned path and goal (dashed, `state.goto`, `state.blocked` while blocked), the
- * followed target and the drone. The header carries `LOCAL · N/E m`, `FC POS` when the
+ * followed target (dashed while it is sought, with its search ellipse, predicted path and
+ * vantage point; hidden while follow-me waits for the operator) and the drone. The header
+ * carries `LOCAL · N/E m`, `FC POS` when the
  * drone falls back to LOCAL_POSITION_NED, the AUTO | LOCAL | MAP pin and a scale bar.
  *
  * [inputs] is read only by the map's draw pass (and by a long-press), so a new sample (the
@@ -447,8 +449,9 @@ internal class MinimapPainter(
     }
 
     private fun DrawScope.target(f: FollowState) {
-        val ned = f.targetNed ?: return
-        val predicted = f.phase == FollowPhase.Coasting || f.phase == FollowPhase.Searching
+        val ned = f.targetNed?.takeIf { MinimapFollow.shows(f) } ?: return
+        val predicted = MinimapFollow.recovering(f)
+        if (predicted) recovery(f)
         val p = pt(ned.first, ned.second)
         val s = 5.dp.toPx()
         path.rewind()
@@ -459,6 +462,27 @@ internal class MinimapPainter(
         drawPath(path, colour, style = stroke(1.5.dp.toPx(), effect))
         // Velocity tick: one second of travel.
         f.targetVelNed?.let { (vn, ve) -> drawLine(colour, p, pt(ned.first + vn, ned.second + ve), 1.5.dp.toPx()) }
+    }
+
+    /** The search ellipse (faint fill, dashed rim), the predicted subject path and the vantage ring, in the coast colour. */
+    private fun DrawScope.recovery(f: FollowState) {
+        f.searchArea?.let { a ->
+            val ctr = pt(a.centerNe.first, a.centerNe.second)
+            val tl = Offset(ctr.x - a.semiMajorM * pxPerM, ctr.y - a.semiMinorM * pxPerM)
+            val sz = Size(2 * a.semiMajorM * pxPerM, 2 * a.semiMinorM * pxPerM)
+            rotate(MinimapFollow.ellipseRotationDeg(a.headingDeg), ctr) {
+                drawOval(c.hudCoast, tl, sz, alpha = 0.15f)
+                drawOval(c.hudCoast, tl, sz, style = stroke(1.dp.toPx(), targetDash))
+            }
+        }
+        val p = f.predictedPathNe
+        if (p.size >= 2) {
+            path.rewind()
+            path.moveTo(x(p[0].second), y(p[0].first))
+            for (i in 1 until p.size) path.lineTo(x(p[i].second), y(p[i].first))
+            drawPath(path, c.hudCoast, style = stroke(1.5.dp.toPx(), targetDash))
+        }
+        f.vantageNe?.let { (n, e) -> drawCircle(c.hudCoast, 4.dp.toPx(), pt(n, e), style = stroke(1.5.dp.toPx(), targetDash)) }
     }
 
     private fun DrawScope.drone(p: Offset, yaw: Float) {
