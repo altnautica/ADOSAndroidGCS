@@ -3,6 +3,14 @@
 All notable changes to ADOS Android GCS are recorded here. Versions follow the
 app's `versionName`.
 
+## [Unreleased]
+
+- **"No clear view" hold.** When a flight skill aims for a vantage point and
+  no reachable point sees the subject's predicted area, the pilot holds with
+  the reason `no-vantage`. The flight-state chip now reads "No clear view" for
+  it instead of the raw "no vantage". A hold on stale scans still reads
+  "Holding: no fresh obstacle data".
+
 ## [0.6.3] - 2026-11-14
 
 - **Stale or missing obstacle data.** When avoidance is on and the drone's
