@@ -177,7 +177,7 @@ class FlightStateChipResolver(
         when (part) {
             "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
             "speed_cap" -> p.speedCap?.let { cap ->
-                spec.secondary.speedCap?.let { chipText(it.text.replace("{v}", String.format(Locale.ROOT, "%.0f", cap.vHMps)), it.color) }
+                spec.secondary.speedCap?.let { chipText(it.text.replace("{v}", speedCapText(cap.vHMps.toDouble())), it.color) }
             }
             "mission_paused_line" -> spec.secondary.missionPausedLine?.takeIf { matches(it.match, p, ctx, stale) }?.let {
                 chipText(fill(it.text, values(p, ctx)), it.color)
@@ -190,6 +190,12 @@ class FlightStateChipResolver(
             "control_mode" -> p.controlMode?.let { chipText(spec.secondary.controlMode[it.wire] ?: wordLabel(it.wire), FC_KEY) }
             else -> null
         }
+    }
+
+    /** The cap in m/s with at most one decimal (1.5 → "1.5", 2 → "2"), as every surface prints it. */
+    private fun speedCapText(v: Double): String {
+        val r = Math.round(v * 10) / 10.0
+        return if (r == Math.floor(r)) r.toLong().toString() else r.toString()
     }
 
     /** Label of a hold reason, keyed by its exact wire string; an unlisted reason reads with spaces. */
