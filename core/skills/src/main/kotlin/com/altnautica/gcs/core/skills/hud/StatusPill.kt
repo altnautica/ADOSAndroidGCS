@@ -102,6 +102,8 @@ class StatusPill(
      * An active [failsafe] from a fresh pilot state is one critical `failsafe` item, and a
      * running [linkLoss] countdown from one a critical `link_loss` item worded as the
      * `pilot.banner.link_loss` banner, so the pill never reads all well while the banner counts.
+     * A fresh pilot state's [setupAbort] (a setup-strings key, `setup.blocker.aborted_<reason>`)
+     * is one warning `setup_abort` item worded by that key; an unknown key reads as itself.
      *
      * [linkFcStatus] are FC texts the surface hears on its own vehicle link rather than from the
      * pilot: graded like [fcStatus] but kept while the pilot state is stale.
@@ -122,6 +124,7 @@ class StatusPill(
         linkFcStatus: List<PillFcStatus> = emptyList(),
         armUnknown: Boolean = false,
         navSource: PillNavSource? = null,
+        setupAbort: String? = null,
     ): List<PillAlert> {
         val out = mutableListOf<PillAlert>()
         for (a in alerts) {
@@ -140,6 +143,7 @@ class StatusPill(
             out += PillAlert("pilot_not_answering", PillSource.Pilot, PillSeverity.Warning, text.text("alert.pilot_not_answering"))
         } else {
             if (failsafe.active) out += PillAlert("failsafe", PillSource.Pilot, PillSeverity.Critical, failsafeText(failsafe.cause))
+            if (!setupAbort.isNullOrEmpty()) out += PillAlert("setup_abort", PillSource.Pilot, PillSeverity.Warning, text.text(setupAbort))
             if (linkLoss != null) out += PillAlert("link_loss", PillSource.Pilot, PillSeverity.Critical, linkLossText(linkLoss))
         }
         for (r in if (pilotStale) emptyList() else readiness) {

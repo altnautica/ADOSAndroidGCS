@@ -75,7 +75,7 @@ object StatusModel {
      * [texts] are the FC status texts held for the pill: one the pilot relayed goes through the
      * shared rule's pilot texts, dropped while the pilot state is stale; one heard on the vehicle
      * link stays. The pilot's readiness, the storage use, [facts] (pilot, agent, controller and
-     * pre-flight rules) and a fresh pilot's [failsafe] feed the rest.
+     * pre-flight rules), a fresh pilot's [failsafe] and its setup abort [setupAbort] feed the rest.
      */
     fun items(
         alerts: List<CockpitAlert>,
@@ -84,6 +84,7 @@ object StatusModel {
         facts: PillFacts,
         pill: StatusPill,
         failsafe: PillFailsafe = PillFailsafe.None,
+        setupAbort: String? = null,
     ): List<StatusItem> {
         val bySpecId = HashMap<String, CockpitAlert>()
         val inputs = ArrayList<PillAlertInput>()
@@ -118,6 +119,7 @@ object StatusModel {
             linkFcStatus = link.map { PillFcStatus(it.severity, it.text) },
             armUnknown = facts.armUnknown,
             navSource = facts.navSource,
+            setupAbort = setupAbort,
         )
         return active.map { p -> item(p, bySpecId, checks) }
     }

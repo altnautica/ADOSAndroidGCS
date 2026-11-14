@@ -76,19 +76,21 @@ internal class CockpitPill(
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), PillFacts())
 
-    /** The pilot's failsafe as the pill shows it; equal across pilot frames that do not change it. */
-    private val pilotFailsafe: Flow<PillFailsafe> = pilot.state.map { PillFailsafe.of(it) }.distinctUntilChanged()
+    /** The pilot's failsafe and setup abort as the pill shows them; equal across pilot frames that do not change them. */
+    private val pilotFailsafe: Flow<Pair<PillFailsafe, String?>> =
+        pilot.state.map { PillFailsafe.of(it) to it?.setupAbort }.distinctUntilChanged()
 
-    /** Alerts, pilot readiness, failing checks, storage, FC texts (from the link and the pilot's relay) and the FC failsafe. */
+    /** Alerts, pilot readiness, failing checks, storage, FC texts (from the link and the pilot's relay), the FC failsafe and a setup abort. */
     val items: StateFlow<List<StatusItem>> = combine(
         combine(alerts, preflight, facts) { a, pre, f -> Triple(a, pre, f) },
         combine(criticalText, warningTexts) { c, w -> c to w },
         pilotFailsafe,
         tick500,
-    ) { (a, pre, f), (critical, warnings), fs, _ ->
+    ) { (a, pre, f), (critical, warnings), (fs, abort), _ ->
         val now = clock.nowMs()
-        val failsafe = if (f.pilotAgeMs == FRESH_AGE_MS) fs else PillFailsafe.None
-        StatusModel.items(a, pre, heldTexts(critical, warnings, now), f, pill, failsafe)
+        val fresh = f.pilotAgeMs == FRESH_AGE_MS
+        val failsafe = if (fresh) fs else PillFailsafe.None
+        StatusModel.items(a, pre, heldTexts(critical, warnings, now), f, pill, failsafe, if (fresh) abort else null)
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /** The FC texts the pill holds: the critical text while its alert lasts, and the recent warnings. */

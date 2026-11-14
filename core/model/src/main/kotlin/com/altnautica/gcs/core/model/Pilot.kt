@@ -196,6 +196,11 @@ data class PilotState(
     val fcFailsafe: Boolean = false,
     /** What raised the failsafe (`rc_or_failsafe`, `fc`), while [fcFailsafe] holds. */
     val failsafeCause: String? = null,
+    /**
+     * Why the setup wizard's air run aborted, as a setup-strings key
+     * (`setup.blocker.aborted_<reason>`), or null.
+     */
+    val setupAbort: String? = null,
     /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`), or null. */
     val speedCap: SpeedCap? = null,
 ) {

@@ -22,6 +22,7 @@ enum class CockpitSpecFile(val fileName: String) {
     GenericHotspots("gamepad-generic-hotspots.json"),
     SetupStrings("setup-strings.json"),
     Tips("tips.json"),
+    SensorHealth("sensor-health.json"),
 }
 
 /** Reads the raw text of one spec file. */
@@ -71,6 +72,8 @@ object CockpitSpecParser {
         CockpitSpecFile.Ds4Hotspots, CockpitSpecFile.GenericHotspots -> hotspots(text)
         CockpitSpecFile.SetupStrings -> setupStrings(text)
         CockpitSpecFile.Tips -> tips(text)
+        // Read by no Android surface yet: checked as well-formed JSON only.
+        CockpitSpecFile.SensorHealth -> json.parseToJsonElement(text)
     }
 
     private inline fun <T> decode(strategy: DeserializationStrategy<T>, text: String, version: (T) -> Int): T {

@@ -103,7 +103,7 @@ class StatusPillCasesTest {
             )
             val failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str())
             val storage = (i["storage_pct"] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.doubleOrNull
-            val items = StatusModel.items(alerts, PreflightResult(emptyList(), readiness, storage), texts, facts, rules, failsafe)
+            val items = StatusModel.items(alerts, PreflightResult(emptyList(), readiness, storage), texts, facts, rules, failsafe, i["setup_abort"].str())
             val pill = StatusModel.pill(items, emptySet())
 
             assertEquals(name, e["severity"].str(), pill.severity.name.lowercase())
@@ -114,6 +114,7 @@ class StatusPillCasesTest {
         }
         assertEquals("cases Android cannot feed", listOf("preflight_failing_each_item"), skipped)
         assertEquals("the failsafe cases ran", 5, cases.count { it["name"].str()!!.startsWith("fc_failsafe_") && it["name"].str() !in skipped })
+        assertEquals("the setup abort cases ran", 5, cases.count { it["name"].str()!!.startsWith("setup_abort_") && it["name"].str() !in skipped })
         assertTrue("a pre-flight case ran", preflightRan >= 1)
     }
 

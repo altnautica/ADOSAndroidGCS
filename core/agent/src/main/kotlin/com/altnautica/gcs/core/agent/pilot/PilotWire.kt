@@ -144,6 +144,7 @@ object PilotWire {
             setupStep = data.str("setup_step"),
             fcFailsafe = data.bool("fc_failsafe") == true,
             failsafeCause = data.str("failsafe_cause"),
+            setupAbort = data.str("setup_abort"),
             speedCap = (data["speed_cap"] as? JsonObject)?.let { c ->
                 SpeedCap(c.str("reason") ?: return@let null, c.float("v_h_mps") ?: return@let null)
             },

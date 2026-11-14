@@ -156,6 +156,13 @@ class PilotWireTest {
     }
 
     @Test
+    fun `a setup abort parses as its setup-strings key, null in the golden frame`() {
+        assertNull(checkNotNull(PilotWire.parseState(data, 0L)).setupAbort)
+        val aborted = JsonObject(data + mapOf("setup_abort" to JsonPrimitive("setup.blocker.aborted_fc_failsafe")))
+        assertEquals("setup.blocker.aborted_fc_failsafe", checkNotNull(PilotWire.parseState(aborted, 0L)).setupAbort)
+    }
+
+    @Test
     fun `pilot frame envelope wraps the golden state`() {
         val text = """{"kind":"pilot","ts_ms":1793960000000,"data":$fixture}"""
         val f = PilotWire.parseFrame(text, receivedAtMs = 7L) as PilotFrame.State

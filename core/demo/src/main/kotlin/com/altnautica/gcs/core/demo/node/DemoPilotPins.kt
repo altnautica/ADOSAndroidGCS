@@ -79,6 +79,11 @@ internal class DemoPilotPins(
                 mission("complete", MISSION_TOTAL, MISSION_TOTAL)
             }
             DemoScenario.FcFailsafeRtl -> fcFailsafeRtl()
+            // The tuning flight dropped below its altitude floor; the pilot holds in its place.
+            DemoScenario.SetupAborted -> {
+                flying(PILOT, GUIDED)
+                put("setup_abort", SETUP_ABORT_KEY)
+            }
             DemoScenario.LinkLoss -> {
                 flying(PILOT, GUIDED)
                 put("link_loss_in_s", round1((LINK_LOSS_MS - sinceMs % LINK_LOSS_MS) / 1000.0))
@@ -226,6 +231,9 @@ internal class DemoPilotPins(
 
         /** Height a flying pin reports, metres. */
         const val PIN_HEIGHT_M = 15.0
+
+        /** The setup-strings key the setup-abort pin reports. */
+        const val SETUP_ABORT_KEY = "setup.blocker.aborted_altitude_floor"
         private const val LINK_LOSS_MS = 10_000L
         private const val MISSION_SEQ = 4
         private const val MISSION_TOTAL = 6

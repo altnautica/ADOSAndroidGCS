@@ -6,6 +6,7 @@
     <string name="demo_scenario_mission_paused">Mission: paused</string>
     <string name="demo_scenario_mission_complete">Mission: complete</string>
     <string name="demo_scenario_fc_failsafe_rtl">Flight controller failsafe: RTL</string>
+    <string name="demo_scenario_setup_aborted">Setup flight aborted</string>
     <string name="demo_scenario_pilot_stalled">Pilot stops responding</string>
     <string name="demo_scenario_link_loss">Control link lost</string>
     <string name="demo_scenario_no_gnss">No GNSS</string>

@@ -317,6 +317,16 @@ class DemoPilotTest {
     }
 
     @Test
+    fun `the setup abort pin reports why the setup flight aborted`() {
+        assertTrue(state()["setup_abort"] is JsonNull)
+        scenarios.pin(DemoScenario.SetupAborted)
+        assertEquals(DemoPilotPins.SETUP_ABORT_KEY, state().str("setup_abort"))
+        assertEquals("pilot", state().str("owner"))
+        scenarios.pin(null)
+        assertTrue(state()["setup_abort"] is JsonNull)
+    }
+
+    @Test
     fun `the failsafe pins refuse take control, resume and the launch sequence`() {
         for (scenario in listOf(DemoScenario.FcFailsafeRtl, DemoScenario.GotoRefusedFailsafe)) {
             scenarios.pin(scenario)

@@ -35,6 +35,9 @@ enum class DemoScenario(
     /** The flight controller entered RTL on its own (a failsafe); the pin holds it there. */
     FcFailsafeRtl(R.string.demo_scenario_fc_failsafe_rtl),
 
+    /** The setup wizard's air run aborted at its altitude floor: `setup_abort` names why. */
+    SetupAborted(R.string.demo_scenario_setup_aborted),
+
     /** The pilot stops sending frames and answering actions while its socket stays open. */
     PilotStalled(R.string.demo_scenario_pilot_stalled),
 

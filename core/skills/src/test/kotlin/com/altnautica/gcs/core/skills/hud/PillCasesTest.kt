@@ -67,6 +67,7 @@ class PillCasesTest {
                     // An explicit null is unknown; an absent key is not known to this surface.
                     armUnknown = "armed" in i && i["armed"] is JsonNull,
                     navSource = nav,
+                    setupAbort = i["setup_abort"].str(),
                 ),
                 emptySet(),
             )
@@ -101,6 +102,18 @@ class PillCasesTest {
         assertEquals(listOf("failsafe"), fresh.map { it.id })
         assertEquals(PillSeverity.Critical, fresh.single().severity)
         val stale = pill.alerts(emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 5_000, failsafe = on)
+        assertEquals(listOf("pilot_not_answering"), stale.map { it.id })
+    }
+
+    @Test
+    fun `the setup abort cases are in the shared file and the item reads its setup string`() {
+        val names = goldenCases("pill-cases.json").map { it.name }
+        assertTrue(names.toString(), names.count { it.startsWith("setup_abort_") } >= 5)
+        val fresh = pill.alerts(emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 100, setupAbort = "setup.blocker.aborted_ground_contact")
+        assertEquals(listOf("setup_abort"), fresh.map { it.id })
+        assertEquals(PillSeverity.Warning, fresh.single().severity)
+        assertTrue(fresh.single().text, fresh.single().text != "setup.blocker.aborted_ground_contact")
+        val stale = pill.alerts(emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 5_000, setupAbort = "setup.blocker.aborted_ground_contact")
         assertEquals(listOf("pilot_not_answering"), stale.map { it.id })
     }
 
