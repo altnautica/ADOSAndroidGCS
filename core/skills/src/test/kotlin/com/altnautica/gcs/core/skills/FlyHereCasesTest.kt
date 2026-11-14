@@ -3,6 +3,7 @@ package com.altnautica.gcs.core.skills
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.FlightMode
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.PositionUnverified
 import com.altnautica.gcs.core.model.SkillContext
 import com.altnautica.gcs.core.skills.builtin.FlyHereSkill
 import com.altnautica.gcs.core.skills.hud.FlyHereFc
@@ -34,6 +35,9 @@ class FlyHereCasesTest {
             armed = it["armed"].bool(),
             landed = it["landed"].bool(),
             fcFailsafe = it["fc_failsafe"].bool() == true,
+            positionUnverified = (it["position_unverified"] as? JsonObject)?.let { u ->
+                PositionUnverified(u["reason"].str() ?: "", u["detail"].str(), null, null)
+            },
         )
     }
 

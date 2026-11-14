@@ -10,6 +10,14 @@ app's `versionName`.
   the reason `no-vantage`. The flight-state chip now reads "No clear view" for
   it instead of the raw "no vantage". A hold on stale scans still reads
   "Holding: no fresh obstacle data".
+- **Position unverified.** When the drone cannot vouch for its horizontal
+  position, the flight-state chip reads "Position unverified · <reason>" in
+  the blocked colour (after the flight controller's RTH, Landing and
+  Transition chips, with Take control while the flight controller flies its
+  own mode), and the nav-source chip turns crit with FLOW DISAGREES, CORRIDOR
+  or UNVERIFIED, read from a fresh pilot frame only. The reason reads in words
+  from the shared spec, a lost heading or IMU feed included. Fly here is not
+  offered then, through the pilot or as a reposition in GUIDED.
 
 ## [0.6.3] - 2026-11-14
 

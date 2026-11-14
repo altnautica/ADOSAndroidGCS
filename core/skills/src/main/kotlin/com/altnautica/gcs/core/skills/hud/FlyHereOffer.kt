@@ -13,6 +13,7 @@ enum class FlyHereRoute(val wire: String) { Pilot("pilot"), Fc("fc") }
 /** Why Fly Here is not offered; worded by the `refusal.<wire>` spec string. */
 enum class FlyHereReason(val wire: String) {
     Failsafe("failsafe"),
+    PositionUnverified("position_unverified"),
     Landed("landed"),
     PilotStale("pilot_stale"),
     ControlMode("control_mode"),
@@ -33,22 +34,25 @@ data class FlyHereOffer(val route: FlyHereRoute?, val reason: FlyHereReason? = n
  * `fly-here-cases.json`). The pilot route needs a fresh state under ADOS control that offers
  * `goto`, known armed and airborne, outside an FC failsafe (the pilot refuses a goto then);
  * else the FC route while the FC flies GUIDED, armed and airborne, unless a fresh pilot state
- * reports an FC failsafe (a reposition would fight the failsafe RTL or land). Otherwise the
- * reason, so a map long-press can say it instead of opening a dialog. An unknown arm state
- * (the pilot has no FC link) is possibly airborne: never [FlyHereReason.Landed];
+ * reports an FC failsafe (a reposition would fight the failsafe RTL or land) or an unverified
+ * position (the FC would fly there on the same estimate; the pilot refuses a goto then too).
+ * Otherwise the reason, so a map long-press can say it instead of opening a dialog. An unknown
+ * arm state (the pilot has no FC link) is possibly airborne: never [FlyHereReason.Landed];
  * without the surface's own FC facts it is [FlyHereReason.NoFcLink].
  */
 fun flyHereOffered(p: PilotState?, pilotAgeMs: Long, fc: FlyHereFc?, staleAfterMs: Long = PilotState.STALE_MS): FlyHereOffer {
     val fresh = pilotAgeMs < staleAfterMs
     val gotoAdvertised = p != null && PilotAction.GOTO in p.surfaceOps
-    if (p != null && fresh && p.controlMode == ControlMode.Ados && gotoAdvertised && p.knownAirborne && !p.fcFailsafe) {
+    val unverified = p != null && fresh && p.positionUnverified != null
+    if (p != null && fresh && p.controlMode == ControlMode.Ados && gotoAdvertised && p.knownAirborne && !p.fcFailsafe && !unverified) {
         return FlyHereOffer(FlyHereRoute.Pilot)
     }
     val failsafe = p != null && fresh && p.fcFailsafe
-    if (fc != null && !failsafe && fc.guided && fc.armed && !fc.landed) return FlyHereOffer(FlyHereRoute.Fc)
+    if (fc != null && !failsafe && !unverified && fc.guided && fc.armed && !fc.landed) return FlyHereOffer(FlyHereRoute.Fc)
     if (p != null && !fresh) return FlyHereOffer(null, FlyHereReason.PilotStale)
     if (p != null) {
         if (p.fcFailsafe) return FlyHereOffer(null, FlyHereReason.Failsafe)
+        if (p.positionUnverified != null) return FlyHereOffer(null, FlyHereReason.PositionUnverified)
         if (p.armed == false || p.landed == true) return FlyHereOffer(null, FlyHereReason.Landed)
         if (fc == null && p.armed == null) return FlyHereOffer(null, FlyHereReason.NoFcLink)
         if (fc == null && gotoAdvertised && p.controlMode != ControlMode.Ados) return FlyHereOffer(null, FlyHereReason.ControlMode)

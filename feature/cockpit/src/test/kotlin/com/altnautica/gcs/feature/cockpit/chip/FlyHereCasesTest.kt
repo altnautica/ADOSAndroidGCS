@@ -23,7 +23,7 @@ class FlyHereCasesTest {
 
     @Test
     fun `every fly here case offers the expected route and reason`() {
-        assertEquals(24, cases.size)
+        assertEquals(26, cases.size)
         for (c in cases) {
             val name = c["name"]!!.jsonPrimitive.content
             val input = c["input"]!!.jsonObject
