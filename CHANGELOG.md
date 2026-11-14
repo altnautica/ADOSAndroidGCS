@@ -88,6 +88,9 @@ app's `versionName`.
   card.
 - **Blocked goal in the AR view.** The AR goal ring turns the blocked colour
   while the way to it is blocked, as the path does.
+- **Speed cap on the flight-state chip.** While the drone flies without GNSS
+  and its pilot caps horizontal speed, the flight-state chip shows the cap in
+  m/s, as the drone's own cockpit and Mission Control do.
 - **Skill states follow the pilot.** The Mode sheet, the skill picker and
   Disarm now update when only the pilot's control mode, flight controller
   failsafe, arm state, landed state or offered operations change; they waited
