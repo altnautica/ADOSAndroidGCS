@@ -8,6 +8,8 @@ import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.Vehicle
+import com.altnautica.gcs.core.skills.SkillReason
+import com.altnautica.gcs.core.skills.builtin.BuiltinIds
 import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
 import com.altnautica.gcs.feature.cockpit.modes.ModePickerUi
@@ -67,6 +69,8 @@ internal class CockpitModeSheet(
             elrsAvailable = reach is Reach.ViaGround,
             pilotLinked = linked,
             fcModes = ModePickerUi(modeChoices(modes, current, endsStick), enabled = state?.enabled == true, reasonKey = state?.takeIf { !it.enabled }?.reasonKey),
+            // The Take control built-in's failsafe gate: taking control would cancel the FC's return or landing.
+            takeControlReasonKey = s[BuiltinIds.TAKE_CONTROL]?.reasonKey?.takeIf { it == SkillReason.FAILSAFE },
         )
     }.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
 

@@ -41,6 +41,7 @@ import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.feature.cockpit.flow.specText
+import com.altnautica.gcs.feature.cockpit.skillbar.reasonText
 import androidx.compose.foundation.layout.Row
 import com.altnautica.gcs.core.skills.spec.ModeSheetSpec
 import com.altnautica.gcs.core.skills.spec.SpecConfirmKind
@@ -58,6 +59,8 @@ data class ModeSheetUi(
     val pilotLinked: Boolean,
     /** Every firmware mode for the advanced section. */
     val fcModes: ModePickerUi,
+    /** Why Take control is unavailable now (a failsafe return or landing); null while it is offered. */
+    val takeControlReasonKey: String? = null,
 )
 
 /** What the Mode sheet asks for; each maps to one pilot action or the `set-mode` skill. */
@@ -188,12 +191,17 @@ private fun HandoverSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: ModeS
     val fcFlies = ui.owner == PilotOwner.FcMode || ui.owner == PilotOwner.MissionFc
     if (fcFlies) {
         Section(specText("flow.mode.section.who_flies")) {
+            val reason = ui.takeControlReasonKey
             HoldToConfirmButton(
                 specText("flow.mode.take_control"),
                 holdsMs[HOLD_TAKE_CONTROL] ?: DEFAULT_HOLD_MS,
                 actions::onTakeControl,
                 modifier = Modifier.fillMaxWidth().testTag(TAG_TAKE_CONTROL),
+                enabled = reason == null,
             )
+            if (reason != null) {
+                Text(reasonText(reason), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.statusWarning)
+            }
         }
         return
     }

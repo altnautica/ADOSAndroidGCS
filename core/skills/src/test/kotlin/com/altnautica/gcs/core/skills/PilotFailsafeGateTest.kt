@@ -64,6 +64,22 @@ class PilotFailsafeGateTest {
     }
 
     @Test
+    fun `a fresh pilot reporting a failsafe disables and refuses resume and take control`() = runTest {
+        val link = FakePilotLink(connected = true)
+        val c = ctx(link = link, pilot = adosPilot().copy(fcFailsafe = true, landed = false))
+        for (id in listOf("resume", "take_control")) {
+            assertEquals(id, SkillReason.FAILSAFE, builtin(id).state(c).reasonKey)
+            assertEquals(id, CommandResult.Denied(SkillReason.FAILSAFE), builtin(id).activate(c, emptyMap()))
+        }
+        assertTrue(link.actions.isEmpty())
+        assertTrue(vehicle.control.sent.isEmpty())
+        // Without the failsafe both are offered again.
+        val clear = ctx(link = link, pilot = adosPilot().copy(fcFailsafe = false, landed = false))
+        assertTrue(builtin("resume").state(clear).enabled)
+        assertTrue(builtin("take_control").state(clear).enabled)
+    }
+
+    @Test
     fun `a stale pilot's landed does not allow disarm`() {
         val link = FakePilotLink(connected = true).apply { fresh = false }
         val c = ctx(mode = loiter, link = link, pilot = adosPilot().copy(landed = true))

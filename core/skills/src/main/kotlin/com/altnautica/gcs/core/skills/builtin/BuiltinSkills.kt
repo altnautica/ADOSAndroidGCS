@@ -314,7 +314,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
         link?.let { return it }
         if (spec.id == BuiltinIds.TAKE_CONTROL && ctx.pilotLink == null) return disabledState(SkillReason.PILOT_UNAVAILABLE)
         armGate(ctx)?.let { return it }
-        if (spec.id == BuiltinIds.PAUSE && ctx.fcFailsafe()) return disabledState(SkillReason.FAILSAFE)
+        if (spec.id in FAILSAFE_GATED && ctx.fcFailsafe()) return disabledState(SkillReason.FAILSAFE)
         if (spec.id == BuiltinIds.RESUME && !ctx.routesToPilot()) {
             val mission = ctx.pilot?.mission?.state
             if (mission != null && mission != MissionState.Paused) return disabledState(SkillReason.NO_PAUSED_MISSION)
@@ -366,9 +366,9 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
     }
 
     private suspend fun dispatch(ctx: SkillContext, args: Map<String, Any?>): CommandResult {
+        // Pause, Resume and Take control never cancel a failsafe return or landing, on any route.
+        if (spec.id in FAILSAFE_GATED && ctx.fcFailsafe()) return CommandResult.Denied(SkillReason.FAILSAFE)
         if (spec.id == BuiltinIds.TAKE_CONTROL) return ctx.sendPilot(PilotAction(spec.pilotAction))
-        // Pause never cancels a failsafe return or landing, on any route.
-        if (spec.id == BuiltinIds.PAUSE && ctx.fcFailsafe()) return CommandResult.Denied(SkillReason.FAILSAFE)
         val recovery = spec.id in RECOVERY_BUILTINS
         val link = ctx.pilotLink
         // A second recovery press while the first still waits on the pilot goes to the FC at once.

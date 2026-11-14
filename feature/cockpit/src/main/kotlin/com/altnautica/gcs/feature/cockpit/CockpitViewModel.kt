@@ -728,7 +728,8 @@ class CockpitViewModel @AssistedInject constructor(
     fun onChipButton(button: ChipButton) {
         when (button) {
             ChipButton.Resume -> activate(BuiltinIds.RESUME)
-            ChipButton.TakeControl -> pilotAction(PilotAction(PilotAction.TAKE_CONTROL))
+            // Through the built-in, so its gates (a failsafe return or landing among them) refuse it with a reason.
+            ChipButton.TakeControl -> activate(BuiltinIds.TAKE_CONTROL)
             ChipButton.SetUpAircraft -> _events.tryEmit(CockpitEvent.SetUpAircraft)
             ChipButton.Abort -> abortLaunch()
         }

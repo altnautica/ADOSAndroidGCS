@@ -13,6 +13,7 @@ import com.altnautica.gcs.core.model.PilotSkillRef
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
@@ -94,6 +95,18 @@ class PilotWireTest {
         val none = JsonObject(data + mapOf("avoid_state" to JsonPrimitive("unavailable")))
         val s = checkNotNull(PilotWire.parseState(none, 0L))
         assertEquals(AvoidState.Unavailable, s.avoidState)
+    }
+
+    @Test
+    fun `a pilot that has not heard the flight controller reports its mode as unknown`() {
+        val unheard = JsonObject(
+            data + mapOf("fc_mode" to JsonNull, "fc_mode_name" to JsonNull, "armed" to JsonNull, "landed" to JsonNull),
+        )
+        val s = checkNotNull(PilotWire.parseState(unheard, receivedAtMs = 42L))
+        assertNull(s.fcMode)
+        assertNull(s.fcModeName)
+        assertNull(s.armed)
+        assertNull(s.landed)
     }
 
     @Test

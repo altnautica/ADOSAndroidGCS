@@ -84,6 +84,17 @@ class CockpitRulesTest {
         assertEquals(ChipButton.Resume, paused.button)
     }
 
+    @Test
+    fun `an FC mode the pilot has not heard reads unknown, never a default mode`() {
+        val now = 10_000L
+        val unheard = pilotState(PilotOwner.FcMode, fcModeName = null, fcMode = null, receivedAtMs = now)
+        val chip = chips.resolve(unheard, ChipContext(now))
+        assertEquals("FC · — · ADOS standing by", chip.primary.text)
+        val ctx = ControllerContext.of(unheard, armed = null, modeName = null, pickerOpen = false, lowBattery = false, failsafe = false)
+        assertEquals(false, ctx.rthActive)
+        assertEquals(false, ctx.hover)
+    }
+
     private fun skill(id: String, plugin: String): Skill = mockk {
         every { this@mockk.id } returns "$plugin:$id"
         every { source } returns SkillSource.Extension(plugin)

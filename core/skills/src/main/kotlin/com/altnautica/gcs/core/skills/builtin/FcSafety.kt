@@ -17,6 +17,9 @@ internal val FAILSAFE_MODES = setOf(
     "PRECLAND",
 )
 
+/** Built-ins disabled and refused while the FC flies a failsafe: each would cancel its return or landing. */
+internal val FAILSAFE_GATED = setOf(BuiltinIds.PAUSE, BuiltinIds.RESUME, BuiltinIds.TAKE_CONTROL)
+
 private const val MAV_STATE_CRITICAL = 5
 private const val MAV_STATE_EMERGENCY = 6
 private const val GUIDED_MODE = "GUIDED"
