@@ -56,3 +56,10 @@ internal fun reacquiredText(strings: com.altnautica.gcs.core.skills.spec.SetupSt
     )
     return e.occluder?.let { "$text · ${strings.format("follow.occluder.$it")}" } ?: text
 }
+
+/**
+ * The not-applied toast for follow-me setting [key]: `follow.reacquire_not_applied` for the
+ * re-acquire mode, `follow.<key>_not_applied` for the others.
+ */
+internal fun followNotAppliedText(strings: com.altnautica.gcs.core.skills.spec.SetupStringsSpec, key: String): String =
+    strings.format(if (key == com.altnautica.gcs.feature.cockpit.autonomy.CockpitAutonomy.REACQUIRE_KEY) "follow.reacquire_not_applied" else "follow.${key}_not_applied")

@@ -101,8 +101,12 @@ app's `versionName`.
   confirm. With a game controller, Cross (the select button) moves focus into
   the prompt while it is shown instead of opening the skill picker; the D-pad
   then moves between its actions, Cross presses the focused one and Circle
-  leaves the prompt. The sticks keep flying and the brake, return and kill
-  buttons keep working throughout.
+  leaves the prompt. Running an action also leaves it, so after Pick a target
+  the controller's designate, camera and zoom buttons act again. The sticks
+  keep flying and the brake, return and kill buttons keep working throughout.
+- **Follow settings on the rail.** The predictive search switch shows only in
+  smart re-acquire mode. A when-unsure or predictive search change that
+  follow-me does not apply names that setting in its toast.
 - **Camera lost while waiting.** When the follow camera stops sending frames
   while follow-me waits for the operator, the prompt stays up, says the camera
   stopped and offers no search again. A follow hold names its reason from the

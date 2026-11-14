@@ -81,7 +81,7 @@ internal const val FOLLOW_PROMPT_TAG = "follow-prompt"
  * [focusRequests] emission (the controller's select) or when the operator moves it there (Tab,
  * the arrow keys). While focus is inside, [onFocusedChange] reports it (the controller then
  * navigates the prompt), a hardware keyboard runs R, P, H, L and X (bare keys only), and Back
- * moves focus out again. Touch targets grow with the width class and glove mode.
+ * or any action moves focus out again. Touch targets grow with the width class and glove mode.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -140,6 +140,7 @@ internal fun FollowAwaitPrompt(
                 val modified = e.isShiftPressed || e.isCtrlPressed || e.isAltPressed || e.isMetaPressed
                 val action = FollowPrompts.actionForKey(e.utf16CodePoint.toChar(), modified, prompt.actions) ?: return@onPreviewKeyEvent false
                 onAction(action)
+                focusManager.clearFocus()
                 true
             },
     ) {
@@ -151,6 +152,8 @@ internal fun FollowAwaitPrompt(
                     val focus = if (i == 0) Modifier.focusRequester(first) else Modifier
                     PromptButton(ICONS.getValue(a), specText(a.labelKey), a.key.uppercaseChar(), target, a == FollowPromptAction.Stop, focus.testTag("$FOLLOW_PROMPT_TAG-${a.wire}")) {
                         onAction(a)
+                        // An action hands the controller back to flight: designate, camera and zoom act again.
+                        focusManager.clearFocus()
                     }
                 }
             }

@@ -155,7 +155,10 @@ private fun RailButton(icon: ImageVector, label: String, size: Dp, tint: Color, 
 @Composable
 private fun railText() = AdosTypography.numeric.small.copy(fontSize = 9.sp, fontWeight = FontWeight.SemiBold)
 
-/** When unsure (FOLLOW | HOLD) and the predictive search switch, each shown once follow-me reports it. */
+/**
+ * When unsure (FOLLOW | HOLD) and the predictive search switch, each shown once follow-me reports
+ * it; the switch only in smart re-acquire mode, as strict never predicts.
+ */
 @Composable
 private fun FollowSettings(ui: RailUi, size: Dp, onSetting: (String, JsonPrimitive) -> Unit) {
     ui.uncertainMode?.let { mode ->
@@ -166,7 +169,8 @@ private fun FollowSettings(ui: RailUi, size: Dp, onSetting: (String, JsonPrimiti
             value = mode, pending = ui.pending[CockpitAutonomy.UNCERTAIN_KEY]?.contentOrNull, size = size,
         ) { onSetting(CockpitAutonomy.UNCERTAIN_KEY, JsonPrimitive(it)) }
     }
-    ui.predictiveSearch?.let { on ->
+    val mode = ui.pending[CockpitAutonomy.REACQUIRE_KEY]?.contentOrNull ?: ui.reacquireMode
+    if (mode != "strict") ui.predictiveSearch?.let { on ->
         PredictiveToggle(on, ui.pending[CockpitAutonomy.PREDICTIVE_KEY]?.booleanOrNull, size) {
             onSetting(CockpitAutonomy.PREDICTIVE_KEY, JsonPrimitive(it))
         }

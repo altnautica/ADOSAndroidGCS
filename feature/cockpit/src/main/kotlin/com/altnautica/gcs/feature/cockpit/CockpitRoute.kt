@@ -139,13 +139,7 @@ fun CockpitRoute(
                     snackbar.showSnackbar(reasonTextOf(vm.specStrings, event.reasonKey))
                 is CockpitEvent.Reacquired -> snackbar.showSnackbar(reacquiredText(vm.specStrings, event))
                 CockpitEvent.PickTarget -> snackbar.showSnackbar(vm.specStrings.format("follow.prompt.action.redesignate"))
-                is CockpitEvent.FollowSettingNotApplied -> snackbar.showSnackbar(
-                    if (event.key == CockpitAutonomy.REACQUIRE_KEY) {
-                        vm.specStrings.format("follow.reacquire_not_applied")
-                    } else {
-                        vm.specStrings.format("skill.did_not_respond", mapOf("skill" to vm.specStrings.format("follow.chip")))
-                    },
-                )
+                is CockpitEvent.FollowSettingNotApplied -> snackbar.showSnackbar(followNotAppliedText(vm.specStrings, event.key))
                 CockpitEvent.MinimapLocal -> snackbar.showSnackbar(vm.specStrings.format("minimap.toast_local"))
                 CockpitEvent.PilotUnavailable -> snackbar.showSnackbar(vm.specStrings.format("cockpit.pilot.unavailable"))
                 is CockpitEvent.PilotRefused -> snackbar.showSnackbar(

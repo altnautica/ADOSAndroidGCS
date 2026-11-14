@@ -175,12 +175,54 @@ class FollowRecoveryChromeTest {
         compose.waitForIdle()
         compose.onNodeWithTag("$FOLLOW_PROMPT_TAG-resume").assertIsFocused()
         assertEquals(true, focused.last())
-        // The D-pad moves along the actions and its centre presses the focused one; a bare letter runs its action.
+        // The D-pad moves along the actions and its centre presses the focused one.
         compose.onNodeWithTag("$FOLLOW_PROMPT_TAG-resume").performKeyInput { pressKey(Key.DirectionRight) }
         compose.onNodeWithTag("$FOLLOW_PROMPT_TAG-redesignate").assertIsFocused()
         compose.onNodeWithTag("$FOLLOW_PROMPT_TAG-redesignate").performKeyInput { pressKey(Key.DirectionCenter) }
-        compose.onNodeWithTag("$FOLLOW_PROMPT_TAG-redesignate").performKeyInput { pressKey(Key.X) }
+        // Pick a target leaves the prompt up but hands the controller back to the cockpit.
+        compose.waitForIdle()
+        compose.onNodeWithTag("$FOLLOW_PROMPT_TAG-redesignate").assertIsNotFocused()
+        assertEquals(false, focused.last())
+        // Back in, a bare letter runs its action and moves focus out the same way.
+        compose.runOnIdle { requests.tryEmit(Unit) }
+        compose.waitForIdle()
+        assertEquals(true, focused.last())
+        compose.onNodeWithTag("$FOLLOW_PROMPT_TAG-resume").performKeyInput { pressKey(Key.X) }
+        compose.waitForIdle()
+        assertEquals(false, focused.last())
         compose.runOnIdle { assertEquals(listOf(FollowPromptAction.Redesignate, FollowPromptAction.Stop), ran) }
+    }
+
+    @Test
+    fun `the predictive search switch shows only in smart re-acquire mode`() {
+        var ui by mutableStateOf(
+            RailUi(
+                followInstalled = true, followActive = true, followEnabled = true, reacquireMode = "strict",
+                uncertainMode = "follow", predictiveSearch = true, swapLabels = null, canRecord = false, recording = false,
+            ),
+        )
+        compose.setContent {
+            AdosTheme {
+                CompositionLocalProvider(LocalCockpitStrings provides strings) {
+                    FollowRail(ui, WidthClass.Expanded, 600.dp, onFollow = {}, onSetting = { _, _ -> }, onSwap = {}, onRecord = {})
+                }
+            }
+        }
+        compose.onNodeWithTag("uncertain-follow").assertIsDisplayed()
+        compose.onNodeWithTag("predictive-search").assertDoesNotExist()
+        // A pending switch to smart shows it at once.
+        compose.runOnIdle { ui = ui.copy(pending = mapOf("reacquire_mode" to JsonPrimitive("smart"))) }
+        compose.onNodeWithTag("predictive-search").assertIsDisplayed()
+        compose.runOnIdle { ui = ui.copy(reacquireMode = "smart", pending = emptyMap()) }
+        compose.onNodeWithTag("predictive-search").assertIsOn()
+    }
+
+    @Test
+    fun `a follow setting that was not applied names the setting`() {
+        assertEquals(strings.format("follow.reacquire_not_applied"), com.altnautica.gcs.feature.cockpit.followNotAppliedText(strings, "reacquire_mode"))
+        assertEquals(strings.format("follow.uncertain_mode_not_applied"), com.altnautica.gcs.feature.cockpit.followNotAppliedText(strings, "uncertain_mode"))
+        assertEquals(strings.format("follow.predictive_search_not_applied"), com.altnautica.gcs.feature.cockpit.followNotAppliedText(strings, "predictive_search"))
+        assertFalse(com.altnautica.gcs.feature.cockpit.followNotAppliedText(strings, "predictive_search").startsWith("follow."))
     }
 
     @Test
