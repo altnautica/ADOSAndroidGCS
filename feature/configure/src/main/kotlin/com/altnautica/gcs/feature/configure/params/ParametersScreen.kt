@@ -244,7 +244,7 @@ internal fun paramMessageText(message: ParamMessage, rows: Map<String, ParamRow>
         },
         message.name,
     ) to StatusLevel.Error
-    is ParamMessage.Invalid -> "${message.name}: ${invalidReasonText(message.reason, rows[message.name]?.meta)}" to StatusLevel.Error
+    is ParamMessage.Invalid -> "${message.name}: ${invalidReasonText(message.name, message.reason, rows[message.name]?.meta)}" to StatusLevel.Error
     is ParamMessage.LoadIncomplete -> stringResource(R.string.cfg_param_incomplete, message.missing) to StatusLevel.Warning
     is ParamMessage.FileUnreadable -> stringResource(R.string.cfg_param_file_unreadable) to StatusLevel.Error
     ParamMessage.FileSaved -> stringResource(R.string.cfg_param_file_saved) to StatusLevel.Success

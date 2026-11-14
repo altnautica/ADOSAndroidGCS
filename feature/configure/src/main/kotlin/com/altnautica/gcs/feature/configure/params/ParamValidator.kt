@@ -6,7 +6,10 @@ sealed interface ParamValidation {
     data class Invalid(val reason: ParamInvalidReason) : ParamValidation
 }
 
-enum class ParamInvalidReason { NotANumber, NotInteger, BelowMin, AboveMax, NotAnOption, UnknownBits, ReadOnly }
+enum class ParamInvalidReason { NotANumber, NotInteger, BelowMin, AboveMax, NotAnOption, UnknownBits, ReadOnly, NotOnStep }
+
+/** Whole-number limits a parameter keeps whatever its documentation says: [min]..[max] in steps of [step]. */
+data class ParamFixedLimit(val min: Double, val max: Double, val step: Double)
 
 object ParamValidator {
     /**
@@ -25,6 +28,22 @@ object ParamValidator {
         else -> READ_ONLY_PATTERNS.any { it.containsMatchIn(name) }
     }
 
+    /**
+     * Limits held without documentation too. FLOW_ORIENT_YAW is centidegrees, -17999..18000,
+     * increment 10 (ArduPilot parameter docs); a wrong flow yaw inverts the flow feedback
+     * (https://ardupilot.org/copter/docs/common-mtf-01.html).
+     */
+    private val FIXED = mapOf("FLOW_ORIENT_YAW" to ParamFixedLimit(-17999.0, 18000.0, 10.0))
+
+    /** The fixed limit of [name], if it has one. */
+    fun fixedLimit(name: String): ParamFixedLimit? = FIXED[name]
+
+    /** The lowest value [name] accepts: its fixed limit, else its documented minimum. */
+    fun min(name: String, meta: ParamMeta?): Double? = FIXED[name]?.min ?: meta?.min
+
+    /** The highest value [name] accepts: its fixed limit, else its documented maximum. */
+    fun max(name: String, meta: ParamMeta?): Double? = FIXED[name]?.max ?: meta?.max
+
     /** Checks free-text input. Without metadata any finite number is accepted. */
     fun validate(name: String, meta: ParamMeta?, input: String): ParamValidation {
         val value = input.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
@@ -34,6 +53,7 @@ object ParamValidator {
 
     fun validate(name: String, meta: ParamMeta?, value: Double): ParamValidation {
         if (isReadOnly(name, meta)) return ParamValidation.Invalid(ParamInvalidReason.ReadOnly)
+        FIXED[name]?.let { return fixed(it, value) }
         if (meta == null) return ParamValidation.Valid(value)
         if (meta.isInteger && value % 1.0 != 0.0) return ParamValidation.Invalid(ParamInvalidReason.NotInteger)
         when (meta.editor) {
@@ -54,6 +74,14 @@ object ParamValidator {
         meta.min?.let { if (value < it) return ParamValidation.Invalid(ParamInvalidReason.BelowMin) }
         meta.max?.let { if (value > it) return ParamValidation.Invalid(ParamInvalidReason.AboveMax) }
         return ParamValidation.Valid(value)
+    }
+
+    private fun fixed(limit: ParamFixedLimit, value: Double): ParamValidation = when {
+        value % 1.0 != 0.0 -> ParamValidation.Invalid(ParamInvalidReason.NotInteger)
+        value < limit.min -> ParamValidation.Invalid(ParamInvalidReason.BelowMin)
+        value > limit.max -> ParamValidation.Invalid(ParamInvalidReason.AboveMax)
+        value % limit.step != 0.0 -> ParamValidation.Invalid(ParamInvalidReason.NotOnStep)
+        else -> ParamValidation.Valid(value)
     }
 
     /** Toggles [bit] in a bitmask value. */

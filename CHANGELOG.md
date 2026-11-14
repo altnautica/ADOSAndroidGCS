@@ -111,6 +111,11 @@ app's `versionName`.
   draws amber. A drone with no lidar reports `unavailable`, read as "No
   obstacle sensor" in the warning colour; its sticks fly and Fly Here is
   refused.
+- **Optical flow yaw in centidegrees.** The parameter editor and import
+  review hold `FLOW_ORIENT_YAW` to -17999..18000 in steps of 10 (centidegrees)
+  with or without the firmware's documentation. A value off the 10 step is
+  refused, such as an old 1..7 setting from the 45° scale some ground stations
+  used, which ArduPilot reads as 0.01..0.07°.
 
 ## [0.6.1] - 2026-11-13
 

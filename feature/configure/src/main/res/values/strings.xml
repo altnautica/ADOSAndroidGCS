@@ -50,6 +50,7 @@
     <string name="cfg_param_value">Value %1$s</string>
     <string name="cfg_param_min">min %1$s</string>
     <string name="cfg_param_max">max %1$s</string>
+    <string name="cfg_param_step">step %1$s</string>
     <string name="cfg_param_default">default %1$s</string>
     <string name="cfg_param_reboot">Takes effect after the flight controller reboots.</string>
     <string name="cfg_param_read_only">Read-only parameter.</string>
@@ -59,6 +60,7 @@
     <string name="cfg_param_invalid_max">Must be at most %1$s.</string>
     <string name="cfg_param_invalid_option">Choose one of the listed values.</string>
     <string name="cfg_param_invalid_bits">Sets bits this parameter does not define.</string>
+    <string name="cfg_param_invalid_step">Must be a multiple of %1$s.</string>
     <string name="cfg_param_armed_title">Change a parameter while armed?</string>
     <string name="cfg_param_armed_message">The vehicle is armed. Writing %1$s = %2$s changes its behaviour in flight.</string>
     <string name="cfg_param_armed_confirm">Hold to write</string>

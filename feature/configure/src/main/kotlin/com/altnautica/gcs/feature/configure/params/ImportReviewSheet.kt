@@ -76,7 +76,7 @@ internal fun ImportReviewSheet(
                 val refused = review.invalid[d.name]
                 val checked = refused == null && d.name !in review.deselected
                 val note = when {
-                    refused != null -> invalidReasonText(refused, metaFor(d.name)) to colors.statusWarning
+                    refused != null -> invalidReasonText(d.name, refused, metaFor(d.name)) to colors.statusWarning
                     d.name in review.failed -> stringResource(R.string.cfg_param_write_failed, d.name) to colors.statusError
                     else -> null
                 }

@@ -35,14 +35,16 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.configure.R
 
 @Composable
-fun invalidReasonText(reason: ParamInvalidReason, meta: ParamMeta?): String = when (reason) {
+fun invalidReasonText(name: String, reason: ParamInvalidReason, meta: ParamMeta?): String = when (reason) {
     ParamInvalidReason.NotANumber -> stringResource(R.string.cfg_param_invalid_number)
     ParamInvalidReason.NotInteger -> stringResource(R.string.cfg_param_invalid_integer)
-    ParamInvalidReason.BelowMin -> stringResource(R.string.cfg_param_invalid_min, ParamFile.displayValue(meta?.min ?: 0.0))
-    ParamInvalidReason.AboveMax -> stringResource(R.string.cfg_param_invalid_max, ParamFile.displayValue(meta?.max ?: 0.0))
+    ParamInvalidReason.BelowMin -> stringResource(R.string.cfg_param_invalid_min, ParamFile.displayValue(ParamValidator.min(name, meta) ?: 0.0))
+    ParamInvalidReason.AboveMax -> stringResource(R.string.cfg_param_invalid_max, ParamFile.displayValue(ParamValidator.max(name, meta) ?: 0.0))
     ParamInvalidReason.NotAnOption -> stringResource(R.string.cfg_param_invalid_option)
     ParamInvalidReason.UnknownBits -> stringResource(R.string.cfg_param_invalid_bits)
     ParamInvalidReason.ReadOnly -> stringResource(R.string.cfg_param_read_only)
+    ParamInvalidReason.NotOnStep ->
+        stringResource(R.string.cfg_param_invalid_step, ParamFile.displayValue(ParamValidator.fixedLimit(name)?.step ?: meta?.increment ?: 1.0))
 }
 
 /** Label for a value: the enum option name when documented, plus units. */
@@ -99,8 +101,9 @@ internal fun NumberEditor(row: ParamRow, meta: ParamMeta?, writing: String?, onS
     val validation = ParamValidator.validate(row.name, meta, text)
     val error = (validation as? ParamValidation.Invalid)?.reason
     val hint = listOfNotNull(
-        meta?.min?.let { stringResource(R.string.cfg_param_min, ParamFile.displayValue(it)) },
-        meta?.max?.let { stringResource(R.string.cfg_param_max, ParamFile.displayValue(it)) },
+        ParamValidator.min(row.name, meta)?.let { stringResource(R.string.cfg_param_min, ParamFile.displayValue(it)) },
+        ParamValidator.max(row.name, meta)?.let { stringResource(R.string.cfg_param_max, ParamFile.displayValue(it)) },
+        ParamValidator.fixedLimit(row.name)?.let { stringResource(R.string.cfg_param_step, ParamFile.displayValue(it.step)) },
         meta?.units,
         meta?.defaultValue?.let { stringResource(R.string.cfg_param_default, ParamFile.displayValue(it)) },
     ).joinToString(" · ")
@@ -111,7 +114,7 @@ internal fun NumberEditor(row: ParamRow, meta: ParamMeta?, writing: String?, onS
         singleLine = true,
         isError = error != null,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        supportingText = { Text(if (error != null) invalidReasonText(error, meta) else hint) },
+        supportingText = { Text(if (error != null) invalidReasonText(row.name, error, meta) else hint) },
     )
     meta?.options?.takeIf { it.isNotEmpty() }?.let { options ->
         options.forEach { o ->
@@ -161,7 +164,7 @@ private fun BitmaskEditor(value: Double, meta: ParamMeta, writing: String?, onSu
         }
     }
     val invalid = ParamValidator.validate(meta.name, meta, current) as? ParamValidation.Invalid
-    invalid?.let { Text(invalidReasonText(it.reason, meta), color = AdosTheme.colors.statusError) }
+    invalid?.let { Text(invalidReasonText(meta.name, it.reason, meta), color = AdosTheme.colors.statusError) }
     WriteButton(writing, onClick = { onSubmit(ParamFile.displayValue(current)) }, enabled = invalid == null)
 }
 
