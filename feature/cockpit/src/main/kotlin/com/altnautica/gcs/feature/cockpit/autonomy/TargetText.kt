@@ -88,6 +88,9 @@ internal class TargetText(private val strings: SetupStringsSpec) {
             NavQuality.HoldOk -> "nav_source.q.hold_ok"
             NavQuality.NoFlow -> "nav_source.q.no_flow"
             NavQuality.Drift -> "nav_source.q.drift"
+            NavQuality.FlowDisagrees -> "nav_source.q.flow_disagrees"
+            NavQuality.Corridor -> "nav_source.q.corridor"
+            NavQuality.Unverified -> "nav_source.q.unverified"
         },
     )
 

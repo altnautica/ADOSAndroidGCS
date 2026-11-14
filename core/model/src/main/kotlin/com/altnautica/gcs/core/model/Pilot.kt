@@ -203,6 +203,8 @@ data class PilotState(
     val setupAbort: String? = null,
     /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`), or null. */
     val speedCap: SpeedCap? = null,
+    /** The pilot does not trust the horizontal position (an older agent sends none), or null. */
+    val positionUnverified: PositionUnverified? = null,
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
@@ -227,6 +229,13 @@ data class PilotStatusText(val severity: Int, val text: String, val ageMs: Long?
 
 /** The pilot's horizontal speed cap: why ([reason], e.g. `gnss-denied`) and the limit [vHMps] in m/s. */
 data class SpeedCap(val reason: String, val vHMps: Float)
+
+/**
+ * The pilot does not trust the horizontal position: [reason] is `flow_disagrees`,
+ * `extnav_lost` or `extnav_degraded`; [detail] vision-nav's own reason when it named one;
+ * [flowMps] / [estimateMps] the measured flow speed and the estimate's speed when sent.
+ */
+data class PositionUnverified(val reason: String, val detail: String?, val flowMps: Float?, val estimateMps: Float?)
 
 /**
  * One stick frame for the onboard pilot. Axes are in [-1, 1] after the surface's mode

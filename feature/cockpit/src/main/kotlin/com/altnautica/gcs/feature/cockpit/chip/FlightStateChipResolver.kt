@@ -109,6 +109,7 @@ class FlightStateChipResolver(
         m.controlMode?.let { if (p.controlMode?.wire != it) return false }
         m.sequenceRunning?.let { if ((launchStep(p) != null) != it) return false }
         m.fcFailsafe?.let { if (p.fcFailsafe != it) return false }
+        m.positionUnverified?.let { if ((p.positionUnverified != null) != it) return false }
         return true
     }
 
@@ -137,6 +138,7 @@ class FlightStateChipResolver(
         "total" to num(p.mission?.total),
         "eta" to formatEta(ctx.missionEtaS),
         "fc_mode_name_upper" to (p.fcModeName ?: NO_VALUE).uppercase(),
+        "position_unverified_label" to positionUnverifiedKey(p)?.let { spec.positionUnverifiedLabels[it] ?: wordLabel(it) }.orEmpty(),
     )
 
     /** A profile as the mode sheet labels it (`mode_sheet.profile`); an unknown value reads with a capital first letter. */
@@ -201,6 +203,12 @@ class FlightStateChipResolver(
     /** Label of a hold reason, keyed by its exact wire string; an unlisted reason reads with spaces. */
     fun holdReasonLabel(reason: String): String =
         spec.holdReasonLabels[reason] ?: reason.replace('-', ' ').replace('_', ' ')
+
+    /** The label key of the pilot's `position_unverified`: vision-nav's detail when the spec labels it, else the reason. */
+    fun positionUnverifiedKey(p: PilotState): String? {
+        val u = p.positionUnverified ?: return null
+        return u.detail?.takeIf { it in spec.positionUnverifiedLabels } ?: u.reason
+    }
 
     private fun chipText(text: String, colorKey: String) = ChipText(text, colorKey, color(colorKey))
 

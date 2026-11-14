@@ -383,7 +383,7 @@ internal class CockpitAutonomy(
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyMap())
 
     /** The nav chip's inputs ([navInputsOnTick]). */
-    val navInputsState: StateFlow<NavInputs?> = navInputsOnTick(scope, clock, telemetry, feed.nav, tick, commandedSet, ekfParams)
+    val navInputsState: StateFlow<NavInputs?> = navInputsOnTick(scope, clock, telemetry, feed.nav, tick, commandedSet, ekfParams, pilotState)
 
     val navChip: StateFlow<NavChip?> = navInputsState.map { it?.let(NavSource::resolve) }
         .distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)

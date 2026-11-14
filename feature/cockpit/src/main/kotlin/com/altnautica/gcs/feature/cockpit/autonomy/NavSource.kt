@@ -1,10 +1,12 @@
 package com.altnautica.gcs.feature.cockpit.autonomy
 
+import com.altnautica.gcs.core.model.PositionUnverified
+
 /** What the nav-source chip labels the EKF's horizontal source as. */
 enum class NavLabel { DeadReckoning, ExtNav, Gps, Flow, Stale }
 
 /** Quality word on the chip. */
-enum class NavQuality { Good, Fair, Poor, Degraded, Lost, NoFix, Glitch, HoldOk, NoFlow, Drift }
+enum class NavQuality { Good, Fair, Poor, Degraded, Lost, NoFix, Glitch, HoldOk, NoFlow, Drift, FlowDisagrees, Corridor, Unverified }
 
 /** Colour role of a quality word. */
 enum class NavTone { Good, Warn, Crit, Muted }
@@ -48,6 +50,8 @@ data class NavInputs(
     val gpsFixType: Int?,
     val sats: Int?,
     val hdop: Float?,
+    /** The pilot's `position_unverified`, or null while the pilot trusts the position or is unheard. */
+    val positionUnverified: PositionUnverified? = null,
 )
 
 object NavSource {
@@ -69,8 +73,25 @@ object NavSource {
     /** Active set: fresh vision-nav, else the set this GCS last commanded, else 1. */
     fun activeSet(i: NavInputs): Int = i.nav?.activeSet?.takeIf { i.navFresh && it in 1..3 } ?: i.commandedSet ?: 1
 
-    /** HUD v2 §8.3, rows in order; the first match wins. */
+    /**
+     * HUD v2 §8.3, rows in order; the first match wins. The pilot's `position_unverified`
+     * then turns any live row (not stale, not dead reckoning) crit with its reason.
+     */
     fun resolve(i: NavInputs): NavChip {
+        val row = sourceRow(i)
+        val u = i.positionUnverified ?: return row
+        if (row.label == NavLabel.Stale || row.label == NavLabel.DeadReckoning) return row
+        return row.copy(quality = unverifiedWord(u.detail ?: u.reason), tone = NavTone.Crit)
+    }
+
+    /** The crit word for a position nobody can vouch for: the flow disagreeing, a corridor with no measured speed, or unverified. */
+    private fun unverifiedWord(reason: String?): NavQuality = when (reason) {
+        "flow_disagrees", "ekf_flow_disagree" -> NavQuality.FlowDisagrees
+        "corridor_unmeasured" -> NavQuality.Corridor
+        else -> NavQuality.Unverified
+    }
+
+    private fun sourceRow(i: NavInputs): NavChip {
         val set = activeSet(i)
         val flags = i.ekfFlags
         if (flags == null || i.ekfAgeMs == null || i.ekfAgeMs >= EKF_STALE_MS) return NavChip(NavLabel.Stale, null, NavTone.Muted, activeSet = set)
@@ -94,6 +115,11 @@ object NavSource {
     }
 
     private fun extNav(nav: NavState?, flags: Int, set: Int): NavChip {
+        // A reason from vision-nav on a degraded or lost pose says why the position cannot be trusted.
+        val why = nav?.healthReason
+        if (why != null && (nav.extnavHealth == ExtNavHealth.Degraded || nav.extnavHealth == ExtNavHealth.Lost)) {
+            return NavChip(NavLabel.ExtNav, unverifiedWord(why), NavTone.Crit, activeSet = set)
+        }
         val (q, t) = when (nav?.extnavHealth) {
             ExtNavHealth.Good -> NavQuality.Good to NavTone.Good
             ExtNavHealth.Degraded -> NavQuality.Degraded to NavTone.Warn

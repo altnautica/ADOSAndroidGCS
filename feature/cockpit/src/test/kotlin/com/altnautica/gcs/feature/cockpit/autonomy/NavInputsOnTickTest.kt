@@ -25,7 +25,7 @@ class NavInputsOnTickTest {
         val tick = MutableStateFlow(0L)
         val inputs = navInputsOnTick(
             backgroundScope, clock, MutableStateFlow<VehicleTelemetry?>(t), MutableStateFlow(null), tick,
-            MutableStateFlow(null), MutableStateFlow(emptyMap()),
+            MutableStateFlow(null), MutableStateFlow(emptyMap()), MutableStateFlow(null),
         )
         val seen = mutableListOf<NavInputs?>()
         backgroundScope.launch { inputs.collect { seen += it } }

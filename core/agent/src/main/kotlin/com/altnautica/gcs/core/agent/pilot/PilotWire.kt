@@ -18,6 +18,7 @@ import com.altnautica.gcs.core.model.PilotSkillRef
 import com.altnautica.gcs.core.model.PilotStatusText
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
+import com.altnautica.gcs.core.model.PositionUnverified
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import com.altnautica.gcs.core.model.SpeedCap
@@ -147,6 +148,9 @@ object PilotWire {
             setupAbort = data.str("setup_abort"),
             speedCap = (data["speed_cap"] as? JsonObject)?.let { c ->
                 SpeedCap(c.str("reason") ?: return@let null, c.float("v_h_mps") ?: return@let null)
+            },
+            positionUnverified = (data["position_unverified"] as? JsonObject)?.let { u ->
+                PositionUnverified(u.str("reason") ?: return@let null, u.str("detail"), u.float("flow_mps"), u.float("estimate_mps"))
             },
         )
     }

@@ -84,6 +84,8 @@ data class NavState(
     val obstacleRateHz: Float?,
     val minObstacleM: Float?,
     val gpsFix: Int?,
+    /** Why the pose is degraded or lost (`health_reason`: `corridor_unmeasured`, `flow_disagrees`, ...); null when none is named. */
+    val healthReason: String? = null,
     /** Age of the newest pose in ms (`pose_age_ms`), null while none. */
     val poseAgeMs: Long? = null,
 )

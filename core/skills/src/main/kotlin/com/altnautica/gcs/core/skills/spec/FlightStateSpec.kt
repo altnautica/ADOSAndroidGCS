@@ -10,6 +10,8 @@ data class FlightStateSpec(
     @SerialName("fc_mode_classes") val fcModeClasses: FcModeClassesSpec,
     val secondary: FlightStateSecondarySpec,
     @SerialName("hold_reason_labels") val holdReasonLabels: Map<String, String> = emptyMap(),
+    /** Labels for the pilot's `position_unverified`, keyed by its labelled `detail`, else its `reason`. */
+    @SerialName("position_unverified_labels") val positionUnverifiedLabels: Map<String, String> = emptyMap(),
     @SerialName("stale_after_ms") val staleAfterMs: Long,
     val tap: String,
     @SerialName("mode_sheet") val modeSheet: ModeSheetSpec,
@@ -46,6 +48,8 @@ data class FlightStateMatchSpec(
     /** A launch sequence runs: present, its step not `done`, no error. */
     @SerialName("sequence_running") val sequenceRunning: Boolean? = null,
     @SerialName("fc_failsafe") val fcFailsafe: Boolean? = null,
+    /** The pilot reports it does not trust the horizontal position. */
+    @SerialName("position_unverified") val positionUnverified: Boolean? = null,
 )
 
 @Serializable
