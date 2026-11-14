@@ -143,8 +143,13 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
         CockpitSheet.Preflight -> {
             val result by vm.preflight.collectAsStateWithLifecycle()
             val gating by vm.armGateOpen.collectAsStateWithLifecycle()
+            val armed by vm.armedForFix.collectAsStateWithLifecycle()
             Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
-                PreflightSheet(result, gating = gating, onContinue = vm::continuePreflight, onDismiss = { vm.setPreflight(false) })
+                PreflightSheet(
+                    result, gating = gating, onContinue = vm::continuePreflight, onDismiss = { vm.setPreflight(false) },
+                    fixOffered = { vm.batteryFailsafeFixOffered(it, armed) },
+                    onFix = vm::fixBatteryFailsafe,
+                )
             }
         }
         CockpitSheet.Mode -> modeSheet?.let { ui ->

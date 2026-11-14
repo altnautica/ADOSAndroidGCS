@@ -4,6 +4,8 @@ import com.altnautica.gcs.core.demo.DemoScenario
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.AUTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FC_MODE
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FC_PROFILE_OK
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.BATTERY_FAILSAFE_OK
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.batteryFailsafeOff
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FOLLOW_SKILL_ID
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.GOTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.GUIDED
@@ -64,6 +66,18 @@ internal class DemoPilotPins(
                 putJsonArray("readiness") {
                     add(FC_PROFILE_OK)
                     add(readiness(READINESS_BLOCK_ID, false, "block", "No position estimate"))
+                    add(BATTERY_FAILSAFE_OK)
+                }
+            }
+            DemoScenario.BatteryFailsafeOff, DemoScenario.BatteryFailsafeConfinedRtl -> {
+                grounded(armed = false)
+                putJsonArray("readiness") {
+                    add(FC_PROFILE_OK)
+                    add(readiness("position", true, "block", "Position estimate available"))
+                    add(
+                        if (scenario == DemoScenario.BatteryFailsafeOff) batteryFailsafeOff(controlMode)
+                        else DemoPilotWire.BATTERY_FAILSAFE_CONFINED_RTL,
+                    )
                 }
             }
             DemoScenario.MissionActive -> {
@@ -92,6 +106,7 @@ internal class DemoPilotPins(
             DemoScenario.NoGnss -> putJsonArray("readiness") {
                 add(FC_PROFILE_OK)
                 add(readiness("position", true, "block", "Position from the EKF origin only"))
+                add(BATTERY_FAILSAFE_OK)
             }
             DemoScenario.StatusTexts -> putJsonArray("statustext") {
                 STATUS_TEXTS.forEachIndexed { i, text ->

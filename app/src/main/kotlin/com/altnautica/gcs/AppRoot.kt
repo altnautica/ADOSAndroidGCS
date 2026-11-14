@@ -54,6 +54,7 @@ import com.altnautica.gcs.feature.settings.SettingsRoute
 import com.altnautica.gcs.feature.settings.controller.ControllerRoute
 import com.altnautica.gcs.feature.settings.licences.LicencesRoute
 import com.altnautica.gcs.navigation.AircraftSetupKey
+import com.altnautica.gcs.feature.cockpit.preflight.BatteryFailsafeFix
 import com.altnautica.gcs.navigation.BackStackOps
 import com.altnautica.gcs.navigation.CloudKey
 import com.altnautica.gcs.navigation.CockpitKey
@@ -170,7 +171,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                     )
                 }
                 entry<AircraftSetupKey> { key ->
-                    AircraftSetupRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }, wizard = key.wizard)
+                    AircraftSetupRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }, wizard = key.wizard, step = key.step, run = key.run)
                 }
                 entry<ParamsKey> { key -> ParametersSurfaceRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }) }
                 entry<LogsKey> {
@@ -214,6 +215,9 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
                         },
                         onSetUpAircraft = { id -> BackStackOps.push(backStack, AircraftSetupKey(id.value, GROUND_WIZARD)) },
                         onOpenControls = { BackStackOps.push(backStack, ControllerKey) },
+                        onFixBatteryFailsafe = { id ->
+                            BackStackOps.push(backStack, AircraftSetupKey(id.value, BatteryFailsafeFix.WIZARD, BatteryFailsafeFix.STEP, run = true))
+                        },
                     )
                 }
                 entry<ConnectKey> { key ->

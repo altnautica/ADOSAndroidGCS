@@ -51,10 +51,18 @@ fun preflightItemLabel(item: PreflightItem, known: Boolean): String {
 /**
  * The pre-flight checklist: the surface checks, then the pilot's readiness items. When
  * [gating] is true an arm waits on it, and Continue (enabled once nothing blocks) lets it go.
+ * A readiness item for which [fixOffered] holds carries a fix button calling [onFix].
  * Drawn in the cockpit window; place it in a full-size box.
  */
 @Composable
-fun PreflightSheet(result: PreflightResult, gating: Boolean, onContinue: () -> Unit, onDismiss: () -> Unit) {
+fun PreflightSheet(
+    result: PreflightResult,
+    gating: Boolean,
+    onContinue: () -> Unit,
+    onDismiss: () -> Unit,
+    fixOffered: (ReadinessItem) -> Boolean = { false },
+    onFix: () -> Unit = {},
+) {
     val colors = AdosTheme.colors
     AdosSheet(onDismiss, title = specText("flow.preflight.title")) {
         Column(
@@ -71,7 +79,16 @@ fun PreflightSheet(result: PreflightResult, gating: Boolean, onContinue: () -> U
                 }
                 CheckRow(icon, tint, preflightItemLabel(check.item, check.known), check.passed, "$PREFLIGHT_ROW_TAG:${check.item.name}")
             }
-            for (item in result.readiness) ReadinessRow(item)
+            for (item in result.readiness) {
+                ReadinessRow(item)
+                if (fixOffered(item)) {
+                    AdosButton(
+                        specText(BatteryFailsafeFix.LABEL_KEY),
+                        onClick = onFix,
+                        modifier = Modifier.fillMaxWidth().testTag("$PREFLIGHT_FIX_TAG:${item.id}"),
+                    )
+                }
+            }
             if (gating) {
                 if (!result.ready) {
                     Text(specText("flow.preflight.blocked"), style = MaterialTheme.typography.bodySmall, color = colors.statusError)
@@ -114,3 +131,4 @@ private fun CheckRow(icon: ImageVector, tint: Color, label: String, passed: Bool
 
 const val PREFLIGHT_ROW_TAG = "preflight_row"
 const val PREFLIGHT_CONTINUE_TAG = "preflight_continue"
+const val PREFLIGHT_FIX_TAG = "preflight_fix"

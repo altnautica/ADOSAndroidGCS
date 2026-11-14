@@ -43,6 +43,21 @@ internal object DemoPilotWire {
 
     val FC_PROFILE_OK = readiness("fc_profile", true, "block", "FC failsafe parameters match the ADOS profile")
 
+    const val BATTERY_FAILSAFE_ID = "battery_failsafe"
+    val BATTERY_FAILSAFE_OK = readiness(BATTERY_FAILSAFE_ID, true, "warn", "Battery failsafe set")
+
+    /** Both battery failsafe actions do nothing: it blocks arming in ADOS control and warns otherwise. */
+    fun batteryFailsafeOff(controlMode: String) = readiness(
+        BATTERY_FAILSAFE_ID, false, if (controlMode == "ados") "block" else "warn",
+        "Battery failsafe does nothing: set low = RTL, critical = Land",
+    )
+
+    /** Without GNSS the failsafe RTL would climb to the RTL altitude: a warning whose fix sets both actions to Land. */
+    val BATTERY_FAILSAFE_CONFINED_RTL = readiness(
+        BATTERY_FAILSAFE_ID, false, "warn",
+        "No GNSS: a battery RTL climbs to the RTL altitude, into the roof indoors; set low = Land, critical = Land",
+    )
+
     fun modeName(mode: Int) = MODE_NAMES[mode] ?: "MODE $mode"
 
     fun ownerLabel(owner: String, profile: String) = if (owner == PILOT) "PILOT · ${profile.uppercase()}" else owner.uppercase()

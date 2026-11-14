@@ -12,6 +12,10 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -106,5 +110,23 @@ class DemoFcSetupTest {
         assertEquals(SetupStepState.Done, done.state)
         assertNotNull(done.result!!["gains_after"])
         assertEquals(SetupStepState.WaitingUser, setup.step("air", "verify").state)
+    }
+
+    @Test
+    fun adosProfileListsTheFailsafeProfileAndWritesOnlyOnApply() = runTest {
+        val setup = DemoFcSetup(this)
+        assertTrue(setup.runStep("ground", "ados_profile") is AgentResult.Ok)
+        val listed = setup.step("ground", "ados_profile")
+        assertEquals(SetupStepState.WaitingUser, listed.state)
+        assertEquals(listOf("apply"), listed.actions.map { it.id })
+        val rows = listed.args["params"]!!.jsonArray.associate { r -> r.jsonObject["name"]!!.jsonPrimitive.content to r.jsonObject["value"]!!.jsonPrimitive.double }
+        assertEquals(2.0, rows["BATT_FS_LOW_ACT"])
+        assertEquals(1.0, rows["BATT_FS_CRT_ACT"])
+        assertEquals(null, listed.result)
+
+        setup.act("ground", "ados_profile", "apply")
+        val done = setup.step("ground", "ados_profile")
+        assertEquals(SetupStepState.Done, done.state)
+        assertEquals(DemoFcSetup.COPTER_PROFILE.size, done.result!!["applied"]!!.jsonArray.size)
     }
 }

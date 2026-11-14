@@ -93,6 +93,8 @@ import com.altnautica.gcs.feature.cockpit.preflight.FirstArmGate
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightContext
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightResult
 import com.altnautica.gcs.feature.cockpit.preflight.cockpitPreflight
+import com.altnautica.gcs.feature.cockpit.preflight.BatteryFailsafeFix
+import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.feature.cockpit.preflight.sticksAvailable
 import com.altnautica.gcs.feature.cockpit.preflight.storageUsedPct
 import com.altnautica.gcs.feature.cockpit.skillbar.CockpitTargetActions
@@ -395,6 +397,19 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** The flight controller's arm state from a fresh heartbeat; null when unknown. */
     private fun fcArmed(): Boolean? = freshHeartbeatArmed(telemetry.value?.heartbeat?.value, clock.nowMs())
+
+    /** The arm state the checklist's fix buttons go by: a fresh pilot's, else a fresh heartbeat's; null when unknown. */
+    val armedForFix: StateFlow<Boolean?> = tick500.map { freshPilot(pilot.state.value, clock.nowMs())?.armed ?: fcArmed() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
+
+    /** The checklist row's battery failsafe fix shows for [item] at arm state [armed] (see [BatteryFailsafeFix.offered]). */
+    fun batteryFailsafeFixOffered(item: ReadinessItem, armed: Boolean?): Boolean = BatteryFailsafeFix.offered(item, armed, specStrings)
+
+    /** The checklist's battery failsafe fix: the checklist closes and Aircraft setup opens on the failsafe profile step. */
+    fun fixBatteryFailsafe() {
+        setPreflight(false)
+        _events.tryEmit(CockpitEvent.FixBatteryFailsafe)
+    }
 
     /** Next card; past the last one the tour is marked seen. */
     fun nextTourStep() {

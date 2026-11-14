@@ -31,6 +31,9 @@ sealed interface CockpitEvent {
     /** The chip's or the Menu's "Set up aircraft" was pressed. */
     data object SetUpAircraft : CockpitEvent
 
+    /** The checklist's battery failsafe fix was pressed: Aircraft setup on the failsafe profile step. */
+    data object FixBatteryFailsafe : CockpitEvent
+
     /** The Menu's Controls: the controller settings. */
     data object OpenControls : CockpitEvent
 }

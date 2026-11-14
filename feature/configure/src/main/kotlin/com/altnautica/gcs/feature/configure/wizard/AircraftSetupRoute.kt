@@ -47,13 +47,13 @@ import kotlinx.serialization.json.JsonObject
 /**
  * Settings › Aircraft setup for [nodeId]: the `ground` and `air` wizards with each
  * step runnable on its own, the setup report and the parameter snapshots. [wizard]
- * (and [step]) open straight into one wizard or step.
+ * (and [step]) open straight into one wizard or step; [run] runs that step on opening.
  */
 @Composable
-fun AircraftSetupRoute(nodeId: DeviceId, onBack: () -> Unit, wizard: String? = null, step: String? = null) {
+fun AircraftSetupRoute(nodeId: DeviceId, onBack: () -> Unit, wizard: String? = null, step: String? = null, run: Boolean = false) {
     val vm = hiltViewModel<WizardViewModel, WizardViewModel.Factory>(
-        key = "aircraft-setup-${nodeId.value}-$wizard-$step",
-        creationCallback = { it.create(nodeId.value, wizard, step) },
+        key = "aircraft-setup-${nodeId.value}-$wizard-$step-$run",
+        creationCallback = { it.create(nodeId.value, wizard, step, run) },
     )
     val state by vm.state.collectAsStateWithLifecycle()
     CompositionLocalProvider(LocalSetupText provides vm.text) {

@@ -18,9 +18,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
 /** Where the aircraft setup surface is: the wizard list, or one wizard (optionally one step of it). */
@@ -57,29 +59,46 @@ class WizardViewModel internal constructor(
     backends: SetupBackendSource,
     /** Setup strings for the screen. */
     val text: SetupText,
+    /** Run the [initial] step once its first overview loads; the step's own actions still wait for the operator. */
+    runInitialStep: Boolean = false,
 ) : ViewModel() {
     @AssistedInject constructor(
         @Assisted nodeId: String,
         @Assisted("wizard") wizard: String?,
         @Assisted("step") step: String?,
+        @Assisted run: Boolean,
         backends: SetupBackendSource,
         text: SetupText,
-    ) : this(DeviceId(nodeId), wizard?.let { WizardFocus(it, step) }, backends, text)
+    ) : this(DeviceId(nodeId), wizard?.let { WizardFocus(it, step) }, backends, text, run)
 
     @AssistedFactory
     interface Factory {
-        fun create(nodeId: String, @Assisted("wizard") wizard: String?, @Assisted("step") step: String?): WizardViewModel
+        fun create(nodeId: String, @Assisted("wizard") wizard: String?, @Assisted("step") step: String?, run: Boolean): WizardViewModel
     }
 
     private val focus = MutableStateFlow(initial)
     private var session: SetupSession? = null
 
+    /** The step still to run on opening, cleared once sent so a reconnect never runs it again. */
+    private var pendingRun: WizardFocus? = initial?.takeIf { runInitialStep && it.step != null }
+
     /** Null until the backend source first answers; then the session, or a holder of null for a direct link. */
     private val sessions: StateFlow<Resolved?> = backends.observe(nodeId).map { backend ->
         session?.close()
         session = backend?.let { SetupSession(it, viewModelScope).also(SetupSession::open) }
+        session?.let(::runPending)
         Resolved(session)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private fun runPending(s: SetupSession) {
+        val run = pendingRun ?: return
+        viewModelScope.launch {
+            s.state.first { it.overview != null && !it.actionsBlocked }
+            if (pendingRun == null || session !== s) return@launch
+            pendingRun = null
+            s.runStep(run.wizard, run.step!!)
+        }
+    }
 
     private class Resolved(val session: SetupSession?)
 

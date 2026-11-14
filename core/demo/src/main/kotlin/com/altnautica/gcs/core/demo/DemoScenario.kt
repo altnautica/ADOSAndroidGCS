@@ -23,6 +23,12 @@ enum class DemoScenario(
     /** On the ground with the position readiness item failing (block): the chip reads NOT READY. */
     ReadinessBlocked(R.string.demo_scenario_readiness_blocked),
 
+    /** On the ground with the battery failsafe doing nothing: blocks under ADOS control, warns otherwise; the checklist offers its fix. */
+    BatteryFailsafeOff(R.string.demo_scenario_battery_failsafe_off),
+
+    /** On the ground with a battery failsafe RTL that would climb without GNSS: a warning the checklist offers to fix. */
+    BatteryFailsafeConfinedRtl(R.string.demo_scenario_battery_failsafe_confined_rtl),
+
     /** Flying the flight controller's mission, waypoint 4 of 6, with an ETA to the next waypoint. */
     MissionActive(R.string.demo_scenario_mission_active),
 

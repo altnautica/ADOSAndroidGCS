@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FC_PROFILE_OK
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.BATTERY_FAILSAFE_OK
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.FOLLOW_SKILL_ID
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.GOTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.HOLD_CONTROLLER_LOST
@@ -84,6 +85,7 @@ internal fun liveFrame(p: PilotLive, fc: FcLive, t: Long): JsonObject {
         putJsonArray("readiness") {
             add(FC_PROFILE_OK)
             add(readiness("position", true, "block", "Position estimate available"))
+            add(BATTERY_FAILSAFE_OK)
         }
         put("link_loss_in_s", JsonNull)
         put("link_loss_action", LINK_LOSS_ACTION)

@@ -61,7 +61,8 @@ import com.altnautica.gcs.feature.cockpit.skillbar.reasonTextOf
  * drone. Keeps the screen on, honours the max-brightness toggle, takes hardware
  * input while visible, and asks before leaving while the vehicle is armed.
  * [onSetUpAircraft] opens aircraft setup for the flown vehicle (the chip's and the Menu's
- * "Set up aircraft"); [onOpenControls] the controller settings (the Menu's Controls).
+ * "Set up aircraft"); [onFixBatteryFailsafe] opens it running the failsafe profile step (the
+ * checklist's battery failsafe fix); [onOpenControls] the controller settings (the Menu's Controls).
  */
 @Composable
 fun CockpitRoute(
@@ -69,6 +70,7 @@ fun CockpitRoute(
     onExit: () -> Unit,
     onSetUpAircraft: (DeviceId) -> Unit,
     onOpenControls: () -> Unit,
+    onFixBatteryFailsafe: (DeviceId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val vm = hiltViewModel<CockpitViewModel, CockpitViewModel.Factory>(
@@ -144,6 +146,7 @@ fun CockpitRoute(
                 )
                 CockpitEvent.PilotNoAnswer -> snackbar.showSnackbar(vm.specStrings.format("cockpit.pilot.no_answer"))
                 CockpitEvent.SetUpAircraft -> (vm.extensionNodeId.value ?: nodeId).let(onSetUpAircraft)
+                CockpitEvent.FixBatteryFailsafe -> (vm.extensionNodeId.value ?: nodeId).let(onFixBatteryFailsafe)
                 CockpitEvent.OpenControls -> onOpenControls()
             }
         }

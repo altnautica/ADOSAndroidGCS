@@ -226,6 +226,10 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
                 "accel" -> accel(s, action)
                 "outputs" -> outputs(s, action)
                 "autotune" -> autotune(s, action)
+                "ados_profile" -> if (action == APPLY) {
+                    s.done(mapOf("applied" to profileRows(), "absent" to JsonArray(emptyList())))
+                    finished(s)
+                }
                 else -> if (action == "start") timed(s)
             }
         }
@@ -260,9 +264,19 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
                 askTest(s)
             }
             "autotune" -> s.waitUser(primary("start"), danger("abort"))
+            // Lists the failsafe profile; nothing is written until the operator applies it.
+            "ados_profile" -> {
+                s.args["params"] = profileRows()
+                s.waitUser(primary(APPLY))
+            }
             else -> s.waitUser(primary("start"), secondary("skip"))
         }
     }
+
+    /** The copter failsafe profile as `{name, value}` rows, as the vehicle's pilot lists it. */
+    private fun profileRows() = JsonArray(
+        COPTER_PROFILE.map { (name, value) -> JsonObject(mapOf("name" to JsonPrimitive(name), "value" to JsonPrimitive(value))) },
+    )
 
     /** Accel: start, then one "Next pose" per pose as the flight controller asks for it. */
     private fun accel(s: StepRun, action: String) {
@@ -475,6 +489,13 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
     internal companion object {
         const val WIZARD_GROUND = "ground"
         const val WIZARD_AIR = "air"
+        const val APPLY = "apply"
+
+        /** The ArduCopter failsafe profile the `ados_profile` step writes on apply. */
+        val COPTER_PROFILE = listOf(
+            "MAV_GCS_SYSID" to 1.0, "FS_GCS_ENABLE" to 1.0, "FS_GCS_TIMEOUT" to 3.0, "GUID_TIMEOUT" to 1.0,
+            "RC_OVERRIDE_TIME" to 1.0, "BATT_FS_LOW_ACT" to 2.0, "BATT_FS_CRT_ACT" to 1.0,
+        )
 
         /** The engine's ArduCopter step lists. */
         val GROUND_STEPS = listOf(

@@ -267,6 +267,33 @@ class DemoPilotTest {
     }
 
     @Test
+    fun `the battery failsafe item reads set by default and the pin turns it off, blocking only under ADOS control`() {
+        val set = state().readiness("battery_failsafe")
+        assertTrue(set["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("Battery failsafe set", set.str("msg"))
+
+        scenarios.pin(DemoScenario.BatteryFailsafeOff)
+        val off = state().readiness("battery_failsafe")
+        assertFalse(off["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("block", off.str("severity"))
+        assertEquals("Battery failsafe does nothing: set low = RTL, critical = Land", off.str("msg"))
+        assertEquals("not_ready:battery_failsafe", action("arm").str("err"))
+        assertFalse(fc.armed)
+
+        action("control_mode:fc_manual")
+        assertEquals("warn", state().readiness("battery_failsafe").str("severity"))
+    }
+
+    @Test
+    fun `the confined RTL pin warns that the battery failsafe RTL climbs without GNSS`() {
+        scenarios.pin(DemoScenario.BatteryFailsafeConfinedRtl)
+        val item = state().readiness("battery_failsafe")
+        assertFalse(item["ok"]!!.jsonPrimitive.boolean)
+        assertEquals("warn", item.str("severity"))
+        assertEquals("No GNSS: a battery RTL climbs to the RTL altitude, into the roof indoors; set low = Land, critical = Land", item.str("msg"))
+    }
+
+    @Test
     fun `mission pins report waypoint 4 of 6 active with an ETA, paused, and complete`() {
         scenarios.pin(DemoScenario.MissionActive)
         val active = state()
@@ -426,7 +453,7 @@ class DemoPilotTest {
         assertTrue(position["ok"]!!.jsonPrimitive.boolean)
         assertTrue(position.str("msg")!!.contains("EKF origin"))
         val ids = s["readiness"]!!.jsonArray.map { it.jsonObject.str("id") }
-        assertEquals(listOf("fc_profile", "position"), ids)
+        assertEquals(listOf("fc_profile", "position", "battery_failsafe"), ids)
         assertFalse(fc.gnssFix)
     }
 

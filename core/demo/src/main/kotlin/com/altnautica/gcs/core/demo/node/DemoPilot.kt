@@ -269,9 +269,12 @@ internal class DemoPilot(
         return null
     }
 
-    /** `not_ready:<id>` while the readiness pin fails a block item in ADOS control, as the pilot refuses to arm. */
-    private fun notReady(t: Long): String? =
-        if (controlMode == "ados" && pinned(t) == DemoScenario.ReadinessBlocked) "not_ready:$READINESS_BLOCK_ID" else null
+    /** `not_ready:<id>` while a readiness pin fails a block item in ADOS control, as the pilot refuses to arm. */
+    private fun notReady(t: Long): String? = if (controlMode != "ados") null else when (pinned(t)) {
+        DemoScenario.ReadinessBlocked -> "not_ready:$READINESS_BLOCK_ID"
+        DemoScenario.BatteryFailsafeOff -> "not_ready:${DemoPilotWire.BATTERY_FAILSAFE_ID}"
+        else -> null
+    }
 
     /**
      * A surface's "fly here" (`{lat, lon, alt_m}`), offered in ADOS control as the vehicle's
