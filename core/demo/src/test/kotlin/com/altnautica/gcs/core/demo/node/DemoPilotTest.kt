@@ -317,6 +317,29 @@ class DemoPilotTest {
     }
 
     @Test
+    fun `the failsafe pins refuse take control, resume and the launch sequence`() {
+        for (scenario in listOf(DemoScenario.FcFailsafeRtl, DemoScenario.GotoRefusedFailsafe)) {
+            scenarios.pin(scenario)
+            assertEquals(scenario.name, "fc_mode", state().str("owner"))
+            // The flying pin has put the flight controller in the air; the refusals leave it there.
+            val modeBefore = fc.mode
+            val armedBefore = fc.armed
+            for (name in listOf("take_control", "resume", "takeoff", "launch")) {
+                assertEquals("${scenario.name} $name", "failsafe", action(name).str("err"))
+            }
+            assertEquals(scenario.name, modeBefore, fc.mode)
+            assertEquals(scenario.name, armedBefore, fc.armed)
+            assertEquals(scenario.name, "fc_mode", state().str("owner"))
+        }
+        scenarios.pin(null)
+        fc.armed = true
+        fc.altitudeM = 10.0
+        fc.mode = GUIDED
+        assertNull(action("take_control").str("err"))
+        assertEquals("pilot", state().str("owner"))
+    }
+
+    @Test
     fun `actions answer from the pinned flight state, not the flight controller's`() {
         // A disarmed vehicle on the ground pinned to a flying mission.
         scenarios.pin(DemoScenario.MissionActive)

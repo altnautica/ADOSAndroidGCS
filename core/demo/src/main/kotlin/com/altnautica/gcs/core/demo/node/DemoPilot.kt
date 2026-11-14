@@ -52,7 +52,8 @@ import kotlinx.serialization.json.put
  *
  * A [DemoScenario] pinned in [scenarios] lays its fields over this live state (see
  * [DemoPilotPins]); while pinned, the actions answer from the pinned `armed` and `landed`,
- * so the pilot never refuses what its own frame offers. A failsafe pin refuses `pause`.
+ * so the pilot never refuses what its own frame offers. A failsafe pin refuses `pause`,
+ * `take_control`, `resume`, `takeoff` and `launch`; `hand_to_fc` stays the way out.
  * [DemoScenario.PilotStalled] stops the frames and the action answers instead.
  */
 internal class DemoPilot(
@@ -228,6 +229,7 @@ internal class DemoPilot(
                 "pause" -> return pause(t)
                 "take_control" -> {
                     if (!armed(t)) return "disarmed"
+                    if (DemoPilotPins.failsafe(pinned(t))) return "failsafe"
                     holdAsPilot(t)
                     gate = PilotGate()
                 }
@@ -243,7 +245,8 @@ internal class DemoPilot(
                     owner = FC_MODE
                     controlMode = "fc_manual"
                 }
-                "resume", "rth_cancel" -> Unit
+                "resume" -> if (DemoPilotPins.failsafe(pinned(t))) return "failsafe"
+                "rth_cancel" -> Unit
                 else -> return "unknown_action"
             }
         }
@@ -369,6 +372,7 @@ internal class DemoPilot(
     private fun grounded(t: Long): Boolean = pinnedFlag(t, "landed") ?: landed()
 
     private fun startLaunch(after: String, altM: Float, checks: Boolean, t: Long): String? {
+        if (DemoPilotPins.failsafe(pinned(t))) return "failsafe"
         if (armed(t) && !grounded(t)) return "airborne"
         if (!armed(t)) notReady(t)?.let { return it }
         launch = PilotLaunch(after, altM.coerceIn(1f, MAX_ALT_M), if (checks) "checks" else "arm", t)
