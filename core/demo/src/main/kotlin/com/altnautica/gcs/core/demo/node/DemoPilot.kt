@@ -50,11 +50,10 @@ import kotlinx.serialization.json.put
  * - an armed flight controller in any other mode makes the owner `fc_mode` (AUTO:
  *   `mission_fc`), and disarming makes it `idle`.
  *
- * A [DemoScenario] pinned in [scenarios] lays its fields over this live state (see
- * [DemoPilotPins]); while pinned, the actions answer from the pinned `armed` and `landed`,
- * so the pilot never refuses what its own frame offers. A failsafe pin refuses `pause`,
- * `take_control`, `resume`, `takeoff` and `launch`; `hand_to_fc` stays the way out.
- * [DemoScenario.PilotStalled] stops the frames and the action answers instead.
+ * A [DemoScenario] pinned in [scenarios] lays its fields over this live state (see [DemoPilotPins]);
+ * while pinned, the actions answer from the pinned `armed` and `landed`, so the pilot never refuses
+ * what its own frame offers. A failsafe pin refuses `pause`, `take_control`, `resume`, `takeoff` and
+ * `launch` (`hand_to_fc` is the way out). [DemoScenario.PilotStalled] stops the frames and the action answers.
  */
 internal class DemoPilot(
     private val fc: DemoFc,
@@ -187,6 +186,7 @@ internal class DemoPilot(
 
     /** Runs [name]; null on success, otherwise the refusal reason. Armed and landed are the reported (pinned) ones. */
     private fun act(name: String, args: JsonObject?, t: Long): String? {
+        if (name in FAILSAFE_REFUSED && DemoPilotPins.failsafe(pinned(t))) return "failsafe"
         when {
             name.startsWith("profile:") -> profile = name.removePrefix("profile:").takeIf { it in PROFILES } ?: return "bad_value"
             name.startsWith("control_mode:") -> controlMode = name.removePrefix("control_mode:").takeIf { it in CONTROL_MODES } ?: return "bad_value"
@@ -229,7 +229,6 @@ internal class DemoPilot(
                 "pause" -> return pause(t)
                 "take_control" -> {
                     if (!armed(t)) return "disarmed"
-                    if (DemoPilotPins.failsafe(pinned(t))) return "failsafe"
                     holdAsPilot(t)
                     gate = PilotGate()
                 }
@@ -245,8 +244,7 @@ internal class DemoPilot(
                     owner = FC_MODE
                     controlMode = "fc_manual"
                 }
-                "resume" -> if (DemoPilotPins.failsafe(pinned(t))) return "failsafe"
-                "rth_cancel" -> Unit
+                "resume", "rth_cancel" -> Unit
                 else -> return "unknown_action"
             }
         }
@@ -372,7 +370,6 @@ internal class DemoPilot(
     private fun grounded(t: Long): Boolean = pinnedFlag(t, "landed") ?: landed()
 
     private fun startLaunch(after: String, altM: Float, checks: Boolean, t: Long): String? {
-        if (DemoPilotPins.failsafe(pinned(t))) return "failsafe"
         if (armed(t) && !grounded(t)) return "airborne"
         if (!armed(t)) notReady(t)?.let { return it }
         launch = PilotLaunch(after, altM.coerceIn(1f, MAX_ALT_M), if (checks) "checks" else "arm", t)

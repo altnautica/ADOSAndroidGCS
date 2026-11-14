@@ -36,6 +36,9 @@ internal val PROFILES = setOf("cine", "normal", "sport")
 internal val CONTROL_MODES = setOf("ados", "fc_manual", "elrs")
 internal val AVOID_MODES = setOf("brake", "bypass", "off")
 
+/** Actions refused while the flight controller flies its own failsafe (pause and goto check it themselves). */
+internal val FAILSAFE_REFUSED = setOf("take_control", "resume", "takeoff", "launch")
+
 /** One `{kind:"pilot", ts_ms, data}` frame. */
 internal fun frameOf(t: Long, data: JsonObject): String = buildJsonObject {
     put("kind", "pilot")
