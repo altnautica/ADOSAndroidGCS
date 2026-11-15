@@ -50,6 +50,9 @@ enum class DemoScenario(
     /** On the ground in a confined place: the last legs run through cells not seen yet. */
     ConfinedRouteUnverified(R.string.demo_scenario_confined_route_unverified),
 
+    /** On the ground in a confined place: waypoint 5 has no position, so the check cannot place it and a launch is refused. */
+    ConfinedRouteUnchecked(R.string.demo_scenario_confined_route_unchecked),
+
     /** On the ground in a confined place: leg 3→4 passes too close to a wall, so a launch is refused. */
     ConfinedRouteInfeasible(R.string.demo_scenario_confined_route_infeasible),
 

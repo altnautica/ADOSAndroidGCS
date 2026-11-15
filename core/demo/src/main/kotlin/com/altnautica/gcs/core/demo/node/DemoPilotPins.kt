@@ -105,6 +105,8 @@ internal class DemoPilotPins(
             DemoScenario.ConfinedRouteFeasible -> confinedGround(routeCheck("feasible", sigmaM = 0.02, pinch = CLEAR_PINCH))
             // Unknown pose σ: the check is at best unverified, and legs 5 and 6 are not seen yet.
             DemoScenario.ConfinedRouteUnverified -> confinedGround(routeCheck("unverified", sigmaM = null, pinch = CLEAR_PINCH, unverified = listOf(5, 6)))
+            // Waypoint 5 has no position: the check cannot place it, so the route stays unverified.
+            DemoScenario.ConfinedRouteUnchecked -> confinedGround(routeCheck("unverified", sigmaM = 0.02, pinch = CLEAR_PINCH, unchecked = listOf(5)))
             DemoScenario.ConfinedRouteInfeasible -> confinedGround(routeCheck("infeasible", sigmaM = 0.02, pinch = TIGHT_PINCH))
             DemoScenario.ConfinedNearLimit -> {
                 flying(MISSION_FC, AUTO)
@@ -125,6 +127,8 @@ internal class DemoPilotPins(
                 flying(PILOT, GUIDED)
                 put("low_battery_action", "land")
                 put("rth_countdown_s", round1((LOW_BATTERY_MS - sinceMs % LOW_BATTERY_MS) / 1000.0))
+                // A GNSS-free copter lands: the countdown banner names the landing.
+                banner("pilot.banner.low_battery_land_in", "pct" to LOW_BATTERY_PCT, "need_pct" to LOW_BATTERY_NEED_PCT, "in_s" to "${LOW_BATTERY_MS / 1000}")
             }
             DemoScenario.LowBatteryLand -> lowBatteryFired("land", PILOT, LAND, "pilot.banner.low_battery_land", LOW_BATTERY_LAND_TEXT, sinceMs)
             // A multirotor's low-battery return is SmartRTL, the flight controller flying the recorded path.
@@ -203,7 +207,7 @@ internal class DemoPilotPins(
     }
 
     /** A route check [state] with the demo airframe's margin; [pinch] is `(from, to, clearance)`. */
-    private fun routeCheck(state: String, sigmaM: Double?, pinch: Triple<Int, Int, Double>, unverified: List<Int> = emptyList()) = buildJsonObject {
+    private fun routeCheck(state: String, sigmaM: Double?, pinch: Triple<Int, Int, Double>, unverified: List<Int> = emptyList(), unchecked: List<Int> = emptyList()) = buildJsonObject {
         put("state", state)
         put("required_m", REQUIRED_M)
         put("margin_m", MARGIN_M)
@@ -220,6 +224,7 @@ internal class DemoPilotPins(
             put("required_m", REQUIRED_M)
         }
         putJsonArray("unverified_legs") { unverified.forEach { add(it) } }
+        if (unchecked.isNotEmpty()) putJsonArray("unchecked") { unchecked.forEach { add(it) } }
     }
 
     /** Offers `goto` from the state each refusal [code] stands for. */
@@ -340,6 +345,7 @@ internal class DemoPilotPins(
         private const val LINK_LOSS_MS = 10_000L
         private const val LOW_BATTERY_MS = 10_000L
         private const val LOW_BATTERY_PCT = "18"
+        private const val LOW_BATTERY_NEED_PCT = "20"
         private const val MISSION_SEQ = 4
         private const val MISSION_TOTAL = 6
 

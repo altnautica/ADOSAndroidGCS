@@ -146,8 +146,18 @@ class DemoPilotTest {
         scenarios.pin(DemoScenario.ConfinedNearLimit)
         assertEquals(SpeedCap("confined-near", 0.5f), PilotWire.parseState(state(), 0L)!!.speedCap)
         scenarios.pin(DemoScenario.ConfinedRouteInfeasible)
-        assertEquals(RoutePinch(3, 4, listOf(41.25f, -17.5f, -2f), 0.52f, 0.577f), PilotWire.parseState(state(), 0L)!!.routeCheck!!.pinch)
+        assertEquals(RoutePinch(3, 4, listOf(41.25, -17.5, -2.0), 0.52, 0.577), PilotWire.parseState(state(), 0L)!!.routeCheck!!.pinch)
         assertEquals("route_infeasible", action("launch", """{"after":"mission"}""").str("err"))
+    }
+
+    @Test
+    fun `the unchecked-route pin names the waypoint the check cannot place and refuses a mission launch`() {
+        scenarios.pin(DemoScenario.ConfinedRouteUnchecked)
+        val rc = PilotWire.parseState(state(), 0L)!!.routeCheck!!
+        assertEquals(RouteCheckState.Unverified, rc.state)
+        assertEquals(listOf(5), rc.unchecked)
+        assertFalse(rc.truncated)
+        assertEquals("route_unchecked", action("launch", """{"after":"mission"}""").str("err"))
     }
 
     @Test
@@ -357,13 +367,16 @@ class DemoPilotTest {
     }
 
     @Test
-    fun `the live frame reports no low-battery action and the countdown pin counts down to a landing`() {
+    fun `the live frame reports no low-battery action and the countdown pin counts down to a landing under its banner`() {
         assertTrue(state()["low_battery_action"] is JsonNull)
         scenarios.pin(DemoScenario.LowBatteryCountdownLand)
         val s = state()
         assertEquals("land", s.str("low_battery_action"))
         assertEquals(10.0, s["rth_countdown_s"]!!.jsonPrimitive.double, 1e-9)
         assertEquals(false, s["landed"]!!.jsonPrimitive.boolean)
+        // The GNSS-free countdown names the landing, never a return.
+        assertEquals("pilot.banner.low_battery_land_in", s.obj("banner").str("text_key"))
+        assertEquals(mapOf("pct" to "18", "need_pct" to "20", "in_s" to "10"), PilotWire.parseState(s, 0L)!!.banner!!.args)
         t += 4_000
         assertEquals(6.0, state()["rth_countdown_s"]!!.jsonPrimitive.double, 1e-9)
     }

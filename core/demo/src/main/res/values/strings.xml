@@ -11,6 +11,7 @@
     <string name="demo_scenario_setup_aborted">Setup flight aborted</string>
     <string name="demo_scenario_confined_route_feasible">Confined: route clear</string>
     <string name="demo_scenario_confined_route_unverified">Confined: route not seen yet</string>
+    <string name="demo_scenario_confined_route_unchecked">Confined: waypoint without a position</string>
     <string name="demo_scenario_confined_route_infeasible">Confined: route too tight</string>
     <string name="demo_scenario_confined_near_limit">Confined: near the clearance limit</string>
     <string name="demo_scenario_pilot_stalled">Pilot stops responding</string>

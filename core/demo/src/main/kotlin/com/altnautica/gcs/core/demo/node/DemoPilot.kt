@@ -219,6 +219,7 @@ internal class DemoPilot(
                     if (after !in AFTERS) return "bad_after"
                     // A confined mission whose route check is infeasible is never launched.
                     if (after == "mission" && pinned(t) == DemoScenario.ConfinedRouteInfeasible) return "route_infeasible"
+                    if (after == "mission" && pinned(t) == DemoScenario.ConfinedRouteUnchecked) return "route_unchecked"
                     return startLaunch(after, altArg(args) ?: LAUNCH_ALT_M, checks = true, t)
                 }
                 "land" -> {
