@@ -372,22 +372,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** The first-connect controller tour card on screen (0..[TOUR_STEPS]-1), or null. */
     val tourStep: StateFlow<Int?> = overlays.tour.asStateFlow()
 
-    init {
-        // The first pad connected anywhere opens the three-card tour once, here as in Settings,
-        // but only on the ground: in the air it waits for the landing, and a takeoff puts an
-        // open tour away unseen, so the pad never leaves flight control for it.
-        overlays.onTourClosed = ::finishTour
-        viewModelScope.launch {
-            combine(router.gamepadConnected, controls.tourSeen, tick500) { pad, seen, _ -> (pad && !seen) to airborne() }
-                .distinctUntilChanged()
-                .collect { (show, air) ->
-                    when {
-                        air -> overlays.tour.value = null
-                        show && overlays.tour.value == null -> overlays.tour.value = 0
-                    }
-                }
-        }
-    }
+    private val tour = CockpitTour(viewModelScope, router, controls, tick500, overlays, ::airborne)
 
     /**
      * Possibly in the air: from the pilot while its frame is fresh, else a fresh heartbeat.
@@ -413,15 +398,9 @@ class CockpitViewModel @AssistedInject constructor(
     }
 
     /** Next card; past the last one the tour is marked seen. */
-    fun nextTourStep() {
-        val step = overlays.tour.value ?: return
-        if (step + 1 < TOUR_STEPS) overlays.tour.value = step + 1 else finishTour()
-    }
+    fun nextTourStep() = tour.nextTourStep()
 
-    fun finishTour() {
-        overlays.tour.value = null
-        viewModelScope.launch { controls.setTourSeen(true) }
-    }
+    fun finishTour() = tour.finishTour()
 
     private val session = sessionFactory.create(
         vehicle,

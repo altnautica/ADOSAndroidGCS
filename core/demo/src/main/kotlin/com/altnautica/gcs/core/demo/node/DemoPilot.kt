@@ -9,14 +9,12 @@ import com.altnautica.gcs.core.demo.node.DemoPilotWire.FC_MODE
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.GOTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.GUIDED
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.IDLE
-import com.altnautica.gcs.core.demo.node.DemoPilotWire.LAND
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.LANDED_ALT_M
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.LOITER
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.MISSION_FC
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.PILOT
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.POSHOLD
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.READINESS_BLOCK_ID
-import com.altnautica.gcs.core.demo.node.DemoPilotWire.RTL
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.number
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.text
 import com.altnautica.gcs.core.mavlink.enums.MavCmd
@@ -85,6 +83,8 @@ internal class DemoPilot(
 
     /** When a surface's `goto` was accepted; the owner shows `goto` for [GOTO_SHOWN_MS]. */
     private var gotoAtMs: Long? = null
+
+    private val pinFlight = DemoPinFlight(fc, ::setMode)
 
     private val stalled: Boolean get() = scenarios.pinned.value == DemoScenario.PilotStalled
 
@@ -321,55 +321,9 @@ internal class DemoPilot(
             pinnedScenario = s
             pinnedAtMs = t
             gotoAtMs = null
-            followPin(s)
+            if (pinFlight.followPin(s)) launch = null
         }
         return s
-    }
-
-    /** True while the flight controller is in the air because a flying pin put it there. */
-    private var pinLifted = false
-
-    /** The mode the flying pin puts the flight controller in, and whether it waits for the climb to end. */
-    private var pinMode: Int? = null
-    private var pinModePending = false
-
-    /**
-     * The flight controller follows the pin: a flying pin takes it into the air and then into
-     * the pin's flight mode, so its own telemetry agrees with the pilot frame; it lands again
-     * when the pin is lifted for one that is not flying. [DemoScenario.NoGnss] drops its fix.
-     */
-    private fun followPin(scenario: DemoScenario?) {
-        val fix = scenario != DemoScenario.NoGnss
-        if (fc.gnssFix != fix) fc.gnssFix = fix
-        pinModePending = false
-        if (DemoPilotPins.airborne(scenario)) {
-            // An RTL would bring the flight controller home and land it, ending the pin.
-            pinMode = DemoPilotPins.fcMode(scenario)?.takeIf { it != RTL }
-            if (fc.armed && !landed()) {
-                // Still coming down from an earlier pin: this pin's flight lands again when lifted.
-                if (fc.mode == LAND) pinLifted = true
-                holdPinMode()
-                return
-            }
-            launch = null
-            setMode(GUIDED)
-            fc.command(MavCmd.MAV_CMD_COMPONENT_ARM_DISARM, 1f)
-            fc.command(MavCmd.MAV_CMD_NAV_TAKEOFF, p7 = DemoPilotPins.PIN_HEIGHT_M.toFloat())
-            pinLifted = true
-            pinModePending = true
-        } else {
-            pinMode = null
-            if (pinLifted) {
-                pinLifted = false
-                if (fc.armed) fc.command(MavCmd.MAV_CMD_NAV_LAND)
-            }
-        }
-    }
-
-    /** Puts the airborne flight controller in the pin's mode; one still landing for an earlier pin holds in GUIDED. */
-    private fun holdPinMode() {
-        val mode = pinMode ?: if (fc.mode == LAND) GUIDED else return
-        if (fc.mode != mode) setMode(mode)
     }
 
     private fun pins() = DemoPilotPins(controlMode, profile, gotoAccepted = gotoAtMs != null)
@@ -425,11 +379,11 @@ internal class DemoPilot(
         if (guidedSentMs?.let { t - it >= MODE_SETTLE_MS } == true) guidedSentMs = null
         if (gotoAtMs?.let { t - it > GOTO_SHOWN_MS } == true) {
             gotoAtMs = null
-            if (!pinModePending && pinMode != null) holdPinMode() // back to the mode a pinned frame reports
+            if (!pinFlight.pinModePending && pinFlight.pinMode != null) pinFlight.holdPinMode() // back to the mode a pinned frame reports
         }
-        if (pinModePending && armed && fc.altitudeM >= ARRIVED_FRACTION * DemoPilotPins.PIN_HEIGHT_M) {
-            pinModePending = false
-            holdPinMode()
+        if (pinFlight.pinModePending && armed && fc.altitudeM >= ARRIVED_FRACTION * DemoPilotPins.PIN_HEIGHT_M) {
+            pinFlight.pinModePending = false
+            pinFlight.holdPinMode()
         }
         owner = when {
             !armed -> IDLE

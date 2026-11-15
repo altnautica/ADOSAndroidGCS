@@ -10,7 +10,6 @@ import com.altnautica.gcs.core.agent.fcsetup.SetupConfirm
 import com.altnautica.gcs.core.agent.fcsetup.SetupReport
 import com.altnautica.gcs.core.agent.fcsetup.SetupRunning
 import com.altnautica.gcs.core.agent.fcsetup.SetupSnapshot
-import com.altnautica.gcs.core.agent.fcsetup.SetupStep
 import com.altnautica.gcs.core.agent.fcsetup.SetupStepState
 import com.altnautica.gcs.core.agent.fcsetup.SetupWizard
 import com.altnautica.gcs.core.agent.fcsetup.SetupWizardState
@@ -19,7 +18,6 @@ import com.altnautica.gcs.core.agent.fcsetup.WizardReply
 import com.altnautica.gcs.core.agent.http.AgentError
 import com.altnautica.gcs.core.agent.http.AgentResult
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -41,85 +39,6 @@ import kotlinx.serialization.json.JsonPrimitive
  * once, and running steps tick at the engine's 5 Hz.
  */
 class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
-
-    private class StepRun(val wizard: String, val id: String) {
-        var state = SetupStepState.Pending
-        var progress: Float? = null
-        var image: String? = null
-        var variant: String? = null
-
-        /** Interpolation values for the step's strings (`{n}` in the motor questions). */
-        val args = LinkedHashMap<String, JsonElement>()
-        val live = LinkedHashMap<String, JsonElement>()
-        var actions: List<SetupAction> = emptyList()
-        var blockers: List<String> = emptyList()
-        var result: JsonObject? = null
-
-        // Step-specific progress.
-        var pose = 0
-        var motor = 0
-        var asking: String? = null
-        val wrongPosition = ArrayList<Int>()
-        val swapWires = ArrayList<Int>()
-        var ticker: Job? = null
-
-        fun view() = SetupStep(
-            wizard = wizard,
-            step = id,
-            titleKey = "setup.$id.title",
-            bodyKey = variant?.let { "setup.$id.body.$it" } ?: "setup.$id.body",
-            args = JsonObject(LinkedHashMap(args)),
-            image = image,
-            state = state,
-            progress = progress,
-            live = JsonObject(LinkedHashMap(live)),
-            actions = actions,
-            blockers = blockers,
-            result = result,
-        )
-
-        fun reset() {
-            ticker?.cancel()
-            state = SetupStepState.Pending
-            progress = null
-            image = null
-            variant = null
-            args.clear()
-            live.clear()
-            actions = emptyList()
-            blockers = emptyList()
-            result = null
-            pose = 0
-            motor = 0
-            asking = null
-            wrongPosition.clear()
-            swapWires.clear()
-        }
-
-        fun waitUser(vararg a: SetupAction) {
-            state = SetupStepState.WaitingUser
-            actions = a.toList()
-        }
-
-        fun running() {
-            state = SetupStepState.Running
-            actions = emptyList()
-        }
-
-        fun done(r: Map<String, JsonElement>) {
-            state = SetupStepState.Done
-            progress = 1f
-            actions = emptyList()
-            blockers = emptyList()
-            result = JsonObject(r)
-        }
-
-        fun fail(blocker: String) {
-            state = SetupStepState.Failed
-            actions = listOf(primary("retry"))
-            blockers = listOf(blocker)
-        }
-    }
 
     private class WizardRun(val id: String, steps: List<String>) {
         var state = SetupWizardState.NotStarted
@@ -556,9 +475,5 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
             ),
             "battery" to mapOf("batt_volt_mult" to JsonPrimitive(10.1)),
         )
-
-        private fun primary(id: String) = SetupAction(id, "setup.action.$id", SetupActionStyle.Primary, SetupConfirm.None)
-        private fun secondary(id: String) = SetupAction(id, "setup.action.$id", SetupActionStyle.Secondary, SetupConfirm.None)
-        private fun danger(id: String) = SetupAction(id, "setup.action.$id", SetupActionStyle.Danger, SetupConfirm.Hold)
     }
 }
