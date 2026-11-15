@@ -5,6 +5,23 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Route check details.** A route check that could not place a waypoint
+  names it ("Route not fully checked: no position for waypoint 5"), and a
+  mission longer than the check holds says so; a too-tight leg still reads
+  first. Clearances keep the wire's precision, so 0.525 m reads 0.53 as on
+  the web. The confined margin is the propeller tip radius plus 0.1 m,
+  whatever the open margin is set to.
+- **Place class from the vehicle.** "Load from drone" and Download keep the
+  class the pilot flies (or leave it unset while unknown), so Start never
+  switches a confined pilot to Open. Start refuses with the pilot's own
+  reason when it is absent or not answering, reads the class back until a
+  newer frame reports it, and needs the pilot's route check of a confined
+  mission before it arms.
+- **Stall overlay.** Return and Land on the stall overlay run the Return and
+  Land actions, so they reach the flight controller when the pilot does not
+  answer. A SmartRTL the flight controller does not answer lands in place.
+- **Low-battery landing countdown.** The GNSS-free countdown banner reads
+  "Battery reserve 18% (need 20%) · Landing in 10 s".
 - **Confined places.** The Launch sheet and the planner offer a place class,
   Open or Confined space, with a line explaining the margin each flies. The
   Launch sheet sends the pick to the pilot (`place_class`) before the launch;
