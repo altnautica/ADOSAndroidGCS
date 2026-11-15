@@ -18,6 +18,9 @@ app's `versionName`.
   or UNVERIFIED, read from a fresh pilot frame only. The reason reads in words
   from the shared spec, a lost heading or IMU feed included. Fly here is not
   offered then, through the pilot or as a reposition in GUIDED.
+- **Lidar map heading.** The shared sensor-health spec carries the drone's
+  new readiness item "Lidar map heading not confirmed". The preflight sheet
+  and status pill show it as the drone sends it.
 
 ## [0.6.3] - 2026-11-14
 
