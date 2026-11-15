@@ -50,6 +50,15 @@ enum class DemoScenario(
     /** The control link timed out: `link_loss_in_s` counts down to a return home. */
     LinkLoss(R.string.demo_scenario_link_loss),
 
+    /** The battery is low and the pilot may fly without GNSS: `rth_countdown_s` counts down to a landing. */
+    LowBatteryCountdownLand(R.string.demo_scenario_low_battery_countdown_land),
+
+    /** The low-battery countdown ran out: the pilot lands where it is and announces it. */
+    LowBatteryLand(R.string.demo_scenario_low_battery_land),
+
+    /** The low-battery countdown ran out: the flight controller flies SmartRTL home and the pilot announces it. */
+    LowBatteryRth(R.string.demo_scenario_low_battery_rth),
+
     /** No GNSS fix: the demo flight controller loses its fix and position comes from the EKF origin only. */
     NoGnss(R.string.demo_scenario_no_gnss),
 

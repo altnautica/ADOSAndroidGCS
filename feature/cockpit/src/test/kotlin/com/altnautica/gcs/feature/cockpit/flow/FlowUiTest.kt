@@ -43,6 +43,28 @@ class FlowUiTest {
     }
 
     @Test
+    fun `the low-battery countdown names a landing when the pilot will land, a return home otherwise`() {
+        val strings = testSpec.setupStrings
+        assertEquals("Low battery: landing in 5 s", lowBatteryLine(strings, 4.2f, "land"))
+        assertEquals("Low battery: returning home in 5 s", lowBatteryLine(strings, 4.2f, "rth"))
+        assertEquals("Low battery: returning home in 5 s", lowBatteryLine(strings, 4.2f, null))
+        val pilot = pilotState(PilotOwner.Pilot, armed = true, landed = false).copy(rthCountdownS = 4.2f, lowBatteryAction = "land")
+        assertEquals("land", FlowUi.of(pilot, "android", streaming = false).lowBatteryAction)
+    }
+
+    @Test
+    fun `any pilot banner reads by its text key, the low-battery ones included`() {
+        val land = PilotBanner("pilot.banner.low_battery_land", mapOf("pct" to "18"), null)
+        assertEquals("Low battery: landing (no GNSS return)", bannerLine(testSpec.setupStrings, land))
+        val home = PilotBanner("pilot.banner.low_battery_returning", mapOf("pct" to "18"), null)
+        assertEquals("Low battery: returning home", bannerLine(testSpec.setupStrings, home))
+        val smart = PilotBanner("pilot.banner.low_battery_smart_rtl", mapOf("pct" to "18"), null)
+        assertEquals("Low battery: returning home along the flown path (SmartRTL)", bannerLine(testSpec.setupStrings, smart))
+        val noPath = PilotBanner("pilot.banner.low_battery_land_no_srtl", mapOf("pct" to "18"), null)
+        assertEquals("Low battery: no SmartRTL path, landing", bannerLine(testSpec.setupStrings, noPath))
+    }
+
+    @Test
     fun `pilot frames that change nothing shown leave the flow state equal`() {
         val pilot = pilotState(PilotOwner.Pilot)
         // A countdown within one shown second, and a gate filling: equal state, no redraw.

@@ -13,13 +13,23 @@ data class PillAlertInput(val id: String, val level: PillAlertLevel, val title: 
 /** One FC status text at WARNING or worse: MAVLink [severity] (0 emergency … 7 debug). */
 data class PillFcStatus(val severity: Int, val text: String)
 
-/** The FC flying a failsafe RTL or land of its own (`fc_failsafe`), and why (`failsafe_cause`). */
-data class PillFailsafe(val active: Boolean, val cause: String?) {
+/**
+ * The FC flying a failsafe RTL or land of its own (`fc_failsafe`), and why (`failsafe_cause`);
+ * and the pilot's own [lowBatteryAction] (`low_battery_action`) once its countdown has run out.
+ */
+data class PillFailsafe(val active: Boolean, val cause: String?, val lowBatteryAction: String? = null) {
     companion object {
         val None = PillFailsafe(false, null)
 
-        /** The pill's failsafe inputs from a pilot state (`pilotFailsafe`). */
-        fun of(p: PilotState?): PillFailsafe = PillFailsafe(p?.fcFailsafe == true, p?.failsafeCause)
+        /**
+         * The pill's failsafe inputs from a pilot state (`pilotFailsafe`). The low-battery
+         * action waits while its countdown runs: the countdown has its own banner.
+         */
+        fun of(p: PilotState?): PillFailsafe = PillFailsafe(
+            p?.fcFailsafe == true,
+            p?.failsafeCause,
+            p?.takeIf { it.rthCountdownS == null }?.lowBatteryAction,
+        )
     }
 }
 
@@ -99,9 +109,11 @@ class StatusPill(
      * a warning; each [preflightFailing] item (`id` to its label, passed only on the ground) a
      * warning, none while [armUnknown] (the arm state is unknown, so the drone may be airborne).
      * A degraded [navSource] (warn or crit tone) is one `nav_source_degraded` item of that severity.
-     * An active [failsafe] from a fresh pilot state is one critical `failsafe` item, and a
-     * running [linkLoss] countdown from one a critical `link_loss` item worded as the
-     * `pilot.banner.link_loss` banner, so the pill never reads all well while the banner counts.
+     * An active [failsafe] from a fresh pilot state is one critical `failsafe` item, its
+     * low-battery action one critical `low_battery` item ([lowBatteryText]) that the pilot's
+     * own STATUSTEXT of the same words folds into, and a running [linkLoss] countdown from one
+     * a critical `link_loss` item worded as the `pilot.banner.link_loss` banner, so the pill
+     * never reads all well while the banner counts.
      * A fresh pilot state's [setupAbort] (a setup-strings key, `setup.blocker.aborted_<reason>`)
      * is one warning `setup_abort` item worded by that key; an unknown key reads as itself.
      *
@@ -139,11 +151,13 @@ class StatusPill(
             out += PillAlert("agent_unreachable", PillSource.Link, PillSeverity.Critical, text.text("alert.agent_unreachable"))
         }
         val pilotStale = pilotRule && (pilotAgeMs == null || pilotAgeMs >= staleAfterMs)
+        val lowBattery = if (pilotStale) null else lowBatteryText(failsafe.lowBatteryAction)
         if (pilotStale) {
             out += PillAlert("pilot_not_answering", PillSource.Pilot, PillSeverity.Warning, text.text("alert.pilot_not_answering"))
         } else {
             if (failsafe.active) out += PillAlert("failsafe", PillSource.Pilot, PillSeverity.Critical, failsafeText(failsafe.cause))
             if (!setupAbort.isNullOrEmpty()) out += PillAlert("setup_abort", PillSource.Pilot, PillSeverity.Warning, text.text(setupAbort))
+            if (lowBattery != null) out += PillAlert("low_battery", PillSource.Battery, PillSeverity.Critical, lowBattery)
             if (linkLoss != null) out += PillAlert("link_loss", PillSource.Pilot, PillSeverity.Critical, linkLossText(linkLoss))
         }
         for (r in if (pilotStale) emptyList() else readiness) {
@@ -172,8 +186,10 @@ class StatusPill(
             val t = prearm.last().replace(PREARM, "")
             out += PillAlert("fc:$t", PillSource.FcPrearm, PillSeverity.Warning, t)
         }
-        // The FC repeats a warning while its condition lasts: one alert per text, at its worst severity.
+        // The FC repeats a warning while its condition lasts: one alert per text, at its worst
+        // severity. The pilot's own low-battery announcement folds into its `low_battery` item.
         val fcAt = HashMap<String, Int>()
+        if (lowBattery != null) fcAt[lowBattery] = out.indexOfFirst { it.id == "low_battery" }
         for (s in if (pilotStale) linkFcStatus else fcStatus + linkFcStatus) {
             if (PREARM.containsMatchIn(s.text)) continue
             val sev = if (s.severity <= 2) PillSeverity.Critical else PillSeverity.Warning
@@ -201,6 +217,16 @@ class StatusPill(
         val c = cause?.ifEmpty { null } ?: "fc"
         val key = "pilot.banner.cause.$c"
         return text.text("alert.failsafe", mapOf("cause" to if (text.has(key)) text.text(key) else c))
+    }
+
+    /**
+     * The low-battery item's words for [action] (`land`, `rth`), the pilot's own STATUSTEXT
+     * when it fired; null for none or an unknown action.
+     */
+    fun lowBatteryText(action: String?): String? = when (action) {
+        "land" -> text.text("alert.low_battery_land")
+        "rth" -> text.text("alert.low_battery_rth")
+        else -> null
     }
 
     /** `Link lost: <action> in <s> s`, the seconds rounded up as the banner shows them. */

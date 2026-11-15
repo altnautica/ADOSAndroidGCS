@@ -11,11 +11,15 @@ import com.altnautica.gcs.core.demo.node.DemoPilotWire.GOTO
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.GUIDED
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.HOLD_CONTROLLER_LOST
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.IDLE
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.LAND
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.LOW_BATTERY_LAND_TEXT
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.LOW_BATTERY_RTH_TEXT
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.LOITER
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.MISSION_FC
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.PILOT
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.READINESS_BLOCK_ID
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.RTL
+import com.altnautica.gcs.core.demo.node.DemoPilotWire.SMART_RTL
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.SKILL
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.TUNING
 import com.altnautica.gcs.core.demo.node.DemoPilotWire.modeName
@@ -102,6 +106,15 @@ internal class DemoPilotPins(
                 flying(PILOT, GUIDED)
                 put("link_loss_in_s", round1((LINK_LOSS_MS - sinceMs % LINK_LOSS_MS) / 1000.0))
             }
+            DemoScenario.LowBatteryCountdownLand -> {
+                flying(PILOT, GUIDED)
+                put("low_battery_action", "land")
+                put("rth_countdown_s", round1((LOW_BATTERY_MS - sinceMs % LOW_BATTERY_MS) / 1000.0))
+            }
+            DemoScenario.LowBatteryLand -> lowBatteryFired("land", PILOT, LAND, "pilot.banner.low_battery_land", LOW_BATTERY_LAND_TEXT, sinceMs)
+            // A multirotor's low-battery return is SmartRTL, the flight controller flying the recorded path.
+            DemoScenario.LowBatteryRth ->
+                lowBatteryFired("rth", FC_MODE, SMART_RTL, "pilot.banner.low_battery_smart_rtl", LOW_BATTERY_RTH_TEXT, sinceMs)
             // The pilot's own readiness ids; the lost fix itself shows on the flight controller's telemetry.
             DemoScenario.NoGnss -> putJsonArray("readiness") {
                 add(FC_PROFILE_OK)
@@ -190,6 +203,23 @@ internal class DemoPilotPins(
         banner("pilot.banner.fc_mode_change", "mode" to modeName(RTL), "cause" to "fc")
     }
 
+    /**
+     * The pilot's low-battery countdown ran out: [owner] flies [action] in flight mode [mode],
+     * the pilot shows [bannerKey] and announces [text] as a CRITICAL STATUSTEXT.
+     */
+    private fun JsonObjectBuilder.lowBatteryFired(action: String, owner: String, mode: Int, bannerKey: String, text: String, sinceMs: Long) {
+        flying(owner, mode)
+        put("low_battery_action", action)
+        banner(bannerKey, "pct" to LOW_BATTERY_PCT)
+        putJsonArray("statustext") {
+            add(buildJsonObject {
+                put("severity", SEVERITY_CRITICAL)
+                put("text", text)
+                put("age_ms", sinceMs % STATUS_TEXT_WRAP_MS)
+            })
+        }
+    }
+
     private fun JsonObjectBuilder.flying(owner: String, mode: Int, label: String = ownerLabel(owner, profile)) {
         put("owner", owner)
         put("owner_label", label)
@@ -250,6 +280,8 @@ internal class DemoPilotPins(
         /** The setup-strings key the setup-abort pin reports. */
         const val SETUP_ABORT_KEY = "setup.blocker.aborted_altitude_floor"
         private const val LINK_LOSS_MS = 10_000L
+        private const val LOW_BATTERY_MS = 10_000L
+        private const val LOW_BATTERY_PCT = "18"
         private const val MISSION_SEQ = 4
         private const val MISSION_TOTAL = 6
         private const val DEMO_MISSION_ID = 1
@@ -258,6 +290,9 @@ internal class DemoPilotPins(
 
         /** MAV_SEVERITY_WARNING. */
         private const val SEVERITY_WARNING = 4
+
+        /** MAV_SEVERITY_CRITICAL, the pilot's low-battery announcement. */
+        private const val SEVERITY_CRITICAL = 2
         // Every text stays younger than the cockpit's 10 s status-text hold, so all nine stay listed.
         private const val STATUS_TEXT_SPACING_MS = 500L
         private const val STATUS_TEXT_WRAP_MS = 1_000L

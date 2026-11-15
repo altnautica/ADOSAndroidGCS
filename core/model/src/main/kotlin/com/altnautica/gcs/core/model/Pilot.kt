@@ -201,6 +201,11 @@ data class PilotState(
      * (`setup.blocker.aborted_<reason>`), or null.
      */
     val setupAbort: String? = null,
+    /**
+     * The pilot's own low-battery action, `land` (it may fly without GNSS) or `rth`, while its
+     * countdown runs ([rthCountdownS]) and after it fired; null while none.
+     */
+    val lowBatteryAction: String? = null,
     /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`), or null. */
     val speedCap: SpeedCap? = null,
     /** The pilot does not trust the horizontal position (an older agent sends none), or null. */

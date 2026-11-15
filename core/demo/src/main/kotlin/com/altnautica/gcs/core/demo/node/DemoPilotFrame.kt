@@ -92,6 +92,7 @@ internal fun liveFrame(p: PilotLive, fc: FcLive, t: Long): JsonObject {
         put("fc_failsafe", false)
         put("failsafe_cause", JsonNull)
         put("setup_abort", JsonNull)
+        put("low_battery_action", JsonNull)
         putJsonObject("mission") {
             put("state", "none")
             put("seq", 0)

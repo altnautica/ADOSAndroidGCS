@@ -276,7 +276,7 @@ class DemoPilotTest {
         val off = state().readiness("battery_failsafe")
         assertFalse(off["ok"]!!.jsonPrimitive.boolean)
         assertEquals("block", off.str("severity"))
-        assertEquals("Battery failsafe does nothing: set low = RTL, critical = Land", off.str("msg"))
+        assertEquals("Battery failsafe does nothing: set low = SmartRTL or Land, critical = Land", off.str("msg"))
         assertEquals("not_ready:battery_failsafe", action("arm").str("err"))
         assertFalse(fc.armed)
 
@@ -290,7 +290,46 @@ class DemoPilotTest {
         val item = state().readiness("battery_failsafe")
         assertFalse(item["ok"]!!.jsonPrimitive.boolean)
         assertEquals("warn", item.str("severity"))
-        assertEquals("No GNSS: a battery RTL climbs to the RTL altitude, into the roof indoors; set low = Land, critical = Land", item.str("msg"))
+        assertEquals("May fly without GNSS: a battery RTL climbs to the RTL altitude, into the roof indoors; set low = Land, critical = Land", item.str("msg"))
+    }
+
+    @Test
+    fun `the live frame reports no low-battery action and the countdown pin counts down to a landing`() {
+        assertTrue(state()["low_battery_action"] is JsonNull)
+        scenarios.pin(DemoScenario.LowBatteryCountdownLand)
+        val s = state()
+        assertEquals("land", s.str("low_battery_action"))
+        assertEquals(10.0, s["rth_countdown_s"]!!.jsonPrimitive.double, 1e-9)
+        assertEquals(false, s["landed"]!!.jsonPrimitive.boolean)
+        t += 4_000
+        assertEquals(6.0, state()["rth_countdown_s"]!!.jsonPrimitive.double, 1e-9)
+    }
+
+    @Test
+    fun `the low-battery pins report the pilot's land or SmartRTL return with its banner and critical text`() {
+        val cases = listOf(
+            Triple(DemoScenario.LowBatteryLand, "land", "Low battery: landing"),
+            Triple(DemoScenario.LowBatteryRth, "rth", "Low battery: returning home"),
+        )
+        for ((scenario, lowAction, text) in cases) {
+            scenarios.pin(scenario)
+            val s = state()
+            assertEquals(scenario.name, lowAction, s.str("low_battery_action"))
+            assertTrue(scenario.name, s["rth_countdown_s"] is JsonNull)
+            assertEquals(scenario.name, if (lowAction == "land") "LAND" else "SMART_RTL", s.str("fc_mode_name"))
+            val banner = s.obj("banner")
+            assertEquals(
+                scenario.name,
+                if (lowAction == "land") "pilot.banner.low_battery_land" else "pilot.banner.low_battery_smart_rtl",
+                banner.str("text_key"),
+            )
+            assertNotNull(scenario.name, banner.obj("args").str("pct"))
+            val announced = s["statustext"]!!.jsonArray.single().jsonObject
+            assertEquals(scenario.name, 2, announced["severity"]!!.jsonPrimitive.int)
+            assertEquals(scenario.name, text, announced.str("text"))
+        }
+        scenarios.pin(null)
+        assertTrue(state()["low_battery_action"] is JsonNull)
     }
 
     @Test

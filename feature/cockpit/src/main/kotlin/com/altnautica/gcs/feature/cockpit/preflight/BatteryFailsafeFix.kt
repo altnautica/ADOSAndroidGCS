@@ -16,10 +16,11 @@ object BatteryFailsafeFix {
 
     /**
      * The states the profile step fixes: a failsafe action left at nothing, or an RTL that climbs
-     * without GNSS. Levels, an RTL above the altitude limit and unknowns have no fix here.
+     * without GNSS. Unset levels, no monitor and unknowns have no fix here (the levels and the
+     * monitor belong to the initial tune).
      */
     private val FIXABLE_KEYS = listOf(
-        "none", "none_confined", "low_none", "low_none_confined", "critical_none", "confined_rtl",
+        "none", "none_confined", "low_none", "low_none_confined", "low_none_plane", "critical_none", "confined_rtl",
         "differs", "differs_confined", "differs_low",
     ).map { "readiness.battery_failsafe.$it" }
 

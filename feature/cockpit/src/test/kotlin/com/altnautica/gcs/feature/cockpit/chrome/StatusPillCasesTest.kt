@@ -101,7 +101,7 @@ class StatusPillCasesTest {
                     )
                 },
             )
-            val failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str())
+            val failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str(), i["low_battery_action"].str())
             val storage = (i["storage_pct"] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.doubleOrNull
             val items = StatusModel.items(alerts, PreflightResult(emptyList(), readiness, storage), texts, facts, rules, failsafe, i["setup_abort"].str())
             val pill = StatusModel.pill(items, emptySet())

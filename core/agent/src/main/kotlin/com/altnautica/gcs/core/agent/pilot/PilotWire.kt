@@ -66,6 +66,9 @@ object PilotWire {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** The low-battery actions the pilot reports (`low_battery_action`). */
+    private val LOW_BATTERY_ACTIONS = setOf("land", "rth")
+
     /** A server frame of the pilot WebSocket, or null when it is not one this build reads. */
     fun parseFrame(text: String, receivedAtMs: Long): PilotFrame? {
         val o = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return null
@@ -146,6 +149,7 @@ object PilotWire {
             fcFailsafe = data.bool("fc_failsafe") == true,
             failsafeCause = data.str("failsafe_cause"),
             setupAbort = data.str("setup_abort"),
+            lowBatteryAction = data.str("low_battery_action")?.takeIf { it in LOW_BATTERY_ACTIONS },
             speedCap = (data["speed_cap"] as? JsonObject)?.let { c ->
                 SpeedCap(c.str("reason") ?: return@let null, c.float("v_h_mps") ?: return@let null)
             },

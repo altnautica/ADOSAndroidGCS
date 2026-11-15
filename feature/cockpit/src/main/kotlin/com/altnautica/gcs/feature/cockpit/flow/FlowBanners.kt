@@ -55,7 +55,7 @@ const val TAKE_OVER_HOLD_MS = 1_500
 /**
  * The flow announcements the cockpit shows over the video, derived from the pilot state:
  * the handover banner, the centre-sticks gate ring, another surface holding the sticks,
- * the link-loss countdown and the low-battery return countdown. It holds only what the
+ * the link-loss countdown and the low-battery countdown. It holds only what the
  * screen shows: the countdowns in the whole seconds they read and the gate as pending (its
  * ring reads the progress itself, on the beat), so a pilot frame that changes nothing on
  * screen leaves it equal and redraws nothing.
@@ -68,8 +68,10 @@ data class FlowUi(
     val sticksWith: InputSession? = null,
     /** Seconds until the link-loss action, rounded up to the whole second the banner reads. */
     val linkLossInS: Float? = null,
-    /** Seconds until the low-battery return, rounded up to the whole second the banner reads. */
+    /** Seconds until the low-battery action, rounded up to the whole second the banner reads. */
     val rthCountdownS: Float? = null,
+    /** What the low-battery countdown ends in: `land` or `rth` (null reads as a return home). */
+    val lowBatteryAction: String? = null,
     /** A launch sequence running (or refused): its steps and Abort stay on screen until it is done. */
     val launch: LaunchSequence? = null,
 ) {
@@ -87,6 +89,7 @@ data class FlowUi(
                 sticksWith = session?.takeIf { it.src != ownSrc },
                 linkLossInS = pilot.linkLossInS?.let(::shownSeconds),
                 rthCountdownS = pilot.rthCountdownS?.let(::shownSeconds),
+                lowBatteryAction = pilot.lowBatteryAction,
                 launch = pilot.sequence?.takeIf { it.step != LaunchStep.Done },
             )
         }
@@ -186,14 +189,14 @@ fun LinkLossBanner(text: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** The cancellable low-battery return countdown. */
+/** The cancellable low-battery countdown: a landing or a return home ([lowBatteryLine]). */
 @Composable
-fun LowBatteryBanner(inS: Float, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+fun LowBatteryBanner(inS: Float, action: String?, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier) {
         BannerShell(Icons.Outlined.BatteryAlert, AdosTheme.colors.statusError, "flow-low-battery") {
             Column(Modifier.weight(1f)) {
                 Text(
-                    specText("flow.low_battery.title", "in_s" to lowBatteryCountdown(inS).toString()),
+                    lowBatteryLine(LocalCockpitStrings.current, inS, action),
                     color = LocalChrome.current.text,
                     style = MaterialTheme.typography.titleSmall,
                 )
@@ -206,6 +209,15 @@ fun LowBatteryBanner(inS: Float, onCancel: () -> Unit, modifier: Modifier = Modi
 
 /** Whole seconds the return countdown shows, through the shared readout ([ReadoutFormat.countdownS]). */
 internal fun lowBatteryCountdown(inS: Float): Long = ReadoutFormat.countdownS((inS * 1000f).roundToLong())
+
+/**
+ * The low-battery countdown's title: `flow.low_battery.title_land` when the pilot will land
+ * ([action] `land`), `flow.low_battery.title` (a return home) otherwise.
+ */
+fun lowBatteryLine(strings: SetupStringsSpec, inS: Float, action: String?): String = strings.format(
+    if (action == "land") "flow.low_battery.title_land" else "flow.low_battery.title",
+    mapOf("in_s" to lowBatteryCountdown(inS).toString()),
+)
 
 /**
  * The launch sequence while it runs: its steps, the current one marked, and Abort, which

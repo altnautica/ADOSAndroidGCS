@@ -11,6 +11,9 @@
     <string name="demo_scenario_setup_aborted">Setup flight aborted</string>
     <string name="demo_scenario_pilot_stalled">Pilot stops responding</string>
     <string name="demo_scenario_link_loss">Control link lost</string>
+    <string name="demo_scenario_low_battery_countdown_land">Low battery: landing countdown</string>
+    <string name="demo_scenario_low_battery_land">Low battery: landing</string>
+    <string name="demo_scenario_low_battery_rth">Low battery: SmartRTL home</string>
     <string name="demo_scenario_no_gnss">No GNSS</string>
     <string name="demo_scenario_status_texts">Flight controller warnings</string>
     <string name="demo_scenario_follow">Follow skill flying</string>

@@ -163,6 +163,19 @@ class PilotWireTest {
     }
 
     @Test
+    fun `the low-battery action parses land or rth only, and is null while none`() {
+        assertNull(checkNotNull(PilotWire.parseState(data, 0L)).lowBatteryAction)
+        for (action in listOf("land", "rth")) {
+            val s = checkNotNull(PilotWire.parseState(JsonObject(data + ("low_battery_action" to JsonPrimitive(action))), 0L))
+            assertEquals(action, s.lowBatteryAction)
+        }
+        for (other in listOf(JsonPrimitive("hold"), JsonPrimitive(1), JsonNull)) {
+            val s = checkNotNull(PilotWire.parseState(JsonObject(data + ("low_battery_action" to other)), 0L))
+            assertNull(other.toString(), s.lowBatteryAction)
+        }
+    }
+
+    @Test
     fun `pilot frame envelope wraps the golden state`() {
         val text = """{"kind":"pilot","ts_ms":1793960000000,"data":$fixture}"""
         val f = PilotWire.parseFrame(text, receivedAtMs = 7L) as PilotFrame.State

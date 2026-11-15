@@ -63,7 +63,7 @@ class PillCasesTest {
                     agentReachable = i["agent_reachable"].bool() ?: true,
                     controllerLost = i["controller_lost"].bool() ?: false,
                     preflightFailing = preflight,
-                    failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str()),
+                    failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str(), i["low_battery_action"].str()),
                     // An explicit null is unknown; an absent key is not known to this surface.
                     armUnknown = "armed" in i && i["armed"] is JsonNull,
                     navSource = nav,
@@ -114,6 +114,35 @@ class PillCasesTest {
         assertEquals(PillSeverity.Warning, fresh.single().severity)
         assertTrue(fresh.single().text, fresh.single().text != "setup.blocker.aborted_ground_contact")
         val stale = pill.alerts(emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 5_000, setupAbort = "setup.blocker.aborted_ground_contact")
+        assertEquals(listOf("pilot_not_answering"), stale.map { it.id })
+    }
+
+    @Test
+    fun `the low-battery item waits for its countdown, words the action and folds the pilot's own text`() {
+        val names = goldenCases("pill-cases.json").map { it.name }
+        assertTrue(names.toString(), names.count { it.startsWith("low_battery_") } >= 3)
+        val landing = adosPilot().copy(lowBatteryAction = "land", rthCountdownS = null)
+        // The countdown has its own banner: no pill item until it fired.
+        assertEquals(PillFailsafe.None, PillFailsafe.of(landing.copy(rthCountdownS = 4f)))
+        assertEquals(PillFailsafe(false, null, "land"), PillFailsafe.of(landing))
+        assertEquals("Low battery: landing", pill.lowBatteryText("land"))
+        assertEquals("Low battery: returning home", pill.lowBatteryText("rth"))
+        assertEquals(null, pill.lowBatteryText("hold"))
+        val announced = listOf(PillFcStatus(2, "Low battery: landing"))
+        val fresh = pill.alerts(
+            emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 100,
+            failsafe = PillFailsafe.of(landing), linkFcStatus = announced,
+        )
+        assertEquals(listOf("low_battery"), fresh.map { it.id })
+        assertEquals(PillSource.Battery, fresh.single().source)
+        assertEquals(PillSeverity.Critical, fresh.single().severity)
+        // While the countdown runs the pill lists no low-battery item: the banner counts.
+        val counting = pill.alerts(
+            emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 100,
+            failsafe = PillFailsafe.of(landing.copy(rthCountdownS = 4f)),
+        )
+        assertEquals(emptyList<String>(), counting.map { it.id })
+        val stale = pill.alerts(emptyList(), emptyList(), null, null, pilotRule = true, pilotAgeMs = 5_000, failsafe = PillFailsafe.of(landing))
         assertEquals(listOf("pilot_not_answering"), stale.map { it.id })
     }
 

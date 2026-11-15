@@ -39,6 +39,6 @@ internal fun FlowBanners(vm: CockpitViewModel, modifier: Modifier) {
             // The configured action in words ("Return home", "Land", "Hold"); a dash when unknown.
             SpecText(vm.cockpitSpec.setupStrings).linkLossLine(s, action)?.let { LinkLossBanner(it) }
         }
-        flow.rthCountdownS?.let { LowBatteryBanner(it, vm::cancelRthCountdown) }
+        flow.rthCountdownS?.let { LowBatteryBanner(it, flow.lowBatteryAction, vm::cancelRthCountdown) }
     }
 }

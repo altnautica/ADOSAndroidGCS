@@ -36,9 +36,10 @@ internal object DemoPilotWire {
     const val LAND = 9
     const val POSHOLD = 16
     const val BRAKE = 17
+    const val SMART_RTL = 21
     private val MODE_NAMES = mapOf(
         0 to "STABILIZE", ALTHOLD to "ALT_HOLD", AUTO to "AUTO", GUIDED to "GUIDED", LOITER to "LOITER",
-        RTL to "RTL", 7 to "CIRCLE", LAND to "LAND", POSHOLD to "POSHOLD", BRAKE to "BRAKE",
+        RTL to "RTL", 7 to "CIRCLE", LAND to "LAND", POSHOLD to "POSHOLD", BRAKE to "BRAKE", SMART_RTL to "SMART_RTL",
     )
 
     val FC_PROFILE_OK = readiness("fc_profile", true, "block", "FC failsafe parameters match the ADOS profile")
@@ -49,14 +50,20 @@ internal object DemoPilotWire {
     /** Both battery failsafe actions do nothing: it blocks arming in ADOS control and warns otherwise. */
     fun batteryFailsafeOff(controlMode: String) = readiness(
         BATTERY_FAILSAFE_ID, false, if (controlMode == "ados") "block" else "warn",
-        "Battery failsafe does nothing: set low = RTL, critical = Land",
+        "Battery failsafe does nothing: set low = SmartRTL or Land, critical = Land",
     )
 
     /** Without GNSS the failsafe RTL would climb to the RTL altitude: a warning whose fix sets both actions to Land. */
     val BATTERY_FAILSAFE_CONFINED_RTL = readiness(
         BATTERY_FAILSAFE_ID, false, "warn",
-        "No GNSS: a battery RTL climbs to the RTL altitude, into the roof indoors; set low = Land, critical = Land",
+        "May fly without GNSS: a battery RTL climbs to the RTL altitude, into the roof indoors; set low = Land, critical = Land",
     )
+
+    /** The pilot's own low-battery announcement (its STATUSTEXT and pill item) once it lands. */
+    const val LOW_BATTERY_LAND_TEXT = "Low battery: landing"
+
+    /** The pilot's own low-battery announcement once it returns home. */
+    const val LOW_BATTERY_RTH_TEXT = "Low battery: returning home"
 
     fun modeName(mode: Int) = MODE_NAMES[mode] ?: "MODE $mode"
 
