@@ -23,7 +23,11 @@ class RouteCheckWireTextTest {
     private fun routeLine(json: String): String = text.report(frame("route_check", json).routeCheck)!!.line
 
     @Test
-    fun `an unverified check names the waypoints it could not place, then a mission too long to check`() {
+    fun `an unverified check says a stale feed, then names the waypoints it could not place, then a mission too long to check`() {
+        assertEquals(
+            "Route not fully checked: the mission is not downloaded yet · slow near walls",
+            routeLine("""{"state":"unverified","required_m":0.577,"unverified_legs":[],"unchecked":[3],"stale":true}"""),
+        )
         assertEquals(
             "Route not fully checked: no position for waypoint 3, 5 · slow near walls",
             routeLine("""{"state":"unverified","required_m":0.577,"unverified_legs":[],"unchecked":[3,5],"truncated":true}"""),

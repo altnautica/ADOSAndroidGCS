@@ -187,7 +187,9 @@ data class RoutePinch(val fromSeq: Int, val toSeq: Int, val ned: List<Double>, v
  * pose σ ([sigmaM], null when unknown), the [pinch] and the legs ([unverifiedLegs], by their
  * end waypoint) running through unobserved cells. [unchecked] lists the mission items the check
  * cannot place (no position; the legs to and from them are not checked) and [truncated] says the
- * mission is longer than the route the check holds: either keeps the state at best unverified.
+ * mission is longer than the route the check holds; [stale] says the mission feed may not hold the
+ * FC's mission (not downloaded yet, or out of step with its count). Each keeps the state at best
+ * unverified.
  */
 data class RouteCheck(
     val state: RouteCheckState,
@@ -198,6 +200,7 @@ data class RouteCheck(
     val unverifiedLegs: List<Int>,
     val unchecked: List<Int> = emptyList(),
     val truncated: Boolean = false,
+    val stale: Boolean = false,
 )
 
 enum class ReadinessSeverity { Block, Warn }

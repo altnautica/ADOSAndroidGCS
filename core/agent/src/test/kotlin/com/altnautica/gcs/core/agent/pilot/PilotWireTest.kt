@@ -312,16 +312,18 @@ class PilotWireTest {
     }
 
     @Test
-    fun `the route check names the waypoints it cannot place and a mission too long to hold, both absent by default`() {
+    fun `the route check names the waypoints it cannot place, a mission too long to hold and a stale feed, all absent by default`() {
         val rc = """{"owner":"pilot","place_class":"confined","route_check":{"state":"unverified","required_m":0.577,"unverified_legs":[],
-            |"unchecked":[3,"x",5,null],"truncated":true}}""".trimMargin()
+            |"unchecked":[3,"x",5,null],"truncated":true,"stale":true}}""".trimMargin()
         val u = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(rc) as JsonObject, 0L)).routeCheck!!
         assertEquals(listOf(3, 5), u.unchecked)
         assertTrue(u.truncated)
+        assertTrue(u.stale)
         val plain = """{"owner":"pilot","route_check":{"state":"feasible","required_m":0.577,"unverified_legs":[]}}"""
         val p = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(plain) as JsonObject, 0L)).routeCheck!!
         assertEquals(emptyList<Int>(), p.unchecked)
         assertFalse(p.truncated)
+        assertFalse(p.stale)
     }
 
     @Test

@@ -5,12 +5,14 @@ app's `versionName`.
 
 ## [Unreleased]
 
-- **Route check details.** A route check that could not place a waypoint
-  names it ("Route not fully checked: no position for waypoint 5"), and a
-  mission longer than the check holds says so; a too-tight leg still reads
-  first. Clearances keep the wire's precision, so 0.525 m reads 0.53 as on
-  the web. The confined margin is the propeller tip radius plus 0.1 m,
-  whatever the open margin is set to.
+- **Route check details.** A route check on a mission the agent has not
+  downloaded yet says so ("Route not fully checked: the mission is not
+  downloaded yet"); one that could not place a waypoint names it ("Route
+  not fully checked: no position for waypoint 5"), and a mission longer
+  than the check holds says so; a too-tight leg still reads first.
+  Clearances keep the wire's precision, so 0.525 m reads 0.53 as on the
+  web. The confined margin is the vehicle's outer radius (props, guards or
+  cage) plus 0.1 m, whatever the open margin is set to.
 - **Place class from the vehicle.** "Load from drone" and Download keep the
   class the pilot flies (or leave it unset while unknown), so Start never
   switches a confined pilot to Open. Start refuses with the pilot's own

@@ -190,6 +190,7 @@ object PilotWire {
             unverifiedLegs = seqs(o["unverified_legs"]),
             unchecked = seqs(o["unchecked"]),
             truncated = o.bool("truncated") == true,
+            stale = o.bool("stale") == true,
         )
     }
 

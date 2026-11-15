@@ -40,8 +40,9 @@ class ConfinedText(private val text: SpecText) {
      * The route-check report, or null with no route check. The infeasible line names the pinch
      * leg (`3→4`) with its clearance and the clearance it needs, two decimals each; the pinch
      * position reads one decimal, its height up (the negated down component). An unverified
-     * check that could not place some waypoints names them (`route_check.unchecked`), then a
-     * mission too long to hold (`route_check.truncated`), before the generic "not seen yet".
+     * check on a mission feed not in step with the FC says so first (`route_check.stale`), then
+     * names the waypoints it could not place (`route_check.unchecked`), then a mission too long
+     * to hold (`route_check.truncated`), before the generic "not seen yet".
      */
     fun report(rc: RouteCheck?): RouteCheckReport? {
         if (rc == null) return null
@@ -57,6 +58,7 @@ class ConfinedText(private val text: SpecText) {
         }
         val key = when {
             rc.state != RouteCheckState.Unverified -> rc.state.wire
+            rc.stale -> "stale"
             rc.unchecked.isNotEmpty() -> "unchecked"
             rc.truncated -> "truncated"
             else -> rc.state.wire
