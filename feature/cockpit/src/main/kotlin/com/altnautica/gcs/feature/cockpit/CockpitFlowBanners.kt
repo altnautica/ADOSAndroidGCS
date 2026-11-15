@@ -15,6 +15,7 @@ import com.altnautica.gcs.feature.cockpit.flow.HandoverBanner
 import com.altnautica.gcs.feature.cockpit.flow.LaunchProgressBanner
 import com.altnautica.gcs.feature.cockpit.flow.LinkLossBanner
 import com.altnautica.gcs.feature.cockpit.flow.LowBatteryBanner
+import com.altnautica.gcs.feature.cockpit.flow.MissionStallBanner
 import com.altnautica.gcs.feature.cockpit.flow.SticksWithBanner
 import androidx.compose.runtime.derivedStateOf
 
@@ -22,7 +23,8 @@ import androidx.compose.runtime.derivedStateOf
 internal fun linkLossAction(pilot: PilotState?): String? = pilot?.linkLossAction ?: pilot?.banner?.args?.get("action")
 
 /**
- * Handover banner, another surface holding the sticks, link-loss and low-battery countdowns.
+ * Handover banner, another surface holding the sticks, the mission stall, link-loss and
+ * low-battery countdowns.
  * Of the pilot's frames it reads only the link-loss action, so a new frame that changes
  * nothing here does not recompose the banners.
  */
@@ -39,6 +41,7 @@ internal fun FlowBanners(vm: CockpitViewModel, modifier: Modifier) {
             // The configured action in words ("Return home", "Land", "Hold"); a dash when unknown.
             SpecText(vm.cockpitSpec.setupStrings).linkLossLine(s, action)?.let { LinkLossBanner(it) }
         }
+        flow.stall?.let { MissionStallBanner(it, vm::onStallAction) }
         flow.rthCountdownS?.let { LowBatteryBanner(it, flow.lowBatteryAction, vm::cancelRthCountdown) }
     }
 }

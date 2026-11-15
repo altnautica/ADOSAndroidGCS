@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.FlightTakeoff
+import androidx.compose.material.icons.outlined.WrongLocation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,6 +37,9 @@ import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.InputSession
+import com.altnautica.gcs.core.model.MissionStall
+import com.altnautica.gcs.core.model.MissionStallKind
+import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotBanner
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.LaunchSequence
@@ -74,8 +78,13 @@ data class FlowUi(
     val lowBatteryAction: String? = null,
     /** A launch sequence running (or refused): its steps and Abort stay on screen until it is done. */
     val launch: LaunchSequence? = null,
+    /** No progress on the mission or the return: the persistent stall overlay. */
+    val stall: StallUi? = null,
 ) {
     companion object {
+        /** Pilot banners the stall overlay already says, with its live countdown: hidden while it shows. */
+        private val STALL_BANNER_KEYS = setOf("pilot.banner.mission_stalled", "pilot.banner.mission_stalled_hold", "pilot.banner.return_blocked")
+
         /**
          * The flow state for [pilot]; [ownSrc] is this surface's input source name and
          * [nowMs] vehicle-agnostic local time. A banner shows while the pilot keeps it.
@@ -83,19 +92,64 @@ data class FlowUi(
         fun of(pilot: PilotState?, ownSrc: String, streaming: Boolean): FlowUi {
             if (pilot == null) return FlowUi()
             val session = pilot.inputSession
+            val stall = pilot.missionStall?.let(StallUi::of)
             return FlowUi(
-                banner = pilot.banner,
+                banner = pilot.banner?.takeUnless { stall != null && it.textKey in STALL_BANNER_KEYS },
                 gatePending = pilot.gate?.pending == true && streaming,
                 sticksWith = session?.takeIf { it.src != ownSrc },
                 linkLossInS = pilot.linkLossInS?.let(::shownSeconds),
                 rthCountdownS = pilot.rthCountdownS?.let(::shownSeconds),
                 lowBatteryAction = pilot.lowBatteryAction,
                 launch = pilot.sequence?.takeIf { it.step != LaunchStep.Done },
+                stall = stall,
             )
         }
 
         /** A countdown as the whole second it reads (rounded up, never below zero). */
         internal fun shownSeconds(s: Float): Float = ceil(s.toDouble()).toFloat().coerceAtLeast(0f)
+    }
+}
+
+/** One stall overlay button: its spec label and the pilot action it sends. */
+enum class StallAction(val labelKey: String, val action: String, val tag: String) {
+    Skip("flow.mission_stall.skip", PilotAction.MISSION_SKIP, "flow-stall-skip"),
+    Return("flow.mission_stall.return", PilotAction.RTH, "flow-stall-return"),
+    Land("flow.mission_stall.land", PilotAction.LAND, "flow-stall-land"),
+}
+
+/**
+ * The stall overlay as it reads: the waypoint label, the no-progress window in whole seconds,
+ * and the seconds to the automatic action rounded up ([inS] null: the pilot holds for the operator).
+ */
+data class StallUi(val kind: MissionStallKind, val wp: String, val windowS: Long, val inS: Long?) {
+    /** A mission stall offers skip, return and land; a blocked return offers land (or flying by stick). */
+    val actions: List<StallAction>
+        get() = when (kind) {
+            MissionStallKind.Mission -> listOf(StallAction.Skip, StallAction.Return, StallAction.Land)
+            MissionStallKind.Return -> listOf(StallAction.Land)
+        }
+
+    /** The overlay title from the spec strings. */
+    fun title(strings: SetupStringsSpec): String = when (kind) {
+        MissionStallKind.Mission -> {
+            val args = mapOf("wp" to wp, "window_s" to windowS.toString())
+            if (inS == null) {
+                strings.format("flow.mission_stall.title_hold", args)
+            } else {
+                strings.format("flow.mission_stall.title", args + ("in_s" to inS.toString()))
+            }
+        }
+        MissionStallKind.Return ->
+            if (inS == null) strings.format("pilot.hold_reason.return-blocked") else strings.format("flow.return_blocked.title", mapOf("in_s" to inS.toString()))
+    }
+
+    companion object {
+        fun of(stall: MissionStall) = StallUi(
+            kind = stall.kind,
+            wp = stall.wpLabel ?: stall.seq?.toString().orEmpty(),
+            windowS = stall.windowS.roundToLong(),
+            inS = stall.skipInS?.let { FlowUi.shownSeconds(it).toLong() },
+        )
     }
 }
 
@@ -218,6 +272,26 @@ fun lowBatteryLine(strings: SetupStringsSpec, inS: Float, action: String?): Stri
     if (action == "land") "flow.low_battery.title_land" else "flow.low_battery.title",
     mapOf("in_s" to lowBatteryCountdown(inS).toString()),
 )
+
+/**
+ * The persistent stall overlay: no progress to the waypoint (or home), the countdown to the
+ * automatic skip or landing, and the operator's choices, each sent to the pilot as [onAction].
+ */
+@Composable
+fun MissionStallBanner(stall: StallUi, onAction: (StallAction) -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        BannerShell(Icons.Outlined.WrongLocation, AdosTheme.colors.statusError, "flow-mission-stall") {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                Text(stall.title(LocalCockpitStrings.current), color = LocalChrome.current.text, style = MaterialTheme.typography.titleSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+                    for (a in stall.actions) {
+                        AdosButton(specText(a.labelKey), onClick = { onAction(a) }, modifier = Modifier.testTag(a.tag))
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * The launch sequence while it runs: its steps, the current one marked, and Abort, which

@@ -198,6 +198,9 @@ internal class PlannerHarness {
     /** The vehicle's mirrored plan as its agent would serve it; null: no agent path. */
     val mirror = MutableStateFlow<com.altnautica.gcs.core.agent.mission.MissionMirror?>(null)
 
+    /** The waypoints the vehicle's pilot reports skipped. */
+    val gaps = MutableStateFlow<List<com.altnautica.gcs.core.model.MissionGap>>(emptyList())
+
     fun viewModel() = PlannerViewModel(
         servicesProvider = provider,
         nodeSources = emptySet(),
@@ -208,6 +211,7 @@ internal class PlannerHarness {
         plannerSettings = PlannerSettingsRepository(prefs),
         inputRouter = mockk(relaxed = true),
         mirrorSource = { mirror },
+        gapsSource = { gaps },
         draftStore = drafts,
     )
 

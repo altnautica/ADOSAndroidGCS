@@ -2,8 +2,8 @@ package com.altnautica.gcs.core.map
 
 import androidx.compose.runtime.Immutable
 
-/** Kind of a mission marker; selects its badge colour on the map. */
-enum class WaypointKind { Nav, Takeoff, Land, ReturnHome, Loiter, RegionOfInterest }
+/** Kind of a mission marker; selects its badge colour on the map. [Skipped]: a waypoint the vehicle skipped (a coverage gap). */
+enum class WaypointKind { Nav, Takeoff, Land, ReturnHome, Loiter, RegionOfInterest, Skipped }
 
 /** Mission item marker. [label] is drawn inside the badge (usually the item number). */
 @Immutable

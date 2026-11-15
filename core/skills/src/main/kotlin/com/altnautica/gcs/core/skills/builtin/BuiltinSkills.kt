@@ -110,6 +110,9 @@ private val RECOVERY_MODES = setOf("LOITER", "BRAKE", "ALT_HOLD", "POSHOLD", "QL
 /** Hold of a non-recovery mode change from the Mode sheet. */
 private const val MODE_CHANGE_HOLD_MS = 1_500
 
+/** The FC mode that returns along the flown path; the FC's return while ADOS flies. */
+private const val SMART_RTL_MODE = "SMART_RTL"
+
 /** Confirm tier of a mode change from the Mode sheet: tap for recovery modes, a hold otherwise. */
 fun modeChangeConfirm(modeName: String): ConfirmPolicy? {
     if (modeName.uppercase() in RECOVERY_MODES) return null
@@ -408,12 +411,29 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
             BuiltinIds.DISARM -> send(ctx, VehicleCommand.Disarm())
             BuiltinIds.TAKEOFF -> takeoff(ctx, args)
             BuiltinIds.LAND -> send(ctx, VehicleCommand.Land)
-            BuiltinIds.RTH -> send(ctx, VehicleCommand.ReturnToLaunch)
+            BuiltinIds.RTH -> if (ctx.pilot?.controlMode == ControlMode.Ados) adosFcReturn(ctx) else send(ctx, VehicleCommand.ReturnToLaunch)
             BuiltinIds.PAUSE -> pause(ctx)
             BuiltinIds.RESUME -> send(ctx, VehicleCommand.ResumeMission)
             BuiltinIds.KILL -> send(ctx, VehicleCommand.Kill)
             else -> CommandResult.Unsupported
         }
+    }
+
+    /**
+     * The flight controller's return while ADOS flies and the pilot did not take the `rth`
+     * (its state is stale, it did not answer, or a second press escalated): SmartRTL back
+     * along the flown path, and a landing in place where the FC lacks or refuses it. ADOS
+     * never commands a straight RTL climb.
+     */
+    private suspend fun adosFcReturn(ctx: SkillContext): CommandResult {
+        val smartRtl = ctxModes(ctx).firstOrNull { it.name.equals(SMART_RTL_MODE, ignoreCase = true) }
+        if (smartRtl != null) {
+            when (val result = send(ctx, VehicleCommand.SetMode(smartRtl))) {
+                is CommandResult.Rejected, CommandResult.Unsupported -> Unit
+                else -> return result
+            }
+        }
+        return send(ctx, VehicleCommand.Land)
     }
 
     /**

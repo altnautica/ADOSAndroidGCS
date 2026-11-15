@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.data.plan.PlannerSettingsRepository
 import com.altnautica.gcs.core.database.SavedPlanDao
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
+import com.altnautica.gcs.core.link.mission.MissionGapsSource
 import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.map.DragPhase
@@ -65,6 +66,7 @@ class PlannerViewModel @Inject constructor(
     private val plannerSettings: PlannerSettingsRepository,
     private val inputRouter: AdosInputRouter,
     mirrorSource: MissionMirrorSource,
+    gapsSource: MissionGapsSource,
     private val draftStore: PlanDraftStore,
 ) : ViewModel() {
 
@@ -83,7 +85,7 @@ class PlannerViewModel @Inject constructor(
     private val nextId: () -> Long = { ids.getAndIncrement() }
 
     private val session = PlanSession(_state)
-    private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId, mirrorSource) { plan, name, savedId, dirty ->
+    private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId, mirrorSource, gapsSource) { plan, name, savedId, dirty ->
         session.replacePlan(plan, name = name, savedId = savedId, dirty = dirty)
     }
     private val library = PlannerLibrary(viewModelScope, _state, savedPlans, documents, session, nextId, ::clearDraft) { vehicle.planWithHome() }

@@ -3,6 +3,7 @@ package com.altnautica.gcs.feature.plan
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
 import com.altnautica.gcs.core.link.mission.MissionError
 import com.altnautica.gcs.core.link.mission.MissionItem
+import com.altnautica.gcs.core.link.mission.MissionGapsSource
 import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.link.mission.MissionResult
 import com.altnautica.gcs.core.link.mission.MissionTransfer
@@ -10,6 +11,7 @@ import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.mission.TransferDirection
 import com.altnautica.gcs.core.link.mission.UploadReceipt
 import com.altnautica.gcs.core.agent.mission.MissionMirror
+import com.altnautica.gcs.core.model.MissionGap
 import com.altnautica.gcs.core.model.MissionState
 import kotlinx.coroutines.flow.first
 import com.altnautica.gcs.core.link.services.VehicleServices
@@ -57,6 +59,7 @@ internal class PlannerVehicleController(
     private val clock: ElapsedClock,
     private val nextId: () -> Long,
     private val mirrorSource: MissionMirrorSource,
+    private val gapsSource: MissionGapsSource,
     private val replacePlan: (plan: MissionPlan, name: String, savedId: String?, dirty: Boolean) -> Unit,
 ) {
     private var services: VehicleServices? = null
@@ -64,10 +67,14 @@ internal class PlannerVehicleController(
     private var transferJob: Job? = null
     private var startJob: Job? = null
     private var mirrorJob: Job? = null
+    private var gapsJob: Job? = null
 
     /** The vehicle's mirrored plan as last read, and this device's receipt for the plan it put there. */
     private var mirror: MissionMirror? = null
     private var receipt: PlanReceipt? = null
+
+    /** The waypoints the vehicle's pilot skipped, as last read. */
+    private var gaps: List<MissionGap> = emptyList()
 
     // ── Vehicle ──────────────────────────────────────────────
 
@@ -92,7 +99,10 @@ internal class PlannerVehicleController(
         vehicleJob?.cancel()
         mirrorJob?.cancel()
         mirrorJob = null
+        gapsJob?.cancel()
+        gapsJob = null
         mirror = null
+        gaps = emptyList()
         receipt = null
         transferJob?.cancel()
         transferJob = null
@@ -106,6 +116,7 @@ internal class PlannerVehicleController(
                 link = if (nodeId == null) VehicleLink.None else VehicleLink.Connecting,
                 vehiclePlan = null,
                 drone = null,
+                skipped = emptyList(),
                 transfer = TransferState.Idle,
                 startSheet = null,
             )
@@ -130,23 +141,31 @@ internal class PlannerVehicleController(
                 refreshDrone()
             }
         }
+        gapsJob = scope.launch {
+            gapsSource.observe(nodeId).collect { g ->
+                gaps = g
+                refreshDrone()
+            }
+        }
     }
 
     /**
      * Recomputes [PlannerUiState.drone]: the mirrored plan, and whether it differs from
      * this device's. A vehicle plan with the open plan's items counts as the same plan.
+     * Also places the skipped waypoints on the mirrored plan's items.
      */
     private fun refreshDrone() {
         val m = mirror
         if (m == null) {
-            state.update { s -> s.withDrone(null) }
+            state.update { s -> s.withDrone(null).copy(skipped = emptyList()) }
             return
         }
         val dronePlan = PlanIdentity.planOf(m, nextId)
+        val skipped = PlanIdentity.skippedOf(m, gaps)
         state.update { s ->
             val sameItems = dronePlan != null && dronePlan.items.map { it.command to it.position } == s.plan.items.map { it.command to it.position }
             val differs = dronePlan != null && !sameItems && !PlanIdentity.matches(m, receipt)
-            s.withDrone(DroneMissionUi(dronePlan, m.status?.state ?: MissionState.None, differs))
+            s.withDrone(DroneMissionUi(dronePlan, m.status?.state ?: MissionState.None, differs)).copy(skipped = skipped)
         }
     }
 
@@ -420,6 +439,7 @@ internal class PlannerVehicleController(
     fun cancel() {
         vehicleJob?.cancel()
         mirrorJob?.cancel()
+        gapsJob?.cancel()
         transferJob?.cancel()
         startJob?.cancel()
     }

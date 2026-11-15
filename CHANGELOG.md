@@ -5,6 +5,22 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Mission stall overlay.** When the pilot reports no progress to a
+  waypoint, the cockpit shows a persistent overlay such as "No progress to
+  waypoint 3 for 15 s · Skipping in 33 s" with Skip waypoint, Return and Land
+  here; with no countdown it reads "Holding for you". A blocked return reads
+  "Return blocked · Landing in 40 s" with Land here alone. The buttons send
+  the pilot's `mission_skip`, `rth` and `land` actions. Voice prompts say
+  "Mission stalled. Holding.", "Return blocked. Holding." and "Waypoint
+  skipped".
+- **Skipped waypoints on the planner map.** A waypoint the pilot skipped shows
+  crossed out in the error colour where the vehicle's plan puts it.
+- **No straight RTL in ADOS control.** When the pilot does not take a Return
+  press (its state is stale, it does not answer, or the press is repeated),
+  the flight controller is put in SmartRTL, or lands where SmartRTL is missing
+  or refused. It no longer gets a straight RTL.
+- **Return wording.** The low-battery countdown and the launch's when-done
+  choice name the return along the flown path.
 - **"No clear view" hold.** When a flight skill aims for a vantage point and
   no reachable point sees the subject's predicted area, the pilot holds with
   the reason `no-vantage`. The flight-state chip now reads "No clear view" for

@@ -190,6 +190,8 @@ data class PlannerUiState(
     val vehiclePlan: MissionPlan? = null,
     /** The vehicle's own plan from its agent's mirror; null without an agent path. */
     val drone: DroneMissionUi? = null,
+    /** Waypoints of the vehicle's plan its pilot skipped this flight, where the mirror places them. */
+    val skipped: List<SkippedWaypoint> = emptyList(),
     val confirmReplaceWithDownload: Boolean = false,
     val library: List<SavedPlanEntity> = emptyList(),
     /** A discarding action waiting for the operator's confirm. */

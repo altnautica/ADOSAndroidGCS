@@ -109,6 +109,40 @@ data class MissionStatus(
     val ageMs: Long?,
     val landingSeq: Boolean,
     val uploadsSeen: Long?,
+    /** The item the vehicle flies towards, when the agent reports it. */
+    val target: MissionTarget? = null,
+    /** Waypoints skipped this flight (coverage gaps), oldest first. */
+    val gaps: List<MissionGap> = emptyList(),
+)
+
+/** The active mission item: its [seq], MAV_CMD [cmd], local-NED position [ned] (m) and acceptance radius. */
+data class MissionTarget(val seq: Int, val cmd: Int?, val ned: List<Float>?, val radiusM: Float?)
+
+/** A skipped waypoint: [reason] is `stall_timeout` (the countdown ran out) or `stall_operator`; [atMs] epoch ms. */
+data class MissionGap(val seq: Int, val reason: String, val atMs: Long?)
+
+/** What stalled: a mission leg or the return home. */
+enum class MissionStallKind(val wire: String) {
+    Mission("mission"),
+    Return("return");
+
+    companion object {
+        fun of(wire: String?): MissionStallKind? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/**
+ * No progress towards the active waypoint (or home): the vehicle holds for the operator.
+ * [skipInS] counts down to the automatic action (skip for a mission, land for a return);
+ * null holds until the operator decides. [windowS] is the no-progress window that tripped it.
+ */
+data class MissionStall(
+    val kind: MissionStallKind,
+    val seq: Int?,
+    val wpLabel: String?,
+    val sinceMs: Long?,
+    val skipInS: Float?,
+    val windowS: Float,
 )
 
 enum class ReadinessSeverity { Block, Warn }
@@ -210,6 +244,8 @@ data class PilotState(
     val speedCap: SpeedCap? = null,
     /** The pilot does not trust the horizontal position (an older agent sends none), or null. */
     val positionUnverified: PositionUnverified? = null,
+    /** No progress on the mission or the return: present while the vehicle holds for the operator. */
+    val missionStall: MissionStall? = null,
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
@@ -269,6 +305,9 @@ data class PilotAction(val name: String, val args: Map<String, Any?> = emptyMap(
 
         /** Flies to a map point: `{lat, lon, alt_m}`, altitude above home. Offered when `surface_ops` lists it. */
         const val GOTO = "goto"
+
+        /** Skips the stalled waypoint now (the mission continues with the next item). */
+        const val MISSION_SKIP = "mission_skip"
 
         fun profile(p: PilotProfile) = PilotAction("profile:${p.wire}")
         fun controlMode(m: ControlMode) = PilotAction("control_mode:${m.wire}")

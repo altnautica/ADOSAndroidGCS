@@ -214,6 +214,7 @@ private fun AdosColorRoles.iconPalette() = IconPalette(
     returnHome = statusSerious.toArgb(),
     loiter = hudDim.toArgb(),
     roi = hudMuted.toArgb(),
+    skipped = statusError.toArgb(),
     selected = fgPrimary.toArgb(),
     home = statusSuccess.toArgb(),
     rally = statusWarning.toArgb(),

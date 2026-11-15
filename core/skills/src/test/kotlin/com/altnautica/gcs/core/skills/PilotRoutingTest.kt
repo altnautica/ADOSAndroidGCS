@@ -69,10 +69,16 @@ fun adosPilot(armed: Boolean = true, vehicleClass: PilotVehicleClass? = null) = 
     sequence = null, banner = null, rthCountdownS = null, receivedAtMs = 0L,
 )
 
+/** ArduCopter's SmartRTL mode. */
+private val SMART_RTL = FlightMode(21, "SMART_RTL")
+
 class PilotRoutingTest {
-    private val vehicle = FakeVehicle()
+    private val vehicle = FakeVehicle().apply { control.availableModes.value = control.availableModes.value + SMART_RTL }
     private val builtins = BuiltinSkills.from(testSpec.builtins, testSpec.ds4)
     private fun builtin(id: String) = builtins.first { it.id == id }
+
+    /** What a return the pilot did not take sends to the FC in ADOS control: SmartRTL, never RTL. */
+    private val smartRtl = VehicleCommand.SetMode(SMART_RTL)
 
     private fun ctx(link: PilotLink, fcFresh: Boolean = true, pilot: PilotState = adosPilot()) =
         SkillContext(vehicle, armed = true, mode = null, linkFresh = fcFresh, checklistReady = true, autonomousNav = true, pilot = pilot, pilotLink = link)
@@ -87,7 +93,7 @@ class PilotRoutingTest {
         }
         assertTrue("nothing is written into the dead channel", link.actions.isEmpty())
         val sent = vehicle.control.sent
-        assertEquals(VehicleCommand.ReturnToLaunch, sent[1])
+        assertEquals(smartRtl, sent[1])
         assertEquals(VehicleCommand.Land, sent[2])
         assertEquals(VehicleCommand.Kill, sent[3])
         assertEquals(4, sent.size)
@@ -122,7 +128,7 @@ class PilotRoutingTest {
         assertEquals(CommandResult.Rejected(-1, "readiness red"), builtin("takeoff").activate(ctx(link, pilot = adosPilot(armed = false)), emptyMap()))
         link.answer = PilotActionResult.NoAnswer
         assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(link), emptyMap()))
-        assertEquals(listOf<VehicleCommand>(VehicleCommand.ReturnToLaunch), vehicle.control.sent)
+        assertEquals(listOf<VehicleCommand>(smartRtl), vehicle.control.sent)
         assertEquals(CommandResult.Timeout, builtin("rth").activate(ctx(link, fcFresh = false), emptyMap()))
         link.answer = PilotActionResult.Accepted
         assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(link), emptyMap()))
@@ -138,7 +144,7 @@ class PilotRoutingTest {
             assertEquals(id, CommandResult.Accepted, builtin(id).activate(c, emptyMap()))
         }
         assertTrue("nothing waits on the silent pilot", link.actions.isEmpty())
-        assertEquals(listOf(VehicleCommand.ReturnToLaunch, VehicleCommand.Land, VehicleCommand.Kill), vehicle.control.sent.drop(1))
+        assertEquals(listOf(smartRtl, VehicleCommand.Land, VehicleCommand.Kill), vehicle.control.sent.drop(1))
     }
 
     @Test
@@ -165,7 +171,7 @@ class PilotRoutingTest {
     fun `an older unanswered recovery press never falls back to the FC after a newer one went out`() = runTest {
         for ((older, newer, want) in listOf(
             Triple("rth", "land", VehicleCommand.Land),
-            Triple("pause", "rth", VehicleCommand.ReturnToLaunch),
+            Triple("pause", "rth", smartRtl),
             Triple("land", "kill", VehicleCommand.Kill),
         )) {
             vehicle.control.sent.clear()
@@ -259,7 +265,35 @@ class PilotRoutingTest {
         val link = FakePilotLink(answer = PilotActionResult.NoAnswer)
         builtin("land").activate(ctx(link), emptyMap())
         assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(link), emptyMap()))
-        assertEquals(listOf(VehicleCommand.Land, VehicleCommand.ReturnToLaunch), vehicle.control.sent)
+        assertEquals(listOf(VehicleCommand.Land, smartRtl), vehicle.control.sent)
+    }
+
+    @Test
+    fun `in ADOS control a return the pilot does not take never goes to the FC as a straight RTL`() = runTest {
+        val link = FakePilotLink(connected = false)
+        assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(link), emptyMap()))
+        assertEquals(listOf<VehicleCommand>(smartRtl), vehicle.control.sent)
+
+        // The FC refuses SmartRTL (no flown path): it lands in place.
+        vehicle.control.sent.clear()
+        vehicle.control.result = CommandResult.Rejected(4, "denied")
+        builtin("rth").activate(ctx(link), emptyMap())
+        assertEquals(listOf(smartRtl, VehicleCommand.Land), vehicle.control.sent)
+
+        // Firmware without SmartRTL: it lands in place.
+        vehicle.control.sent.clear()
+        vehicle.control.result = CommandResult.Accepted
+        vehicle.control.availableModes.value = vehicle.control.availableModes.value - SMART_RTL
+        assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(link), emptyMap()))
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.Land), vehicle.control.sent)
+        assertTrue(vehicle.control.sent.none { it == VehicleCommand.ReturnToLaunch })
+    }
+
+    @Test
+    fun `outside ADOS control the return is the FC's own RTL`() = runTest {
+        val fcControl = adosPilot().copy(controlMode = ControlMode.FcManual)
+        assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(FakePilotLink(connected = false), pilot = fcControl), emptyMap()))
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.ReturnToLaunch), vehicle.control.sent)
     }
 
     @Test

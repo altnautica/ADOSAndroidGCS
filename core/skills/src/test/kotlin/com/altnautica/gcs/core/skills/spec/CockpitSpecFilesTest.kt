@@ -8,10 +8,13 @@ import java.io.File
 class CockpitSpecFilesTest {
     private val dir = File("../../feature/cockpit/src/main/assets/cockpit-spec")
 
+    /** Spec files carried byte for byte with the canonical spec that this app does not read yet. */
+    private val carriedUnread = setOf("sensor-health.json")
+
     @Test
     fun `every shipped spec json file has a CockpitSpecFile entry`() {
         val shipped = dir.listFiles { f -> f.isFile && f.name.endsWith(".json") }.orEmpty().map { it.name }.toSortedSet()
-        val registered = CockpitSpecFile.entries.map { it.fileName }.toSortedSet()
+        val registered = (CockpitSpecFile.entries.map { it.fileName } + carriedUnread).toSortedSet()
         assertEquals(shipped, registered)
     }
 }

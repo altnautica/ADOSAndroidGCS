@@ -116,7 +116,7 @@ fun PlannerUiState.toOverlays(): MapOverlays {
     }
 
     return MapOverlays(
-        waypoints = waypoints,
+        waypoints = waypoints + skipped.map(::skippedMarker),
         lines = lines,
         polygons = polygons,
         circles = circles,
@@ -124,6 +124,10 @@ fun PlannerUiState.toOverlays(): MapOverlays {
         handles = handles,
     )
 }
+
+/** A skipped waypoint's marker: the item number crossed out, in the skipped colour; not selectable or draggable. */
+internal fun skippedMarker(wp: SkippedWaypoint) =
+    MapWaypoint(id = "skipped-${wp.seq}", position = wp.position, label = "\u00D7${wp.label}", kind = WaypointKind.Skipped, draggable = false)
 
 /** Home marker position: the plan home, else the vehicle's. */
 fun PlannerUiState.homeMarker(): GeoPoint? = plan.home?.position ?: (link as? VehicleLink.Connected)?.home

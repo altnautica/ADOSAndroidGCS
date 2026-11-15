@@ -4,7 +4,11 @@ import com.altnautica.gcs.core.model.AvoidMode
 import com.altnautica.gcs.core.model.AvoidState
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.InputSession
+import com.altnautica.gcs.core.model.MissionGap
+import com.altnautica.gcs.core.model.MissionStall
+import com.altnautica.gcs.core.model.MissionStallKind
 import com.altnautica.gcs.core.model.MissionState
+import com.altnautica.gcs.core.model.MissionTarget
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotInput
 import com.altnautica.gcs.core.model.PilotOwner
@@ -231,6 +235,44 @@ class PilotWireTest {
         val ground = checkNotNull(PilotWire.parseState(Json.parseToJsonElement("""{"owner":"idle","armed":false,"landed":true}""") as JsonObject, 0L))
         assertFalse(ground.armStateUnknown)
         assertFalse(ground.possiblyAirborne)
+    }
+
+    @Test
+    fun `the stall golden frame parses the mission stall, its target and the skipped waypoints`() {
+        val text = checkNotNull(javaClass.classLoader!!.getResource("fixtures/pilot-frame-stall.json")).readText()
+        val s = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(text) as JsonObject, 0L))
+        assertEquals("mission-stalled", s.holdReason)
+        assertEquals(MissionStall(MissionStallKind.Mission, 3, "3", 1793960000000L, 32.5f, 15f), s.missionStall)
+        val m = checkNotNull(s.mission)
+        assertEquals(MissionTarget(3, 16, listOf(42.5f, -18f, -15f), null), m.target)
+        assertEquals(listOf(MissionGap(2, "stall_timeout", 1793959950000L)), m.gaps)
+        assertEquals("pilot.banner.mission_stalled", s.banner?.textKey)
+    }
+
+    @Test
+    fun `a frame without a stall leaves the stall, target and gaps absent`() {
+        val s = checkNotNull(PilotWire.parseState(data, 0L))
+        assertNull(s.missionStall)
+        assertNull(s.mission?.target)
+        assertEquals(emptyList<MissionGap>(), s.mission?.gaps)
+    }
+
+    @Test
+    fun `a return stall holds with no countdown, a malformed stall is dropped`() {
+        val ret = """{"owner":"pilot","mission_stall":{"kind":"return","seq":null,"wp_label":null,"since_ms":5,"skip_in_s":null,"window_s":15.0},
+            |"mission":{"state":"returning","seq":0,"total":4,"target":{"seq":0,"cmd":20,"ned":null,"radius_m":30.0}}}""".trimMargin()
+        val s = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(ret) as JsonObject, 0L))
+        assertEquals(MissionStall(MissionStallKind.Return, null, null, 5L, null, 15f), s.missionStall)
+        assertEquals(MissionTarget(0, 20, null, 30f), s.mission?.target)
+        for (bad in listOf("""{"kind":"warp","window_s":15}""", """{"kind":"mission","seq":3}""")) {
+            val b = checkNotNull(PilotWire.parseState(Json.parseToJsonElement("""{"owner":"pilot","mission_stall":$bad}""") as JsonObject, 0L))
+            assertNull(bad, b.missionStall)
+        }
+    }
+
+    @Test
+    fun `the waypoint skip action encodes by name`() {
+        assertEquals("""{"op":"action","name":"mission_skip","src":"android"}""", PilotWire.action(PilotAction(PilotAction.MISSION_SKIP), "android", null))
     }
 
     @Test

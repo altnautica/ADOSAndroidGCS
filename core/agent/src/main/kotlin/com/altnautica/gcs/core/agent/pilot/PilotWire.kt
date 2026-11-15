@@ -7,8 +7,12 @@ import com.altnautica.gcs.core.model.HandoverGate
 import com.altnautica.gcs.core.model.InputSession
 import com.altnautica.gcs.core.model.LaunchSequence
 import com.altnautica.gcs.core.model.LaunchStep
+import com.altnautica.gcs.core.model.MissionGap
+import com.altnautica.gcs.core.model.MissionStall
+import com.altnautica.gcs.core.model.MissionStallKind
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.MissionStatus
+import com.altnautica.gcs.core.model.MissionTarget
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotBanner
 import com.altnautica.gcs.core.model.PilotInput
@@ -156,6 +160,19 @@ object PilotWire {
             positionUnverified = (data["position_unverified"] as? JsonObject)?.let { u ->
                 PositionUnverified(u.str("reason") ?: return@let null, u.str("detail"), u.float("flow_mps"), u.float("estimate_mps"))
             },
+            missionStall = (data["mission_stall"] as? JsonObject)?.let(::missionStall),
+        )
+    }
+
+    private fun missionStall(o: JsonObject): MissionStall? {
+        val kind = MissionStallKind.of(o.str("kind")) ?: return null
+        return MissionStall(
+            kind = kind,
+            seq = o.long("seq")?.toInt(),
+            wpLabel = o.str("wp_label"),
+            sinceMs = o.long("since_ms"),
+            skipInS = o.float("skip_in_s"),
+            windowS = o.float("window_s") ?: return null,
         )
     }
 
@@ -181,6 +198,13 @@ object PilotWire {
             ageMs = o.long("age_ms"),
             landingSeq = o.bool("landing_seq") == true,
             uploadsSeen = o.long("uploads_seen"),
+            target = (o["target"] as? JsonObject)?.let { t ->
+                MissionTarget(t.long("seq")?.toInt() ?: return@let null, t.long("cmd")?.toInt(), floats(t["ned"], 3), t.float("radius_m"))
+            },
+            gaps = (o["gaps"] as? JsonArray).orEmpty().mapNotNull { e ->
+                val g = e as? JsonObject ?: return@mapNotNull null
+                MissionGap(g.long("seq")?.toInt() ?: return@mapNotNull null, g.str("reason").orEmpty(), g.long("at_ms"))
+            },
         )
     }
 

@@ -66,6 +66,7 @@ internal data class IconPalette(
     val returnHome: Int,
     val loiter: Int,
     val roi: Int,
+    val skipped: Int,
     val selected: Int,
     val home: Int,
     val rally: Int,
@@ -98,6 +99,7 @@ internal class MapIconFactory(private val density: Float, private val palette: I
         WaypointKind.ReturnHome -> palette.returnHome
         WaypointKind.Loiter -> palette.loiter
         WaypointKind.RegionOfInterest -> palette.roi
+        WaypointKind.Skipped -> palette.skipped
     }
 
     private fun px(dp: Float) = dp * density

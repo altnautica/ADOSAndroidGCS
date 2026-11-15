@@ -3,6 +3,8 @@ package com.altnautica.gcs.feature.plan
 import com.altnautica.gcs.core.agent.mission.MirrorItem
 import com.altnautica.gcs.core.agent.mission.MissionMirror
 import com.altnautica.gcs.core.link.mission.MissionItem
+import com.altnautica.gcs.core.map.GeoPoint
+import com.altnautica.gcs.core.model.MissionGap
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.feature.plan.model.MissionPlan
 import com.altnautica.gcs.feature.plan.model.MissionWire
@@ -30,6 +32,20 @@ object PlanIdentity {
 
     /** The receipt for a plan read from [mirror] itself (Load from drone). */
     fun receiptOf(mirror: MissionMirror) = PlanReceipt(mirror.mission?.id ?: 0L, mirror.count, mirror.uploadsSeen)
+
+    /**
+     * The skipped waypoints [gaps] names (wire `seq`), placed on the mirrored items with a
+     * position. [SkippedWaypoint.label] follows the planner's item numbering (1 = first item
+     * after ArduPilot's home slot).
+     */
+    fun skippedOf(mirror: MissionMirror, gaps: List<MissionGap>): List<SkippedWaypoint> {
+        val bySeq = mirror.items.filter { it.missionType == 0 }.associateBy { it.seq }
+        return gaps.map { it.seq }.distinct().mapNotNull { seq ->
+            val item = bySeq[seq]?.takeIf { it.x != 0 || it.y != 0 } ?: return@mapNotNull null
+            val number = if (mirror.homeSlot) seq else seq + 1
+            SkippedWaypoint(seq, number.toString(), GeoPoint(item.x / 1e7, item.y / 1e7))
+        }
+    }
 
     /** The mirrored mission as a plan; null when the vehicle holds no mission items. */
     fun planOf(mirror: MissionMirror, nextId: () -> Long): MissionPlan? {
@@ -60,3 +76,6 @@ data class DroneMissionUi(
     val state: MissionState,
     val differs: Boolean,
 )
+
+/** A waypoint the vehicle skipped (a coverage gap): its wire [seq], the planner's item [label], and where it is. */
+data class SkippedWaypoint(val seq: Int, val label: String, val position: GeoPoint)

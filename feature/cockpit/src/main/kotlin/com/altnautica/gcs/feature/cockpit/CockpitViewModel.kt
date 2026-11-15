@@ -76,6 +76,7 @@ import com.altnautica.gcs.feature.cockpit.chrome.StatusItem
 import com.altnautica.gcs.feature.cockpit.chrome.StatusModel
 import com.altnautica.gcs.feature.cockpit.confirm.ConfirmController
 import com.altnautica.gcs.feature.cockpit.flow.FlowUi
+import com.altnautica.gcs.feature.cockpit.flow.StallAction
 import com.altnautica.gcs.feature.cockpit.launch.LaunchDraft
 import com.altnautica.gcs.feature.cockpit.launch.LaunchUi
 import com.altnautica.gcs.feature.cockpit.manual.CockpitStickController
@@ -588,6 +589,9 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** Cancels the low-battery return countdown. */
     fun cancelRthCountdown() = pilotAction(PilotAction(PilotAction.RTH_CANCEL))
+
+    /** A stall overlay choice (skip the waypoint, return, land here), sent to the pilot. */
+    fun onStallAction(action: StallAction) = pilotAction(PilotAction(action.action))
 
     /** Takes the stick session over from another surface. */
     fun takeSticks() {

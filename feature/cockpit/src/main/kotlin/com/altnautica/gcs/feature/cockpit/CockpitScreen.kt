@@ -344,9 +344,9 @@ internal fun centreBannerTop(centreHeight: Dp): Dp {
     return if (readoutBottom - HEADING_READOUT_HEIGHT < BANNER_TOP + BANNER_HEIGHT) readoutBottom + BANNER_TOP else BANNER_TOP
 }
 
-/** The gap above the centre's banners, and the tallest banner (the low-battery one with its button). */
+/** The gap above the centre's banners, and the tallest banner (the mission stall: its title over a row of buttons). */
 internal val BANNER_TOP = 4.dp
-internal val BANNER_HEIGHT = 72.dp
+internal val BANNER_HEIGHT = 120.dp
 
 /** Landscape windows shorter than this are phones. */
 private const val PHONE_MAX_HEIGHT_DP = 480
