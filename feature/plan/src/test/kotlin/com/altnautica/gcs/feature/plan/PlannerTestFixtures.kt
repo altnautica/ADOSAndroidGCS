@@ -205,12 +205,28 @@ internal class PlannerHarness {
     val placeClassesSent = mutableListOf<com.altnautica.gcs.core.model.PlaceClass>()
     var placeClassAnswer: com.altnautica.gcs.core.model.PilotActionResult = com.altnautica.gcs.core.model.PilotActionResult.Accepted
 
+    /** Reads after an accepted place class that still return the view from before it (the agent's status lags a frame). */
+    var placeClassReadLag = 0
+
+    /** The route check the pilot reports once Start has set a confined class; null: none computed yet. */
+    var routeCheckAfterConfined: com.altnautica.gcs.core.model.RouteCheck? = null
+
+    private var lagged = com.altnautica.gcs.core.link.mission.PilotPlanView.None
+    private var lagLeft = 0
+
     private val pilotSource = object : com.altnautica.gcs.core.link.mission.VehiclePilotSource {
         override fun observe(id: DeviceId) = pilot
-        override suspend fun read(id: DeviceId) = pilot.value
+        override suspend fun read(id: DeviceId) = if (lagLeft > 0) lagged.also { lagLeft-- } else pilot.value
         override suspend fun setPlaceClass(id: DeviceId, placeClass: com.altnautica.gcs.core.model.PlaceClass): com.altnautica.gcs.core.model.PilotActionResult {
             placeClassesSent += placeClass
-            if (placeClassAnswer == com.altnautica.gcs.core.model.PilotActionResult.Accepted) pilot.value = pilot.value.copy(placeClass = placeClass)
+            // The agent takes the class only with a pilot state under 2 s old.
+            if ((pilot.value.ageMs ?: Long.MAX_VALUE) > 2_000) return com.altnautica.gcs.core.model.PilotActionResult.Unavailable
+            if (placeClassAnswer == com.altnautica.gcs.core.model.PilotActionResult.Accepted) {
+                lagged = pilot.value
+                lagLeft = placeClassReadLag
+                val rc = routeCheckAfterConfined.takeIf { placeClass == com.altnautica.gcs.core.model.PlaceClass.Confined }
+                pilot.value = pilot.value.copy(placeClass = placeClass, routeCheck = rc, tsMs = (pilot.value.tsMs ?: 0L) + 100)
+            }
             return placeClassAnswer
         }
     }

@@ -13,6 +13,12 @@ import androidx.compose.ui.platform.testTag
 import com.altnautica.gcs.core.designsystem.component.StatusChip
 import com.altnautica.gcs.core.designsystem.component.StatusLevel
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
+import com.altnautica.gcs.core.link.mission.VehiclePilotSource
+import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.RouteCheckState
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import com.altnautica.gcs.core.link.mission.PilotPlanView
 import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.model.RouteCheck
@@ -31,6 +37,50 @@ const val PLACE_CLASS_PICKER_TAG = "plan-place-class"
 internal fun placeClassMarginM(c: PlaceClass, pilot: PilotPlanView): Double? =
     pilot.routeCheck?.marginM?.takeIf { pilot.placeClass == c }
         ?: ConfinedText.effectiveMarginM(c, configuredM = null, propTipRadiusM = null)
+
+/** How long Start reads the pilot back for the class it set, and how often. */
+internal const val PLACE_CLASS_READ_BACK_MS = 3_000L
+internal const val PLACE_CLASS_POLL_MS = 250L
+
+/**
+ * Sets [placeClass] on the pilot of [nodeId] and reads it back: the error that stops the start
+ * (null to go on) and the last view read. An absent or stale pilot stops it before anything is
+ * sent, with its own reason. After an accepted set the pilot is read until a fresh frame newer
+ * than the one before the set reports the class (and, for a confined class, its route check of
+ * the mission), for at most [PLACE_CLASS_READ_BACK_MS]; a confined plan then needs that route
+ * check, and one that reads infeasible stops the start.
+ */
+internal suspend fun setPlaceClassChecked(source: VehiclePilotSource, nodeId: DeviceId, placeClass: PlaceClass): Pair<StartError?, PilotPlanView> {
+    val before = source.read(nodeId)
+    val unready = when {
+        before.placeClass == null -> "no_pilot"
+        !before.fresh -> "pilot_stale"
+        else -> null
+    }
+    if (unready != null) return StartError.PlaceClassRefused(PilotActionResult.Refused(unready)) to before
+    val result = source.setPlaceClass(nodeId, placeClass)
+    if (result != PilotActionResult.Accepted) return StartError.PlaceClassRefused(result) to before
+    val beforeTs = before.tsMs
+    fun settled(v: PilotPlanView): Boolean {
+        val newer = beforeTs == null || (v.tsMs ?: Long.MIN_VALUE) > beforeTs
+        return v.fresh && newer && v.placeClass == placeClass && (placeClass != PlaceClass.Confined || v.routeCheck != null)
+    }
+    var now = source.read(nodeId)
+    withTimeoutOrNull(PLACE_CLASS_READ_BACK_MS) {
+        while (!settled(now)) {
+            delay(PLACE_CLASS_POLL_MS)
+            now = source.read(nodeId)
+        }
+    }
+    val error = when {
+        now.placeClass != placeClass -> StartError.PlaceClassNotSet(now.placeClass)
+        placeClass != PlaceClass.Confined -> null
+        now.routeCheck == null -> StartError.RouteNotChecked
+        now.routeCheck?.state == RouteCheckState.Infeasible -> StartError.RouteInfeasible
+        else -> null
+    }
+    return error to now
+}
 
 /**
  * The plan's place class: Open / Confined space with the explain line, in the cockpit spec's
@@ -54,7 +104,10 @@ internal fun PlaceClassSelector(state: PlannerUiState, actions: PlannerActions) 
                 )
             }
         }
-        Text(text.explain(selected, placeClassMarginM(selected, state.pilot)), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+        // A plan from the vehicle with its class unset flies the pilot's: explain that one.
+        (selected ?: state.pilot.placeClass)?.let { c ->
+            Text(text.explain(c, placeClassMarginM(c, state.pilot)), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+        }
     }
 }
 

@@ -168,7 +168,8 @@ data class PlanHome(val position: GeoPoint, val altMslM: Float?)
 
 /**
  * A whole mission plan: path, fence and rally points. [placeClass] is the kind of place it
- * is flown in, set on the vehicle's pilot before the mission starts.
+ * is flown in, set on the vehicle's pilot before the mission starts; null for a plan built
+ * from the vehicle while its pilot's class was unknown, which Start leaves as the pilot has it.
  */
 data class MissionPlan(
     val items: List<PlanItem> = emptyList(),
@@ -176,7 +177,7 @@ data class MissionPlan(
     val rally: List<RallyPoint> = emptyList(),
     val home: PlanHome? = null,
     val cruiseSpeedMs: Float? = null,
-    val placeClass: PlaceClass = PlaceClass.Open,
+    val placeClass: PlaceClass? = PlaceClass.Open,
 ) {
     val isEmpty: Boolean get() = items.isEmpty() && fence.isEmpty() && rally.isEmpty()
 }

@@ -51,7 +51,8 @@ class PlaceClassPlanTest {
     @Test
     fun `the picker's class is kept in the plan and Start sets it on the pilot before arming`() = runTest {
         h.withViewModel { vm ->
-            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Open)
+            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Open, ageMs = 0)
+            h.routeCheckAfterConfined = check(RouteCheckState.Feasible)
             h.connect(vm, armed = false)
             vm.onMapTap(a)
             vm.onMapTap(b)
@@ -76,7 +77,7 @@ class PlaceClassPlanTest {
     @Test
     fun `a refused place class stops the start with nothing armed`() = runTest {
         h.withViewModel { vm ->
-            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Open)
+            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Open, ageMs = 0)
             h.placeClassAnswer = PilotActionResult.Refused("armed")
             h.connect(vm, armed = false)
             vm.onMapTap(a)
@@ -94,7 +95,7 @@ class PlaceClassPlanTest {
     @Test
     fun `an infeasible route check blocks a confined start, and a confined plan needs a pilot`() = runTest {
         h.withViewModel { vm ->
-            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Confined, routeCheck = check(RouteCheckState.Infeasible))
+            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Confined, routeCheck = check(RouteCheckState.Infeasible), ageMs = 0)
             h.connect(vm, armed = false)
             vm.onMapTap(a)
             vm.setPlaceClass(PlaceClass.Confined)
@@ -105,7 +106,7 @@ class PlaceClassPlanTest {
             assertFalse(sheet.canSlide)
             assertEquals(RouteCheckState.Infeasible, sheet.routeCheck?.state)
 
-            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Confined, routeCheck = check(RouteCheckState.Unverified))
+            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Confined, routeCheck = check(RouteCheckState.Unverified), ageMs = 0)
             sheet = vm.state.value.startSheet!!
             assertTrue(sheet.checks.single { it.kind == StartCheckKind.RouteCheck }.ok)
 

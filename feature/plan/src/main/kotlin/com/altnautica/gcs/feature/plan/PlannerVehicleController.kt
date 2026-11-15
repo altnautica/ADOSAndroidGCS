@@ -12,7 +12,6 @@ import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.mission.TransferDirection
 import com.altnautica.gcs.core.link.mission.UploadReceipt
 import com.altnautica.gcs.core.agent.mission.MissionMirror
-import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.MissionState
@@ -180,10 +179,10 @@ internal class PlannerVehicleController(
         return next.copy(startSheet = next.startSheet?.let { refreshChecks(it, next) })
     }
 
-    /** Replaces the open plan with the vehicle's mirrored plan ("Load from drone"). */
+    /** Replaces the open plan with the vehicle's mirrored plan ("Load from drone"), in the class its pilot flies (unset while unknown). */
     fun loadFromDrone() {
         val m = mirror ?: return
-        val plan = state.value.drone?.plan ?: return
+        val plan = state.value.drone?.plan?.copy(placeClass = pilot.placeClass) ?: return
         if (state.value.transferring) return
         replacePlan(plan, state.value.nodeName.orEmpty(), null, true)
         receipt = PlanIdentity.receiptOf(m)
@@ -340,12 +339,14 @@ internal class PlannerVehicleController(
                 state.update { it.copy(transfer = TransferState.Done(TransferDirection.Download, 0), message = message) }
                 return@runTransfer
             }
-            replacePlan(rebuilt.plan, state.value.nodeName.orEmpty(), null, true)
+            // The vehicle's plan flies the class its pilot flies; unset while unknown, so Start never changes it.
+            val plan = rebuilt.plan.copy(placeClass = pilot.placeClass)
+            replacePlan(plan, state.value.nodeName.orEmpty(), null, true)
             mirror?.let { receipt = PlanIdentity.receiptOf(it) }
             state.update {
                 it.copy(
                     transfer = TransferState.Done(TransferDirection.Download, mission.items.size),
-                    vehiclePlan = rebuilt.plan,
+                    vehiclePlan = plan,
                     message = message ?: it.message,
                 )
             }
@@ -401,9 +402,14 @@ internal class PlannerVehicleController(
         val nodeId = state.value.nodeId ?: return
         state.update { it.copy(startSheet = sheet.copy(running = true, error = null)) }
         startJob = scope.launch {
-            if (sheet.setsPlaceClass) placeClassError(nodeId, sheet.placeClass)?.let { error ->
-                state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = error)) }
-                return@launch
+            if (sheet.setsPlaceClass) {
+                val (error, now) = setPlaceClassChecked(pilotSource, nodeId, checkNotNull(sheet.placeClass))
+                pilot = now
+                state.update { it.copy(pilot = now) }
+                if (error != null) {
+                    state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = error)) }
+                    return@launch
+                }
             }
             if (!sheet.armed) {
                 val armed = svc.vehicle.control.run(VehicleCommand.Arm())
@@ -423,36 +429,27 @@ internal class PlannerVehicleController(
 
     fun onMissionStartHandled() = state.update { it.copy(missionStartedFor = null) }
 
-    /** Sets [placeClass] on the pilot of [nodeId] and reads it back; the error that stops the start, or null. */
-    private suspend fun placeClassError(nodeId: DeviceId, placeClass: PlaceClass): StartError? {
-        val result = pilotSource.setPlaceClass(nodeId, placeClass)
-        if (result != PilotActionResult.Accepted) return StartError.PlaceClassRefused(result)
-        val now = pilotSource.read(nodeId)
-        pilot = now
-        state.update { it.copy(pilot = now) }
-        return when {
-            now.placeClass != placeClass -> StartError.PlaceClassNotSet(now.placeClass)
-            placeClass == PlaceClass.Confined && now.routeCheck?.state == RouteCheckState.Infeasible -> StartError.RouteInfeasible
-            else -> null
-        }
-    }
-
     private fun refreshChecks(sheet: StartMissionSheet, s: PlannerUiState): StartMissionSheet {
         val link = s.link as? VehicleLink.Connected
         val fix = link?.gpsFix
         val planClass = s.plan.placeClass
         val pilotClass = s.pilot.placeClass
+        // A plan with its class unset flies the pilot's.
+        val flown = planClass ?: pilotClass
+        val sets = planClass != null && pilotClass != null && pilotClass != planClass
         // The pilot's route check stands for the plan only while it flies the plan's class.
-        val routeCheck = s.pilot.routeCheck?.takeIf { pilotClass == planClass }
+        val routeCheck = s.pilot.routeCheck?.takeIf { pilotClass == flown }
         val checks = buildList {
             add(StartCheck(StartCheckKind.LinkFresh, link?.linkFresh == true))
             add(StartCheck(StartCheckKind.PlanOnVehicle, s.planOnVehicle))
             // A pilot that reports a class takes the plan's on Start; a confined plan needs one.
-            if (planClass == PlaceClass.Confined || pilotClass != null) {
-                add(StartCheck(StartCheckKind.PlaceClass, planClass == PlaceClass.Open || pilotClass != null))
+            if (flown == PlaceClass.Confined || pilotClass != null) {
+                add(StartCheck(StartCheckKind.PlaceClass, flown == PlaceClass.Open || pilotClass != null))
             }
-            if (planClass == PlaceClass.Confined) {
-                add(StartCheck(StartCheckKind.RouteCheck, routeCheck?.state != RouteCheckState.Infeasible))
+            // A confined plan needs the pilot's route check of the mission, not infeasible; one
+            // Start still has to set is read back after the set.
+            if (flown == PlaceClass.Confined) {
+                add(StartCheck(StartCheckKind.RouteCheck, sets || (routeCheck != null && routeCheck.state != RouteCheckState.Infeasible)))
             }
             add(StartCheck(StartCheckKind.GpsFix, fix != null && fix >= GpsFix.Fix3D))
             add(StartCheck(StartCheckKind.HomeSet, link?.home != null))

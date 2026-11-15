@@ -109,6 +109,7 @@
     <string name="plan_start_error_start">Mission start refused: %1$s</string>
     <string name="plan_start_error_place">Place not set: %1$s</string>
     <string name="plan_start_error_place_unconfirmed">Place not set: the drone still flies %1$s</string>
+    <string name="plan_start_error_route_unchecked">Not started: the drone has not checked this route for the confined profile yet</string>
     <string name="plan_result_denied">the drone refused it</string>
     <string name="plan_result_temporarily_rejected">the drone can\'t do that right now; try again</string>
     <string name="plan_result_failed">the drone tried and failed</string>

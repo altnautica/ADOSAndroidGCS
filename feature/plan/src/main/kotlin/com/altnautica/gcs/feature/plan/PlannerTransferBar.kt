@@ -196,7 +196,7 @@ internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerAct
                     when (check.kind) {
                         StartCheckKind.LinkFresh -> stringResource(R.string.plan_start_check_link)
                         StartCheckKind.PlanOnVehicle -> stringResource(R.string.plan_start_check_plan)
-                        StartCheckKind.PlaceClass -> stringResource(R.string.plan_start_check_place, classLabel(sheet.placeClass))
+                        StartCheckKind.PlaceClass -> stringResource(R.string.plan_start_check_place, classLabel(sheet.placeClass ?: sheet.pilotPlaceClass))
                         StartCheckKind.RouteCheck -> specText?.text("route_check.title") ?: stringResource(R.string.plan_start_check_route)
                         StartCheckKind.GpsFix -> stringResource(R.string.plan_start_check_gps)
                         StartCheckKind.HomeSet -> stringResource(R.string.plan_start_check_home)
@@ -234,6 +234,7 @@ internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerAct
                 is StartError.PlaceClassRefused -> stringResource(R.string.plan_start_error_place, refusal(placeClassRefusalCode(error.result)))
                 is StartError.PlaceClassNotSet -> stringResource(R.string.plan_start_error_place_unconfirmed, classLabel(error.reported))
                 StartError.RouteInfeasible -> refusal("route_infeasible")
+                StartError.RouteNotChecked -> stringResource(R.string.plan_start_error_route_unchecked)
             }
             StatusChip(level = StatusLevel.Error, label = text)
         }

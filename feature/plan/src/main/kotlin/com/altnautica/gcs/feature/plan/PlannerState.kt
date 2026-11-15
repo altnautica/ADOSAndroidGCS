@@ -122,6 +122,9 @@ sealed interface StartError {
 
     /** Once in the plan's class, the pilot's route check reads infeasible: nothing was armed. */
     data object RouteInfeasible : StartError
+
+    /** A confined plan the pilot has not route-checked within the read-back: nothing was armed. */
+    data object RouteNotChecked : StartError
 }
 
 /** "Start mission" confirm sheet (slide tier). */
@@ -131,8 +134,8 @@ data class StartMissionSheet(
     val overrideChecklist: Boolean = false,
     val running: Boolean = false,
     val error: StartError? = null,
-    /** The plan's place class, and the one the vehicle's pilot flies now (null with no pilot). */
-    val placeClass: PlaceClass = PlaceClass.Open,
+    /** The plan's place class (null: the plan leaves it as the pilot has it), and the one the vehicle's pilot flies now (null with no pilot). */
+    val placeClass: PlaceClass? = PlaceClass.Open,
     val pilotPlaceClass: PlaceClass? = null,
     /** The pilot's route check of the loaded mission, while it flies the plan's class. */
     val routeCheck: RouteCheck? = null,
@@ -148,7 +151,7 @@ data class StartMissionSheet(
     val needsOverride: Boolean get() = blockingOk && !softOk
 
     /** Start sets the plan's place class on the pilot before arming. */
-    val setsPlaceClass: Boolean get() = pilotPlaceClass != null && pilotPlaceClass != placeClass
+    val setsPlaceClass: Boolean get() = placeClass != null && pilotPlaceClass != null && pilotPlaceClass != placeClass
 }
 
 /** One-shot notices. */
