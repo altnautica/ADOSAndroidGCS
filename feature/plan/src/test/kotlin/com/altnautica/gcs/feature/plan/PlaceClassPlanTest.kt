@@ -35,7 +35,7 @@ class PlaceClassPlanTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun check(rc: RouteCheckState) = RouteCheck(rc, 0.577f, 0.477f, 0.02f, null, emptyList())
+    private fun check(rc: RouteCheckState) = RouteCheck(rc, 0.577, 0.477, 0.02, null, emptyList())
 
     @Test
     fun `a confined plan round-trips its place class through the saved plan file, an open one writes nothing`() {

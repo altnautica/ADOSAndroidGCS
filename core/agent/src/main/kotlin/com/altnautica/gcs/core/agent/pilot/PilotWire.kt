@@ -175,21 +175,27 @@ object PilotWire {
         val state = RouteCheckState.of(o.str("state")) ?: return null
         return RouteCheck(
             state = state,
-            requiredM = o.float("required_m") ?: return null,
-            marginM = o.float("margin_m"),
-            sigmaM = o.float("sigma_m"),
+            requiredM = o.double("required_m") ?: return null,
+            marginM = o.double("margin_m"),
+            sigmaM = o.double("sigma_m"),
             pinch = (o["pinch"] as? JsonObject)?.let { p ->
                 RoutePinch(
                     fromSeq = p.long("from_seq")?.toInt() ?: return@let null,
                     toSeq = p.long("to_seq")?.toInt() ?: return@let null,
-                    ned = floats(p["ned"], 3) ?: return@let null,
-                    clearanceM = p.float("clearance_m") ?: return@let null,
-                    requiredM = p.float("required_m") ?: return@let null,
+                    ned = doubles(p["ned"], 3) ?: return@let null,
+                    clearanceM = p.double("clearance_m") ?: return@let null,
+                    requiredM = p.double("required_m") ?: return@let null,
                 )
             },
-            unverifiedLegs = (o["unverified_legs"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.longOrNull?.toInt() },
+            unverifiedLegs = seqs(o["unverified_legs"]),
+            unchecked = seqs(o["unchecked"]),
+            truncated = o.bool("truncated") == true,
         )
     }
+
+    /** The numeric entries of a mission-item seq array; anything else is skipped. */
+    private fun seqs(e: JsonElement?): List<Int> =
+        (e as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.longOrNull?.toInt() }
 
     private fun missionStall(o: JsonObject): MissionStall? {
         val kind = MissionStallKind.of(o.str("kind")) ?: return null
@@ -302,6 +308,8 @@ object PilotWire {
 
     private fun JsonObject.float(key: String): Float? = prim(key)?.takeIf { !it.isString }?.doubleOrNull?.toFloat()
 
+    private fun JsonObject.double(key: String): Double? = prim(key)?.takeIf { !it.isString }?.doubleOrNull
+
     private fun JsonObject.bool(key: String): Boolean? = prim(key)?.takeIf { !it.isString }?.booleanOrNull
 
     /** A numeric array of exactly [n] entries, or null. */
@@ -309,5 +317,12 @@ object PilotWire {
         val a = e as? JsonArray ?: return null
         if (a.size != n) return null
         return a.map { (it as? JsonPrimitive)?.takeIf { p -> p !is JsonNull && !p.isString }?.doubleOrNull?.toFloat() ?: return null }
+    }
+
+    /** A numeric array of exactly [n] entries at full precision, or null. */
+    private fun doubles(e: JsonElement?, n: Int): List<Double>? {
+        val a = e as? JsonArray ?: return null
+        if (a.size != n) return null
+        return a.map { (it as? JsonPrimitive)?.takeIf { p -> p !is JsonNull && !p.isString }?.doubleOrNull ?: return null }
     }
 }

@@ -177,22 +177,27 @@ enum class RouteCheckState(val wire: String) {
 /**
  * The tightest checked point of the route: on the leg [fromSeq]→[toSeq], at [ned] (local
  * north, east, down in metres), [clearanceM] from the nearest obstacle against [requiredM].
+ * Distances keep the wire's double precision, so they round as the agent and the web print them.
  */
-data class RoutePinch(val fromSeq: Int, val toSeq: Int, val ned: List<Float>, val clearanceM: Float, val requiredM: Float)
+data class RoutePinch(val fromSeq: Int, val toSeq: Int, val ned: List<Double>, val clearanceM: Double, val requiredM: Double)
 
 /**
  * The confined profile's check of the loaded mission ([PilotState.routeCheck]): its [state],
  * the clearance it needs ([requiredM] = [marginM] plus the pose uncertainty term), the live
  * pose σ ([sigmaM], null when unknown), the [pinch] and the legs ([unverifiedLegs], by their
- * end waypoint) running through unobserved cells.
+ * end waypoint) running through unobserved cells. [unchecked] lists the mission items the check
+ * cannot place (no position; the legs to and from them are not checked) and [truncated] says the
+ * mission is longer than the route the check holds: either keeps the state at best unverified.
  */
 data class RouteCheck(
     val state: RouteCheckState,
-    val requiredM: Float,
-    val marginM: Float?,
-    val sigmaM: Float?,
+    val requiredM: Double,
+    val marginM: Double?,
+    val sigmaM: Double?,
     val pinch: RoutePinch?,
     val unverifiedLegs: List<Int>,
+    val unchecked: List<Int> = emptyList(),
+    val truncated: Boolean = false,
 )
 
 enum class ReadinessSeverity { Block, Warn }

@@ -133,7 +133,7 @@ data class LaunchUi(
      * margin from its route check when it checks in that class, else the class default
      * (unknown for a confined place, which depends on the airframe's prop radius).
      */
-    val marginM: Float?
+    val marginM: Double?
         get() = routeCheck?.marginM?.takeIf { pilotPlaceClass == placeClass }
             ?: ConfinedText.effectiveMarginM(placeClass, configuredM = null, propTipRadiusM = null)
 }

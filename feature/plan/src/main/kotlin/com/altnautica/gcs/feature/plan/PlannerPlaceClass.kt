@@ -28,7 +28,7 @@ const val PLACE_CLASS_PICKER_TAG = "plan-place-class"
  * route check while it flies [c], else the class default (unknown for a confined place, which
  * depends on the airframe's prop radius).
  */
-internal fun placeClassMarginM(c: PlaceClass, pilot: PilotPlanView): Float? =
+internal fun placeClassMarginM(c: PlaceClass, pilot: PilotPlanView): Double? =
     pilot.routeCheck?.marginM?.takeIf { pilot.placeClass == c }
         ?: ConfinedText.effectiveMarginM(c, configuredM = null, propTipRadiusM = null)
 

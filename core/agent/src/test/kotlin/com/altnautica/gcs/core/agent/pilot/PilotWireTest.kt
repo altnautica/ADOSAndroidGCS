@@ -283,10 +283,10 @@ class PilotWireTest {
         assertEquals(
             RouteCheck(
                 state = RouteCheckState.Infeasible,
-                requiredM = 0.577f,
-                marginM = 0.477f,
-                sigmaM = 0.02f,
-                pinch = RoutePinch(3, 4, listOf(41.25f, -17.5f, -2f), 0.52f, 0.577f),
+                requiredM = 0.577,
+                marginM = 0.477,
+                sigmaM = 0.02,
+                pinch = RoutePinch(3, 4, listOf(41.25, -17.5, -2.0), 0.52, 0.577),
                 unverifiedLegs = listOf(5, 6),
             ),
             s.routeCheck,
@@ -304,11 +304,24 @@ class PilotWireTest {
         assertNull(s.routeCheck)
         val rc = """{"owner":"pilot","place_class":"confined","route_check":{"state":"unverified","required_m":0.577,"margin_m":0.477,"sigma_m":null,"pinch":null,"unverified_legs":[2]}}"""
         val u = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(rc) as JsonObject, 0L))
-        assertEquals(RouteCheck(RouteCheckState.Unverified, 0.577f, 0.477f, null, null, listOf(2)), u.routeCheck)
+        assertEquals(RouteCheck(RouteCheckState.Unverified, 0.577, 0.477, null, null, listOf(2)), u.routeCheck)
         val bad = """{"owner":"pilot","place_class":"cave","route_check":{"state":"maybe","required_m":0.5}}"""
         val b = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(bad) as JsonObject, 0L))
         assertEquals(PlaceClass.Open, b.placeClass)
         assertNull(b.routeCheck)
+    }
+
+    @Test
+    fun `the route check names the waypoints it cannot place and a mission too long to hold, both absent by default`() {
+        val rc = """{"owner":"pilot","place_class":"confined","route_check":{"state":"unverified","required_m":0.577,"unverified_legs":[],
+            |"unchecked":[3,"x",5,null],"truncated":true}}""".trimMargin()
+        val u = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(rc) as JsonObject, 0L)).routeCheck!!
+        assertEquals(listOf(3, 5), u.unchecked)
+        assertTrue(u.truncated)
+        val plain = """{"owner":"pilot","route_check":{"state":"feasible","required_m":0.577,"unverified_legs":[]}}"""
+        val p = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(plain) as JsonObject, 0L)).routeCheck!!
+        assertEquals(emptyList<Int>(), p.unchecked)
+        assertFalse(p.truncated)
     }
 
     @Test
