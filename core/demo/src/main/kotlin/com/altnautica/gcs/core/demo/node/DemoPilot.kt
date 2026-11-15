@@ -70,6 +70,7 @@ internal class DemoPilot(
     private var controlMode = "ados"
     private var profile = "normal"
     private var avoid = "brake"
+    private var placeClass = "open"
 
     private var session: PilotSession? = null
     private var gate: PilotGate? = null
@@ -191,6 +192,11 @@ internal class DemoPilot(
             name.startsWith("profile:") -> profile = name.removePrefix("profile:").takeIf { it in PROFILES } ?: return "bad_value"
             name.startsWith("control_mode:") -> controlMode = name.removePrefix("control_mode:").takeIf { it in CONTROL_MODES } ?: return "bad_value"
             name.startsWith("avoid:") -> avoid = name.removePrefix("avoid:").takeIf { it in AVOID_MODES } ?: return "bad_value"
+            // The place class is chosen on the ground only.
+            name.startsWith("place_class:") -> {
+                if (armed(t)) return "armed"
+                placeClass = name.removePrefix("place_class:").takeIf { it in PLACE_CLASSES } ?: return "bad_value"
+            }
             name.startsWith("vtol:") -> return "vehicle_class"
             else -> when (name) {
                 "arm" -> {
@@ -211,6 +217,8 @@ internal class DemoPilot(
                 "launch" -> {
                     val after = args?.text("after") ?: "hold"
                     if (after !in AFTERS) return "bad_after"
+                    // A confined mission whose route check is infeasible is never launched.
+                    if (after == "mission" && pinned(t) == DemoScenario.ConfinedRouteInfeasible) return "route_infeasible"
                     return startLaunch(after, altArg(args) ?: LAUNCH_ALT_M, checks = true, t)
                 }
                 "land" -> {
@@ -245,8 +253,12 @@ internal class DemoPilot(
                     controlMode = "fc_manual"
                 }
                 "resume", "rth_cancel" -> Unit
-                // The demo flies no mission, so it never stalls: there is no waypoint to skip.
-                "mission_skip" -> return if (armed(t)) "no_stall" else "disarmed"
+                // The demo flies no mission of its own, so only the too-tight-route hold has a waypoint to skip.
+                "mission_skip" -> return when {
+                    !armed(t) -> "disarmed"
+                    pinned(t) == DemoScenario.HoldRouteInfeasible -> null
+                    else -> "no_stall"
+                }
                 else -> return "unknown_action"
             }
         }
@@ -486,7 +498,7 @@ internal class DemoPilot(
             val shownOwner = if (gotoAtMs != null && owner != IDLE) GOTO else owner
             Captured(
                 t = t,
-                live = PilotLive(shownOwner, controlMode, profile, avoid, session?.copy(), gate?.copy(), launch?.copy()),
+                live = PilotLive(shownOwner, controlMode, profile, avoid, session?.copy(), gate?.copy(), launch?.copy(), placeClass),
                 fc = FcLive(fc.armed, fc.mode, landed, fc.altitudeM),
                 pins = pins(),
                 scenario = scenario,

@@ -1,11 +1,16 @@
 package com.altnautica.gcs.core.demo.node
 
 import com.altnautica.gcs.core.demo.DemoScenario
+import com.altnautica.gcs.core.agent.pilot.PilotWire
 import com.altnautica.gcs.core.demo.DemoScenarioStore
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.ARM_DISARM
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.GUIDED
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.SET_MODE
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.TAKEOFF
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RouteCheckState
+import com.altnautica.gcs.core.model.RoutePinch
+import com.altnautica.gcs.core.model.SpeedCap
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
@@ -106,6 +111,55 @@ class DemoPilotTest {
         fly(500)
         assertEquals("no_stall", action("mission_skip").str("err"))
         assertEquals(false, action("mission_skip")["ok"]!!.jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
+    fun `the place class is set on the ground, refused in the air, and reported on the live frame`() {
+        assertEquals("open", state().str("place_class"))
+        assertEquals(true, action("place_class:confined")["ok"]!!.jsonPrimitive.boolean)
+        assertEquals(PlaceClass.Confined, PilotWire.parseState(state(), 0L)!!.placeClass)
+        assertEquals("bad_value", action("place_class:cave").str("err"))
+        action("takeoff")
+        fly(500)
+        assertEquals("armed", action("place_class:open").str("err"))
+        assertEquals("confined", state().str("place_class"))
+    }
+
+    @Test
+    fun `the confined pins report each route check state, the confined cap, and refuse an infeasible mission launch`() {
+        val states = mapOf(
+            DemoScenario.ConfinedRouteFeasible to RouteCheckState.Feasible,
+            DemoScenario.ConfinedRouteUnverified to RouteCheckState.Unverified,
+            DemoScenario.ConfinedRouteInfeasible to RouteCheckState.Infeasible,
+            DemoScenario.ConfinedNearLimit to RouteCheckState.Feasible,
+        )
+        for ((scenario, want) in states) {
+            scenarios.pin(scenario)
+            val p = PilotWire.parseState(state(), 0L)!!
+            assertEquals(scenario.name, PlaceClass.Confined, p.placeClass)
+            assertEquals(scenario.name, want, p.routeCheck?.state)
+        }
+        scenarios.pin(DemoScenario.ConfinedRouteUnverified)
+        val unverified = PilotWire.parseState(state(), 0L)!!.routeCheck!!
+        assertNull(unverified.sigmaM)
+        assertEquals(listOf(5, 6), unverified.unverifiedLegs)
+        scenarios.pin(DemoScenario.ConfinedNearLimit)
+        assertEquals(SpeedCap("confined-near", 0.5f), PilotWire.parseState(state(), 0L)!!.speedCap)
+        scenarios.pin(DemoScenario.ConfinedRouteInfeasible)
+        assertEquals(RoutePinch(3, 4, listOf(41.25f, -17.5f, -2f), 0.52f, 0.577f), PilotWire.parseState(state(), 0L)!!.routeCheck!!.pinch)
+        assertEquals("route_infeasible", action("launch", """{"after":"mission"}""").str("err"))
+    }
+
+    @Test
+    fun `the too-tight-route hold shows the stall flow, its banner, and accepts a skip`() {
+        scenarios.pin(DemoScenario.HoldRouteInfeasible)
+        val p = PilotWire.parseState(state(), 0L)!!
+        assertEquals("route-infeasible", p.holdReason)
+        assertEquals("pilot.banner.route_infeasible", p.banner?.textKey)
+        assertEquals("3→4", p.banner?.args?.get("leg"))
+        assertEquals(RouteCheckState.Infeasible, p.routeCheck?.state)
+        assertNotNull(p.missionStall?.skipInS)
+        assertEquals(true, action("mission_skip")["ok"]!!.jsonPrimitive.boolean)
     }
 
     @Test
@@ -568,7 +622,7 @@ class DemoPilotTest {
     fun `hold pins use the pilot's hold reason wire strings and its banners`() {
         val holds = DemoScenario.entries.filter { it.holdReason != null }
         assertEquals(
-            listOf("controller-lost", "link-loss", "obstacle-close", "lease-revoked", "blocked"),
+            listOf("controller-lost", "link-loss", "obstacle-close", "lease-revoked", "blocked", "route-infeasible"),
             holds.map { it.holdReason },
         )
         for (scenario in holds) {

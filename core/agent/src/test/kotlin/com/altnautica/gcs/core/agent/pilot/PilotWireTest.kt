@@ -16,6 +16,11 @@ import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotSkillRef
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RouteCheck
+import com.altnautica.gcs.core.model.RouteCheckState
+import com.altnautica.gcs.core.model.RoutePinch
+import com.altnautica.gcs.core.model.SpeedCap
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -268,6 +273,50 @@ class PilotWireTest {
             val b = checkNotNull(PilotWire.parseState(Json.parseToJsonElement("""{"owner":"pilot","mission_stall":$bad}""") as JsonObject, 0L))
             assertNull(bad, b.missionStall)
         }
+    }
+
+    @Test
+    fun `the confined golden frame parses the place class, the route check and the confined speed cap`() {
+        val text = checkNotNull(javaClass.classLoader!!.getResource("fixtures/pilot-frame-confined.json")).readText()
+        val s = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(text) as JsonObject, 0L))
+        assertEquals(PlaceClass.Confined, s.placeClass)
+        assertEquals(
+            RouteCheck(
+                state = RouteCheckState.Infeasible,
+                requiredM = 0.577f,
+                marginM = 0.477f,
+                sigmaM = 0.02f,
+                pinch = RoutePinch(3, 4, listOf(41.25f, -17.5f, -2f), 0.52f, 0.577f),
+                unverifiedLegs = listOf(5, 6),
+            ),
+            s.routeCheck,
+        )
+        assertEquals(SpeedCap("confined-near", 0.5f), s.speedCap)
+        assertEquals("route-infeasible", s.holdReason)
+        assertEquals("pilot.banner.route_infeasible", s.banner?.textKey)
+        assertEquals(mapOf("leg" to "3→4", "clearance_m" to "0.52", "required_m" to "0.58"), s.banner?.args)
+    }
+
+    @Test
+    fun `a pilot without the confined profile reads open with no route check, an unknown sigma or no pinch stays null`() {
+        val s = checkNotNull(PilotWire.parseState(data, 0L))
+        assertEquals(PlaceClass.Open, s.placeClass)
+        assertNull(s.routeCheck)
+        val rc = """{"owner":"pilot","place_class":"confined","route_check":{"state":"unverified","required_m":0.577,"margin_m":0.477,"sigma_m":null,"pinch":null,"unverified_legs":[2]}}"""
+        val u = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(rc) as JsonObject, 0L))
+        assertEquals(RouteCheck(RouteCheckState.Unverified, 0.577f, 0.477f, null, null, listOf(2)), u.routeCheck)
+        val bad = """{"owner":"pilot","place_class":"cave","route_check":{"state":"maybe","required_m":0.5}}"""
+        val b = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(bad) as JsonObject, 0L))
+        assertEquals(PlaceClass.Open, b.placeClass)
+        assertNull(b.routeCheck)
+    }
+
+    @Test
+    fun `the place class action encodes by name and value`() {
+        assertEquals(
+            """{"op":"action","name":"place_class:confined","src":"android"}""",
+            PilotWire.action(PilotAction.placeClass(PlaceClass.Confined), "android", null),
+        )
     }
 
     @Test

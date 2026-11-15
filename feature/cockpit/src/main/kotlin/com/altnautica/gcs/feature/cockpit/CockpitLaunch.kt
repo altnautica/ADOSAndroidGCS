@@ -25,6 +25,7 @@ import com.altnautica.gcs.feature.cockpit.launch.LaunchDraft
 import com.altnautica.gcs.feature.cockpit.launch.LaunchUi
 import com.altnautica.gcs.feature.cockpit.launch.NedPoint
 import com.altnautica.gcs.feature.cockpit.launch.abortRefusedNotice
+import com.altnautica.gcs.feature.cockpit.launch.placeClassBeforeLaunch
 import com.altnautica.gcs.feature.cockpit.launch.launchArgs
 import com.altnautica.gcs.feature.cockpit.launch.launchGotoNed
 import com.altnautica.gcs.feature.cockpit.launch.sendLaunchAbort
@@ -78,6 +79,8 @@ internal class CockpitLaunch(
             gotoPoint = gotoNed(pt, d.altM),
             vehicleClass = p?.vehicleClass,
             sequence = p?.sequence,
+            pilotPlaceClass = p?.placeClass,
+            routeCheck = p?.routeCheck,
         )
     }.stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), null)
 
@@ -142,11 +145,28 @@ internal class CockpitLaunch(
         pickMapPoint(localToGlobal(drone, northM, eastM))
     }
 
-    /** Sends the launch sequence from the sheet's choices, behind the first-arm checklist. */
+    /**
+     * Sends the launch sequence from the sheet's choices, behind the first-arm checklist. A
+     * place class picked on the sheet that the pilot does not fly yet goes first, as the
+     * pilot's `place_class`; the launch follows only once the pilot accepts it, and a refusal
+     * reads as the pilot's reason.
+     */
     fun launchNow() {
         val d = draft.value
         val args = launchArgs(d, pickerSkills.value, gotoNed(point.value, d.altM)) ?: return
-        if (armGate(ArmRequest.Launch(args))) send(args)
+        val placeClass = placeClassBeforeLaunch(d, pilot.state.value?.placeClass)
+        if (placeClass == null) {
+            if (armGate(ArmRequest.Launch(args))) send(args)
+            return
+        }
+        scope.launch {
+            val result = pilot.link.value?.action(placeClass) ?: PilotActionResult.Unavailable
+            if (result == PilotActionResult.Accepted) {
+                if (armGate(ArmRequest.Launch(args))) send(args)
+            } else {
+                pilotActionEvent(result, specText)?.let(events::tryEmit)
+            }
+        }
     }
 
     /**

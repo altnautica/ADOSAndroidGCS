@@ -44,6 +44,18 @@ enum class DemoScenario(
     /** The setup wizard's air run aborted at its altitude floor: `setup_abort` names why. */
     SetupAborted(R.string.demo_scenario_setup_aborted),
 
+    /** On the ground in a confined place with a mission loaded: the route check finds every leg clear. */
+    ConfinedRouteFeasible(R.string.demo_scenario_confined_route_feasible),
+
+    /** On the ground in a confined place: the last legs run through cells not seen yet. */
+    ConfinedRouteUnverified(R.string.demo_scenario_confined_route_unverified),
+
+    /** On the ground in a confined place: leg 3→4 passes too close to a wall, so a launch is refused. */
+    ConfinedRouteInfeasible(R.string.demo_scenario_confined_route_infeasible),
+
+    /** Flying the mission in a confined place near the clearance limit: the slow speed cap is on. */
+    ConfinedNearLimit(R.string.demo_scenario_confined_near_limit),
+
     /** The pilot stops sending frames and answering actions while its socket stays open. */
     PilotStalled(R.string.demo_scenario_pilot_stalled),
 
@@ -76,6 +88,9 @@ enum class DemoScenario(
     HoldObstacleClose(R.string.demo_scenario_hold_obstacle_close, holdReason = "obstacle-close"),
     HoldLeaseRevoked(R.string.demo_scenario_hold_lease_revoked, holdReason = "lease-revoked"),
     HoldBlocked(R.string.demo_scenario_hold_blocked, holdReason = "blocked"),
+
+    /** A confined mission's next leg is too tight: the pilot holds and offers skip, return or land. */
+    HoldRouteInfeasible(R.string.demo_scenario_hold_route_infeasible, holdReason = "route-infeasible"),
 
     GotoRefusedBadArgs(R.string.demo_scenario_goto_bad_args, gotoRefusal = "bad_args"),
 

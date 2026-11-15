@@ -14,6 +14,11 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.GpsFix
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.NodeSummary
+import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RouteCheck
+import com.altnautica.gcs.core.link.mission.PilotPlanView
+import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.feature.plan.io.PlanFileFormat
 import com.altnautica.gcs.feature.plan.io.PlanFormatException
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
@@ -89,6 +94,15 @@ sealed interface TransferState {
 enum class StartCheckKind(val blocking: Boolean) {
     LinkFresh(blocking = true),
     PlanOnVehicle(blocking = true),
+
+    /**
+     * The plan's place class can be flown: the pilot already flies it, or reports a class Start
+     * can set. A confined plan on a vehicle with no pilot reporting fails.
+     */
+    PlaceClass(blocking = true),
+
+    /** The pilot's route check of a confined plan does not read infeasible. */
+    RouteCheck(blocking = true),
     GpsFix(blocking = false),
     HomeSet(blocking = false),
 }
@@ -99,6 +113,15 @@ sealed interface StartError {
     data class ArmRefused(val result: CommandResult) : StartError
 
     data class StartRefused(val result: CommandResult) : StartError
+
+    /** The pilot did not take the plan's place class: [result] is its answer. */
+    data class PlaceClassRefused(val result: PilotActionResult) : StartError
+
+    /** The pilot accepted the place class but a fresh read still reports [reported]. */
+    data class PlaceClassNotSet(val reported: PlaceClass?) : StartError
+
+    /** Once in the plan's class, the pilot's route check reads infeasible: nothing was armed. */
+    data object RouteInfeasible : StartError
 }
 
 /** "Start mission" confirm sheet (slide tier). */
@@ -108,6 +131,11 @@ data class StartMissionSheet(
     val overrideChecklist: Boolean = false,
     val running: Boolean = false,
     val error: StartError? = null,
+    /** The plan's place class, and the one the vehicle's pilot flies now (null with no pilot). */
+    val placeClass: PlaceClass = PlaceClass.Open,
+    val pilotPlaceClass: PlaceClass? = null,
+    /** The pilot's route check of the loaded mission, while it flies the plan's class. */
+    val routeCheck: RouteCheck? = null,
 ) {
     private val blockingOk get() = checks.filter { it.kind.blocking }.all { it.ok }
     private val softOk get() = checks.filterNot { it.kind.blocking }.all { it.ok }
@@ -118,6 +146,9 @@ data class StartMissionSheet(
     val canSlide: Boolean get() = !running && blockingOk && (softOk || overrideChecklist)
 
     val needsOverride: Boolean get() = blockingOk && !softOk
+
+    /** Start sets the plan's place class on the pilot before arming. */
+    val setsPlaceClass: Boolean get() = pilotPlaceClass != null && pilotPlaceClass != placeClass
 }
 
 /** One-shot notices. */
@@ -208,6 +239,10 @@ data class PlannerUiState(
     val message: PlannerMessage? = null,
     /** What the last import dropped or skipped, listed in a sheet until dismissed. */
     val importWarnings: List<PlanWarning> = emptyList(),
+    /** The vehicle's pilot as last read: its place class and route check of the loaded mission. */
+    val pilot: PilotPlanView = PilotPlanView.None,
+    /** The cockpit spec's strings, for the place class and route check in the operators' shared words. */
+    val specText: SpecText? = null,
 ) {
     val inSyncWithVehicle: Boolean
         get() = vehiclePlan != null &&

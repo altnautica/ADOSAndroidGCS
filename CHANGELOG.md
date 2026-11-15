@@ -5,6 +5,27 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Confined places.** The Launch sheet and the planner offer a place class,
+  Open or Confined space, with a line explaining the margin each flies. The
+  Launch sheet sends the pick to the pilot (`place_class`) before the launch;
+  the planner saves it with the plan (`.plan` key `mission.placeClass`, written
+  only for a confined plan) and sets it on the pilot when Start is slid,
+  before arming, then reads the pilot back. A "Confined" chip shows in the
+  top bar while the pilot flies the confined profile.
+- **Route check.** The flight screen, the Launch sheet and the planner's
+  Start sheet show the pilot's route check of the loaded mission: "Route
+  clear", "Route not seen yet" or "Route too tight: leg 3→4 has 0.52 m, needs
+  0.58 m" with where the tightest point is. A confined plan whose route check
+  reads too tight cannot be started from the planner.
+- **Speed cap by reason.** The flight-state chip's speed cap reads its
+  reason's own line, such as "Near the clearance limit: 0.5 m/s max".
+- **Low-battery pill item.** Once the pilot's low-battery action has fired,
+  the status pill shows one critical item, "Low battery: landing" or "Low
+  battery: returning home", and the pilot's own announcement folds into it.
+- **Refusals.** A too-tight route, a missing propeller radius and a skip with
+  no stall read as sentences.
+- **Demo.** The demo pilot takes a place class on the ground and has pins for
+  each route-check state, the confined speed cap and a too-tight-route hold.
 - **Mission stall overlay.** When the pilot reports no progress to a
   waypoint, the cockpit shows a persistent overlay such as "No progress to
   waypoint 3 for 15 s · Skipping in 33 s" with Skip waypoint, Return and Land

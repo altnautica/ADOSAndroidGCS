@@ -145,6 +145,56 @@ data class MissionStall(
     val windowS: Float,
 )
 
+/** The kind of place the operator flies in (`place_class`): never chosen automatically. */
+enum class PlaceClass(val wire: String) {
+    /** Open sites: the default obstacle margin. */
+    Open("open"),
+
+    /** Mines, tunnels and rooms: a margin from the prop tips and a slow cap near the limit. */
+    Confined("confined");
+
+    companion object {
+        fun of(wire: String?): PlaceClass? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/** How the loaded mission's legs compare with the clearance the confined profile needs. */
+enum class RouteCheckState(val wire: String) {
+    /** Every sampled point is observed and clear by at least the required distance. */
+    Feasible("feasible"),
+
+    /** Some legs run through cells not observed yet: allowed, flown slowly. */
+    Unverified("unverified"),
+
+    /** An observed point is closer to an obstacle than the required distance. */
+    Infeasible("infeasible");
+
+    companion object {
+        fun of(wire: String?): RouteCheckState? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/**
+ * The tightest checked point of the route: on the leg [fromSeq]→[toSeq], at [ned] (local
+ * north, east, down in metres), [clearanceM] from the nearest obstacle against [requiredM].
+ */
+data class RoutePinch(val fromSeq: Int, val toSeq: Int, val ned: List<Float>, val clearanceM: Float, val requiredM: Float)
+
+/**
+ * The confined profile's check of the loaded mission ([PilotState.routeCheck]): its [state],
+ * the clearance it needs ([requiredM] = [marginM] plus the pose uncertainty term), the live
+ * pose σ ([sigmaM], null when unknown), the [pinch] and the legs ([unverifiedLegs], by their
+ * end waypoint) running through unobserved cells.
+ */
+data class RouteCheck(
+    val state: RouteCheckState,
+    val requiredM: Float,
+    val marginM: Float?,
+    val sigmaM: Float?,
+    val pinch: RoutePinch?,
+    val unverifiedLegs: List<Int>,
+)
+
 enum class ReadinessSeverity { Block, Warn }
 
 /** One pilot readiness item; a [ReadinessSeverity.Block] that is not [ok] refuses arming in pilot control. */
@@ -240,12 +290,16 @@ data class PilotState(
      * countdown runs ([rthCountdownS]) and after it fired; null while none.
      */
     val lowBatteryAction: String? = null,
-    /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`), or null. */
+    /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`, `confined-near`), or null. */
     val speedCap: SpeedCap? = null,
     /** The pilot does not trust the horizontal position (an older agent sends none), or null. */
     val positionUnverified: PositionUnverified? = null,
     /** No progress on the mission or the return: present while the vehicle holds for the operator. */
     val missionStall: MissionStall? = null,
+    /** The place class the operator chose; a pilot that does not report one flies the open profile. */
+    val placeClass: PlaceClass = PlaceClass.Open,
+    /** The confined profile's route check of the loaded mission; null in the open profile or with no mission. */
+    val routeCheck: RouteCheck? = null,
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
@@ -268,7 +322,7 @@ data class PilotState(
 /** One FC status text relayed by the pilot: MAVLink [severity] (0 emergency … 7 debug), [ageMs] since the FC sent it. */
 data class PilotStatusText(val severity: Int, val text: String, val ageMs: Long?)
 
-/** The pilot's horizontal speed cap: why ([reason], e.g. `gnss-denied`) and the limit [vHMps] in m/s. */
+/** The pilot's horizontal speed cap: why ([reason], e.g. `gnss-denied`, `confined-near`) and the limit [vHMps] in m/s. */
 data class SpeedCap(val reason: String, val vHMps: Float)
 
 /**
@@ -315,6 +369,9 @@ data class PilotAction(val name: String, val args: Map<String, Any?> = emptyMap(
 
         /** VTOL transition: to forward flight when [toFixedWing], else to hover. */
         fun vtol(toFixedWing: Boolean) = PilotAction(if (toFixedWing) "vtol:fw" else "vtol:mc")
+
+        /** The place class (refused while armed); the pilot keeps it across restarts. */
+        fun placeClass(c: PlaceClass) = PilotAction("place_class:${c.wire}")
     }
 }
 

@@ -5,6 +5,8 @@ import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
+import com.altnautica.gcs.core.skills.hud.ConfinedText
+import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.spec.FcModeClassSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateMatchSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateSpec
@@ -56,9 +58,10 @@ data class ChipContext(
 class FlightStateChipResolver(
     private val spec: FlightStateSpec,
     private val tokens: TokensSpec,
-    /** `setup-strings.json` strings, for the launch step names in `{step}`. */
+    /** `setup-strings.json` strings, for the launch step names in `{step}` and the speed cap's reason line. */
     private val strings: Map<String, String> = emptyMap(),
 ) {
+    private val confined = ConfinedText(SpecText(strings))
 
     fun resolve(pilot: PilotState?, ctx: ChipContext): FlightStateChipUi {
         if (pilot == null) return noPilot(ctx)
@@ -178,8 +181,9 @@ class FlightStateChipResolver(
     private fun secondary(p: PilotState, ctx: ChipContext, stale: Boolean): List<ChipText> = spec.secondary.order.mapNotNull { part ->
         when (part) {
             "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
+            // The reason's own spec line (`pilot.speed_cap.confined_near`); the spec's default line for a reason it does not name.
             "speed_cap" -> p.speedCap?.let { cap ->
-                spec.secondary.speedCap?.let { chipText(it.text.replace("{v}", speedCapText(cap.vHMps.toDouble())), it.color) }
+                spec.secondary.speedCap?.let { chipText(confined.speedCapLine(cap) ?: it.text.replace("{v}", ConfinedText.speedCapText(cap.vHMps.toDouble())), it.color) }
             }
             "mission_paused_line" -> spec.secondary.missionPausedLine?.takeIf { matches(it.match, p, ctx, stale) }?.let {
                 chipText(fill(it.text, values(p, ctx)), it.color)
@@ -192,12 +196,6 @@ class FlightStateChipResolver(
             "control_mode" -> p.controlMode?.let { chipText(spec.secondary.controlMode[it.wire] ?: wordLabel(it.wire), FC_KEY) }
             else -> null
         }
-    }
-
-    /** The cap in m/s with at most one decimal (1.5 → "1.5", 2 → "2"), as every surface prints it. */
-    private fun speedCapText(v: Double): String {
-        val r = Math.round(v * 10) / 10.0
-        return if (r == Math.floor(r)) r.toLong().toString() else r.toString()
     }
 
     /** Label of a hold reason, keyed by its exact wire string; an unlisted reason reads with spaces. */

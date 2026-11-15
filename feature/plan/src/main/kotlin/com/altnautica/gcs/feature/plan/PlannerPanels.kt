@@ -77,6 +77,7 @@ private fun DefaultsPanel(state: PlannerUiState, actions: PlannerActions) {
         format = metresFormatter(),
     )
     AltitudeRefSelector(state.defaultRef, actions.onDefaultRef)
+    PlaceClassSelector(state, actions)
 }
 
 @Composable

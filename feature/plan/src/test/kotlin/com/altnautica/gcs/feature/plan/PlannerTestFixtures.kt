@@ -198,8 +198,22 @@ internal class PlannerHarness {
     /** The vehicle's mirrored plan as its agent would serve it; null: no agent path. */
     val mirror = MutableStateFlow<com.altnautica.gcs.core.agent.mission.MissionMirror?>(null)
 
-    /** The waypoints the vehicle's pilot reports skipped. */
-    val gaps = MutableStateFlow<List<com.altnautica.gcs.core.model.MissionGap>>(emptyList())
+    /** The vehicle's pilot as the planner reads it: skipped waypoints, place class, route check. */
+    val pilot = MutableStateFlow(com.altnautica.gcs.core.link.mission.PilotPlanView.None)
+
+    /** Place classes the planner asked the pilot to fly, and the answer it gets. */
+    val placeClassesSent = mutableListOf<com.altnautica.gcs.core.model.PlaceClass>()
+    var placeClassAnswer: com.altnautica.gcs.core.model.PilotActionResult = com.altnautica.gcs.core.model.PilotActionResult.Accepted
+
+    private val pilotSource = object : com.altnautica.gcs.core.link.mission.VehiclePilotSource {
+        override fun observe(id: DeviceId) = pilot
+        override suspend fun read(id: DeviceId) = pilot.value
+        override suspend fun setPlaceClass(id: DeviceId, placeClass: com.altnautica.gcs.core.model.PlaceClass): com.altnautica.gcs.core.model.PilotActionResult {
+            placeClassesSent += placeClass
+            if (placeClassAnswer == com.altnautica.gcs.core.model.PilotActionResult.Accepted) pilot.value = pilot.value.copy(placeClass = placeClass)
+            return placeClassAnswer
+        }
+    }
 
     fun viewModel() = PlannerViewModel(
         servicesProvider = provider,
@@ -211,7 +225,10 @@ internal class PlannerHarness {
         plannerSettings = PlannerSettingsRepository(prefs),
         inputRouter = mockk(relaxed = true),
         mirrorSource = { mirror },
-        gapsSource = { gaps },
+        pilotSource = pilotSource,
+        spec = com.altnautica.gcs.core.skills.spec.CockpitSpecRepository(
+            com.altnautica.gcs.core.skills.spec.DirectorySpecSource(java.io.File("../../feature/cockpit/src/main/assets/cockpit-spec")),
+        ),
         draftStore = drafts,
     )
 

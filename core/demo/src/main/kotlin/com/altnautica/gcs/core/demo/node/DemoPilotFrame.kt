@@ -51,6 +51,8 @@ internal class PilotLive(
     val session: PilotSession?,
     val gate: PilotGate?,
     val launch: PilotLaunch?,
+    /** The operator's place class (`open`, `confined`). */
+    val placeClass: String = "open",
 )
 
 /** The flight controller's state the live frame reports. */
@@ -93,6 +95,7 @@ internal fun liveFrame(p: PilotLive, fc: FcLive, t: Long): JsonObject {
         put("failsafe_cause", JsonNull)
         put("setup_abort", JsonNull)
         put("low_battery_action", JsonNull)
+        put("place_class", p.placeClass)
         putJsonObject("mission") {
             put("state", "none")
             put("seq", 0)

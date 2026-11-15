@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.plan.io
 
 import com.altnautica.gcs.core.map.GeoPoint
+import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.feature.plan.model.Autopilot
 import com.altnautica.gcs.feature.plan.model.CollapsedItems
 import com.altnautica.gcs.feature.plan.model.FenceZone
@@ -67,6 +68,9 @@ object PlanFiles {
     private const val WPL_HEADER = "QGC WPL 110"
     private const val GROUND_STATION = "ADOS GCS"
     private const val DEFAULT_CRUISE_SPEED = 15.0
+
+    /** The mission block's place class (`confined`); absent for an open plan. */
+    const val PLACE_CLASS_KEY = "placeClass"
     private const val FIRMWARE_ARDUPILOT = 3
     private const val FIRMWARE_PX4 = 12
     private const val VEHICLE_MULTIROTOR = 2
@@ -155,6 +159,9 @@ object PlanFiles {
                         }
                     }
                 }
+                // A confined plan names its place class; an open one (the default) writes nothing, so
+                // other ground stations read the file unchanged.
+                if (plan.placeClass == PlaceClass.Confined) put(PLACE_CLASS_KEY, plan.placeClass.wire)
                 putJsonArray("plannedHomePosition") {
                     add(home.first.latDeg)
                     add(home.first.lonDeg)
@@ -235,6 +242,7 @@ object PlanFiles {
             rally = parseRally(root["rallyPoints"] as? JsonObject, nextId),
             home = plannedHome(mission["plannedHomePosition"] as? JsonArray),
             cruiseSpeedMs = mission.number("cruiseSpeed")?.toFloat(),
+            placeClass = PlaceClass.of(mission.string(PLACE_CLASS_KEY)) ?: PlaceClass.Open,
         )
         return ImportedPlan(plan, warnings + collapsed.warnings)
     }

@@ -122,12 +122,15 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
     }
 }
 
-/** The nav-source chip for the safety band (item 6). */
+/** The nav-source chip for the safety band (item 6), and the "Confined" chip beside it while the confined profile flies. */
 @Composable
 internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
     val chip by vm.autonomy.navChip.collectAsStateWithLifecycle()
     val inputs by vm.autonomy.navInputsState.collectAsStateWithLifecycle()
-    NavSourceChip(chip, inputs, compact = width == WidthClass.Compact, onUseSet = vm.autonomy::useSourceSet)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        NavSourceChip(chip, inputs, compact = width == WidthClass.Compact, onUseSet = vm.autonomy::useSourceSet)
+        ConfinedChipSlot(vm)
+    }
 }
 
 /** A 500 ms clock for age-based chrome (stale panels, coast countdowns), on every fifth beat of the flight screen. */

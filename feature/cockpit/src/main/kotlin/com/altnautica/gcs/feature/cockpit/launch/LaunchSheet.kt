@@ -22,9 +22,17 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.LaunchSequence
 import com.altnautica.gcs.core.model.LaunchStep
 import com.altnautica.gcs.core.model.MissionState
+import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotVehicleClass
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.model.SkillSource
+import com.altnautica.gcs.core.skills.hud.ConfinedText
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
+import com.altnautica.gcs.feature.cockpit.flow.RouteCheckLines
+import com.altnautica.gcs.feature.cockpit.flow.routeCheckTint
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.feature.cockpit.modes.Segments
 import kotlin.math.cos
@@ -62,13 +70,24 @@ fun launchGotoNed(fromLat: Double, fromLon: Double, fromN: Float, fromE: Float, 
     return NedPoint(fromN + n.toFloat(), fromE + e.toFloat(), -altM)
 }
 
-/** The launch sheet's choices. */
+/**
+ * The launch sheet's choices. [placeClass] is the place class the operator picked on the
+ * sheet; null keeps the one the pilot reports.
+ */
 data class LaunchDraft(
     val altM: Float = DEFAULT_LAUNCH_ALT_M,
     val after: LaunchAfter = LaunchAfter.Hold,
     val skillId: String? = null,
     val whenDone: LaunchWhenDone = LaunchWhenDone.None,
+    val placeClass: PlaceClass? = null,
 )
+
+/** The place class a launch from [draft] flies with: the sheet's pick, else the pilot's own. */
+fun launchPlaceClass(draft: LaunchDraft, pilotClass: PlaceClass?): PlaceClass = draft.placeClass ?: pilotClass ?: PlaceClass.Open
+
+/** The `place_class` action to send before the launch, or null when the pilot already flies [draft]'s class. */
+fun placeClassBeforeLaunch(draft: LaunchDraft, pilotClass: PlaceClass?): PilotAction? =
+    draft.placeClass?.takeIf { it != (pilotClass ?: PlaceClass.Open) }?.let(PilotAction::placeClass)
 
 /** Builds the `launch` action args: `{after, skill?, goto?, alt_m, when_done?}`. Null when a choice is incomplete. */
 fun launchArgs(draft: LaunchDraft, skills: List<Skill>, goto: NedPoint?): Map<String, Any?>? {
@@ -101,7 +120,23 @@ data class LaunchUi(
     val vehicleClass: PilotVehicleClass?,
     /** The sequence in progress; the sheet shows its step strip. */
     val sequence: LaunchSequence?,
-)
+    /** The place class the pilot reports (null without a pilot state). */
+    val pilotPlaceClass: PlaceClass? = null,
+    /** The pilot's route check of the loaded mission (confined, with a mission). */
+    val routeCheck: RouteCheck? = null,
+) {
+    /** The class the launch flies with: the sheet's pick, else the pilot's. */
+    val placeClass: PlaceClass get() = launchPlaceClass(draft, pilotPlaceClass)
+
+    /**
+     * The obstacle margin [placeClass] flies with, for the explain line: the pilot's own
+     * margin from its route check when it checks in that class, else the class default
+     * (unknown for a confined place, which depends on the airframe's prop radius).
+     */
+    val marginM: Float?
+        get() = routeCheck?.marginM?.takeIf { pilotPlaceClass == placeClass }
+            ?: ConfinedText.effectiveMarginM(placeClass, configuredM = null, propTipRadiusM = null)
+}
 
 /** One after-takeoff choice and why it is not available now ([reasonKey], a spec string), null when it is. */
 internal data class LaunchAfterChoice(val after: LaunchAfter, val reasonKey: String?)
@@ -123,7 +158,8 @@ internal fun launchAfterChoices(ui: LaunchUi): List<LaunchAfterChoice> = LaunchA
 }
 
 /**
- * The Launch sheet: take-off altitude, the after-takeoff action (all four choices in the spec
+ * The Launch sheet: the place class (Open / Confined space, with its explain line and the
+ * pilot's route check when it reports one), take-off altitude, the after-takeoff action (all four choices in the spec
  * order; one not available now is dimmed with its reason under the row) and the optional
  * when-done action. Holding "Hold to launch" sends the launch sequence; its progress shows
  * as a step strip.
@@ -143,6 +179,7 @@ fun LaunchSheet(
         ) {
             ui.sequence?.let { StepStrip(it) }
             val d = ui.draft
+            PlaceClassPicker(ui, onPick = { c -> onDraft(d.copy(placeClass = c)) })
             Text(specText("flow.launch.alt_m") + " · " + "%.0f m".format(d.altM), style = MaterialTheme.typography.labelLarge)
             Slider(
                 value = d.altM,
@@ -196,6 +233,35 @@ fun LaunchSheet(
                 )
             }
         }
+    }
+}
+
+/**
+ * The sheet's place class: Open / Confined space, the explain line with the margin the class
+ * flies with, and the pilot's route check of the loaded mission when it reports one. A pick is
+ * sent to the pilot as `place_class` before the launch.
+ */
+@Composable
+private fun PlaceClassPicker(ui: LaunchUi, onPick: (PlaceClass) -> Unit) {
+    val confined = ConfinedText(SpecText(LocalCockpitStrings.current))
+    val cls = ui.placeClass
+    Text(specText("flow.launch.place_class"), style = MaterialTheme.typography.labelLarge)
+    Segments(
+        values = PlaceClass.entries.map { it.wire },
+        labels = PlaceClass.entries.map(confined::label),
+        selected = cls.wire,
+        enabled = true,
+        tag = "launch-place-class",
+    ) { w -> PlaceClass.of(w)?.let(onPick) }
+    Text(
+        confined.explain(cls, ui.marginM),
+        color = AdosTheme.colors.fgSecondary,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.testTag("launch-place-class-explain"),
+    )
+    // The route check is the pilot's, for the class it flies now.
+    confined.report(ui.routeCheck?.takeIf { ui.pilotPlaceClass == cls })?.let { report ->
+        RouteCheckLines(report, routeCheckTint(report.severity), AdosTheme.colors.fgSecondary)
     }
 }
 

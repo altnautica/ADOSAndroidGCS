@@ -17,6 +17,7 @@ import com.altnautica.gcs.core.map.MapBasemap
 import com.altnautica.gcs.core.map.MapFeatureRef
 import com.altnautica.gcs.core.map.MapFeatureType
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.feature.plan.io.PlanFileFormat
 import com.altnautica.gcs.feature.plan.model.AltitudeRef
 import com.altnautica.gcs.feature.plan.model.PlanCommand
@@ -94,6 +95,7 @@ fun PlanRoute(
             onSetParam = viewModel::setParam,
             onDefaultAltitude = viewModel::setDefaultAltitude,
             onDefaultRef = viewModel::setDefaultRef,
+            onPlaceClass = viewModel::setPlaceClass,
             onBasemap = viewModel::setBasemap,
             onSurveySettings = viewModel::setSurveySettings,
             onApplySurvey = viewModel::applySurvey,
@@ -169,6 +171,8 @@ class PlannerActions(
     val onSetParam: (id: Long, index: Int, value: Double) -> Unit,
     val onDefaultAltitude: (Float) -> Unit,
     val onDefaultRef: (AltitudeRef) -> Unit,
+    /** The plan's place class (Open / Confined space). */
+    val onPlaceClass: (PlaceClass) -> Unit,
     val onBasemap: (MapBasemap) -> Unit,
     val onSurveySettings: (SurveySettings) -> Unit,
     val onApplySurvey: () -> Unit,

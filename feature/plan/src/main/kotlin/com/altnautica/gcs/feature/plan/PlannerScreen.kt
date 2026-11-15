@@ -195,7 +195,7 @@ fun PlannerScreen(
     DiscardConfirmSheet(state, actions)
     DeleteSavedConfirmSheet(state, actions)
     ImportWarningsSheet(state, actions)
-    state.startSheet?.let { StartMissionSheetView(it, actions) }
+    state.startSheet?.let { StartMissionSheetView(it, actions, state.specText) }
     if (state.confirmReplaceWithDownload) {
         AdosDialog(
             title = stringResource(R.string.plan_download_replace_title),

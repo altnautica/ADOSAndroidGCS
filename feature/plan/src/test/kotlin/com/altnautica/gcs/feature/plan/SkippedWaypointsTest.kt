@@ -3,7 +3,8 @@ package com.altnautica.gcs.feature.plan
 import com.altnautica.gcs.core.agent.mission.MirrorItem
 import com.altnautica.gcs.core.agent.mission.MissionMirror
 import com.altnautica.gcs.core.agent.mission.MissionStatusWire
-import com.altnautica.gcs.core.link.mission.AgentMissionGapsSource
+import com.altnautica.gcs.core.link.mission.AgentVehiclePilotSource
+import com.altnautica.gcs.core.link.mission.PilotPlanView
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.WaypointKind
 import com.altnautica.gcs.core.model.MissionGap
@@ -64,25 +65,31 @@ class SkippedWaypointsTest {
             runCurrent()
             assertTrue(vm.state.value.toOverlays().waypoints.none { it.kind == WaypointKind.Skipped })
 
-            h.gaps.value = listOf(MissionGap(2, "stall_timeout", 1L))
+            h.pilot.value = PilotPlanView(gaps = listOf(MissionGap(2, "stall_timeout", 1L)))
             runCurrent()
             val marker = vm.state.value.toOverlays().waypoints.single { it.kind == WaypointKind.Skipped }
             assertEquals("\u00D72", marker.label)
             assertEquals(GeoPoint(12.002, 77.002), marker.position)
             assertFalse("a skipped marker never moves the plan", marker.draggable)
 
-            h.gaps.value = emptyList()
+            h.pilot.value = PilotPlanView.None
             runCurrent()
             assertTrue(vm.state.value.toOverlays().waypoints.none { it.kind == WaypointKind.Skipped })
         }
     }
 
     @Test
-    fun `the gaps are read from the pilot frame of the navigation status`() {
+    fun `the gaps, place class and route check are read from the pilot frame of the navigation status`() {
         val frame = File("../../core/agent/src/test/resources/fixtures/pilot-frame-stall.json").readText()
         val status = Json.parseToJsonElement("""{"pilot":{"ts_ms":5,"age_ms":40,"data":$frame},"pose":null}""") as JsonObject
-        assertEquals(listOf(MissionGap(2, "stall_timeout", 1793959950000L)), AgentMissionGapsSource.gapsOf(status))
-        assertEquals(emptyList<MissionGap>(), AgentMissionGapsSource.gapsOf(Json.parseToJsonElement("""{"pilot":null}""") as JsonObject))
-        assertEquals(emptyList<MissionGap>(), AgentMissionGapsSource.gapsOf(null))
+        assertEquals(listOf(MissionGap(2, "stall_timeout", 1793959950000L)), AgentVehiclePilotSource.viewOf(status).gaps)
+        assertEquals(PilotPlanView.None, AgentVehiclePilotSource.viewOf(Json.parseToJsonElement("""{"pilot":null}""") as JsonObject))
+        assertEquals(PilotPlanView.None, AgentVehiclePilotSource.viewOf(null))
+        val confined = File("../../core/agent/src/test/resources/fixtures/pilot-frame-confined.json").readText()
+        val c = AgentVehiclePilotSource.viewOf(Json.parseToJsonElement("""{"pilot":{"ts_ms":5,"age_ms":40,"data":$confined}}""") as JsonObject)
+        assertEquals(com.altnautica.gcs.core.model.PlaceClass.Confined, c.placeClass)
+        assertEquals(com.altnautica.gcs.core.model.RouteCheckState.Infeasible, c.routeCheck?.state)
+        assertEquals("placeclass_confined", AgentVehiclePilotSource.placeClassVerb(com.altnautica.gcs.core.model.PlaceClass.Confined))
+        assertEquals("armed", AgentVehiclePilotSource.refusalCode("pilot refused place_class:confined: armed"))
     }
 }

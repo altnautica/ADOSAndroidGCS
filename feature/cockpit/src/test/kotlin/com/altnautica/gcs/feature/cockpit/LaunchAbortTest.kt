@@ -9,6 +9,12 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.skills.SkillNotice
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.refusalText
+import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.feature.cockpit.launch.LaunchDraft
+import com.altnautica.gcs.feature.cockpit.launch.launchPlaceClass
+import com.altnautica.gcs.feature.cockpit.launch.placeClassBeforeLaunch
+import org.junit.Assert.assertNull
 import com.altnautica.gcs.feature.cockpit.chip.ChipButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -146,5 +152,46 @@ class LaunchAbortTest {
 
         assertEquals(listOf("pause"), pilot.actions)
         vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a place class picked on the Launch sheet goes to the pilot before the launch`() = runTest(dispatcher) {
+        val pilot = LaunchingPilot(this, refuse = null)
+        val vm = launchingVm(pilot)
+        vm.openLaunch(true)
+        vm.setLaunchDraft(LaunchDraft(placeClass = PlaceClass.Confined))
+
+        vm.launchNow()
+        advanceTimeBy(100)
+        runCurrent()
+
+        assertEquals("place_class:confined", pilot.actions.first())
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `a refused place class reads the pilot's reason and sends no launch`() = runTest(dispatcher) {
+        val pilot = LaunchingPilot(this, refuse = "armed")
+        val vm = launchingVm(pilot)
+        val events = mutableListOf<CockpitEvent>()
+        backgroundScope.launch { vm.events.collect { events += it } }
+        vm.openLaunch(true)
+        vm.setLaunchDraft(LaunchDraft(placeClass = PlaceClass.Confined))
+
+        vm.launchNow()
+        advanceTimeBy(100)
+        runCurrent()
+
+        assertEquals(listOf("place_class:confined"), pilot.actions)
+        assertEquals(listOf<CockpitEvent>(CockpitEvent.PilotRefused(SpecText(testSpec.setupStrings).refusalText("armed"))), events)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `the sheet sends nothing extra when the pilot already flies the picked class`() {
+        assertNull(placeClassBeforeLaunch(LaunchDraft(), PlaceClass.Confined))
+        assertNull(placeClassBeforeLaunch(LaunchDraft(placeClass = PlaceClass.Open), null))
+        assertEquals(PilotAction("place_class:open"), placeClassBeforeLaunch(LaunchDraft(placeClass = PlaceClass.Open), PlaceClass.Confined))
+        assertEquals(PlaceClass.Confined, launchPlaceClass(LaunchDraft(), PlaceClass.Confined))
     }
 }

@@ -6,7 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.altnautica.gcs.core.data.plan.PlannerSettingsRepository
 import com.altnautica.gcs.core.database.SavedPlanDao
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
-import com.altnautica.gcs.core.link.mission.MissionGapsSource
+import com.altnautica.gcs.core.link.mission.VehiclePilotSource
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
 import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.map.DragPhase
@@ -66,7 +69,8 @@ class PlannerViewModel @Inject constructor(
     private val plannerSettings: PlannerSettingsRepository,
     private val inputRouter: AdosInputRouter,
     mirrorSource: MissionMirrorSource,
-    gapsSource: MissionGapsSource,
+    pilotSource: VehiclePilotSource,
+    spec: CockpitSpecRepository,
     private val draftStore: PlanDraftStore,
 ) : ViewModel() {
 
@@ -85,7 +89,7 @@ class PlannerViewModel @Inject constructor(
     private val nextId: () -> Long = { ids.getAndIncrement() }
 
     private val session = PlanSession(_state)
-    private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId, mirrorSource, gapsSource) { plan, name, savedId, dirty ->
+    private val vehicle = PlannerVehicleController(viewModelScope, _state, servicesProvider, clock, nextId, mirrorSource, pilotSource) { plan, name, savedId, dirty ->
         session.replacePlan(plan, name = name, savedId = savedId, dirty = dirty)
     }
     private val library = PlannerLibrary(viewModelScope, _state, savedPlans, documents, session, nextId, ::clearDraft) { vehicle.planWithHome() }
@@ -97,6 +101,7 @@ class PlannerViewModel @Inject constructor(
     @Volatile private var draftKept = true
 
     init {
+        _state.update { it.copy(specText = SpecText(spec.setupStrings)) }
         library.observe()
         viewModelScope.launch {
             combine(plannerSettings.settings, offlineMaps.pmtiles) { settings, packs -> packs to BasemapCodec.decode(settings.basemap, packs) }
@@ -366,6 +371,9 @@ class PlannerViewModel @Inject constructor(
     // ── Library and files ────────────────────────────────────
 
     fun setName(name: String) = _state.update { it.copy(name = name) }
+
+    /** The kind of place the plan is flown in; saved with the plan and set on the pilot at Start. */
+    fun setPlaceClass(placeClass: PlaceClass) = edit { it.copy(placeClass = placeClass) }
 
     /** Runs [action] now, or asks first ([PlannerUiState.pendingDiscard]) while there are unsaved edits. */
     fun requestDiscard(action: DiscardAction) = library.requestDiscard(action)

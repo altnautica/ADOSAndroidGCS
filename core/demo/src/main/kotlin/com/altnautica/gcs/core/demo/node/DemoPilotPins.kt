@@ -56,7 +56,7 @@ internal class DemoPilotPins(
         val hold = scenario.holdReason
         val refusal = scenario.gotoRefusal
         when {
-            hold != null -> holding(hold)
+            hold != null -> holding(hold, sinceMs)
             refusal != null -> refusing(refusal)
             else -> state(scenario, sinceMs)
         }
@@ -101,6 +101,21 @@ internal class DemoPilotPins(
             DemoScenario.SetupAborted -> {
                 flying(PILOT, GUIDED)
                 put("setup_abort", SETUP_ABORT_KEY)
+            }
+            DemoScenario.ConfinedRouteFeasible -> confinedGround(routeCheck("feasible", sigmaM = 0.02, pinch = CLEAR_PINCH))
+            // Unknown pose σ: the check is at best unverified, and legs 5 and 6 are not seen yet.
+            DemoScenario.ConfinedRouteUnverified -> confinedGround(routeCheck("unverified", sigmaM = null, pinch = CLEAR_PINCH, unverified = listOf(5, 6)))
+            DemoScenario.ConfinedRouteInfeasible -> confinedGround(routeCheck("infeasible", sigmaM = 0.02, pinch = TIGHT_PINCH))
+            DemoScenario.ConfinedNearLimit -> {
+                flying(MISSION_FC, AUTO)
+                mission("active", MISSION_SEQ, MISSION_TOTAL)
+                put("place_class", "confined")
+                put("route_check", routeCheck("feasible", sigmaM = 0.02, pinch = CLEAR_PINCH))
+                put("min_clearance_m", 1.6)
+                putJsonObject("speed_cap") {
+                    put("reason", "confined-near")
+                    put("v_h_mps", CONFINED_CAP_MPS)
+                }
             }
             DemoScenario.LinkLoss -> {
                 flying(PILOT, GUIDED)
@@ -148,7 +163,7 @@ internal class DemoPilotPins(
     }
 
     /** Airborne in a pilot hold for [reason]. */
-    private fun JsonObjectBuilder.holding(reason: String) {
+    private fun JsonObjectBuilder.holding(reason: String, sinceMs: Long) {
         flying(PILOT, GUIDED)
         put("hold_reason", reason)
         when (reason) {
@@ -161,7 +176,50 @@ internal class DemoPilotPins(
                 banner("pilot.banner.obstacle_close")
             }
             "blocked" -> put("avoid_state", "blocked")
+            // The next leg of a confined mission is too tight: the stall flow offers skip, return or land.
+            "route-infeasible" -> {
+                mission("active", TIGHT_LEG_TO - 1, MISSION_TOTAL)
+                put("place_class", "confined")
+                put("route_check", routeCheck("infeasible", sigmaM = 0.02, pinch = TIGHT_PINCH))
+                banner("pilot.banner.route_infeasible", "leg" to "${TIGHT_LEG_TO - 1}→$TIGHT_LEG_TO", "clearance_m" to "0.52", "required_m" to "0.58")
+                putJsonObject("mission_stall") {
+                    put("kind", "mission")
+                    put("seq", TIGHT_LEG_TO - 1)
+                    put("wp_label", "${TIGHT_LEG_TO - 1}")
+                    put("since_ms", JsonNull)
+                    put("skip_in_s", round1((STALL_SKIP_MS - sinceMs % STALL_SKIP_MS) / 1000.0))
+                    put("window_s", STALL_WINDOW_S)
+                }
+            }
         }
+    }
+
+    /** On the ground and disarmed in a confined place with the demo mission loaded, the route check [rc] laid on. */
+    private fun JsonObjectBuilder.confinedGround(rc: JsonObject) {
+        grounded(armed = false)
+        mission("loaded", 1, MISSION_TOTAL)
+        put("place_class", "confined")
+        put("route_check", rc)
+    }
+
+    /** A route check [state] with the demo airframe's margin; [pinch] is `(from, to, clearance)`. */
+    private fun routeCheck(state: String, sigmaM: Double?, pinch: Triple<Int, Int, Double>, unverified: List<Int> = emptyList()) = buildJsonObject {
+        put("state", state)
+        put("required_m", REQUIRED_M)
+        put("margin_m", MARGIN_M)
+        put("sigma_m", sigmaM?.let(::JsonPrimitive) ?: JsonNull)
+        putJsonObject("pinch") {
+            put("from_seq", pinch.first)
+            put("to_seq", pinch.second)
+            putJsonArray("ned") {
+                add(41.25)
+                add(-17.5)
+                add(-2.0)
+            }
+            put("clearance_m", pinch.third)
+            put("required_m", REQUIRED_M)
+        }
+        putJsonArray("unverified_legs") { unverified.forEach { add(it) } }
     }
 
     /** Offers `goto` from the state each refusal [code] stands for. */
@@ -284,6 +342,18 @@ internal class DemoPilotPins(
         private const val LOW_BATTERY_PCT = "18"
         private const val MISSION_SEQ = 4
         private const val MISSION_TOTAL = 6
+
+        /** The demo airframe's confined margin (prop-tip radius 0.377 m + 0.1 m) and the clearance it needs with σ 0.02 m. */
+        private const val MARGIN_M = 0.477
+        private const val REQUIRED_M = 0.577
+        private const val CONFINED_CAP_MPS = 0.5
+
+        /** The too-tight leg ends at this waypoint; its clearance is under [REQUIRED_M]. */
+        private const val TIGHT_LEG_TO = 4
+        private val TIGHT_PINCH = Triple(TIGHT_LEG_TO - 1, TIGHT_LEG_TO, 0.52)
+        private val CLEAR_PINCH = Triple(2, 3, 0.91)
+        private const val STALL_SKIP_MS = 45_000L
+        private const val STALL_WINDOW_S = 15.0
         private const val DEMO_MISSION_ID = 1
         private const val FOLLOW_PLUGIN_ID = "com.altnautica.follow-me"
         private const val FOLLOW_LABEL = "Follow-Me"

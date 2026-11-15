@@ -23,8 +23,12 @@ import com.altnautica.gcs.core.model.PilotStatusText
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.PositionUnverified
+import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.model.RouteCheck
+import com.altnautica.gcs.core.model.RouteCheckState
+import com.altnautica.gcs.core.model.RoutePinch
 import com.altnautica.gcs.core.model.SpeedCap
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -161,6 +165,29 @@ object PilotWire {
                 PositionUnverified(u.str("reason") ?: return@let null, u.str("detail"), u.float("flow_mps"), u.float("estimate_mps"))
             },
             missionStall = (data["mission_stall"] as? JsonObject)?.let(::missionStall),
+            // Absent on a pilot without the confined profile: open.
+            placeClass = PlaceClass.of(data.str("place_class")) ?: PlaceClass.Open,
+            routeCheck = (data["route_check"] as? JsonObject)?.let(::routeCheck),
+        )
+    }
+
+    private fun routeCheck(o: JsonObject): RouteCheck? {
+        val state = RouteCheckState.of(o.str("state")) ?: return null
+        return RouteCheck(
+            state = state,
+            requiredM = o.float("required_m") ?: return null,
+            marginM = o.float("margin_m"),
+            sigmaM = o.float("sigma_m"),
+            pinch = (o["pinch"] as? JsonObject)?.let { p ->
+                RoutePinch(
+                    fromSeq = p.long("from_seq")?.toInt() ?: return@let null,
+                    toSeq = p.long("to_seq")?.toInt() ?: return@let null,
+                    ned = floats(p["ned"], 3) ?: return@let null,
+                    clearanceM = p.float("clearance_m") ?: return@let null,
+                    requiredM = p.float("required_m") ?: return@let null,
+                )
+            },
+            unverifiedLegs = (o["unverified_legs"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.longOrNull?.toInt() },
         )
     }
 

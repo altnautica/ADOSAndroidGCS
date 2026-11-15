@@ -98,12 +98,17 @@
     <string name="plan_start_check_plan">This plan is on the drone</string>
     <string name="plan_start_check_gps">GPS 3D fix</string>
     <string name="plan_start_check_home">Home position set</string>
+    <string name="plan_start_check_place">Place: %1$s</string>
+    <string name="plan_start_check_place_sets">Drone flies %1$s; set on start</string>
+    <string name="plan_start_check_route">Route check</string>
     <string name="plan_start_check_ok">OK</string>
     <string name="plan_start_check_failed">Not ready</string>
     <string name="plan_start_override">Override checklist</string>
     <string name="plan_start_override_summary">Start with the items above not ready</string>
     <string name="plan_start_error_arm">Arming refused: %1$s</string>
     <string name="plan_start_error_start">Mission start refused: %1$s</string>
+    <string name="plan_start_error_place">Place not set: %1$s</string>
+    <string name="plan_start_error_place_unconfirmed">Place not set: the drone still flies %1$s</string>
     <string name="plan_result_denied">the drone refused it</string>
     <string name="plan_result_temporarily_rejected">the drone can\'t do that right now; try again</string>
     <string name="plan_result_failed">the drone tried and failed</string>

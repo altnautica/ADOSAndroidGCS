@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.plan.model
 
 import com.altnautica.gcs.core.map.GeoPoint
+import com.altnautica.gcs.core.model.PlaceClass
 
 /** MAV_CMD ids the planner understands; any other id is preserved verbatim. */
 object MavCmd {
@@ -165,13 +166,17 @@ data class RallyPoint(val id: Long, val position: GeoPoint, val altM: Float)
 /** Planned home: where the mission is flown from. [altMslM] is null when unknown. */
 data class PlanHome(val position: GeoPoint, val altMslM: Float?)
 
-/** A whole mission plan: path, fence and rally points. */
+/**
+ * A whole mission plan: path, fence and rally points. [placeClass] is the kind of place it
+ * is flown in, set on the vehicle's pilot before the mission starts.
+ */
 data class MissionPlan(
     val items: List<PlanItem> = emptyList(),
     val fence: List<FenceZone> = emptyList(),
     val rally: List<RallyPoint> = emptyList(),
     val home: PlanHome? = null,
     val cruiseSpeedMs: Float? = null,
+    val placeClass: PlaceClass = PlaceClass.Open,
 ) {
     val isEmpty: Boolean get() = items.isEmpty() && fence.isEmpty() && rally.isEmpty()
 }

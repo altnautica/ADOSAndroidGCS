@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.FlightTakeoff
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.WrongLocation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +51,8 @@ import com.altnautica.gcs.feature.cockpit.launch.StepStrip
 import com.altnautica.gcs.core.skills.hud.ReadoutFormat
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
+import com.altnautica.gcs.core.skills.hud.RouteCheckReport
+import com.altnautica.gcs.core.skills.hud.RouteCheckSeverity
 import kotlin.math.ceil
 import kotlin.math.roundToLong
 
@@ -82,9 +85,6 @@ data class FlowUi(
     val stall: StallUi? = null,
 ) {
     companion object {
-        /** Pilot banners the stall overlay already says, with its live countdown: hidden while it shows. */
-        private val STALL_BANNER_KEYS = setOf("pilot.banner.mission_stalled", "pilot.banner.mission_stalled_hold", "pilot.banner.return_blocked")
-
         /**
          * The flow state for [pilot]; [ownSrc] is this surface's input source name and
          * [nowMs] vehicle-agnostic local time. A banner shows while the pilot keeps it.
@@ -94,7 +94,7 @@ data class FlowUi(
             val session = pilot.inputSession
             val stall = pilot.missionStall?.let(StallUi::of)
             return FlowUi(
-                banner = pilot.banner?.takeUnless { stall != null && it.textKey in STALL_BANNER_KEYS },
+                banner = pilot.banner?.takeUnless { stallShadowsBanner(it.textKey, pilot.missionStall) },
                 gatePending = pilot.gate?.pending == true && streaming,
                 sticksWith = session?.takeIf { it.src != ownSrc },
                 linkLossInS = pilot.linkLossInS?.let(::shownSeconds),
@@ -109,6 +109,16 @@ data class FlowUi(
         internal fun shownSeconds(s: Float): Float = ceil(s.toDouble()).toFloat().coerceAtLeast(0f)
     }
 }
+
+/** The pilot banners a shown stall overlay repeats: the overlay carries the live countdown. */
+private val STALL_BANNER_KEYS = setOf("pilot.banner.mission_stalled", "pilot.banner.mission_stalled_hold", "pilot.banner.return_blocked")
+
+/**
+ * Whether the banner [textKey] hides behind the stall overlay (the shared `stallShadowsBanner`):
+ * true for the stall's own banners while [stall] shows. Any other banner (a route too tight
+ * for the confined profile, a skipped waypoint) shows beside the overlay.
+ */
+fun stallShadowsBanner(textKey: String?, stall: MissionStall?): Boolean = stall != null && textKey != null && textKey in STALL_BANNER_KEYS
 
 /** One stall overlay button: its spec label and the pilot action it sends. */
 enum class StallAction(val labelKey: String, val action: String, val tag: String) {
@@ -289,6 +299,34 @@ fun MissionStallBanner(stall: StallUi, onAction: (StallAction) -> Unit, modifier
                     }
                 }
             }
+        }
+    }
+}
+
+/** The tint of a route-check report: fine, allowed but slowed, refused. */
+@Composable
+internal fun routeCheckTint(severity: RouteCheckSeverity): Color = when (severity) {
+    RouteCheckSeverity.Ok -> AdosTheme.colors.statusSuccess
+    RouteCheckSeverity.Warn -> AdosTheme.colors.statusWarning
+    RouteCheckSeverity.Critical -> AdosTheme.colors.statusError
+}
+
+/** The route-check report's lines: its title, the state line and, when known, where the tightest point is. */
+@Composable
+fun RouteCheckLines(report: RouteCheckReport, textColor: Color, dimColor: Color, modifier: Modifier = Modifier) {
+    Column(modifier.testTag("route-check-${report.state.wire}")) {
+        Text(report.title, color = dimColor, style = MaterialTheme.typography.labelSmall)
+        Text(report.line, color = textColor, style = MaterialTheme.typography.titleSmall, modifier = Modifier.testTag("route-check-line"))
+        report.pinchAt?.let { Text(it, color = dimColor, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("route-check-pinch")) }
+    }
+}
+
+/** The confined profile's route check of the loaded mission, while the pilot reports one. */
+@Composable
+fun RouteCheckBanner(report: RouteCheckReport, modifier: Modifier = Modifier) {
+    Box(modifier) {
+        BannerShell(Icons.Outlined.Route, routeCheckTint(report.severity), "flow-route-check") {
+            RouteCheckLines(report, LocalChrome.current.text, LocalChrome.current.textDim, Modifier.weight(1f))
         }
     }
 }

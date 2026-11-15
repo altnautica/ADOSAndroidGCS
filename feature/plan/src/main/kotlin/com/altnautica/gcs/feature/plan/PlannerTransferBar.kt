@@ -33,6 +33,11 @@ import com.altnautica.gcs.core.link.mission.MissionError
 import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.mission.TransferDirection
 import com.altnautica.gcs.core.model.CommandResult
+import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.skills.hud.ConfinedText
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.refusalText
 
 // ── Transfer and start ─────────────────────────────────────
 
@@ -166,9 +171,19 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
 @Composable
 private fun commandResultLabel(result: CommandResult) = commandResultText(LocalResources.current, result)
 
+/** The pilot refusal code a place-class answer reads as, for the spec's refusal table. */
+internal fun placeClassRefusalCode(result: PilotActionResult): String? = when (result) {
+    is PilotActionResult.Refused -> result.reason
+    PilotActionResult.NoAnswer -> "no_response"
+    PilotActionResult.Unavailable -> "pilot_unavailable"
+    PilotActionResult.Accepted -> null
+}
+
 @Composable
-internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerActions) {
+internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerActions, specText: SpecText?) {
     val colors = AdosTheme.colors
+    val confined = specText?.let(::ConfinedText)
+    fun classLabel(c: PlaceClass?): String = c?.let { confined?.label(it) ?: it.wire }.orEmpty()
     AdosConfirmSheet(
         title = stringResource(R.string.plan_start_title),
         message = stringResource(if (sheet.armed) R.string.plan_start_message_armed else R.string.plan_start_message_disarmed),
@@ -178,24 +193,31 @@ internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerAct
         sheet.checks.forEach { check ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                 Text(
-                    stringResource(
-                        when (check.kind) {
-                            StartCheckKind.LinkFresh -> R.string.plan_start_check_link
-                            StartCheckKind.PlanOnVehicle -> R.string.plan_start_check_plan
-                            StartCheckKind.GpsFix -> R.string.plan_start_check_gps
-                            StartCheckKind.HomeSet -> R.string.plan_start_check_home
-                        },
-                    ),
+                    when (check.kind) {
+                        StartCheckKind.LinkFresh -> stringResource(R.string.plan_start_check_link)
+                        StartCheckKind.PlanOnVehicle -> stringResource(R.string.plan_start_check_plan)
+                        StartCheckKind.PlaceClass -> stringResource(R.string.plan_start_check_place, classLabel(sheet.placeClass))
+                        StartCheckKind.RouteCheck -> specText?.text("route_check.title") ?: stringResource(R.string.plan_start_check_route)
+                        StartCheckKind.GpsFix -> stringResource(R.string.plan_start_check_gps)
+                        StartCheckKind.HomeSet -> stringResource(R.string.plan_start_check_home)
+                    },
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.fgPrimary,
                 )
+                // The vehicle flies another class: Start sets the plan's before arming.
+                val sets = check.ok && check.kind == StartCheckKind.PlaceClass && sheet.setsPlaceClass
                 StatusChip(
-                    level = if (check.ok) StatusLevel.Success else if (check.kind.blocking) StatusLevel.Error else StatusLevel.Warning,
-                    label = stringResource(if (check.ok) R.string.plan_start_check_ok else R.string.plan_start_check_failed),
+                    level = if (sets) StatusLevel.Warning else if (check.ok) StatusLevel.Success else if (check.kind.blocking) StatusLevel.Error else StatusLevel.Warning,
+                    label = when {
+                        sets -> stringResource(R.string.plan_start_check_place_sets, classLabel(sheet.pilotPlaceClass))
+                        check.ok -> stringResource(R.string.plan_start_check_ok)
+                        else -> stringResource(R.string.plan_start_check_failed)
+                    },
                 )
             }
         }
+        if (specText != null) sheet.routeCheck?.let { StartRouteCheck(it, specText) }
         if (sheet.needsOverride || sheet.overrideChecklist) {
             SwitchSettingRow(
                 title = stringResource(R.string.plan_start_override),
@@ -205,9 +227,13 @@ internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerAct
             )
         }
         sheet.error?.let { error ->
+            val refusal = { code: String? -> specText?.refusalText(code) ?: code.orEmpty() }
             val text = when (error) {
                 is StartError.ArmRefused -> stringResource(R.string.plan_start_error_arm, commandResultLabel(error.result))
                 is StartError.StartRefused -> stringResource(R.string.plan_start_error_start, commandResultLabel(error.result))
+                is StartError.PlaceClassRefused -> stringResource(R.string.plan_start_error_place, refusal(placeClassRefusalCode(error.result)))
+                is StartError.PlaceClassNotSet -> stringResource(R.string.plan_start_error_place_unconfirmed, classLabel(error.reported))
+                StartError.RouteInfeasible -> refusal("route_infeasible")
             }
             StatusChip(level = StatusLevel.Error, label = text)
         }

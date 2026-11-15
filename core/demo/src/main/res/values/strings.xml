@@ -9,6 +9,10 @@
     <string name="demo_scenario_mission_complete">Mission: complete</string>
     <string name="demo_scenario_fc_failsafe_rtl">Flight controller failsafe: RTL</string>
     <string name="demo_scenario_setup_aborted">Setup flight aborted</string>
+    <string name="demo_scenario_confined_route_feasible">Confined: route clear</string>
+    <string name="demo_scenario_confined_route_unverified">Confined: route not seen yet</string>
+    <string name="demo_scenario_confined_route_infeasible">Confined: route too tight</string>
+    <string name="demo_scenario_confined_near_limit">Confined: near the clearance limit</string>
     <string name="demo_scenario_pilot_stalled">Pilot stops responding</string>
     <string name="demo_scenario_link_loss">Control link lost</string>
     <string name="demo_scenario_low_battery_countdown_land">Low battery: landing countdown</string>
@@ -23,6 +27,7 @@
     <string name="demo_scenario_hold_obstacle_close">Hold: obstacle close</string>
     <string name="demo_scenario_hold_lease_revoked">Hold: control taken back</string>
     <string name="demo_scenario_hold_blocked">Hold: path blocked</string>
+    <string name="demo_scenario_hold_route_infeasible">Hold: route too tight</string>
     <string name="demo_scenario_goto_bad_args">Fly Here refused: invalid point</string>
     <string name="demo_scenario_goto_not_armed">Fly Here refused: not armed</string>
     <string name="demo_scenario_goto_landed">Fly Here refused: landed</string>

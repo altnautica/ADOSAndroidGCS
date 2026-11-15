@@ -3,7 +3,8 @@ package com.altnautica.gcs.feature.plan
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
 import com.altnautica.gcs.core.link.mission.MissionError
 import com.altnautica.gcs.core.link.mission.MissionItem
-import com.altnautica.gcs.core.link.mission.MissionGapsSource
+import com.altnautica.gcs.core.link.mission.PilotPlanView
+import com.altnautica.gcs.core.link.mission.VehiclePilotSource
 import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.link.mission.MissionResult
 import com.altnautica.gcs.core.link.mission.MissionTransfer
@@ -11,7 +12,9 @@ import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.mission.TransferDirection
 import com.altnautica.gcs.core.link.mission.UploadReceipt
 import com.altnautica.gcs.core.agent.mission.MissionMirror
-import com.altnautica.gcs.core.model.MissionGap
+import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.MissionState
 import kotlinx.coroutines.flow.first
 import com.altnautica.gcs.core.link.services.VehicleServices
@@ -59,7 +62,7 @@ internal class PlannerVehicleController(
     private val clock: ElapsedClock,
     private val nextId: () -> Long,
     private val mirrorSource: MissionMirrorSource,
-    private val gapsSource: MissionGapsSource,
+    private val pilotSource: VehiclePilotSource,
     private val replacePlan: (plan: MissionPlan, name: String, savedId: String?, dirty: Boolean) -> Unit,
 ) {
     private var services: VehicleServices? = null
@@ -67,14 +70,14 @@ internal class PlannerVehicleController(
     private var transferJob: Job? = null
     private var startJob: Job? = null
     private var mirrorJob: Job? = null
-    private var gapsJob: Job? = null
+    private var pilotJob: Job? = null
 
     /** The vehicle's mirrored plan as last read, and this device's receipt for the plan it put there. */
     private var mirror: MissionMirror? = null
     private var receipt: PlanReceipt? = null
 
-    /** The waypoints the vehicle's pilot skipped, as last read. */
-    private var gaps: List<MissionGap> = emptyList()
+    /** The vehicle's pilot as last read: skipped waypoints, place class, route check. */
+    private var pilot: PilotPlanView = PilotPlanView.None
 
     // ── Vehicle ──────────────────────────────────────────────
 
@@ -99,10 +102,10 @@ internal class PlannerVehicleController(
         vehicleJob?.cancel()
         mirrorJob?.cancel()
         mirrorJob = null
-        gapsJob?.cancel()
-        gapsJob = null
+        pilotJob?.cancel()
+        pilotJob = null
         mirror = null
-        gaps = emptyList()
+        pilot = PilotPlanView.None
         receipt = null
         transferJob?.cancel()
         transferJob = null
@@ -117,6 +120,7 @@ internal class PlannerVehicleController(
                 vehiclePlan = null,
                 drone = null,
                 skipped = emptyList(),
+                pilot = PilotPlanView.None,
                 transfer = TransferState.Idle,
                 startSheet = null,
             )
@@ -141,9 +145,10 @@ internal class PlannerVehicleController(
                 refreshDrone()
             }
         }
-        gapsJob = scope.launch {
-            gapsSource.observe(nodeId).collect { g ->
-                gaps = g
+        pilotJob = scope.launch {
+            pilotSource.observe(nodeId).collect { p ->
+                pilot = p
+                state.update { s -> s.copy(pilot = p, startSheet = s.startSheet?.let { refreshChecks(it, s.copy(pilot = p)) }) }
                 refreshDrone()
             }
         }
@@ -161,7 +166,7 @@ internal class PlannerVehicleController(
             return
         }
         val dronePlan = PlanIdentity.planOf(m, nextId)
-        val skipped = PlanIdentity.skippedOf(m, gaps)
+        val skipped = PlanIdentity.skippedOf(m, pilot.gaps)
         state.update { s ->
             val sameItems = dronePlan != null && dronePlan.items.map { it.command to it.position } == s.plan.items.map { it.command to it.position }
             val differs = dronePlan != null && !sameItems && !PlanIdentity.matches(m, receipt)
@@ -383,7 +388,12 @@ internal class PlannerVehicleController(
 
     fun dismissStartMission() = state.update { s -> if (s.startSheet?.running == true) s else s.copy(startSheet = null) }
 
-    /** Called when the slide completes: arms if needed, then runs the uploaded mission. */
+    /**
+     * Called when the slide completes. A plan whose place class the vehicle's pilot does not
+     * fly yet sets it first (refused while armed) and reads the pilot back: the start stops,
+     * with nothing armed, when the pilot does not take the class or its route check of a
+     * confined plan reads infeasible. Then arms if needed and runs the uploaded mission.
+     */
     fun startMission() {
         val svc = services ?: return
         val sheet = state.value.startSheet ?: return
@@ -391,6 +401,10 @@ internal class PlannerVehicleController(
         val nodeId = state.value.nodeId ?: return
         state.update { it.copy(startSheet = sheet.copy(running = true, error = null)) }
         startJob = scope.launch {
+            if (sheet.setsPlaceClass) placeClassError(nodeId, sheet.placeClass)?.let { error ->
+                state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = error)) }
+                return@launch
+            }
             if (!sheet.armed) {
                 val armed = svc.vehicle.control.run(VehicleCommand.Arm())
                 if (armed != CommandResult.Accepted) {
@@ -409,16 +423,41 @@ internal class PlannerVehicleController(
 
     fun onMissionStartHandled() = state.update { it.copy(missionStartedFor = null) }
 
+    /** Sets [placeClass] on the pilot of [nodeId] and reads it back; the error that stops the start, or null. */
+    private suspend fun placeClassError(nodeId: DeviceId, placeClass: PlaceClass): StartError? {
+        val result = pilotSource.setPlaceClass(nodeId, placeClass)
+        if (result != PilotActionResult.Accepted) return StartError.PlaceClassRefused(result)
+        val now = pilotSource.read(nodeId)
+        pilot = now
+        state.update { it.copy(pilot = now) }
+        return when {
+            now.placeClass != placeClass -> StartError.PlaceClassNotSet(now.placeClass)
+            placeClass == PlaceClass.Confined && now.routeCheck?.state == RouteCheckState.Infeasible -> StartError.RouteInfeasible
+            else -> null
+        }
+    }
+
     private fun refreshChecks(sheet: StartMissionSheet, s: PlannerUiState): StartMissionSheet {
         val link = s.link as? VehicleLink.Connected
         val fix = link?.gpsFix
-        val checks = listOf(
-            StartCheck(StartCheckKind.LinkFresh, link?.linkFresh == true),
-            StartCheck(StartCheckKind.PlanOnVehicle, s.planOnVehicle),
-            StartCheck(StartCheckKind.GpsFix, fix != null && fix >= GpsFix.Fix3D),
-            StartCheck(StartCheckKind.HomeSet, link?.home != null),
-        )
-        return sheet.copy(checks = checks, armed = link?.armed == true)
+        val planClass = s.plan.placeClass
+        val pilotClass = s.pilot.placeClass
+        // The pilot's route check stands for the plan only while it flies the plan's class.
+        val routeCheck = s.pilot.routeCheck?.takeIf { pilotClass == planClass }
+        val checks = buildList {
+            add(StartCheck(StartCheckKind.LinkFresh, link?.linkFresh == true))
+            add(StartCheck(StartCheckKind.PlanOnVehicle, s.planOnVehicle))
+            // A pilot that reports a class takes the plan's on Start; a confined plan needs one.
+            if (planClass == PlaceClass.Confined || pilotClass != null) {
+                add(StartCheck(StartCheckKind.PlaceClass, planClass == PlaceClass.Open || pilotClass != null))
+            }
+            if (planClass == PlaceClass.Confined) {
+                add(StartCheck(StartCheckKind.RouteCheck, routeCheck?.state != RouteCheckState.Infeasible))
+            }
+            add(StartCheck(StartCheckKind.GpsFix, fix != null && fix >= GpsFix.Fix3D))
+            add(StartCheck(StartCheckKind.HomeSet, link?.home != null))
+        }
+        return sheet.copy(checks = checks, armed = link?.armed == true, placeClass = planClass, pilotPlaceClass = pilotClass, routeCheck = routeCheck)
     }
 
     private fun homeSlot(): Boolean = (state.value.link as? VehicleLink.Connected)?.homeSlot ?: true
@@ -439,7 +478,7 @@ internal class PlannerVehicleController(
     fun cancel() {
         vehicleJob?.cancel()
         mirrorJob?.cancel()
-        gapsJob?.cancel()
+        pilotJob?.cancel()
         transferJob?.cancel()
         startJob?.cancel()
     }
