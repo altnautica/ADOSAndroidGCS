@@ -46,8 +46,8 @@ class FlowUiTest {
     fun `the low-battery countdown names a landing when the pilot will land, a return home otherwise`() {
         val strings = testSpec.setupStrings
         assertEquals("Low battery: landing in 5 s", lowBatteryLine(strings, 4.2f, "land"))
-        assertEquals("Low battery: returning home in 5 s", lowBatteryLine(strings, 4.2f, "rth"))
-        assertEquals("Low battery: returning home in 5 s", lowBatteryLine(strings, 4.2f, null))
+        assertEquals("Battery reserve reached · Returning along the flown path in 5 s", lowBatteryLine(strings, 4.2f, "rth"))
+        assertEquals("Battery reserve reached · Returning along the flown path in 5 s", lowBatteryLine(strings, 4.2f, null))
         val pilot = pilotState(PilotOwner.Pilot, armed = true, landed = false).copy(rthCountdownS = 4.2f, lowBatteryAction = "land")
         assertEquals("land", FlowUi.of(pilot, "android", streaming = false).lowBatteryAction)
     }
