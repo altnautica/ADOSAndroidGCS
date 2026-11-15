@@ -428,7 +428,7 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
         val smartRtl = ctxModes(ctx).firstOrNull { it.name.equals(SMART_RTL_MODE, ignoreCase = true) }
         if (smartRtl != null) {
             when (val result = send(ctx, VehicleCommand.SetMode(smartRtl))) {
-                is CommandResult.Rejected, CommandResult.Unsupported -> Unit
+                is CommandResult.Rejected, CommandResult.Unsupported, CommandResult.Timeout -> Unit
                 else -> return result
             }
         }

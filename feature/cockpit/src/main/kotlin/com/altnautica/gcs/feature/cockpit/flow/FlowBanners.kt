@@ -48,6 +48,7 @@ import com.altnautica.gcs.core.model.LaunchStep
 import com.altnautica.gcs.feature.cockpit.chrome.ChromePanel
 import com.altnautica.gcs.feature.cockpit.chrome.LocalChrome
 import com.altnautica.gcs.feature.cockpit.launch.StepStrip
+import com.altnautica.gcs.core.skills.builtin.BuiltinIds
 import com.altnautica.gcs.core.skills.hud.ReadoutFormat
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
@@ -120,11 +121,15 @@ private val STALL_BANNER_KEYS = setOf("pilot.banner.mission_stalled", "pilot.ban
  */
 fun stallShadowsBanner(textKey: String?, stall: MissionStall?): Boolean = stall != null && textKey != null && textKey in STALL_BANNER_KEYS
 
-/** One stall overlay button: its spec label and the pilot action it sends. */
-enum class StallAction(val labelKey: String, val action: String, val tag: String) {
-    Skip("flow.mission_stall.skip", PilotAction.MISSION_SKIP, "flow-stall-skip"),
-    Return("flow.mission_stall.return", PilotAction.RTH, "flow-stall-return"),
-    Land("flow.mission_stall.land", PilotAction.LAND, "flow-stall-land"),
+/**
+ * One stall overlay button: its spec label, the pilot action it sends and, for Return and Land,
+ * the built-in that sends it ([builtinId]), which falls back to the flight controller when the
+ * pilot does not answer.
+ */
+enum class StallAction(val labelKey: String, val action: String, val tag: String, val builtinId: String?) {
+    Skip("flow.mission_stall.skip", PilotAction.MISSION_SKIP, "flow-stall-skip", null),
+    Return("flow.mission_stall.return", PilotAction.RTH, "flow-stall-return", BuiltinIds.RTH),
+    Land("flow.mission_stall.land", PilotAction.LAND, "flow-stall-land", BuiltinIds.LAND),
 }
 
 /**

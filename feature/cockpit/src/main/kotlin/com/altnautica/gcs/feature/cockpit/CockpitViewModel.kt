@@ -569,8 +569,8 @@ class CockpitViewModel @AssistedInject constructor(
     /** Cancels the low-battery return countdown. */
     fun cancelRthCountdown() = pilotAction(PilotAction(PilotAction.RTH_CANCEL))
 
-    /** A stall overlay choice (skip the waypoint, return, land here), sent to the pilot. */
-    fun onStallAction(action: StallAction) = pilotAction(PilotAction(action.action))
+    /** A stall overlay choice: the skip goes to the pilot; Return and Land run their built-ins (the press is their confirm), which reach the FC when the pilot does not answer. */
+    fun onStallAction(action: StallAction) = action.builtinId?.let { activate(it, mapOf(ARG_HELD to true)) } ?: pilotAction(PilotAction(action.action))
 
     /** Takes the stick session over from another surface. */
     fun takeSticks() {

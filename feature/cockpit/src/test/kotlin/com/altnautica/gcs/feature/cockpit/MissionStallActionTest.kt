@@ -6,6 +6,7 @@ import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.feature.cockpit.flow.StallAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,8 +46,11 @@ class MissionStallActionTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    /** A pilot sending the agent's golden stall frame; every `action` it receives lands in [actions] and is accepted. */
-    private class StalledPilot(private val scope: TestScope) : AutonomyFeedApi {
+    /**
+     * A pilot sending the agent's golden stall frame; every `action` it receives lands in [actions] and,
+     * while it [answers], is accepted.
+     */
+    private class StalledPilot(private val scope: TestScope, private val answers: Boolean = true) : AutonomyFeedApi {
         val actions = mutableListOf<String>()
         private val data = File("../../core/agent/src/test/resources/fixtures/pilot-frame-stall.json").readText()
 
@@ -61,7 +65,7 @@ class MissionStallActionTest {
                     if (o["op"]?.jsonPrimitive?.content != "action") return@collect
                     val name = o.getValue("name").jsonPrimitive.content
                     actions += name
-                    trySend("""{"kind":"action_result","name":"$name","id":"${o["id"]?.jsonPrimitive?.content}","ok":true}""")
+                    if (answers) trySend("""{"kind":"action_result","name":"$name","id":"${o["id"]?.jsonPrimitive?.content}","ok":true}""")
                 }
             }
             awaitClose { reader.cancel() }
@@ -105,5 +109,28 @@ class MissionStallActionTest {
 
         assertEquals(listOf("mission_skip", "rth", "land"), pilot.actions)
         vm.viewModelScope.cancel()
+    }
+
+    @Test
+    fun `return and land from the stall overlay reach the flight controller when the pilot does not answer`() = runTest(dispatcher) {
+        for (a in listOf(StallAction.Return, StallAction.Land)) {
+            val pilot = StalledPilot(this, answers = false)
+            val vehicle = FakeVehicle()
+            vehicle.heartbeatAt(testScheduler.currentTime, armed = true)
+            val vm = testCockpitVm(vehicle, pilot.apis)
+            backgroundScope.launch { vm.flow.collect {} }
+            advanceTimeBy(600)
+            runCurrent()
+            checkNotNull(vm.flow.value.stall)
+
+            vm.onStallAction(a)
+            advanceTimeBy(4_000)
+            runCurrent()
+
+            assertEquals(a.name, listOf(a.action), pilot.actions)
+            // No SmartRTL on this flight controller: the return lands in place, as the Return built-in does.
+            assertEquals(a.name, listOf<VehicleCommand>(VehicleCommand.Land), vehicle.control.sent)
+            vm.viewModelScope.cancel()
+        }
     }
 }

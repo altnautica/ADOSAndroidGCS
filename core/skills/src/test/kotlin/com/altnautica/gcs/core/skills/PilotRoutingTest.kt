@@ -290,6 +290,13 @@ class PilotRoutingTest {
     }
 
     @Test
+    fun `a SmartRTL the FC does not answer lands in place`() = runTest {
+        vehicle.control.result = CommandResult.Timeout
+        builtin("rth").activate(ctx(FakePilotLink(connected = false)), emptyMap())
+        assertEquals(listOf(smartRtl, VehicleCommand.Land), vehicle.control.sent)
+    }
+
+    @Test
     fun `outside ADOS control the return is the FC's own RTL`() = runTest {
         val fcControl = adosPilot().copy(controlMode = ControlMode.FcManual)
         assertEquals(CommandResult.Accepted, builtin("rth").activate(ctx(FakePilotLink(connected = false), pilot = fcControl), emptyMap()))
