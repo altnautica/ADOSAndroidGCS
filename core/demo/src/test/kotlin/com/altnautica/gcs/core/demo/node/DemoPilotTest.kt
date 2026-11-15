@@ -100,6 +100,15 @@ class DemoPilotTest {
     }
 
     @Test
+    fun `a waypoint skip is refused as the agent refuses it with no stall`() {
+        assertEquals("disarmed", action("mission_skip").str("err"))
+        action("takeoff")
+        fly(500)
+        assertEquals("no_stall", action("mission_skip").str("err"))
+        assertEquals(false, action("mission_skip")["ok"]!!.jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
     fun `sticks take an armed idle vehicle in guided only in ados mode, behind the centring gate`() {
         fc.armed = true
         fc.altitudeM = 5.0

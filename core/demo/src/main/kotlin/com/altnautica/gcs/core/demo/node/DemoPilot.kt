@@ -245,6 +245,8 @@ internal class DemoPilot(
                     controlMode = "fc_manual"
                 }
                 "resume", "rth_cancel" -> Unit
+                // The demo flies no mission, so it never stalls: there is no waypoint to skip.
+                "mission_skip" -> return if (armed(t)) "no_stall" else "disarmed"
                 else -> return "unknown_action"
             }
         }
