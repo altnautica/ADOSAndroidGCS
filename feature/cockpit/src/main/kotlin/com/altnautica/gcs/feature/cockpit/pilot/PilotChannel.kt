@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.skills.MonotonicClock
 import com.altnautica.gcs.core.skills.hud.pilotFresh
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -54,14 +56,28 @@ internal interface StickSink {
  * [connected] is true while server frames arrive: a gap of the spec's `stale_after_ms`
  * ([PilotState.STALE_MS]) or more drops the link. Frames are parsed in [parseContext] (off
  * the main thread in the app) and applied in the collector's, in arrival order.
+ *
+ * Every frame carries this app instance's [sid]. With no RC transmitter declared
+ * (`rc_receiver: absent`) the heartbeat comes from [mainTicker] instead, and only while
+ * [controlReachable]: a hung main thread, or an operator who can no longer reach Pause,
+ * Land or Return, goes silent and the pilot's link-loss action fires. [leave] says `bye`
+ * before a deliberate close.
  */
 internal class PilotChannel(
     private val scope: CoroutineScope,
     private val clock: MonotonicClock,
     private val parseContext: CoroutineContext = EmptyCoroutineContext,
+    private val controlReachable: () -> Boolean = { true },
+    private val mainTicker: Ticker = MainLooperTicker(TICK_MS),
+    private val sid: String = PilotWire.PROCESS_SID,
     private val open: (outgoing: Flow<String>) -> Flow<String>,
 ) : PilotLink, StickSink {
     override val src: String = PilotWire.SRC_ANDROID
+
+    private val bye = PilotWire.bye(src, sid)
+
+    /** Completes once the socket took the pending `bye`. */
+    @Volatile private var byeSent: CompletableDeferred<Unit>? = null
 
     private val _connected = MutableStateFlow(false)
     override val connected: StateFlow<Boolean> = _connected.asStateFlow()
@@ -101,13 +117,37 @@ internal class PilotChannel(
                 delay(TICK_MS)
             }
         }
+        mainTicker.start(::mainTick)
     }
 
     fun stop() {
+        mainTicker.stop()
         job?.cancel()
         job = null
         connection = null
         _connected.value = false
+    }
+
+    /**
+     * A deliberate close: says `bye` while the link is up, waits until the socket took it (at
+     * most [BYE_FLUSH_MS]), then stops. The pilot decides whether the leave ends this
+     * instance's link-loss watch.
+     */
+    suspend fun leave() {
+        if (job == null) return
+        if (_connected.value) {
+            val sent = CompletableDeferred<Unit>().also { byeSent = it }
+            if (outgoing.trySend(bye).isSuccess) withTimeoutOrNull(BYE_FLUSH_MS) { sent.await() }
+        }
+        stop()
+    }
+
+    /** The outgoing frames as the socket takes them; a `bye` counts as sent once taken. */
+    private fun sentFrames(): Flow<String> = flow {
+        outgoing.receiveAsFlow().collect { text ->
+            emit(text)
+            if (text === bye) byeSent?.complete(Unit)
+        }
     }
 
     private suspend fun connectLoop() = coroutineScope {
@@ -117,7 +157,7 @@ internal class PilotChannel(
             while (outgoing.tryReceive().isSuccess) Unit
             val c = launch {
                 try {
-                    open(outgoing.receiveAsFlow())
+                    open(sentFrames())
                         .map { text -> clock.nowMs().let { now -> now to PilotWire.parseFrame(text, now) } }
                         .flowOn(parseContext)
                         .collect { (now, frame) ->
@@ -158,7 +198,7 @@ internal class PilotChannel(
         return true
     }
 
-    /** Drops a silent link and keeps the link-loss timer alive while no input streams. */
+    /** Drops a silent link and, with an RC transmitter, keeps the link-loss timer alive while no input streams. */
     internal fun watchdog() {
         if (!_connected.value) return
         val now = clock.nowMs()
@@ -167,10 +207,20 @@ internal class PilotChannel(
             connection?.cancel()
             return
         }
+        if (_state.value?.noRc != true) heartbeat(now)
+    }
+
+    /** The main-looper tick: with no RC, the heartbeat goes out only while a stop control is reachable. */
+    internal fun mainTick() {
+        if (_state.value?.noRc == true && controlReachable()) heartbeat(clock.nowMs())
+    }
+
+    private fun heartbeat(now: Long) {
+        if (!_connected.value) return
         val last = lastInputMs
         val hb = lastHbMs
         if ((last == null || now - last >= HB_MS) && (hb == null || now - hb >= HB_MS)) {
-            if (outgoing.trySend(PilotWire.hb(src)).isSuccess) lastHbMs = now
+            if (outgoing.trySend(PilotWire.hb(src, sid)).isSuccess) lastHbMs = now
         }
     }
 
@@ -183,12 +233,12 @@ internal class PilotChannel(
         if (!_connected.value) return
         val now = clock.nowMs()
         seq = (seq + 1) and MAX_U32
-        if (outgoing.trySend(PilotWire.input(src, session, seq, now, frame)).isSuccess) lastInputMs = now
+        if (outgoing.trySend(PilotWire.input(src, sid, session, seq, now, frame)).isSuccess) lastInputMs = now
     }
 
     override fun release() {
         lastInputMs = null
-        if (_connected.value) outgoing.trySend(PilotWire.release(src, session))
+        if (_connected.value) outgoing.trySend(PilotWire.release(src, sid, session))
     }
 
     override suspend fun action(action: PilotAction): PilotActionResult {
@@ -199,7 +249,7 @@ internal class PilotChannel(
             val answer = async(start = CoroutineStart.UNDISPATCHED) {
                 withTimeoutOrNull(ACTION_ANSWER_MS) { _results.first { it.id == id } }
             }
-            if (!outgoing.trySend(PilotWire.action(action, src, id)).isSuccess) {
+            if (!outgoing.trySend(PilotWire.action(action, src, sid, id)).isSuccess) {
                 answer.cancel()
                 return@coroutineScope PilotActionResult.Unavailable
             }
@@ -210,7 +260,7 @@ internal class PilotChannel(
 
     override fun takeSession(): Boolean {
         if (!_connected.value) return false
-        return outgoing.trySend(PilotWire.sessionTake(src, session)).isSuccess
+        return outgoing.trySend(PilotWire.sessionTake(src, sid, session)).isSuccess
     }
 
     companion object {
@@ -219,6 +269,9 @@ internal class PilotChannel(
 
         /** How long an action waits for the pilot's `action_result`. */
         const val ACTION_ANSWER_MS = 3_000L
+
+        /** How long a deliberate close waits for the socket to take its `bye`. */
+        const val BYE_FLUSH_MS = 500L
         const val RETRY_MS = 1_000L
         const val MAX_RETRY_MS = 10_000L
         private const val OUTGOING_CAPACITY = 64

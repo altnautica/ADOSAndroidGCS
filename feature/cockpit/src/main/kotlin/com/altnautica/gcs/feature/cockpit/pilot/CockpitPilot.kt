@@ -8,6 +8,9 @@ import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.runningFold
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.io.IOException
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
@@ -61,6 +65,10 @@ fun newestPilot(a: PilotState?, b: PilotState?): PilotState? = when {
  * The flown vehicle's pilot channel and pilot state. One [PilotChannel] runs per flown
  * node while this object's scope lives; it is replaced when the node changes. [state]
  * is the newest of the channel's state and the navigation stream's `pilot` kind.
+ *
+ * Channels run in their own scope on the same dispatcher, so a channel closed with its
+ * owner (the node changes, or the cockpit is cleared) still says `bye` before its socket
+ * closes ([PilotChannel.leave]).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class CockpitPilot(
@@ -73,15 +81,37 @@ internal class CockpitPilot(
     reach: Flow<Reach?>,
     /** Where pilot frames are parsed ([PilotChannel]). */
     private val parseContext: CoroutineContext = EmptyCoroutineContext,
+    /** True while the link notification's Pause, Land and Return can be reached. */
+    private val notificationReachable: () -> Boolean = { false },
+    /** The no-RC heartbeat's main-looper tick, one per channel. */
+    private val ticker: () -> Ticker = { MainLooperTicker(PilotChannel.TICK_MS) },
 ) {
+    private val channelScope = CoroutineScope(scope.coroutineContext.minusKey(Job) + SupervisorJob())
+
+    /** True while the cockpit screen is resumed: its Pause (brake) is under the operator's finger. */
+    @Volatile var resumed: Boolean = false
+
+    /** A stop control is reachable: the cockpit is resumed, or the link notification carries Pause, Land and Return. */
+    fun controlReachable(): Boolean = resumed || notificationReachable()
+
     /** The flown node's pilot channel, or null without a node. */
     val link: StateFlow<PilotChannel?> = vehicleNodeId
         .runningFold<DeviceId?, Pair<DeviceId?, PilotChannel?>>(null to null) { (_, old), id ->
-            old?.stop()
+            old?.let { channelScope.launch { it.leave() } }
             id to id?.let { channelFor(it).also(PilotChannel::start) }
         }
         .map { it.second }
         .stateIn(scope, SharingStarted.Eagerly, null)
+
+    init {
+        // The owner is gone (the cockpit closed): the channel leaves on purpose, then its scope ends.
+        scope.coroutineContext[Job]?.invokeOnCompletion {
+            channelScope.launch {
+                link.value?.leave()
+                channelScope.cancel()
+            }
+        }
+    }
 
     /** True while the pilot channel of the flown node receives frames. */
     val linked: StateFlow<Boolean> = link.flatMapLatest { it?.connected ?: flowOf(false) }
@@ -99,7 +129,8 @@ internal class CockpitPilot(
     val stickSink: StateFlow<StickSink?> = combine(link, route) { l, r -> l?.takeIf { r == StickRoute.Pilot } }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    private fun channelFor(id: DeviceId) = PilotChannel(scope, clock, parseContext) { outgoing -> pilotStream(id, outgoing) }
+    private fun channelFor(id: DeviceId) =
+        PilotChannel(channelScope, clock, parseContext, ::controlReachable, ticker()) { outgoing -> pilotStream(id, outgoing) }
 
     private fun pilotStream(id: DeviceId, outgoing: Flow<String>): Flow<String> = flow {
         val a = api(id) ?: throw IOException("no agent path to the vehicle")
