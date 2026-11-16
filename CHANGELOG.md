@@ -82,6 +82,13 @@ app's `versionName`.
   new readiness item "Lidar map heading not confirmed". The preflight sheet
   and status pill show it as the drone sends it.
 
+## [0.6.4] - 2026-11-16
+
+- **On-screen sticks: up is up.** Pushing an on-screen pad up now flies
+  forward or climbs. The pads flipped Y twice, so up flew backward and
+  descended. The on-screen pads and a controller now send the same axes in
+  both stick modes.
+
 ## [0.6.3] - 2026-11-14
 
 - **Stale or missing obstacle data.** When avoidance is on and the drone's
