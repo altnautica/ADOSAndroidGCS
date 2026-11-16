@@ -23,6 +23,7 @@ class StallShadowsBannerTest {
         }
         assertFalse(stallShadowsBanner("pilot.banner.route_infeasible", stall))
         assertFalse(stallShadowsBanner("pilot.banner.mission_stalled_returning", stall))
+        assertFalse(stallShadowsBanner("pilot.banner.mission_stalled_landing", stall))
         assertFalse(stallShadowsBanner(null, stall))
     }
 

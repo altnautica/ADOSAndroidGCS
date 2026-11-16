@@ -90,6 +90,8 @@ class MissionStallBannerTest {
         )
         val returning = PilotBanner("pilot.banner.mission_stalled_returning", mapOf("wp" to "3"), null)
         assertEquals("No operator answered · Returning home along the flown path (SmartRTL)", bannerLine(strings, returning))
+        val landing = PilotBanner("pilot.banner.mission_stalled_landing", mapOf("wp" to "3"), null)
+        assertEquals("No operator answered · Position unverified · Landing here", bannerLine(strings, landing))
         assertEquals(returning, FlowUi.of(golden.copy(missionStall = null, banner = returning), "android", streaming = false).banner)
     }
 
