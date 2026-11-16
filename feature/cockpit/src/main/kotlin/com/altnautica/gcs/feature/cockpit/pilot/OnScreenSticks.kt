@@ -99,9 +99,9 @@ class OnScreenSticks {
         fingers = (fingers + if (down) 1 else -1).coerceAtLeast(0)
     }
 
-    /** The pads as a pad snapshot at [nowMs]; y up is negative, as a controller reports it. */
+    /** The pads as a pad snapshot at [nowMs]; y up is positive, as the input router's raw snapshot reports it. */
     fun snapshot(nowMs: Long): PadSnapshot {
-        val axes = GamepadAxes(left.first, -left.second, right.first, -right.second)
+        val axes = GamepadAxes(left.first, left.second, right.first, right.second)
         return PadSnapshot(
             deviceId = if (fingers > 0) DEVICE_ID else null,
             vendorId = 0,
