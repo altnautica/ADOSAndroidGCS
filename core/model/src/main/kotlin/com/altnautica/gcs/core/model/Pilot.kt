@@ -235,8 +235,30 @@ enum class LaunchStep(val wire: String) {
     }
 }
 
-/** A launch sequence in progress: its [step], the after-takeoff action, and an error once refused. */
-data class LaunchSequence(val step: LaunchStep, val after: String?, val error: String?)
+/** Phases of the supervised lift-off: spool, level on the ground (or probe for trim), lift, climb, then done or stopped. */
+enum class LiftoffPhase(val wire: String) {
+    Spool("spool"),
+    Level("level"),
+    Probe("probe"),
+    Lift("lift"),
+    Climb("climb"),
+    Done("done"),
+    Stopped("stopped");
+
+    companion object {
+        fun of(wire: String?): LiftoffPhase? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/**
+ * The steady take-off of a launch: its [phase], the status line ([text], e.g. "Spinning up",
+ * "Take-off stopped"), the longer [detail] line where a surface has room ("Climbing to 3 m",
+ * "The drone started to tip. Motors off."), the trim source (`learned` or `probe`) and the tilt in degrees.
+ */
+data class Liftoff(val phase: LiftoffPhase, val text: String?, val trim: String?, val tiltDeg: Float?, val detail: String? = null)
+
+/** A launch sequence in progress: its [step], the after-takeoff action, an error once refused, and the lift-off while it runs. */
+data class LaunchSequence(val step: LaunchStep, val after: String?, val error: String?, val liftoff: Liftoff? = null)
 
 /** A transient full-width announcement; [textKey] names a cockpit-spec string, [untilMs] is vehicle time. */
 data class PilotBanner(val textKey: String, val args: Map<String, String>, val untilMs: Long?)
@@ -385,6 +407,16 @@ data class PilotAction(val name: String, val args: Map<String, Any?> = emptyMap(
 
         /** The place class (refused while armed); the pilot keeps it across restarts. */
         fun placeClass(c: PlaceClass) = PilotAction("place_class:${c.wire}")
+
+        /** Clears the connected flight controller's learned airframe record after a rebalance. */
+        const val AIRFRAME_RESET = "airframe_reset"
+
+        /** The launch after-actions a take-off sends: hold where it climbed, or fly the loaded mission. */
+        const val AFTER_HOLD = "hold"
+        const val AFTER_MISSION = "mission"
+
+        /** The supervised launch: spool, level lift-off, climb to [altM], then [after]. */
+        fun launch(after: String, altM: Float) = PilotAction(LAUNCH, mapOf("after" to after, "alt_m" to altM))
     }
 }
 

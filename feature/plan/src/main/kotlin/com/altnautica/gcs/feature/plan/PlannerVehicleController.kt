@@ -33,6 +33,8 @@ import com.altnautica.gcs.core.model.VehicleCommand
 import com.altnautica.gcs.feature.plan.model.Autopilot
 import com.altnautica.gcs.feature.plan.model.FenceLimits
 import com.altnautica.gcs.feature.plan.model.MissionPlan
+import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.feature.plan.model.MissionWire
 import com.altnautica.gcs.feature.plan.model.MissionVerify
 import com.altnautica.gcs.feature.plan.model.PlanHome
@@ -393,7 +395,9 @@ internal class PlannerVehicleController(
      * Called when the slide completes. A plan whose place class the vehicle's pilot does not
      * fly yet sets it first (refused while armed) and reads the pilot back: the start stops,
      * with nothing armed, when the pilot does not take the class or its route check of a
-     * confined plan reads infeasible. Then arms if needed and runs the uploaded mission.
+     * confined plan reads infeasible. On the ground with an onboard pilot, the pilot launches
+     * (supervised lift-off to the plan's take-off altitude) and then flies the mission;
+     * otherwise arms if needed and runs the uploaded mission.
      */
     fun startMission() {
         val svc = services ?: return
@@ -410,6 +414,15 @@ internal class PlannerVehicleController(
                     state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = error)) }
                     return@launch
                 }
+            }
+            if (!sheet.armed && pilot.present) {
+                val launched = pilotSource.action(nodeId, PilotAction.launch(PilotAction.AFTER_MISSION, launchAltitudeM(state.value.plan)))
+                if (launched != PilotActionResult.Accepted) {
+                    state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = StartError.LaunchRefused(launched))) }
+                    return@launch
+                }
+                state.update { it.copy(startSheet = null, missionStartedFor = nodeId) }
+                return@launch
             }
             if (!sheet.armed) {
                 val armed = svc.vehicle.control.run(VehicleCommand.Arm())

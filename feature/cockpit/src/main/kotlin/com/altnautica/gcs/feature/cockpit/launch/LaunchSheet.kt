@@ -21,6 +21,7 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.LaunchSequence
 import com.altnautica.gcs.core.model.LaunchStep
+import com.altnautica.gcs.core.model.LiftoffPhase
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotVehicleClass
@@ -295,9 +296,36 @@ fun StepStrip(sequence: LaunchSequence, modifier: Modifier = Modifier) {
                 )
             }
         }
-        sequence.error?.let { code ->
-            val reason = com.altnautica.gcs.feature.cockpit.skillbar.reasonText(code)
-            Text(specText("flow.launch.refused", "reason" to reason), color = colors.statusError)
+        liftoffLine(sequence)?.let { line ->
+            Text(line, color = colors.fgSecondary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("launch-liftoff"))
+        }
+        val stop = liftoffStopText(sequence)
+        if (stop != null) {
+            Text(stop, color = colors.statusError, modifier = Modifier.testTag("launch-liftoff-stopped"))
+        } else {
+            sequence.error?.let { code ->
+                val reason = com.altnautica.gcs.feature.cockpit.skillbar.reasonText(code)
+                Text(specText("flow.launch.refused", "reason" to reason), color = colors.statusError)
+            }
         }
     }
 }
+
+/** A status line and its longer detail as one line ("Airborne. Climbing to 3 m."); either alone when the other is missing. */
+private fun joinLines(text: String?, detail: String?): String? {
+    val parts = listOfNotNull(text?.takeIf { it.isNotBlank() }, detail?.takeIf { it.isNotBlank() })
+    if (parts.isEmpty()) return null
+    return parts.joinToString(" ") { if (it.endsWith('.')) it else "$it." }
+}
+
+/** The steady take-off's status and detail while it runs ("Spinning up. Motors at idle, checking they're steady."); none once done, stopped or refused. */
+internal fun liftoffLine(sequence: LaunchSequence): String? {
+    if (sequence.error != null) return null
+    val liftoff = sequence.liftoff ?: return null
+    if (liftoff.phase == LiftoffPhase.Done || liftoff.phase == LiftoffPhase.Stopped) return null
+    return joinLines(liftoff.text, liftoff.detail)
+}
+
+/** A take-off that stopped on the ground, in the pilot's words ("Take-off stopped. The drone started to tip. Motors off."), shown in place of the refusal code. */
+internal fun liftoffStopText(sequence: LaunchSequence): String? =
+    sequence.liftoff?.takeIf { it.phase == LiftoffPhase.Stopped }?.let { joinLines(it.text, it.detail) }

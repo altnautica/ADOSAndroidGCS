@@ -39,6 +39,7 @@ import com.altnautica.gcs.feature.cockpit.launch.LaunchSheet
 import com.altnautica.gcs.feature.cockpit.modes.ModeSheet
 import com.altnautica.gcs.feature.cockpit.panels.QuickSettingsPanel
 import com.altnautica.gcs.feature.cockpit.preflight.PreflightSheet
+import com.altnautica.gcs.feature.cockpit.preflight.ReadinessFixes
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerSheet
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
 
@@ -147,8 +148,8 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
             Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
                 PreflightSheet(
                     result, gating = gating, onContinue = vm::continuePreflight, onDismiss = { vm.setPreflight(false) },
-                    fixOffered = { vm.batteryFailsafeFixOffered(it, armed) },
-                    onFix = vm::fixBatteryFailsafe,
+                    fixLabelKey = { ReadinessFixes.labelKey(it, armed, vm.specStrings) },
+                    onFix = vm::fixReadiness,
                 )
             }
         }

@@ -9,6 +9,9 @@ import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.pilot.PilotFrame
 import com.altnautica.gcs.core.agent.pilot.PilotWire
+import com.altnautica.gcs.core.agent.ws.AgentSockets
+import com.altnautica.gcs.core.agent.ws.WsFrame
+import kotlinx.coroutines.CancellationException
 import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.MissionGap
@@ -50,6 +53,8 @@ data class PilotPlanView(
     val routeCheck: RouteCheck? = null,
     val tsMs: Long? = null,
     val ageMs: Long? = null,
+    /** The vehicle runs an onboard pilot (its status carries a pilot frame). */
+    val present: Boolean = false,
 ) {
     /** The pilot's frame was under 2 s old when the status was served (the agent's own rule for a place-class change). */
     val fresh: Boolean get() = ageMs != null && ageMs <= FRESH_MS
@@ -77,6 +82,9 @@ interface VehiclePilotSource {
      * refuses it while armed.
      */
     suspend fun setPlaceClass(id: DeviceId, placeClass: PlaceClass): PilotActionResult
+
+    /** Sends [action] on the pilot channel (`/api/v1/pilot/stream`) and returns the pilot's answer. */
+    suspend fun action(id: DeviceId, action: PilotAction): PilotActionResult
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -85,6 +93,7 @@ class AgentVehiclePilotSource @Inject constructor(
     private val nodes: NodeRepository,
     private val clients: AgentClientFactory,
     private val local: Set<@JvmSuppressWildcards LocalNodeApis>,
+    private val sockets: AgentSockets,
 ) : VehiclePilotSource {
     override fun observe(id: DeviceId): Flow<PilotPlanView> {
         localApi(id)?.let { api -> return polled { api.navStatus(null) } }
@@ -105,9 +114,17 @@ class AgentVehiclePilotSource @Inject constructor(
     }
 
     override suspend fun setPlaceClass(id: DeviceId, placeClass: PlaceClass): PilotActionResult {
-        localApi(id)?.let { return pilotAction(it, PilotAction.placeClass(placeClass)) }
+        localApi(id)?.let { return pilotAction(it::pilotStream, PilotAction.placeClass(placeClass)) }
         val client = client(id, nodes.node(id).first()?.reaches?.firstOrNull()) ?: return PilotActionResult.Unavailable
         return commandAnswer(client.command(placeClassVerb(placeClass)))
+    }
+
+    override suspend fun action(id: DeviceId, action: PilotAction): PilotActionResult {
+        localApi(id)?.let { return pilotAction(it::pilotStream, action) }
+        val client = client(id, nodes.node(id).first()?.reaches?.firstOrNull()) ?: return PilotActionResult.Unavailable
+        return pilotAction({ out ->
+            sockets.open(client, PilotWire.STREAM_WS_PATH, PilotWire.TICKET_SCOPE, out).mapNotNull { (it as? WsFrame.Text)?.text }
+        }, action)
     }
 
     private fun localApi(id: DeviceId): AutonomyFeedApi? = local.firstNotNullOfOrNull { it.autonomy(id) }
@@ -125,13 +142,20 @@ class AgentVehiclePilotSource @Inject constructor(
         }
     }.distinctUntilChanged()
 
-    /** One action on an in-process pilot's stream, answered by its `action_result`. */
-    private suspend fun pilotAction(api: AutonomyFeedApi, action: PilotAction): PilotActionResult {
+    /** One action on a pilot stream opened by [stream], answered by its `action_result`. */
+    private suspend fun pilotAction(stream: (Flow<String>) -> Flow<String>, action: PilotAction): PilotActionResult {
         val sent = PilotWire.action(action, PilotWire.SRC_ANDROID, ACTION_ID)
-        val answer = withTimeoutOrNull(ANSWER_MS) {
-            api.pilotStream(flowOf(sent))
-                .mapNotNull { PilotWire.parseFrame(it, 0L) as? PilotFrame.ActionResult }
-                .first { it.name == action.name }
+        val answer = try {
+            withTimeoutOrNull(ANSWER_MS) {
+                stream(flowOf(sent))
+                    .mapNotNull { PilotWire.parseFrame(it, 0L) as? PilotFrame.ActionResult }
+                    .first { it.name == action.name }
+            }
+        } catch (c: CancellationException) {
+            throw c
+        } catch (_: Exception) {
+            // The socket was refused or dropped before an answer.
+            return PilotActionResult.Unavailable
         } ?: return PilotActionResult.NoAnswer
         return if (answer.ok) PilotActionResult.Accepted else PilotActionResult.Refused(answer.err)
     }
@@ -169,7 +193,7 @@ class AgentVehiclePilotSource @Inject constructor(
             val data = (pilot?.get("data") as? JsonObject) ?: return PilotPlanView.None
             val p = PilotWire.parseState(data, 0L) ?: return PilotPlanView.None
             fun long(key: String) = (pilot[key] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull
-            return PilotPlanView(p.mission?.gaps.orEmpty(), p.placeClass, p.routeCheck, long("ts_ms"), long("age_ms"))
+            return PilotPlanView(p.mission?.gaps.orEmpty(), p.placeClass, p.routeCheck, long("ts_ms"), long("age_ms"), present = true)
         }
     }
 }
