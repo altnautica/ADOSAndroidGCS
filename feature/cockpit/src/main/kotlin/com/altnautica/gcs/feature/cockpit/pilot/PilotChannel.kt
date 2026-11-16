@@ -79,6 +79,9 @@ internal class PilotChannel(
     /** Completes once the socket took the pending `bye`. */
     @Volatile private var byeSent: CompletableDeferred<Unit>? = null
 
+    /** True while [mainTicker] runs: the pilot declares no RC. */
+    @Volatile private var ticking = false
+
     private val _connected = MutableStateFlow(false)
     override val connected: StateFlow<Boolean> = _connected.asStateFlow()
 
@@ -117,11 +120,11 @@ internal class PilotChannel(
                 delay(TICK_MS)
             }
         }
-        mainTicker.start(::mainTick)
     }
 
     fun stop() {
         mainTicker.stop()
+        ticking = false
         job?.cancel()
         job = null
         connection = null
@@ -191,6 +194,11 @@ internal class PilotChannel(
             is PilotFrame.State -> {
                 lastStateMs = now
                 _state.value = frame.state
+                // The main-looper tick runs only with no RC declared, so the looper idles otherwise.
+                if (frame.state.noRc != ticking) {
+                    ticking = frame.state.noRc
+                    if (ticking) mainTicker.start(::mainTick) else mainTicker.stop()
+                }
             }
             is PilotFrame.ActionResult -> _results.tryEmit(frame)
             is PilotFrame.Keepalive -> Unit
