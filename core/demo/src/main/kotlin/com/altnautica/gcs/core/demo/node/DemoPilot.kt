@@ -69,6 +69,7 @@ internal class DemoPilot(
     private var profile = "normal"
     private var avoid = "brake"
     private var placeClass = "open"
+    private var rcReceiver = "present"
 
     private var session: PilotSession? = null
     private var gate: PilotGate? = null
@@ -190,12 +191,24 @@ internal class DemoPilot(
         if (name in FAILSAFE_REFUSED && DemoPilotPins.failsafe(pinned(t))) return "failsafe"
         when {
             name.startsWith("profile:") -> profile = name.removePrefix("profile:").takeIf { it in PROFILES } ?: return "bad_value"
-            name.startsWith("control_mode:") -> controlMode = name.removePrefix("control_mode:").takeIf { it in CONTROL_MODES } ?: return "bad_value"
+            name.startsWith("control_mode:") -> {
+                val mode = name.removePrefix("control_mode:").takeIf { it in CONTROL_MODES } ?: return "bad_value"
+                if (rcReceiver == "absent" && mode != "ados") return "rc_receiver_absent"
+                controlMode = mode
+            }
             name.startsWith("avoid:") -> avoid = name.removePrefix("avoid:").takeIf { it in AVOID_MODES } ?: return "bad_value"
             // The place class is chosen on the ground only.
             name.startsWith("place_class:") -> {
                 if (armed(t)) return "armed"
+                if (rcReceiver == "absent" && name == "place_class:confined") return "rc_receiver_absent"
                 placeClass = name.removePrefix("place_class:").takeIf { it in PLACE_CLASSES } ?: return "bad_value"
+            }
+            // No RC is declared on the ground, in ADOS control and an open place.
+            name.startsWith("rc_receiver:") -> {
+                if (armed(t)) return "armed"
+                val declared = name.removePrefix("rc_receiver:").takeIf { it in RC_RECEIVERS } ?: return "bad_value"
+                if (declared == "absent") noRcRefusal(controlMode, placeClass)?.let { return it }
+                rcReceiver = declared
             }
             name.startsWith("vtol:") -> return "vehicle_class"
             else -> when (name) {
@@ -453,7 +466,7 @@ internal class DemoPilot(
             val shownOwner = if (gotoAtMs != null && owner != IDLE) GOTO else owner
             Captured(
                 t = t,
-                live = PilotLive(shownOwner, controlMode, profile, avoid, session?.copy(), gate?.copy(), launch?.copy(), placeClass),
+                live = PilotLive(shownOwner, controlMode, profile, avoid, session?.copy(), gate?.copy(), launch?.copy(), placeClass, rcReceiver),
                 fc = FcLive(fc.armed, fc.mode, landed, fc.altitudeM),
                 pins = pins(),
                 scenario = scenario,

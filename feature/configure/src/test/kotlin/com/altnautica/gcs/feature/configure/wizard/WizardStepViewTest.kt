@@ -42,6 +42,12 @@ class WizardStepViewTest {
         "setup.question.motor_direction" to "Is it spinning the right way?",
         "setup.blocker.swap_motor_wires" to "Swap two motor wires",
         "setup.result.gains_after" to "Gains after",
+        "setup.ados_intro.title" to "Meet ADOS Pilot",
+        "setup.ados_intro.body" to "ADOS flies the aircraft.",
+        "setup.ados_intro.body.no_rc" to "Fly from the app.",
+        "setup.action.use_ados" to "Use ADOS Pilot",
+        "setup.action.use_ados_no_rc" to "Use ADOS Pilot with no RC",
+        "setup.action.keep_fc" to "Keep the flight controller",
     )
     private val text = SetupText { key, args -> strings[key]?.let { s -> args.entries.fold(s) { t, (k, v) -> t.replace("{$k}", v) } } ?: key }
 
@@ -145,5 +151,48 @@ class WizardStepViewTest {
         compose.onNodeWithText("0.12").assertExists()
         compose.onNodeWithText("tested").assertExists()
         compose.onNodeWithText("4").assertExists()
+    }
+
+    private fun intro(rcPresent: Boolean?, noRcOffered: Boolean = true) = SetupStep(
+        wizard = "ground",
+        step = ADOS_INTRO_STEP,
+        titleKey = "setup.ados_intro.title",
+        bodyKey = "setup.ados_intro.body",
+        args = JsonObject(listOfNotNull("fallback_mode" to JsonPrimitive("elrs"), rcPresent?.let { "rc_present" to JsonPrimitive(it) }).toMap()),
+        state = SetupStepState.WaitingUser,
+        actions = listOfNotNull(
+            SetupAction("use_ados", "setup.action.use_ados", SetupActionStyle.Primary, SetupConfirm.None),
+            SetupAction("keep_fc", "setup.action.keep_fc", SetupActionStyle.Secondary, SetupConfirm.None),
+            SetupAction(USE_ADOS_NO_RC, "setup.action.use_ados_no_rc", SetupActionStyle.Secondary, SetupConfirm.None).takeIf { noRcOffered },
+        ),
+    )
+
+    @Test
+    fun noRcChoiceLeadsWithoutAReceiverAndShowsItsBody() {
+        val shown = shownActions(intro(rcPresent = false))
+        assertEquals(listOf(USE_ADOS_NO_RC, "use_ados", "keep_fc"), shown.map { it.id })
+        assertEquals(listOf(SetupActionStyle.Primary, SetupActionStyle.Secondary, SetupActionStyle.Secondary), shown.map { it.style })
+
+        show(intro(rcPresent = false))
+        compose.onNodeWithText("• Fly from the app.").assertExists()
+        compose.onNodeWithTag("setup-action-$USE_ADOS_NO_RC").performClick()
+        assertEquals(listOf(USE_ADOS_NO_RC), fired)
+    }
+
+    @Test
+    fun withAReceiverAdosLeadsAndTheNoRcChoiceIsSecondary() {
+        val shown = shownActions(intro(rcPresent = true))
+        assertEquals(listOf("use_ados", "keep_fc", USE_ADOS_NO_RC), shown.map { it.id })
+        assertEquals(SetupActionStyle.Primary, shown.first().style)
+        assertEquals(SetupActionStyle.Secondary, shown.last().style)
+    }
+
+    @Test
+    fun noRcBodyShowsOnlyWhenItsChoiceIsOffered() {
+        val older = intro(rcPresent = null, noRcOffered = false)
+        assertEquals(older.actions, shownActions(older))
+        show(older)
+        compose.onNodeWithText("• ADOS flies the aircraft.").assertExists()
+        compose.onNodeWithText("• Fly from the app.").assertDoesNotExist()
     }
 }

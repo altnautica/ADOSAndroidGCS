@@ -53,6 +53,8 @@ internal class PilotLive(
     val launch: PilotLaunch?,
     /** The operator's place class (`open`, `confined`). */
     val placeClass: String = "open",
+    /** The operator's RC declaration (`present`, `absent`). */
+    val rcReceiver: String = "present",
 )
 
 /** The flight controller's state the live frame reports. */
@@ -96,6 +98,8 @@ internal fun liveFrame(p: PilotLive, fc: FcLive, t: Long): JsonObject {
         put("setup_abort", JsonNull)
         put("low_battery_action", JsonNull)
         put("place_class", p.placeClass)
+        // Present only with the no-RC declaration, as the pilot sends it.
+        if (p.rcReceiver == "absent") put("rc_receiver", "absent")
         putJsonObject("mission") {
             put("state", "none")
             put("seq", 0)
