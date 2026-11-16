@@ -91,15 +91,21 @@ internal class DemoFollowFeed {
 
     private fun personX(now: Long) = 560f + 220f * sin(now / 3_000.0).toFloat()
 
-    /** One detection batch of the front camera; the walker is tracked and locked only while [following]. */
+    /**
+     * One detection batch of the front camera; the walker is tracked and locked only while [following].
+     * While a track is followed, four frames of five are crop-only (`crop_window` around the walker),
+     * as the engine sends them: the untracked walker outside the window is not in those.
+     */
     fun detections(now: Long, frameId: Long, following: Boolean): JsonObject {
         val s = step(now)
         val x = personX(now)
+        val tracked = following && (s in 1..3 || s == 7)
+        val cropOnly = tracked && frameId % 5 != 0L
         val items = buildJsonArray {
             // The lost follow camera sends nothing at all.
             if (following && s == 9) return@buildJsonArray
             // A second walker that never gets a track: always a candidate.
-            add(det(980f, 330f, 40f, 104f, 0.64f, null, null))
+            if (!cropOnly) add(det(980f, 330f, 40f, 104f, 0.64f, null, null))
             when {
                 !following -> add(det(x, 280f, 60f, 150f, 0.82f, null, null))
                 s == 0 -> add(det(x, 280f, 60f, 150f, 0.82f, null, null))
@@ -116,6 +122,14 @@ internal class DemoFollowFeed {
             put("frame_width", FRAME_W)
             put("frame_height", FRAME_H)
             put("detections", items)
+            if (cropOnly) {
+                putJsonObject("crop_window") {
+                    put("x", x - 60f)
+                    put("y", 205f)
+                    put("width", 180f)
+                    put("height", 300f)
+                }
+            }
         }
     }
 

@@ -62,6 +62,10 @@ internal object AutonomyParse {
             frameHeight = o["frameHeight"].f() ?: return null,
             receivedAtMs = receivedAtMs,
             items = items,
+            tsMs = o["tsMs"].num()?.toLong() ?: 0L,
+            cropWindow = o["cropWindow"].obj()?.let { c ->
+                Box(c["x"].f() ?: 0f, c["y"].f() ?: 0f, c["width"].f() ?: 0f, c["height"].f() ?: 0f)
+            },
         )
     }
 

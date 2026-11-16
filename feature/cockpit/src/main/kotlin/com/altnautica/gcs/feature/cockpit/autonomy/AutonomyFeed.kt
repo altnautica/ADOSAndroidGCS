@@ -245,7 +245,7 @@ internal class AutonomyFeed(
     }
 
     private fun putBatch(b: DetectionBatch) {
-        _batches.update { it + (b.cameraId to b) }
+        _batches.update { it + (b.cameraId to CropHold.apply(it[b.cameraId], b)) }
     }
 
     /** Parses and applies one navigation frame received (or, for a polled frame, produced) at [receivedAtMs]. */

@@ -151,6 +151,15 @@ class PerceptionFeed @Inject constructor(
             put("frameWidth", num(raw["frame_width"])?.takeIf { it != 0.0 } ?: DEFAULT_FRAME_WIDTH)
             put("frameHeight", num(raw["frame_height"])?.takeIf { it != 0.0 } ?: DEFAULT_FRAME_HEIGHT)
             put("detections", detections)
+            // Set only on a crop-only batch: the frame-pixel window it was detected in.
+            (raw["crop_window"] as? JsonObject)?.let { c ->
+                put("cropWindow", buildJsonObject {
+                    put("x", num(c["x"]) ?: 0.0)
+                    put("y", num(c["y"]) ?: 0.0)
+                    put("width", num(c["width"]) ?: 0.0)
+                    put("height", num(c["height"]) ?: 0.0)
+                })
+            }
         }
     }
 

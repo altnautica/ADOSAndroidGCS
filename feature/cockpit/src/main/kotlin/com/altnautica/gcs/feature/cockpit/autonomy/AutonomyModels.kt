@@ -11,16 +11,21 @@ data class Box(val x: Float, val y: Float, val w: Float, val h: Float) {
 /** Lock state the tracker reports for a detection. */
 enum class LockState { Locked, Uncertain, Lost }
 
-/** One detection of a batch. */
+/** One detection of a batch. [held]: kept from the camera's last whole-frame batch, outside a crop-only batch's window. */
 data class Detection(
     val box: Box,
     val classLabel: String,
     val confidence: Float,
     val trackId: Int?,
     val lockState: LockState?,
+    val held: Boolean = false,
 )
 
-/** One detection batch for one camera, stamped with the local receive time. */
+/**
+ * One detection batch for one camera, stamped with the local receive time. [tsMs] is the agent's
+ * frame time. [cropWindow] is set only on a crop-only batch (frame pixels); [wholeFrame] is the
+ * camera's latest whole-frame batch, kept for those ([CropHold]).
+ */
 data class DetectionBatch(
     val cameraId: String,
     val frameId: Long,
@@ -28,6 +33,9 @@ data class DetectionBatch(
     val frameHeight: Float,
     val receivedAtMs: Long,
     val items: List<Detection>,
+    val tsMs: Long = 0L,
+    val cropWindow: Box? = null,
+    val wholeFrame: DetectionBatch? = null,
 )
 
 /**

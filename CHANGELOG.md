@@ -5,6 +5,13 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Steady boxes while following.** While follow-me flies, the agent's
+  vision engine detects most frames only in a window around the subject.
+  The detection overlay keeps the boxes from the last whole frame that lie
+  outside that window until the next whole frame, or for one second, so
+  other people and objects no longer blink at the whole-frame rate. A batch
+  from an older agent, without the window, draws as before. The demo follow
+  sends the same windowed batches.
 - **Radar: No returns.** A fresh lidar scan with no return in any bin and
   no other distance reads "NO RETURNS" in the warning colour, where it read
   "—". A return is a finite range above 5 cm, the pilot's own rule, so a
