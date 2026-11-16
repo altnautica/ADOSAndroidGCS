@@ -5,8 +5,8 @@ app's `versionName`.
 
 ## [Unreleased]
 
-- **Steady boxes while following.** While follow-me flies, the agent's
-  vision engine detects most frames only in a window around the subject.
+- **Steady boxes while following.** While a target is designated, the
+  agent's vision engine detects most frames only in a window around the subject.
   The detection overlay keeps the boxes from the last whole frame that lie
   outside that window until the next whole frame, or for one second, so
   other people and objects no longer blink at the whole-frame rate. A batch
