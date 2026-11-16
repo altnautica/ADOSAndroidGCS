@@ -16,12 +16,13 @@ class StallShadowsBannerTest {
     private val stall = MissionStall(MissionStallKind.Mission, 3, "3", 0L, 30f, 15f)
 
     @Test
-    fun `the stall overlay hides exactly the stalled, stalled-hold and return-blocked banners`() {
-        for (key in listOf("pilot.banner.mission_stalled", "pilot.banner.mission_stalled_hold", "pilot.banner.return_blocked")) {
+    fun `the stall overlay hides exactly the stalled, stalled-hold, stalled-return and return-blocked banners`() {
+        for (key in listOf("pilot.banner.mission_stalled", "pilot.banner.mission_stalled_hold", "pilot.banner.mission_stalled_return", "pilot.banner.return_blocked")) {
             assertTrue(key, stallShadowsBanner(key, stall))
             assertFalse("no stall, the banner shows: $key", stallShadowsBanner(key, null))
         }
         assertFalse(stallShadowsBanner("pilot.banner.route_infeasible", stall))
+        assertFalse(stallShadowsBanner("pilot.banner.mission_stalled_returning", stall))
         assertFalse(stallShadowsBanner(null, stall))
     }
 

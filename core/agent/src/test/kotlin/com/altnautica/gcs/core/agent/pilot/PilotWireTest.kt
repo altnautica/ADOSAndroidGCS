@@ -263,6 +263,13 @@ class PilotWireTest {
     }
 
     @Test
+    fun `a confined operator wait reads its countdown to the return home`() {
+        val wait = """{"owner":"pilot","mission_stall":{"kind":"mission","seq":3,"wp_label":"3","since_ms":5,"skip_in_s":null,"return_in_s":44.2,"window_s":15.0}}"""
+        val s = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(wait) as JsonObject, 0L))
+        assertEquals(MissionStall(MissionStallKind.Mission, 3, "3", 5L, null, 15f, returnInS = 44.2f), s.missionStall)
+    }
+
+    @Test
     fun `a return stall holds with no countdown, a malformed stall is dropped`() {
         val ret = """{"owner":"pilot","mission_stall":{"kind":"return","seq":null,"wp_label":null,"since_ms":5,"skip_in_s":null,"window_s":15.0},
             |"mission":{"state":"returning","seq":0,"total":4,"target":{"seq":0,"cmd":20,"ned":null,"radius_m":30.0}}}""".trimMargin()

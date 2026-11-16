@@ -112,7 +112,7 @@ data class FlowUi(
 }
 
 /** The pilot banners a shown stall overlay repeats: the overlay carries the live countdown. */
-private val STALL_BANNER_KEYS = setOf("pilot.banner.mission_stalled", "pilot.banner.mission_stalled_hold", "pilot.banner.return_blocked")
+private val STALL_BANNER_KEYS = setOf("pilot.banner.mission_stalled", "pilot.banner.mission_stalled_hold", "pilot.banner.mission_stalled_return", "pilot.banner.return_blocked")
 
 /**
  * Whether the banner [textKey] hides behind the stall overlay (the shared `stallShadowsBanner`):
@@ -134,9 +134,10 @@ enum class StallAction(val labelKey: String, val action: String, val tag: String
 
 /**
  * The stall overlay as it reads: the waypoint label, the no-progress window in whole seconds,
- * and the seconds to the automatic action rounded up ([inS] null: the pilot holds for the operator).
+ * and the seconds to the automatic action rounded up ([inS] null: the pilot holds for the operator,
+ * counting down [returnInS] to a SmartRTL home when no operator answers in a confined place).
  */
-data class StallUi(val kind: MissionStallKind, val wp: String, val windowS: Long, val inS: Long?) {
+data class StallUi(val kind: MissionStallKind, val wp: String, val windowS: Long, val inS: Long?, val returnInS: Long? = null) {
     /** A mission stall offers skip, return and land; a blocked return offers land (or flying by stick). */
     val actions: List<StallAction>
         get() = when (kind) {
@@ -148,10 +149,10 @@ data class StallUi(val kind: MissionStallKind, val wp: String, val windowS: Long
     fun title(strings: SetupStringsSpec): String = when (kind) {
         MissionStallKind.Mission -> {
             val args = mapOf("wp" to wp, "window_s" to windowS.toString())
-            if (inS == null) {
-                strings.format("flow.mission_stall.title_hold", args)
-            } else {
-                strings.format("flow.mission_stall.title", args + ("in_s" to inS.toString()))
+            when {
+                inS != null -> strings.format("flow.mission_stall.title", args + ("in_s" to inS.toString()))
+                returnInS != null -> strings.format("flow.mission_stall.title_return", args + ("in_s" to returnInS.toString()))
+                else -> strings.format("flow.mission_stall.title_hold", args)
             }
         }
         MissionStallKind.Return ->
@@ -164,6 +165,7 @@ data class StallUi(val kind: MissionStallKind, val wp: String, val windowS: Long
             wp = stall.wpLabel ?: stall.seq?.toString().orEmpty(),
             windowS = stall.windowS.roundToLong(),
             inS = stall.skipInS?.let { FlowUi.shownSeconds(it).toLong() },
+            returnInS = stall.returnInS?.let { FlowUi.shownSeconds(it).toLong() },
         )
     }
 }

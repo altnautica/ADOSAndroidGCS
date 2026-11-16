@@ -137,6 +137,8 @@ enum class MissionStallKind(val wire: String) {
  * No progress towards the active waypoint (or home): the vehicle holds for the operator.
  * [skipInS] counts down to the automatic action (skip for a mission, land for a return);
  * null holds until the operator decides. [windowS] is the no-progress window that tripped it.
+ * [returnInS] counts down to a SmartRTL home on its own: a mission held for the operator in a
+ * confined place (no skip left, [skipInS] null) that no operator has answered; null otherwise.
  */
 data class MissionStall(
     val kind: MissionStallKind,
@@ -145,6 +147,7 @@ data class MissionStall(
     val sinceMs: Long?,
     val skipInS: Float?,
     val windowS: Float,
+    val returnInS: Float? = null,
 )
 
 /** The kind of place the operator flies in (`place_class`): never chosen automatically. */

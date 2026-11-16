@@ -207,6 +207,7 @@ object PilotWire {
             sinceMs = o.long("since_ms"),
             skipInS = o.float("skip_in_s"),
             windowS = o.float("window_s") ?: return null,
+            returnInS = o.float("return_in_s"),
         )
     }
 

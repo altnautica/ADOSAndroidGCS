@@ -75,6 +75,25 @@ class MissionStallBannerTest {
     }
 
     @Test
+    fun `a confined operator wait counts down to the return home and keeps all three answers`() {
+        val wait = StallUi.of(golden.missionStall!!.copy(skipInS = null, returnInS = 44.2f))
+        assertEquals(StallUi(MissionStallKind.Mission, "3", 15, null, 45), wait)
+        assertEquals("No progress to waypoint 3 for 15 s · No operator · Returning home in 45 s", wait.title(strings))
+        assertEquals(listOf(StallAction.Skip, StallAction.Return, StallAction.Land), wait.actions)
+    }
+
+    @Test
+    fun `the return banners read their spec text`() {
+        assertEquals(
+            "No progress to waypoint 3 · No operator · Returning home in 45 s",
+            bannerLine(strings, PilotBanner("pilot.banner.mission_stalled_return", mapOf("wp" to "3", "in_s" to "45"), null)),
+        )
+        val returning = PilotBanner("pilot.banner.mission_stalled_returning", mapOf("wp" to "3"), null)
+        assertEquals("No operator answered · Returning home along the flown path (SmartRTL)", bannerLine(strings, returning))
+        assertEquals(returning, FlowUi.of(golden.copy(missionStall = null, banner = returning), "android", streaming = false).banner)
+    }
+
+    @Test
     fun `a blocked return counts down to landing and offers only Land here`() {
         val ret = StallUi.of(golden.missionStall!!.copy(kind = MissionStallKind.Return, seq = null, wpLabel = null, skipInS = 4.2f))
         assertEquals("Return blocked · Landing in 5 s", ret.title(strings))
