@@ -68,7 +68,34 @@ data class FlightStateSecondarySpec(
     @SerialName("fc_failsafe") val fcFailsafe: SecondaryTextSpec? = null,
     @SerialName("speed_cap") val speedCap: SecondaryTextSpec? = null,
     @SerialName("mission_paused_line") val missionPausedLine: MatchedTextSpec? = null,
+    /** `{profile_limit}` of a rule: the horizontal limit the sticks fly at. */
+    @SerialName("profile_limit") val profileLimit: KeyedTextSpec? = null,
+    val clearance: ClearanceTextSpec? = null,
+    @SerialName("input_age") val inputAge: InputAgeTextSpec? = null,
+    @SerialName("h_speed") val hSpeed: OwnerTextSpec? = null,
+    @SerialName("v_speed") val vSpeed: OwnerTextSpec? = null,
 )
+
+/** A part whose text is the `setup-strings` entry [textKey]. */
+@Serializable
+data class KeyedTextSpec(@SerialName("text_key") val textKey: String)
+
+/** The nearest obstacle, shown under [nearFactor] × the margin; [insideMarginColor] at or inside it. */
+@Serializable
+data class ClearanceTextSpec(
+    @SerialName("text_key") val textKey: String,
+    @SerialName("near_factor") val nearFactor: Double,
+    @SerialName("near_color") val nearColor: String,
+    @SerialName("inside_margin_color") val insideMarginColor: String,
+)
+
+/** The stick input age while the sticks fly, shown over [overMs]. */
+@Serializable
+data class InputAgeTextSpec(@SerialName("text_key") val textKey: String, @SerialName("over_ms") val overMs: Long, val color: String)
+
+/** A part shown only while [owner] owns. */
+@Serializable
+data class OwnerTextSpec(@SerialName("text_key") val textKey: String, val owner: String, val color: String)
 
 /** A secondary part shown only while its [match] holds. */
 @Serializable

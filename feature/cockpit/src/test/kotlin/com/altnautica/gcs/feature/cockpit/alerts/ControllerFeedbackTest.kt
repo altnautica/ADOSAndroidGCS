@@ -43,6 +43,7 @@ class ControllerFeedbackTest {
                 MutableStateFlow(ControllerContext()),
                 testSpec.ds4.lightbar,
                 testSpec.ds4.rumble,
+                testSpec.ds4.feedback,
                 executor.asCoroutineDispatcher(),
             )
             feedback.start()

@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.cockpit
 
 import com.altnautica.gcs.core.model.ControlMode
+import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.Skill
@@ -31,16 +32,24 @@ import io.mockk.mockk
 /** Rules the cockpit draws from the spec: light bar, chip, launch arguments and designation. */
 class CockpitRulesTest {
 
-    private fun light(owner: PilotOwner, mission: MissionState? = null, mode: String = "GUIDED", failsafe: Boolean = false, lowBattery: Boolean = false): LightbarState {
-        val p = pilotState(owner, fcModeName = mode, mission = mission)
+    private fun light(
+        owner: PilotOwner,
+        mission: MissionState? = null,
+        mode: String = "GUIDED",
+        failsafe: Boolean = false,
+        lowBattery: Boolean = false,
+        profile: PilotProfile = PilotProfile.Normal,
+    ): LightbarState {
+        val p = pilotState(owner, fcModeName = mode, mission = mission).copy(profile = profile)
         return lightbarState(ControllerContext.of(p, armed = p.armed == true, modeName = null, pickerOpen = false, lowBattery = lowBattery, failsafe = failsafe))
     }
 
     @Test
     fun `light bar colour follows the owner, with the spec's priority on top`() {
         assertEquals(LightbarState.Disarmed, light(PilotOwner.Idle))
-        assertEquals(LightbarState.Pilot, light(PilotOwner.Pilot))
+        assertEquals(LightbarState.PilotNormal, light(PilotOwner.Pilot))
         assertEquals(LightbarState.Pilot, light(PilotOwner.Goto))
+        assertEquals(LightbarState.Pilot, light(PilotOwner.Tuning))
         assertEquals(LightbarState.Skill, light(PilotOwner.Skill))
         assertEquals(LightbarState.Mission, light(PilotOwner.MissionFc, MissionState.Active, mode = "AUTO"))
         assertEquals(LightbarState.ArmedIdle, light(PilotOwner.FcMode, mode = "LOITER"))
@@ -48,6 +57,22 @@ class CockpitRulesTest {
         assertEquals(LightbarState.Rth, light(PilotOwner.FcMode, MissionState.Active, mode = "RTL"))
         assertEquals(LightbarState.LowBattery, light(PilotOwner.FcMode, mode = "RTL", lowBattery = true))
         assertEquals(LightbarState.Failsafe, light(PilotOwner.Pilot, lowBattery = true, failsafe = true))
+    }
+
+    @Test
+    fun `the light bar shows the profile while the operator's sticks own, under the state colours`() {
+        assertEquals(LightbarState.PilotCine, light(PilotOwner.Pilot, profile = PilotProfile.Cine))
+        assertEquals(LightbarState.PilotSport, light(PilotOwner.Pilot, profile = PilotProfile.Sport))
+        // Only the sticks show the profile; goto keeps the plain pilot colour.
+        assertEquals(LightbarState.Pilot, light(PilotOwner.Goto, profile = PilotProfile.Sport))
+        assertEquals(LightbarState.LowBattery, light(PilotOwner.Pilot, lowBattery = true, profile = PilotProfile.Sport))
+        assertEquals(LightbarState.Rth, light(PilotOwner.Pilot, mode = "RTL", profile = PilotProfile.Cine))
+        // Every state has its colour in the spec, each profile its spec state and a distinct colour.
+        val lightbar = testSpec.ds4.lightbar
+        for (s in LightbarState.entries) assertTrue(s.wire, s.wire in lightbar.states && s.wire in lightbar.priority)
+        for (p in PilotProfile.entries) assertEquals(light(PilotOwner.Pilot, profile = p).wire, lightbar.profileStates[p.wire])
+        val colours = listOf(LightbarState.PilotCine, LightbarState.PilotNormal, LightbarState.PilotSport).map { lightbar.states.getValue(it.wire).color }
+        assertEquals(3, colours.toSet().size)
     }
 
     private val chips = FlightStateChipResolver(testSpec.flightState, testSpec.tokens, testSpec.setupStrings.strings)

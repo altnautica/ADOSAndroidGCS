@@ -217,7 +217,7 @@ data class ReadinessItem(val id: String, val ok: Boolean, val severity: Readines
 data class PilotSkillRef(val pluginId: String, val skillId: String, val label: String)
 
 /** The surface whose sticks the pilot currently accepts. */
-data class InputSession(val src: String, val label: String)
+data class InputSession(val src: String, val label: String, val session: Long? = null)
 
 /** The centred-sticks handover gate: pending until the incoming sticks rest centred. */
 data class HandoverGate(val pending: Boolean, val progress: Float)
@@ -313,6 +313,10 @@ data class PilotState(
     val placeClass: PlaceClass = PlaceClass.Open,
     /** The confined profile's route check of the loaded mission; null in the open profile or with no mission. */
     val routeCheck: RouteCheck? = null,
+    /** The limits the pilot flies now (the profile capped by the FC, the vehicle and the place); an older agent sends none. */
+    val profileLimits: ProfileLimits? = null,
+    /** Present while the operator's sticks own the vehicle. */
+    val stick: StickCommand? = null,
 ) {
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
@@ -337,6 +341,15 @@ data class PilotStatusText(val severity: Int, val text: String, val ageMs: Long?
 
 /** The pilot's horizontal speed cap: why ([reason], e.g. `gnss-denied`, `confined-near`) and the limit [vHMps] in m/s. */
 data class SpeedCap(val reason: String, val vHMps: Float)
+
+/**
+ * The effective limits the pilot flies: [profile]'s row capped by the FC, the vehicle and the
+ * place; [vHMps] in m/s; [marginM] the obstacle margin it keeps (null or 0 when not sent).
+ */
+data class ProfileLimits(val profile: PilotProfile?, val vHMps: Float, val marginM: Float? = null)
+
+/** The stick command the pilot flew this tick; [inputAgeMs] is the age of the stick frame it flew. */
+data class StickCommand(val inputAgeMs: Long)
 
 /**
  * The pilot does not trust the horizontal position: [reason] is `flow_disagrees`,

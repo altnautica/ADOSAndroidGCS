@@ -8,8 +8,8 @@ import java.io.File
 class CockpitSpecFilesTest {
     private val dir = File("../../feature/cockpit/src/main/assets/cockpit-spec")
 
-    /** Spec files carried byte for byte with the canonical spec that this app does not read yet. */
-    private val carriedUnread = setOf("sensor-health.json")
+    /** Spec files carried byte for byte with the canonical spec that this app does not read yet (the stick golden vectors are read by tests). */
+    private val carriedUnread = setOf("sensor-health.json", "stick-golden.json")
 
     @Test
     fun `every shipped spec json file has a CockpitSpecFile entry`() {

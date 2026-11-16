@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.cockpit.pilot
 
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.PilotOwner
+import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 
@@ -80,6 +81,11 @@ enum class LightbarState(val wire: String) {
     Rth("rth"),
     Mission("mission"),
     Skill("skill"),
+    /** The operator's sticks own, in each speed profile (`lightbar.profile_states`). */
+    PilotCine("pilot_cine"),
+    PilotNormal("pilot_normal"),
+    PilotSport("pilot_sport"),
+    /** Another motion owner that is not a mission or a skill: goto, swarm, tuning. */
     Pilot("pilot"),
     ArmedIdle("armed_idle"),
     Disarmed("disarmed"),
@@ -96,7 +102,12 @@ fun lightbarState(c: ControllerContext): LightbarState {
         !c.armed -> LightbarState.Disarmed
         owner == PilotOwner.MissionFc || mission == MissionState.Active -> LightbarState.Mission
         owner == PilotOwner.Skill -> LightbarState.Skill
-        owner == PilotOwner.Pilot || owner == PilotOwner.Goto || owner == PilotOwner.Swarm -> LightbarState.Pilot
+        owner == PilotOwner.Pilot -> when (c.pilot?.profile) {
+            PilotProfile.Cine -> LightbarState.PilotCine
+            PilotProfile.Sport -> LightbarState.PilotSport
+            PilotProfile.Normal, null -> LightbarState.PilotNormal
+        }
+        owner == PilotOwner.Goto || owner == PilotOwner.Swarm || owner == PilotOwner.Tuning -> LightbarState.Pilot
         else -> LightbarState.ArmedIdle
     }
 }

@@ -26,10 +26,12 @@ import com.altnautica.gcs.core.model.PositionUnverified
 import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.model.ProfileLimits
 import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
 import com.altnautica.gcs.core.model.SpeedCap
+import com.altnautica.gcs.core.model.StickCommand
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -125,7 +127,7 @@ object PilotWire {
             vehicleClass = PilotVehicleClass.of(data.str("vehicle_class")),
             inputSession = (data["input_session"] as? JsonObject)?.let { s ->
                 val src = s.str("src") ?: return@let null
-                InputSession(src, s.str("label") ?: src)
+                InputSession(src, s.str("label") ?: src, s.long("session"))
             },
             gate = (data["gate"] as? JsonObject)?.let { g ->
                 HandoverGate(pending = g.bool("pending") == true, progress = (g.float("progress") ?: 0f).coerceIn(0f, 1f))
@@ -168,6 +170,10 @@ object PilotWire {
             // Absent on a pilot without the confined profile: open.
             placeClass = PlaceClass.of(data.str("place_class")) ?: PlaceClass.Open,
             routeCheck = (data["route_check"] as? JsonObject)?.let(::routeCheck),
+            profileLimits = (data["profile_limits"] as? JsonObject)?.let { l ->
+                ProfileLimits(PilotProfile.of(l.str("profile")), l.float("v_h_mps") ?: return@let null, l.float("margin_m"))
+            },
+            stick = (data["stick"] as? JsonObject)?.let { c -> StickCommand(c.long("input_age_ms") ?: return@let null) },
         )
     }
 

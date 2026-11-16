@@ -5,6 +5,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 @Serializable
 data class Ds4Spec(
@@ -26,6 +27,7 @@ data class Ds4Spec(
     val designate: Map<String, String> = emptyMap(),
     val lightbar: LightbarSpec,
     val rumble: RumbleSpec,
+    val feedback: FeedbackSpec = FeedbackSpec(),
     @SerialName("export_format") val exportFormat: JsonObject? = null,
 )
 
@@ -101,10 +103,51 @@ data class ControlBindingSpec(
 data class LockedActionSpec(val action: String, val gesture: String, val combo: Boolean)
 
 @Serializable
-data class LightbarSpec(val priority: List<String>, val states: Map<String, LightbarStateSpec>)
+data class LightbarSpec(
+    val priority: List<String>,
+    val states: Map<String, LightbarStateSpec>,
+    /** Profile wire value to the light bar state shown while the operator's sticks own. */
+    @SerialName("profile_states") val profileStates: Map<String, String> = emptyMap(),
+)
 
 @Serializable
 data class LightbarStateSpec(val color: String, val pattern: String, val hz: Float? = null)
+
+/**
+ * Rumble from pilot-state changes: each class's rules compare a state with the previous one;
+ * of the classes that fire on one update only the strongest in [order] plays, once.
+ */
+@Serializable
+data class FeedbackSpec(
+    val order: List<String> = emptyList(),
+    @SerialName("mode_change") val modeChange: List<FeedbackRuleSpec> = emptyList(),
+    val warning: List<FeedbackRuleSpec> = emptyList(),
+    val critical: List<FeedbackRuleSpec> = emptyList(),
+) {
+    /** The rules of class [name] (`mode_change`, `warning`, `critical`). */
+    fun rules(name: String): List<FeedbackRuleSpec> = when (name) {
+        "mode_change" -> modeChange
+        "warning" -> warning
+        "critical" -> critical
+        else -> emptyList()
+    }
+}
+
+/**
+ * One rule: trigger [on] over the dotted snake_case pilot-state path [field]; [values] for
+ * `entered`, [where] and [key] for `new_item`; [armedOnly] fires only while not known disarmed.
+ */
+@Serializable
+data class FeedbackRuleSpec(
+    val id: String,
+    val field: String? = null,
+    val on: String,
+    val values: List<JsonPrimitive> = emptyList(),
+    val where: Map<String, JsonPrimitive> = emptyMap(),
+    val key: String? = null,
+    @SerialName("armed_only") val armedOnly: Boolean = false,
+    val rumble: String,
+)
 
 @Serializable
 data class RumbleSpec(

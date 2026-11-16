@@ -7,6 +7,7 @@ import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
 import com.altnautica.gcs.core.skills.input.controller.ControllerManager
 import com.altnautica.gcs.core.skills.input.controller.Rumble
+import com.altnautica.gcs.core.skills.spec.FeedbackSpec
 import com.altnautica.gcs.core.skills.spec.LightbarSpec
 import com.altnautica.gcs.core.skills.spec.RumbleSpec
 import com.altnautica.gcs.feature.cockpit.pilot.ControllerContext
@@ -50,10 +51,12 @@ private typealias RumbleSpecPulses = com.altnautica.gcs.core.skills.spec.RumbleP
 
 /**
  * Controller light bar and rumble for the cockpit. The light bar follows the flight state
- * (disarmed, armed idle, pilot, skill, mission, RTH blinking, low battery pulsing, failsafe
- * blinking fast) only while the cockpit is started, and returns to the accent colour when
- * it stops. A flight-state change gives one short pulse, a new warning two, a new critical
- * alert three long ones; a confirmed skill gives one short pulse. All of it is best effort.
+ * (disarmed, armed idle, the speed profile while the sticks own, other pilot owners, skill,
+ * mission, RTH blinking, low battery pulsing, failsafe blinking fast) only while the cockpit
+ * is started, and returns to the accent colour when it stops. Pilot-state changes rumble by
+ * the spec's `feedback` rules (mode change, warning, critical; the strongest once per
+ * update); a new cockpit warning or critical alert rumbles too, and a confirmed skill gives
+ * one short pulse. All of it is best effort.
  */
 internal class ControllerFeedback(
     private val scope: CoroutineScope,
@@ -62,6 +65,7 @@ internal class ControllerFeedback(
     private val context: StateFlow<ControllerContext>,
     private val lightbar: LightbarSpec,
     private val rumble: RumbleSpec,
+    private val feedback: FeedbackSpec,
     /** Runs the light bar (off the main thread in the app): a blink or pulse is a 20 Hz loop of binder calls. */
     private val lightbarWork: CoroutineContext,
 ) {
@@ -88,10 +92,9 @@ internal class ControllerFeedback(
                 combine(state, device) { s, _ -> lightbarFrame(s, lightbar) }.collectLatest(::show)
             }
             launch {
-                var last: LightbarState? = null
-                context.map(::lightbarState).distinctUntilChanged().collect { s ->
-                    if (last != null) controllers.rumble(rumbleOf(rumble.modeChange))
-                    last = s
+                val rules = PilotFeedbackRules(feedback)
+                context.map { it.pilot }.distinctUntilChanged().collect { p ->
+                    rules.next(p)?.let(::pattern)?.let { controllers.rumble(rumbleOf(it)) }
                 }
             }
             launch {
@@ -144,6 +147,14 @@ internal class ControllerFeedback(
 
     /** A confirm sheet resolved confirmed. */
     fun onConfirmed() = controllers.rumble(rumbleOf(rumble.modeChange))
+
+    /** The `rumble` pattern a feedback rule names; null for a name this app does not know. */
+    private fun pattern(name: String): RumbleSpecPulses? = when (name) {
+        "mode_change" -> rumble.modeChange
+        "warning" -> rumble.warning
+        "critical" -> rumble.critical
+        else -> null
+    }
 
     /** A ramp tick during a hold at [level] (0..1), or one countdown pulse. */
     fun onHoldCue(kind: String, level: Float) {
