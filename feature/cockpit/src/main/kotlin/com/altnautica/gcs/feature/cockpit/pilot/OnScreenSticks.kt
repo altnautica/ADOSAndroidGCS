@@ -27,12 +27,23 @@ import kotlin.math.hypot
 /** Thumb pad size of the on-screen sticks. */
 val ON_SCREEN_PAD: Dp = 120.dp
 
+/** Knob radius and knob-centre travel of a thumb pad, as fractions of its radius. */
+private const val KNOB_FRAC = 0.32f
+private const val TRAVEL_FRAC = 0.68f
+
+/**
+ * Radius of the dead-zone ring on a pad of radius [r]: the knob's edge while its deflection is
+ * exactly [deadzone], so a knob that stays inside the ring sends nothing.
+ */
+fun deadzoneRingRadius(r: Float, deadzone: Float): Float = r * (KNOB_FRAC + TRAVEL_FRAC * deadzone.coerceIn(0f, 1f))
+
 /**
  * One on-screen thumb pad. It reports its deflection in [-1, 1] (x right, y up) while a
- * finger holds it and springs back to centre on release, reporting (0, 0).
+ * finger holds it and springs back to centre on release, reporting (0, 0). A ring shows the
+ * stick [deadzone]: inside it the pad sends nothing.
  */
 @Composable
-fun ThumbPad(label: String, onDeflect: (x: Float, y: Float) -> Unit, onTouch: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+fun ThumbPad(label: String, deadzone: Float, onDeflect: (x: Float, y: Float) -> Unit, onTouch: (Boolean) -> Unit, modifier: Modifier = Modifier) {
     val colors = AdosTheme.colors
     var knob by remember { mutableStateOf(Offset.Zero) }
     Box(
@@ -71,7 +82,8 @@ fun ThumbPad(label: String, onDeflect: (x: Float, y: Float) -> Unit, onTouch: (B
             val r = size.minDimension / 2f
             drawCircle(colors.overlayPanel, r)
             drawCircle(colors.borderStrong, r, style = Stroke(2.dp.toPx()))
-            drawCircle(colors.accentPrimary, r * 0.32f, center + knob * (r * 0.68f))
+            drawCircle(colors.fgTertiary, deadzoneRingRadius(r, deadzone), style = Stroke(1.dp.toPx()))
+            drawCircle(colors.accentPrimary, r * KNOB_FRAC, center + knob * (r * TRAVEL_FRAC))
         }
     }
 }

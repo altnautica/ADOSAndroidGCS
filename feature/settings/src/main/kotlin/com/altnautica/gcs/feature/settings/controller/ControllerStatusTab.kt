@@ -59,16 +59,19 @@ internal class StatusActions(
     val onRemoveAllModes: (DeviceId) -> Unit,
 )
 
-/** The controller (or the pairing guide) beside its preferences; stacked in portrait. */
+/** A setting's spec title and summary. */
+internal data class SettingText(val title: String, val summary: String)
+
+/** The controller (or the pairing guide) beside its preferences; stacked in portrait. [expo] labels the expo row. */
 @Composable
-internal fun ControllerStatusTab(state: ControllerUiState, actions: StatusActions, padding: PaddingValues) {
+internal fun ControllerStatusTab(state: ControllerUiState, actions: StatusActions, expo: SettingText, padding: PaddingValues) {
     val device: LazyListScope.() -> Unit = {
         item(key = "device") {
             val controller = state.controller
             if (controller != null) ControllerCard(controller) else PairingGuide()
         }
     }
-    val prefs: LazyListScope.() -> Unit = { preferenceItems(state, actions) }
+    val prefs: LazyListScope.() -> Unit = { preferenceItems(state, actions, expo) }
     val contentPadding = PaddingValues(bottom = AdosSpacing.S8)
     if (isLandscape()) {
         Row(Modifier.fillMaxSize().padding(padding)) {
@@ -83,7 +86,7 @@ internal fun ControllerStatusTab(state: ControllerUiState, actions: StatusAction
     }
 }
 
-private fun LazyListScope.preferenceItems(state: ControllerUiState, actions: StatusActions) {
+private fun LazyListScope.preferenceItems(state: ControllerUiState, actions: StatusActions, expo: SettingText) {
     val s = state.settings
     item(key = "feedback") { SectionHeader(stringResource(R.string.settings_controller_feedback)) }
     item(key = "rumble") {
@@ -94,7 +97,7 @@ private fun LazyListScope.preferenceItems(state: ControllerUiState, actions: Sta
     }
     item(key = "sticks") { SectionHeader(stringResource(R.string.settings_controller_sticks)) }
     item(key = "expo") {
-        PercentRow(R.string.settings_controller_expo, R.string.settings_controller_expo_summary, s.expoPct, ControllerSettingsRepository.MAX_EXPO_PCT, actions.onExpo)
+        PercentRow(expo.title, expo.summary, s.expoPct, ControllerSettingsRepository.MAX_EXPO_PCT, actions.onExpo)
     }
     item(key = "allmodes") { SectionHeader(stringResource(R.string.settings_controller_all_modes)) }
     if (state.allModesVehicles.isEmpty()) {
@@ -124,17 +127,17 @@ private fun LazyListScope.preferenceItems(state: ControllerUiState, actions: Sta
 }
 
 @Composable
-private fun PercentRow(title: Int, summary: Int, value: Int, max: Int, onChange: (Int) -> Unit) {
+private fun PercentRow(title: String, summary: String, value: Int, max: Int, onChange: (Int) -> Unit) {
     val resources = LocalResources.current
     NumberSettingRow(
-        title = stringResource(title),
+        title = title,
         value = value,
         onValueChange = onChange,
         range = 0..max,
-        decrementDescription = stringResource(R.string.settings_controller_decrease, stringResource(title)),
-        incrementDescription = stringResource(R.string.settings_controller_increase, stringResource(title)),
+        decrementDescription = stringResource(R.string.settings_controller_decrease, title),
+        incrementDescription = stringResource(R.string.settings_controller_increase, title),
         step = PCT_STEP,
-        summary = stringResource(summary),
+        summary = summary,
         format = { resources.getString(R.string.settings_controller_percent, it) },
     )
 }

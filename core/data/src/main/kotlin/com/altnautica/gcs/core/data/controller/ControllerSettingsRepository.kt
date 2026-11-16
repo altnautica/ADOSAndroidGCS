@@ -18,9 +18,7 @@ data class ControllerSettings(
     val rumble: Boolean = true,
     /** Light bar status colours. */
     val lightbar: Boolean = true,
-    /** Stick dead zone added to the hardware flat range, 0..20 %. */
-    val deadZonePct: Int = 0,
-    /** Pitch, roll and yaw expo, 0..60 %. */
+    /** Pitch, roll and yaw expo, 0..60 %, applied on the direct flight-controller route only. */
     val expoPct: Int = 0,
     /** Vehicles (`DeviceId.value`) whose stick control is allowed in every flight mode. */
     val allModesVehicles: Set<String> = emptySet(),
@@ -36,7 +34,6 @@ class ControllerSettingsRepository @Inject constructor(
         ControllerSettings(
             rumble = p[RUMBLE] ?: d.rumble,
             lightbar = p[LIGHTBAR] ?: d.lightbar,
-            deadZonePct = (p[DEAD_ZONE] ?: d.deadZonePct).coerceIn(0, MAX_DEAD_ZONE_PCT),
             expoPct = (p[EXPO] ?: d.expoPct).coerceIn(0, MAX_EXPO_PCT),
             allModesVehicles = p[ALL_MODES] ?: d.allModesVehicles,
         )
@@ -45,8 +42,6 @@ class ControllerSettingsRepository @Inject constructor(
     suspend fun setRumble(on: Boolean) = dataStore.edit { it[RUMBLE] = on }
 
     suspend fun setLightbar(on: Boolean) = dataStore.edit { it[LIGHTBAR] = on }
-
-    suspend fun setDeadZonePct(pct: Int) = dataStore.edit { it[DEAD_ZONE] = pct.coerceIn(0, MAX_DEAD_ZONE_PCT) }
 
     suspend fun setExpoPct(pct: Int) = dataStore.edit { it[EXPO] = pct.coerceIn(0, MAX_EXPO_PCT) }
 
@@ -57,11 +52,9 @@ class ControllerSettingsRepository @Inject constructor(
     }
 
     companion object {
-        const val MAX_DEAD_ZONE_PCT = 20
         const val MAX_EXPO_PCT = 60
         private val RUMBLE = booleanPreferencesKey("controller.rumble")
         private val LIGHTBAR = booleanPreferencesKey("controller.lightbar")
-        private val DEAD_ZONE = intPreferencesKey("controller.deadZonePct")
         private val EXPO = intPreferencesKey("controller.expoPct")
         private val ALL_MODES = stringSetPreferencesKey("controller.allModesVehicles")
     }

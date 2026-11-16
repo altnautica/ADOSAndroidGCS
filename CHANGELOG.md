@@ -5,6 +5,29 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Controller feedback follows the pilot.** The controller rumbles from
+  one shared rule table over the pilot state: a short pulse on a speed
+  profile, owner, skill or control mode change and on a stick takeover;
+  two on avoidance, a new hold reason, a speed cap or a readiness warning;
+  three long ones on a lost controller, a link-loss countdown, a failsafe,
+  a low-battery return, a readiness block in the air or a lost pilot
+  state. Only the strongest plays per update. While the sticks own, the
+  light bar shows the speed profile (Cine green-cyan, Normal blue, Sport
+  orange) under the failsafe, low battery, RTH, mission and skill colours.
+- **Stick readout on the flight chip.** While the sticks own, the chip
+  shows the profile's effective speed limit ("Pilot · Normal · 7 m/s
+  max"), the horizontal and vertical speed and the stick input age once
+  it passes 100 ms. Under any owner it shows the nearest obstacle once it
+  is within two obstacle margins (amber, red inside the margin).
+- **On-screen stick dead zone.** Each on-screen pad draws its dead-zone
+  ring; a knob inside it sends nothing. In stick mode 1 the pads' spoken
+  labels name what each stick flies. Shared golden vectors check that a
+  controller and the on-screen pads condition the same way in both stick
+  modes and at the dead-zone edge.
+- **Controller settings.** The expo slider says it applies to the direct
+  flight-controller route only; the onboard pilot flies the profile's own
+  curve. The unused stick dead-zone percentage setting is gone (the
+  controls screen's dead zone is the one the sticks use).
 - **Radar: No returns.** A fresh lidar scan with no return in any bin and
   no other distance reads "NO RETURNS" in the warning colour, where it read
   "—". A return is a finite range above 5 cm, the pilot's own rule, so a

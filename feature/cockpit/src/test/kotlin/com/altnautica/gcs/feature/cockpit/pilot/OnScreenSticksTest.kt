@@ -57,4 +57,16 @@ class OnScreenSticksTest {
             }
         }
     }
+
+    @Test
+    fun `the dead-zone ring grows with the dead zone and a knob on it sends nothing`() {
+        assertEquals(0.32f, deadzoneRingRadius(1f, 0f), 1e-6f)
+        assertEquals(0.32f + 0.68f * 0.08f, deadzoneRingRadius(1f, 0.08f), 1e-6f)
+        assertEquals(50f * (0.32f + 0.68f * 0.2f), deadzoneRingRadius(50f, 0.2f), 1e-4f)
+        val sticks = OnScreenSticks()
+        sticks.touch(true)
+        sticks.setRight(0.08f, 0f)
+        val i = StickConditioning(deadzone = 0.08f).condition(sticks.snapshot(1_000L))
+        assertEquals(0f, i.roll, 0f)
+    }
 }

@@ -63,14 +63,17 @@ internal class CockpitFacts(
     }
 
     /**
-     * The chip's distances and mission ETA, sampled on the 2 Hz tick: a moving goal or vehicle
+     * The chip's distances, speeds and mission ETA, sampled on the 2 Hz tick: a moving goal or vehicle
      * changes the chip's text on the tick, never on every pilot frame or position sample.
      */
     private val chipNumbers: StateFlow<ChipNumbers> = combine(tick, minimap) { _, map ->
+        val v = hudValues()
         ChipNumbers(
             homeDistM = homeDistanceM(map),
             goalDistM = pilot.value?.goalNed?.let { goalDistanceM(it, telemetry.value?.localPosition?.value) },
             missionEtaS = autonomy.missionEtaS(),
+            hSpeedMs = v.hSpeedMs,
+            vSpeedMs = v.vSpeedMs,
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), ChipNumbers())
 
@@ -91,6 +94,8 @@ internal class CockpitFacts(
                 vtolTransitioning = telemetry.value?.vtolTransitioning?.value == true,
                 fcModeName = b.modeName,
                 modeDetail = p?.let { FlightStateChipResolver.modeDetail(it.ownerLabel, it.skill?.label) },
+                hSpeedMs = n.hSpeedMs,
+                vSpeedMs = n.vSpeedMs,
             ),
         )
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), chipResolver.resolve(null, ChipContext(clock.nowMs())))
@@ -149,4 +154,10 @@ internal class CockpitFacts(
 }
 
 /** The flight-state chip's measured numbers, as of the last 2 Hz tick. */
-internal data class ChipNumbers(val homeDistM: Float? = null, val goalDistM: Float? = null, val missionEtaS: Float? = null)
+internal data class ChipNumbers(
+    val homeDistM: Float? = null,
+    val goalDistM: Float? = null,
+    val missionEtaS: Float? = null,
+    val hSpeedMs: Float? = null,
+    val vSpeedMs: Float? = null,
+)

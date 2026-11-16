@@ -7,6 +7,7 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.skills.hud.ConfinedText
 import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.spec.ClearanceTextSpec
 import com.altnautica.gcs.core.skills.spec.FcModeClassSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateMatchSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateSpec
@@ -48,6 +49,9 @@ data class ChipContext(
     val modeDetail: String? = null,
     /** Flight mode from the FC heartbeat, used when the vehicle reports no pilot state. */
     val fcModeName: String? = null,
+    /** The vehicle's horizontal and vertical (climb positive) speed in m/s, null when unknown. */
+    val hSpeedMs: Float? = null,
+    val vSpeedMs: Float? = null,
 )
 
 /**
@@ -61,7 +65,8 @@ class FlightStateChipResolver(
     /** `setup-strings.json` strings, for the launch step names in `{step}` and the speed cap's reason line. */
     private val strings: Map<String, String> = emptyMap(),
 ) {
-    private val confined = ConfinedText(SpecText(strings))
+    private val text = SpecText(strings)
+    private val confined = ConfinedText(text)
 
     fun resolve(pilot: PilotState?, ctx: ChipContext): FlightStateChipUi {
         if (pilot == null) return noPilot(ctx)
@@ -132,6 +137,7 @@ class FlightStateChipResolver(
         "step" to launchStep(p)?.let(::stepLabel).orEmpty(),
         "first_block_msg" to p.firstBlock?.msg.orEmpty(),
         "profile" to profileLabel((p.profile ?: PilotProfile.Normal).wire),
+        "profile_limit" to profileLimit(p),
         "skill_label" to (p.skill?.label ?: DEFAULT_SKILL_LABEL).replaceFirstChar { it.uppercaseChar() },
         "mode_detail" to (ctx.modeDetail?.takeIf { p.owner == PilotOwner.Skill } ?: DEFAULT_MODE_DETAIL),
         "dist_m" to num(ctx.goalDistM),
@@ -143,6 +149,13 @@ class FlightStateChipResolver(
         "fc_mode_name_upper" to (p.fcModeName ?: NO_VALUE).uppercase(),
         "position_unverified_label" to positionUnverifiedKey(p)?.let { spec.positionUnverifiedLabels[it] ?: wordLabel(it) }.orEmpty(),
     )
+
+    /** `{profile_limit}`: the horizontal limit the sticks fly at, empty while the agent sends no limits. */
+    private fun profileLimit(p: PilotState): String {
+        val limits = p.profileLimits ?: return ""
+        val key = spec.secondary.profileLimit?.textKey ?: return ""
+        return text.text(key, mapOf("v" to upToOneDecimal(limits.vHMps)))
+    }
 
     /** A profile as the mode sheet labels it (`mode_sheet.profile`); an unknown value reads with a capital first letter. */
     private fun profileLabel(wire: String): String {
@@ -177,7 +190,7 @@ class FlightStateChipResolver(
         return strings[key] ?: step.wire
     }
 
-    /** The secondary line in the spec's order (FC failsafe, speed cap, paused mission, hold reason, avoidance, control mode). */
+    /** The secondary line in the spec's order (failsafe, clearance, input age, speed cap, paused mission, hold reason, avoidance, control mode, speeds). */
     private fun secondary(p: PilotState, ctx: ChipContext, stale: Boolean): List<ChipText> = spec.secondary.order.mapNotNull { part ->
         when (part) {
             "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
@@ -194,8 +207,29 @@ class FlightStateChipResolver(
             }
             "avoid_state" -> p.avoidState?.let { spec.secondary.avoidState[it.wire] }?.let { chipText(it.text, it.color) }
             "control_mode" -> p.controlMode?.let { chipText(spec.secondary.controlMode[it.wire] ?: wordLabel(it.wire), FC_KEY) }
+            "clearance" -> spec.secondary.clearance?.let { clearance(p, it) }
+            "input_age" -> spec.secondary.inputAge?.let { age ->
+                p.stick?.inputAgeMs?.takeIf { it > age.overMs }?.let { chipText(text.text(age.textKey, mapOf("ms" to it)), age.color) }
+            }
+            "h_speed" -> spec.secondary.hSpeed?.takeIf { p.owner.wire == it.owner }?.let { h ->
+                ctx.hSpeedMs?.let { chipText(text.text(h.textKey, mapOf("v" to oneDecimal(it))), h.color) }
+            }
+            "v_speed" -> spec.secondary.vSpeed?.takeIf { p.owner.wire == it.owner }?.let { v ->
+                ctx.vSpeedMs?.let { chipText(text.text(v.textKey, mapOf("v" to oneDecimal(it))), v.color) }
+            }
             else -> null
         }
+    }
+
+    /**
+     * The nearest obstacle while it is under `near_factor` × the margin (the pilot's own margin,
+     * else the route check's), in the inside colour at or inside the margin; none with no margin.
+     */
+    private fun clearance(p: PilotState, c: ClearanceTextSpec): ChipText? {
+        val margin = p.profileLimits?.marginM?.takeIf { it > 0f }?.toDouble() ?: p.routeCheck?.marginM ?: return null
+        val m = p.minClearanceM ?: return null
+        if (m >= c.nearFactor * margin) return null
+        return chipText(text.text(c.textKey, mapOf("m" to oneDecimal(m))), if (m <= margin) c.insideMarginColor else c.nearColor)
     }
 
     /** Label of a hold reason, keyed by its exact wire string; an unlisted reason reads with spaces. */
@@ -221,6 +255,10 @@ class FlightStateChipResolver(
         /** Rule id reported when no spec rule matches. */
         const val RULE_NONE = "none"
         private const val FC_KEY = "fc"
+        fun oneDecimal(v: Float): String = String.format(Locale.ROOT, "%.1f", v)
+
+        /** One decimal with its sign: `+0.5`, `−0.5` (a typographic minus), `+0.0`. */
+        fun signedOneDecimal(v: Float): String = (if (v < 0f) "−" else "+") + oneDecimal(kotlin.math.abs(v))
         private const val SETUP_NEEDED = "setup_needed"
 
         /** The pilot reports the aircraft still needs setup (its `setup_needed` readiness item is unmet). */
