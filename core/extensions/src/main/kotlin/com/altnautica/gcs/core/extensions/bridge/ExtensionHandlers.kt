@@ -380,14 +380,13 @@ class ExtensionHandlersFactory @Inject constructor(
             else -> return fail("command '$command' is not permitted from extensions")
         }
         val before = vehicle() ?: return fail("command.send not supported")
+        // A take-off may arm on some transports (the agent's take-off is the pilot's launch,
+        // which arms). An extension never arms: the operator arms first, on every transport.
+        if (cmd is VehicleCommand.Takeoff && before.telemetry.heartbeat.value?.armed != true) return fail("Arm first")
         approve(pluginId, before, "Extension command", "$pluginId wants to send \"$command\" to ${node.value}", rate, vehicle)
             ?.let { return fail(it) }
-        // With a live onboard pilot, a take-off of an armed vehicle is its supervised launch,
-        // holding where it climbed. The pilot's launch arms; an extension never arms, so a
-        // disarmed take-off stays on the FC, which refuses it until the operator arms.
-        if (cmd is VehicleCommand.Takeoff && before.telemetry.heartbeat.value?.armed == true &&
-            pilots.read(node).let { it.present && it.fresh }
-        ) {
+        // With a live onboard pilot, a take-off is its supervised launch, holding where it climbed.
+        if (cmd is VehicleCommand.Takeoff && pilots.read(node).let { it.present && it.fresh }) {
             val answer = pilots.action(node, PilotAction.launch(PilotAction.AFTER_HOLD, cmd.altM))
             if (answer != PilotActionResult.Accepted) {
                 notifier.post(pluginId, "approved \"$command\" for ${node.value} was not taken by the pilot ($answer)", NoticeLevel.Error)

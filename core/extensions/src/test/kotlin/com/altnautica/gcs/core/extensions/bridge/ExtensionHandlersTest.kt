@@ -173,12 +173,19 @@ class ExtensionHandlersTest {
     }
 
     @Test
-    fun takeoffWhileDisarmedNeverArmsThroughThePilot() = runTest {
+    fun takeoffWhileNotKnownArmedIsRefusedOnEveryTransport() = runTest {
         pilotPresent = true
-        heartbeat.value = HeartbeatState(false, FlightMode(4, "GUIDED"), 2, 3, 0)
-        approvedTakeoff()
-        assertTrue("the pilot's launch would arm; an extension never arms", pilotActions.isEmpty())
-        assertEquals("the FC refuses a take-off while disarmed", listOf<VehicleCommand>(VehicleCommand.Takeoff(6f)), commands)
+        for (armed in listOf<Boolean?>(false, null)) {
+            heartbeat.value = armed?.let { HeartbeatState(it, FlightMode(4, "GUIDED"), 2, 3, 0) }
+            val h = factory().create("com.example.ext", NODE, "m1")
+            runCurrent()
+            val result = h.call("command.send", """{"command":"takeoff","args":{"alt":6}}""")!!.jsonObject
+            assertEquals("false", result["ok"]!!.jsonPrimitive.content)
+            assertEquals("Arm first", result["error"]!!.jsonPrimitive.content)
+            assertTrue("no prompt for a refused take-off", confirm.pending.value.isEmpty())
+        }
+        assertTrue("an extension never arms through the pilot", pilotActions.isEmpty())
+        assertTrue("nothing reaches any transport", commands.isEmpty())
     }
 
     @Test
