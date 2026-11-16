@@ -154,7 +154,7 @@ class FlightStateChipResolver(
     private fun profileLimit(p: PilotState): String {
         val limits = p.profileLimits ?: return ""
         val key = spec.secondary.profileLimit?.textKey ?: return ""
-        return text.text(key, mapOf("v" to upToOneDecimal(limits.vHMps)))
+        return text.text(key, mapOf("v" to ConfinedText.speedCapText(limits.vHMps.toDouble())))
     }
 
     /** A profile as the mode sheet labels it (`mode_sheet.profile`); an unknown value reads with a capital first letter. */
@@ -255,10 +255,11 @@ class FlightStateChipResolver(
         /** Rule id reported when no spec rule matches. */
         const val RULE_NONE = "none"
         private const val FC_KEY = "fc"
-        fun oneDecimal(v: Float): String = String.format(Locale.ROOT, "%.1f", v)
 
-        /** One decimal with its sign: `+0.5`, `−0.5` (a typographic minus), `+0.0`. */
-        fun signedOneDecimal(v: Float): String = (if (v < 0f) "−" else "+") + oneDecimal(kotlin.math.abs(v))
+        /** One decimal with a dot whatever the locale; under 0.05 either way reads `0.0`, never `-0.0`. */
+        fun oneDecimal(v: Float): String = if (kotlin.math.abs(v) < HALF_TENTH) "0.0" else String.format(Locale.ROOT, "%.1f", v)
+
+        private const val HALF_TENTH = 0.05f
         private const val SETUP_NEEDED = "setup_needed"
 
         /** The pilot reports the aircraft still needs setup (its `setup_needed` readiness item is unmet). */

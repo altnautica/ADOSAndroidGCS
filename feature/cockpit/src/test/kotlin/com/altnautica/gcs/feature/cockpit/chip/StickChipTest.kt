@@ -25,10 +25,10 @@ class StickChipTest {
     @Test
     fun `the chip shows the profile with its limit and the horizontal and vertical speed`() {
         val ui = chips.resolve(sticks, ctx)
-        assertEquals("Pilot · Normal · 7 m/s max", ui.primary.text)
+        assertEquals("Pilot · Normal · 7 m/s", ui.primary.text)
         assertEquals(listOf("H 3.2 m/s", "V -0.4 m/s"), texts(ui))
         assertEquals("fc", ui.secondary.first().colorKey)
-        assertEquals("Pilot · Sport · 2.5 m/s max", chips.resolve(sticks.copy(profile = PilotProfile.Sport, profileLimits = ProfileLimits(PilotProfile.Sport, 2.5f)), ctx).primary.text)
+        assertEquals("Pilot · Sport · 2.5 m/s", chips.resolve(sticks.copy(profile = PilotProfile.Sport, profileLimits = ProfileLimits(PilotProfile.Sport, 2.5f)), ctx).primary.text)
     }
 
     @Test

@@ -36,7 +36,10 @@ class PilotFeedbackRulesTest {
         assertEquals("mode_change", rumble(skill, skill.copy(skill = PilotSkillRef("p", "follow", "Follow"))))
         val stick = base.copy(inputSession = InputSession("android", "Phone", 4L))
         assertEquals("mode_change", rumble(stick, stick.copy(inputSession = InputSession("mc", "MC", 5L))))
-        assertNull("a takeover needs a new session", rumble(stick, stick.copy(inputSession = null)))
+        assertEquals("mode_change", rumble(stick, stick.copy(inputSession = InputSession("android", "Phone", 5L))))
+        assertNull("a session ending is no takeover", rumble(stick, stick.copy(inputSession = null)))
+        assertNull("the own sticks resuming are no takeover", rumble(base, stick))
+        assertNull("a new label alone is no takeover", rumble(stick, stick.copy(inputSession = InputSession("android", "Pixel", 4L))))
     }
 
     @Test

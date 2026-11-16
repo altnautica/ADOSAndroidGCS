@@ -42,6 +42,8 @@ internal class PilotFeedbackRules(private val spec: FeedbackSpec) {
             "entered" -> b != a && b in rule.values
             "appeared" -> a == JsonNull && b != JsonNull
             "new_item" -> newItem(rule, a, b)
+            "replaced" -> a != JsonNull && b != JsonNull &&
+                (if (rule.keys.isEmpty()) a != b else rule.keys.any { at(a, it) != at(b, it) })
             else -> false
         }
     }
@@ -62,6 +64,10 @@ internal class PilotFeedbackRules(private val spec: FeedbackSpec) {
     }
 }
 
+/** The value at dotted [path] inside [e]; JsonNull where absent. */
+private fun at(e: JsonElement, path: String): JsonElement =
+    path.split('.').fold(e) { acc, k -> (acc as? JsonObject)?.get(k) ?: JsonNull }
+
 /**
  * The pilot-state value at a dotted snake_case wire path, as the agent sends it; JsonNull when
  * absent (the wire omits `fc_failsafe` while false) or when this app does not carry the field.
@@ -71,6 +77,15 @@ internal fun pilotField(p: PilotState, path: String): JsonElement = when (path) 
     "profile" -> p.profile?.wire.json()
     "control_mode" -> p.controlMode?.wire.json()
     "skill.skill_id" -> p.skill?.skillId.json()
+    "input_session" -> p.inputSession?.let {
+        JsonObject(
+            buildMap {
+                put("src", JsonPrimitive(it.src))
+                put("label", JsonPrimitive(it.label))
+                put("session", it.session?.let(::JsonPrimitive) ?: JsonNull)
+            },
+        )
+    } ?: JsonNull
     "input_session.session" -> p.inputSession?.session?.let(::JsonPrimitive) ?: JsonNull
     "avoid_state" -> p.avoidState?.wire.json()
     "hold_reason" -> p.holdReason.json()

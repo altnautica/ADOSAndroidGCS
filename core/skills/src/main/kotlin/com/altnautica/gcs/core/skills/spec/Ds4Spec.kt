@@ -135,7 +135,7 @@ data class FeedbackSpec(
 
 /**
  * One rule: trigger [on] over the dotted snake_case pilot-state path [field]; [values] for
- * `entered`, [where] and [key] for `new_item`; [armedOnly] fires only while not known disarmed.
+ * `entered`, [where] and [key] for `new_item`, [keys] for `replaced`; [armedOnly] fires only while not known disarmed.
  */
 @Serializable
 data class FeedbackRuleSpec(
@@ -145,6 +145,8 @@ data class FeedbackRuleSpec(
     val values: List<JsonPrimitive> = emptyList(),
     val where: Map<String, JsonPrimitive> = emptyMap(),
     val key: String? = null,
+    /** For `replaced`: dotted paths inside [field] compared between states; the whole value when empty. */
+    val keys: List<String> = emptyList(),
     @SerialName("armed_only") val armedOnly: Boolean = false,
     val rumble: String,
 )

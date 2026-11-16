@@ -15,8 +15,8 @@ app's `versionName`.
   light bar shows the speed profile (Cine green-cyan, Normal blue, Sport
   orange) under the failsafe, low battery, RTH, mission and skill colours.
 - **Stick readout on the flight chip.** While the sticks own, the chip
-  shows the profile's effective speed limit ("Pilot · Normal · 7 m/s
-  max"), the horizontal and vertical speed and the stick input age once
+  shows the profile's effective speed limit ("Pilot · Normal · 7 m/s"),
+  the horizontal and vertical speed and the stick input age once
   it passes 100 ms. Under any owner it shows the nearest obstacle once it
   is within two obstacle margins (amber, red inside the margin).
 - **On-screen stick dead zone.** Each on-screen pad draws its dead-zone

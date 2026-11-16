@@ -82,8 +82,9 @@ fun ThumbPad(label: String, deadzone: Float, onDeflect: (x: Float, y: Float) -> 
             val r = size.minDimension / 2f
             drawCircle(colors.overlayPanel, r)
             drawCircle(colors.borderStrong, r, style = Stroke(2.dp.toPx()))
-            drawCircle(colors.fgTertiary, deadzoneRingRadius(r, deadzone), style = Stroke(1.dp.toPx()))
             drawCircle(colors.accentPrimary, r * KNOB_FRAC, center + knob * (r * TRAVEL_FRAC))
+            // Drawn over the knob, so the ring stays visible while the knob crosses it.
+            drawCircle(colors.fgTertiary, deadzoneRingRadius(r, deadzone), style = Stroke(1.dp.toPx()))
         }
     }
 }
