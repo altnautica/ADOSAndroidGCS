@@ -25,8 +25,12 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
@@ -37,10 +41,28 @@ import com.altnautica.gcs.feature.cockpit.flow.specText
 /** A spec colour (0xAARRGGBB) as a Compose colour. */
 fun specColor(argb: Long): Color = Color(argb.toInt())
 
+/** The state colour keys a secondary part draws in its own colour; every other part reads in the dim text. */
+private val WARNING_KEYS = setOf("avoiding", "blocked")
+
+/**
+ * The chip's secondary line, " · " before each part, in the dim text; a part whose colour key
+ * is a warning (`avoiding`) or critical (`blocked`) key keeps its state colour.
+ */
+fun secondaryLine(parts: List<ChipText>): AnnotatedString = buildAnnotatedString {
+    parts.forEach { part ->
+        append(SEPARATOR)
+        if (part.colorKey in WARNING_KEYS) {
+            withStyle(SpanStyle(color = specColor(part.color))) { append(part.text) }
+        } else {
+            append(part.text)
+        }
+    }
+}
+
 /**
  * The flight-state chip: an outline in its state colour with a leading dot, the owner and
- * mode in the chrome text, the secondary part inline after " · " in the dim text (it
- * truncates before the primary does), and the rule's button. Tapping the chip opens the
+ * mode in the chrome text, the secondary part inline after " · " in the dim text with warning
+ * parts in their state colour (it truncates before the primary does), and the rule's button. Tapping the chip opens the
  * Mode sheet; the chip dims while the pilot state is stale.
  */
 @Composable
@@ -54,7 +76,7 @@ fun FlightStateChip(
     val tint = specColor(ui.primary.color)
     val openLabel = specText("flow.chip.open_mode_sheet")
     val shape = RoundedCornerShape(c.radiusSmall)
-    val secondary = ui.secondary.joinToString(SEPARATOR) { it.text }
+    val secondary = secondaryLine(ui.secondary)
     Row(
         modifier
             .testTag(FLIGHT_CHIP_TAG)
@@ -76,7 +98,7 @@ fun FlightStateChip(
         Text(ui.primary.text, style = c.chipText.copy(color = c.text), maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (secondary.isNotEmpty()) {
             Text(
-                SEPARATOR + secondary,
+                secondary,
                 style = c.chipText.copy(color = c.textDim, fontWeight = FontWeight.Normal),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

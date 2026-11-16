@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.chip
 
+import androidx.compose.ui.graphics.Color
 import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.ProfileLimits
@@ -55,6 +56,21 @@ class StickChipTest {
         val goto = sticks.copy(owner = PilotOwner.Goto, minClearanceM = 1.0f)
         assertEquals("blocked", part(chips.resolve(goto, ctx), "Obstacle")?.colorKey)
         assertNull("no margin known", part(chips.resolve(sticks.copy(profileLimits = null, minClearanceM = 0.5f), ctx), "Obstacle"))
+    }
+
+    @Test
+    fun `the secondary line draws an inside-margin clearance red and a late input amber, the rest dim`() {
+        val ui = chips.resolve(sticks.copy(minClearanceM = 1.5f, stick = StickCommand(240L)), ctx)
+        val line = secondaryLine(ui.secondary)
+        assertEquals(ui.secondary.joinToString("") { " · " + it.text }, line.text)
+        fun colourOf(t: String): Color? {
+            val at = line.text.indexOf(t)
+            return line.spanStyles.singleOrNull { it.start == at && it.end == at + t.length }?.item?.color
+        }
+        assertEquals(Color(chips.color("blocked").toInt()), colourOf("Obstacle 1.5 m"))
+        assertEquals(Color(chips.color("avoiding").toInt()), colourOf("Input 240 ms"))
+        assertNull("speeds stay in the dim text", colourOf("H 3.2 m/s"))
+        assertEquals(2, line.spanStyles.size)
     }
 
     @Test
