@@ -12,6 +12,8 @@ import com.altnautica.gcs.feature.plan.model.MavCmd
 import com.altnautica.gcs.feature.plan.model.MavFrame
 import com.altnautica.gcs.feature.plan.model.MissionPlan
 import com.altnautica.gcs.feature.plan.model.PlanItem
+import com.altnautica.gcs.core.map.GeoPoint
+import com.altnautica.gcs.feature.plan.model.PlanHome
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -97,11 +99,31 @@ class PilotLaunchStartTest {
     }
 
     @Test
+    fun `with a stale pilot frame, Start arms and starts the mission on the FC`() = runTest {
+        h.withViewModel { vm ->
+            h.pilot.value = PilotPlanView(placeClass = PlaceClass.Open, tsMs = 1_000, ageMs = 30_000, present = true)
+            loadAndStart(vm)
+            assertTrue(h.pilotActions.isEmpty())
+            assertEquals(listOf<VehicleCommand>(VehicleCommand.Arm()), h.control.commands)
+            assertEquals(1, h.mission.started)
+        }
+    }
+
+    @Test
     fun `the launch climbs to the plan's take-off altitude, clamped, else the default`() {
         fun plan(z: Float?) = MissionPlan(items = listOfNotNull(z?.let { PlanItem(1, MavCmd.NAV_TAKEOFF, MavFrame.GLOBAL_RELATIVE_ALT, z = it) }))
         assertEquals(15f, launchAltitudeM(plan(15f)))
         assertEquals(120f, launchAltitudeM(plan(500f)))
         assertEquals(3f, launchAltitudeM(plan(0f)))
         assertEquals(3f, launchAltitudeM(plan(null)))
+    }
+
+    @Test
+    fun `a sea-level take-off item climbs above home, else the default`() {
+        val item = PlanItem(1, MavCmd.NAV_TAKEOFF, MavFrame.GLOBAL, z = 920f)
+        assertEquals(3f, launchAltitudeM(MissionPlan(items = listOf(item))))
+        val home = PlanHome(GeoPoint(0.0, 0.0), altMslM = 910f)
+        assertEquals(10f, launchAltitudeM(MissionPlan(items = listOf(item), home = home)))
+        assertEquals(7f, launchAltitudeM(MissionPlan(items = listOf(item.copy(frame = MavFrame.GLOBAL_TERRAIN_ALT, z = 7f)))))
     }
 }

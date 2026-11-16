@@ -188,6 +188,19 @@ class LaunchAbortTest {
     }
 
     @Test
+    fun `the balance check's fix sends airframe_reset to the pilot`() = runTest(dispatcher) {
+        val pilot = LaunchingPilot(this, refuse = null)
+        val vm = launchingVm(pilot)
+
+        vm.fixReadiness(com.altnautica.gcs.core.model.ReadinessItem("airframe_balance", ok = false, severity = com.altnautica.gcs.core.model.ReadinessSeverity.Warn, msg = "Balance: uneven."))
+        advanceTimeBy(100)
+        runCurrent()
+
+        assertEquals(listOf("airframe_reset"), pilot.actions)
+        vm.viewModelScope.cancel()
+    }
+
+    @Test
     fun `the sheet sends nothing extra when the pilot already flies the picked class`() {
         assertNull(placeClassBeforeLaunch(LaunchDraft(), PlaceClass.Confined))
         assertNull(placeClassBeforeLaunch(LaunchDraft(placeClass = PlaceClass.Open), null))

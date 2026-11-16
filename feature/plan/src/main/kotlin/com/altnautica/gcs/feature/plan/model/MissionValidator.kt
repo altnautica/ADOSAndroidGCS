@@ -187,7 +187,7 @@ object MissionValidator {
     }
 
     /** The item's altitude above home, or null when it cannot be told (MSL without a home altitude). */
-    private fun altitudeAboveHome(plan: MissionPlan, item: PlanItem): Float? = when (item.altitudeRef) {
+    internal fun altitudeAboveHome(plan: MissionPlan, item: PlanItem): Float? = when (item.altitudeRef) {
         AltitudeRef.Relative, AltitudeRef.Terrain -> item.z
         AltitudeRef.Msl -> plan.home?.altMslM?.let { item.z - it }
         null -> null

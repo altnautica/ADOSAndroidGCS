@@ -72,10 +72,11 @@ class ExtensionHandlersTest {
 
     /** The vehicle's onboard pilot: present or not, and the actions sent to it. */
     private var pilotPresent = false
+    private var pilotAgeMs: Long? = 0
     private val pilotActions = mutableListOf<PilotAction>()
     private val pilots = object : VehiclePilotSource {
-        override fun observe(id: DeviceId) = flowOf(PilotPlanView(present = pilotPresent))
-        override suspend fun read(id: DeviceId) = PilotPlanView(present = pilotPresent)
+        override fun observe(id: DeviceId) = flowOf(PilotPlanView(ageMs = pilotAgeMs, present = pilotPresent))
+        override suspend fun read(id: DeviceId) = PilotPlanView(ageMs = pilotAgeMs, present = pilotPresent)
         override suspend fun setPlaceClass(id: DeviceId, placeClass: PlaceClass) = PilotActionResult.Unavailable
         override suspend fun action(id: DeviceId, action: PilotAction): PilotActionResult {
             pilotActions += action
@@ -150,6 +151,34 @@ class ExtensionHandlersTest {
         assertEquals(listOf(PilotAction(PilotAction.LAUNCH, mapOf("after" to "hold", "alt_m" to 6f))), pilotActions)
         assertTrue("nothing went straight to the flight controller", commands.isEmpty())
         assertEquals("true", result!!.jsonObject["ok"]!!.jsonPrimitive.content)
+    }
+
+    private fun TestScope.approvedTakeoff() {
+        val h = factory().create("com.example.ext", NODE, "m1")
+        runCurrent()
+        val job = backgroundScope.launch { h.call("command.send", """{"command":"takeoff","args":{"alt":6}}""") }
+        runCurrent()
+        confirm.answer(confirm.pending.value.single().id, true)
+        runCurrent()
+        check(job.isCompleted)
+    }
+
+    @Test
+    fun takeoffWithAStalePilotGoesToTheFlightController() = runTest {
+        pilotPresent = true
+        pilotAgeMs = 30_000
+        approvedTakeoff()
+        assertTrue("a stopped pilot gets no launch", pilotActions.isEmpty())
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.Takeoff(6f)), commands)
+    }
+
+    @Test
+    fun takeoffWhileDisarmedNeverArmsThroughThePilot() = runTest {
+        pilotPresent = true
+        heartbeat.value = HeartbeatState(false, FlightMode(4, "GUIDED"), 2, 3, 0)
+        approvedTakeoff()
+        assertTrue("the pilot's launch would arm; an extension never arms", pilotActions.isEmpty())
+        assertEquals("the FC refuses a take-off while disarmed", listOf<VehicleCommand>(VehicleCommand.Takeoff(6f)), commands)
     }
 
     @Test

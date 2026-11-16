@@ -43,6 +43,15 @@ class LiftoffSurfaceTest {
     }
 
     @Test
+    fun `a take-off stopped before lift-off reads the spec text, not the code`() {
+        val strings = testSpec.setupStrings
+        assertEquals(
+            "Take-off stopped. The flight controller did not take the steady take-off settings (GUID_OPTIONS, GCS_PID_MASK).",
+            com.altnautica.gcs.feature.cockpit.skillbar.reasonTextOf(strings, "liftoff_fc_params"),
+        )
+    }
+
+    @Test
     fun `I rebalanced it shows on a failing balance check while disarmed and sends airframe_reset`() {
         val warn = ReadinessItem("airframe_balance", ok = false, severity = ReadinessSeverity.Warn, msg = "Balance: nose-heavy. Off by about 35 mm. Move the battery back.")
         assertTrue(ReadinessFixes.resetsAirframe(warn, armed = false))

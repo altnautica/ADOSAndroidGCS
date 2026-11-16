@@ -415,8 +415,9 @@ internal class PlannerVehicleController(
                     return@launch
                 }
             }
-            if (!sheet.armed && pilot.present) {
-                val launched = pilotSource.action(nodeId, PilotAction.launch(PilotAction.AFTER_MISSION, launchAltitudeM(state.value.plan)))
+            // A stopped pilot keeps its last frame; only a fresh one takes the launch.
+            if (!sheet.armed && pilot.present && pilot.fresh) {
+                val launched = pilotSource.action(nodeId, PilotAction.launch(PilotAction.AFTER_MISSION, launchAltitudeM(planWithHome())))
                 if (launched != PilotActionResult.Accepted) {
                     state.update { s -> s.copy(startSheet = s.startSheet?.copy(running = false, error = StartError.LaunchRefused(launched))) }
                     return@launch
