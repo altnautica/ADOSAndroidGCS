@@ -164,7 +164,7 @@ class StatusPill(
             if (r.ok) continue
             // A blocking item refuses take-off: critical, as the pre-flight sheet fails it.
             val sev = if (r.severity == ReadinessSeverity.Block) PillSeverity.Critical else PillSeverity.Warning
-            out += PillAlert("pilot:${r.id}", PillSource.PilotReadiness, sev, r.msg.ifEmpty { text.readinessItemLabel(r.id) })
+            out += PillAlert("pilot:${r.id}", PillSource.PilotReadiness, sev, r.msg.ifEmpty { r.id })
         }
         if (controllerLost && !pilotStale) {
             out += PillAlert("controller_lost", PillSource.Controller, PillSeverity.Warning, text.text("alert.controller_lost"))

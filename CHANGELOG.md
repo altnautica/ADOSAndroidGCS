@@ -29,8 +29,7 @@ app's `versionName`.
   and reach the flight controller when the pilot does not answer.
 - **Setup: no RC choice.** The "Meet ADOS Pilot" step offers ADOS Pilot
   with no RC transmitter when the vehicle offers it, with its explanation.
-  It leads when no RC receiver was seen. Checklist and status rows without
-  their own message read by their spec label.
+  It leads when no RC receiver was seen.
 - **Radar: No returns.** A fresh lidar scan with no return in any bin and
   no other distance reads "NO RETURNS" in the warning colour, where it read
   "—". A return is a finite range above 5 cm, the pilot's own rule, so a
