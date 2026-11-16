@@ -40,7 +40,7 @@ class ConfinedTextTest {
         assertNull(ok.pinchAt)
         val unseen = text.report(RouteCheck(RouteCheckState.Unverified, 0.577, 0.477, null, null, listOf(5)))!!
         assertEquals(RouteCheckSeverity.Warn, unseen.severity)
-        assertEquals("Route not seen yet · slow near walls", unseen.line)
+        assertEquals("Route checked in flight at each leg's height · slow near walls", unseen.line)
         assertNull(text.report(null))
     }
 

@@ -37,7 +37,7 @@ class RouteCheckWireTextTest {
             routeLine("""{"state":"unverified","required_m":0.577,"unverified_legs":[],"truncated":true}"""),
         )
         assertEquals(
-            "Route not seen yet · slow near walls",
+            "Route checked in flight at each leg's height · slow near walls",
             routeLine("""{"state":"unverified","required_m":0.577,"unverified_legs":[5]}"""),
         )
     }
