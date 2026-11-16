@@ -116,6 +116,7 @@ fun ProximityRadar(
         ProximityWord.Clear to specText("skill.avoid.clear").uppercase(),
         ProximityWord.Caution to specText("radar.caution").uppercase(),
         ProximityWord.Danger to specText("radar.danger").uppercase(),
+        ProximityWord.NoReturns to specText("radar.no_returns").uppercase(),
     )
     val scanNone = specText("radar.scan_none").uppercase()
     // Only the rounded obstacle rate shows, so the nav stream recomposes the header only when it changes.
@@ -173,8 +174,13 @@ fun ProximityRadar(
                         val top = measurer.measure(if (f.northAligned && scan == null) "N" else "FWD", style)
                         drawText(top, topLeft = Offset(center.x - top.size.width / 2f, center.y - outer + 2.dp.toPx()))
                         val nearest = f.nearestM
-                        val readout = if (nearest != null && !f.stale) "${HudGeometry.oneDecimal(nearest)} m ${words.getValue(LocalFrame.proximityWord(nearest))}" else "—"
-                        val label = measurer.measure(readout, style)
+                        val word = LocalFrame.radarWord(nearest, f.stale, scan)
+                        val readout = when {
+                            word == null -> "—"
+                            nearest == null -> words.getValue(word)
+                            else -> "${HudGeometry.oneDecimal(nearest)} m ${words.getValue(word)}"
+                        }
+                        val label = measurer.measure(readout, if (word == ProximityWord.NoReturns) style.copy(color = colors.hudWarn) else style)
                         drawText(label, topLeft = Offset(center.x - label.size.width / 2f, center.y + outer / 3))
                         val h = measurer.measure(headerText, ringStyle)
                         drawText(h, topLeft = Offset(center.x - h.size.width / 2f, center.y - outer / 3 - h.size.height))

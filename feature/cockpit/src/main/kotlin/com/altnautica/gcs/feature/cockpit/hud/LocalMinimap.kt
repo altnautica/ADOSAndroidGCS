@@ -380,7 +380,7 @@ internal class MinimapPainter(
             val ink = c.hudInk.copy(alpha = 0.6f)
             for (i in scan.rangesM.indices) {
                 val r = scan.rangesM[i]
-                if (r <= 0f) continue
+                if (!LocalFrame.isScanReturn(r)) continue
                 val th = scan.angleStartRad + i * scan.angleIncrementRad
                 // Body forward/right to map north/east at the pose.
                 val f = r * cos(th)

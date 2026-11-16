@@ -5,6 +5,10 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Radar: No returns.** A fresh lidar scan with no return in any bin and
+  no other distance reads "NO RETURNS" in the warning colour, where it read
+  "—". A return is a finite range above 5 cm, the pilot's own rule, so a
+  scan of only near-zero bins no longer reads as an obstacle at 0.0 m.
 - **Route check details.** A route check on a mission the agent has not
   downloaded yet says so ("Route not fully checked: the mission is not
   downloaded yet"); one that could not place a waypoint names it ("Route

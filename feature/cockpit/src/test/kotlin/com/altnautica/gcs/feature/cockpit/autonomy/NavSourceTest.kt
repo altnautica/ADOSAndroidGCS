@@ -88,6 +88,26 @@ class NavSourceTest {
     }
 
     @Test
+    fun `fresh scan with zero returns reads NO RETURNS, never clear`() {
+        val empty = ScanFrame(0f, 0.1f, FloatArray(60), 0)
+        assertEquals(ProximityWord.NoReturns, LocalFrame.radarWord(null, stale = false, scan = empty))
+        assertEquals(ProximityWord.Clear, LocalFrame.radarWord(8f, stale = false, scan = empty))
+        assertEquals(ProximityWord.Danger, LocalFrame.radarWord(1f, stale = false, scan = empty))
+        assertEquals(null, LocalFrame.radarWord(null, stale = false, scan = null))
+        assertEquals(null, LocalFrame.radarWord(null, stale = true, scan = null))
+    }
+
+    @Test
+    fun `a return is a finite range above 5 cm`() {
+        val near = ScanFrame(0f, 0.1f, floatArrayOf(0.03f, 0.05f, Float.NaN, 0f), 0)
+        assertEquals(null, LocalFrame.nearestScanM(near))
+        assertEquals(ProximityWord.NoReturns, LocalFrame.radarWord(LocalFrame.nearestScanM(near), stale = false, scan = near))
+        assertEquals(0, LocalFrame.scanDots(near, 6f, 100f, 100f, 60f, 360).size)
+        val one = ScanFrame(0f, 0.1f, floatArrayOf(0.03f, 1.2f, 0f), 0)
+        assertEquals(1.2f, LocalFrame.nearestScanM(one))
+    }
+
+    @Test
     fun `M1 tile anchor is its north-west corner`() {
         val (n, e) = LocalFrame.tileAnchor(0, -1, 0.05f)
         assertEquals(3.2f, n, 1e-5f)

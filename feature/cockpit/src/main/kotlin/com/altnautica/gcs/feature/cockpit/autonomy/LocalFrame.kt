@@ -13,6 +13,12 @@ object LocalFrame {
     const val DANGER_M = 2f
     const val CAUTION_M = 5f
 
+    /** A scan bin at or under this range returned nothing (the pilot's rule). */
+    const val MIN_RETURN_M = 0.05f
+
+    /** A range that returned a surface: finite and above [MIN_RETURN_M]. */
+    fun isScanReturn(r: Float): Boolean = r.isFinite() && r > MIN_RETURN_M
+
     /** Next scale when the dial is tapped: 3 → 6 → 12 → auto → 3. */
     fun nextScale(s: RadarScale): RadarScale = when (s) {
         RadarScale.Three -> RadarScale.Six
@@ -33,7 +39,7 @@ object LocalFrame {
      * returns x0, y0, x1, y1… at most [maxDots] points (evenly decimated).
      */
     fun scanDots(scan: ScanFrame, displayRangeM: Float, cx: Float, cy: Float, radiusPx: Float, maxDots: Int): FloatArray {
-        val idx = scan.rangesM.indices.filter { val r = scan.rangesM[it]; r > 0f && r <= displayRangeM }
+        val idx = scan.rangesM.indices.filter { val r = scan.rangesM[it]; isScanReturn(r) && r <= displayRangeM }
         val step = if (idx.size > maxDots) idx.size.toFloat() / maxDots else 1f
         val n = minOf(idx.size, maxDots)
         val out = FloatArray(n * 2)
@@ -47,14 +53,25 @@ object LocalFrame {
         return out
     }
 
-    /** Nearest positive scan return in metres, or null. */
-    fun nearestScanM(scan: ScanFrame): Float? = scan.rangesM.filter { it > 0f }.minOrNull()
+    /** Nearest scan return ([isScanReturn]) in metres, or null. */
+    fun nearestScanM(scan: ScanFrame): Float? = scan.rangesM.filter(::isScanReturn).minOrNull()
 
     /** Readout word for a nearest distance. */
     fun proximityWord(nearestM: Float): ProximityWord = when {
         nearestM < DANGER_M -> ProximityWord.Danger
         nearestM <= CAUTION_M -> ProximityWord.Caution
         else -> ProximityWord.Clear
+    }
+
+    /**
+     * Radar readout word: any distance reading wins; a fresh scan with no return and no other
+     * reading is [ProximityWord.NoReturns] (never clear); no live source at all is null.
+     */
+    fun radarWord(nearestM: Float?, stale: Boolean, scan: ScanFrame?): ProximityWord? = when {
+        stale -> null
+        nearestM != null -> proximityWord(nearestM)
+        scan != null && scan.rangesM.none(::isScanReturn) -> ProximityWord.NoReturns
+        else -> null
     }
 
     /** Local-frame screen point for map (north [x], east [y]) about centre ([xc], [yc]) at [pxPerM]. */
@@ -76,4 +93,4 @@ object LocalFrame {
     }
 }
 
-enum class ProximityWord { Clear, Caution, Danger }
+enum class ProximityWord { Clear, Caution, Danger, NoReturns }
