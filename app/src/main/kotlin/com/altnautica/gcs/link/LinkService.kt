@@ -16,6 +16,8 @@ import androidx.lifecycle.lifecycleScope
 import com.altnautica.gcs.MainActivity
 import com.altnautica.gcs.R
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
+import com.altnautica.gcs.core.skills.cockpit.StopControls
+import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Liveness
 import com.altnautica.gcs.core.model.NodeProfile
@@ -41,7 +43,9 @@ data class LinkLine(val id: DeviceId, val name: String, val modeName: String?, v
 /**
  * Foreground service (`connectedDevice`) that runs while any vehicle link is
  * open, so a link survives the app going to the background. Its notification
- * names the node with mode and battery, and offers Disconnect.
+ * names the node with mode and battery, and offers Disconnect; while a cockpit is
+ * open it offers Pause, Land and Return instead, shown on the lock screen too, which
+ * run in that cockpit on the main thread ([StopControls]).
  */
 @AndroidEntryPoint
 class LinkService : LifecycleService() {
@@ -52,19 +56,31 @@ class LinkService : LifecycleService() {
 
     @Inject lateinit var vitals: NodeVitalsRepository
 
+    @Inject lateinit var stops: StopControls
+
+    @Inject lateinit var notificationControls: LinkNotificationControls
+
+    @Inject lateinit var spec: CockpitSpecRepository
+
     override fun onCreate() {
         super.onCreate()
         ensureChannel(this)
-        startInForeground(build(emptyList()))
+        startInForeground(build(emptyList(), stopControls = false))
         lifecycleScope.launch {
-            lines().collect { lines ->
+            combine(lines(), stops.available, ::Pair).collect { (lines, controls) ->
                 if (lines.isEmpty() && vehicles.openLinks.value.isEmpty()) {
                     stopSelf()
                 } else {
-                    getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, build(lines))
+                    getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, build(lines, controls))
+                    notificationControls.posted = controls
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        notificationControls.posted = false
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -74,6 +90,8 @@ class LinkService : LifecycleService() {
                 vehicles.openLinks.value.forEach { vehicles.disconnect(it.id) }
             }
         }
+        // A stop control from the notification runs in the open cockpit, here on the main thread.
+        StopAction.of(intent?.action)?.let { stops.run(it.builtinId) }
         return START_NOT_STICKY
     }
 
@@ -97,7 +115,7 @@ class LinkService : LifecycleService() {
         com.altnautica.gcs.core.model.FcVariant.Unknown, null, null,
     )
 
-    private fun build(lines: List<LinkLine>): Notification {
+    private fun build(lines: List<LinkLine>, stopControls: Boolean): Notification {
         val content = LinkNotice.from(lines)
         val title = when (content) {
             is LinkNotice.Single -> content.name
@@ -124,7 +142,7 @@ class LinkService : LifecycleService() {
             Intent(this, LinkService::class.java).setAction(ACTION_DISCONNECT),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_link_notification)
             .setContentTitle(title)
             .setContentText(text)
@@ -133,8 +151,23 @@ class LinkService : LifecycleService() {
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(0, getString(R.string.link_notification_disconnect), disconnect)
-            .build()
+            // The stop controls must work from the lock screen without unlocking.
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        // A notification shows three actions: the stop controls while a cockpit can run them, else Disconnect.
+        if (stopControls) {
+            StopAction.entries.forEachIndexed { i, a ->
+                val pending = PendingIntent.getService(
+                    this,
+                    STOP_REQUEST_BASE + i,
+                    Intent(this, LinkService::class.java).setAction(a.intentAction),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                builder.addAction(0, spec.setupStrings.format(a.labelKey), pending)
+            }
+        } else {
+            builder.addAction(0, getString(R.string.link_notification_disconnect), disconnect)
+        }
+        return builder.build()
     }
 
     private fun startInForeground(notification: Notification) {
@@ -154,6 +187,7 @@ class LinkService : LifecycleService() {
         const val CHANNEL_ID = "vehicle_link"
         const val NOTIFICATION_ID = 1001
         const val ACTION_DISCONNECT = "com.altnautica.gcs.link.DISCONNECT"
+        private const val STOP_REQUEST_BASE = 2
 
         fun ensureChannel(context: Context) {
             val manager = context.getSystemService(NotificationManager::class.java) ?: return

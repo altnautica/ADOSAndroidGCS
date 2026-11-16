@@ -10,7 +10,7 @@ fun SpecText.refusalText(code: String?, readinessLabel: ((String) -> String)? = 
     if (code.isNullOrEmpty()) return text("refusal.none")
     if (code.startsWith(NOT_READY)) {
         val id = code.removePrefix(NOT_READY)
-        val item = readinessLabel?.invoke(id) ?: if (has("readiness.item.$id")) text("readiness.item.$id") else id
+        val item = readinessLabel?.invoke(id) ?: readinessItemLabel(id)
         return text("refusal.not_ready", mapOf("item" to item))
     }
     if (code.startsWith(FC_REFUSED)) {
@@ -23,6 +23,9 @@ fun SpecText.refusalText(code: String?, readinessLabel: ((String) -> String)? = 
     if (has("mav_result.$code")) return text("mav_result.$code")
     return text("refusal.unknown", mapOf("code" to code))
 }
+
+/** A readiness item's label (`readiness.item.<id>`), or its id where the spec names none. */
+fun SpecText.readinessItemLabel(id: String): String = if (has("readiness.item.$id")) text("readiness.item.$id") else id
 
 /** True when the spec names [code] (or it is a `not_ready:` or `fc_refused:` code): a sentence, not a raw id. */
 fun SpecText.knowsRefusal(code: String): Boolean =

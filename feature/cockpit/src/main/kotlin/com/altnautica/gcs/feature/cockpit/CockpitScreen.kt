@@ -196,7 +196,7 @@ private fun FlightScreen(
     val gimbal by vm.gimbal.available.collectAsStateWithLifecycle()
     val overflow = remember { TopBarOverflow() }
     val sizes = remember(width) { flightSizes(width) }
-    val onScreen by vm.onScreenSticksEnabled.collectAsStateWithLifecycle()
+    val onScreen by vm.noRc.sticksEnabled.collectAsStateWithLifecycle()
     val sticks = sticksShown(onScreen, width, vm.cockpitSpec.layout.onScreenSticks.classes)
     Box(Modifier.fillMaxSize()) {
         FlightGrid(
@@ -295,7 +295,7 @@ private fun Card(vm: CockpitViewModel) {
  */
 @Composable
 private fun Centre(vm: CockpitViewModel, width: WidthClass, zones: FlightZones, snackbar: @Composable () -> Unit) {
-    val onScreen by vm.onScreenSticksEnabled.collectAsStateWithLifecycle()
+    val onScreen by vm.noRc.sticksEnabled.collectAsStateWithLifecycle()
     val rect = zones.centre
     Box(Modifier.fillMaxSize()) {
         CentreRings(vm, Modifier.align(Alignment.Center).zIndex(Z.ALERTS))

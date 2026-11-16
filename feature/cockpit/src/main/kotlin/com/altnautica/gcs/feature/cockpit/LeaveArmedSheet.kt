@@ -13,13 +13,14 @@ import com.altnautica.gcs.feature.cockpit.flow.specText
 /**
  * Asks before leaving the cockpit while the vehicle is armed. Like every flight-screen
  * sheet it starts below the top bar (the caller provides the measured inset), so STOP
- * takes the first press with it open.
+ * takes the first press with it open. With no RC transmitter [noRcMessage] says what the
+ * leave ends in (`shell.leave_no_rc`); Stay cancels it.
  */
 @Composable
-internal fun LeaveArmedSheet(onStay: () -> Unit, onLeave: () -> Unit) {
+internal fun LeaveArmedSheet(onStay: () -> Unit, onLeave: () -> Unit, noRcMessage: String? = null) {
     AdosConfirmSheet(
         title = specText("cockpit.leave_armed.title"),
-        message = specText("cockpit.leave_armed.message"),
+        message = noRcMessage ?: specText("cockpit.leave_armed.message"),
         onDismiss = onStay,
         danger = true,
     ) {

@@ -28,6 +28,9 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosSize
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
+import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.readinessItemLabel
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** Label of a check; [known] false appends "not reported". */
@@ -112,7 +115,9 @@ private fun ReadinessRow(item: ReadinessItem) {
         item.severity == ReadinessSeverity.Warn -> Icons.Outlined.WarningAmber to colors.statusWarning
         else -> Icons.Outlined.Cancel to colors.statusError
     }
-    CheckRow(icon, tint, item.msg, item.ok, "$PREFLIGHT_ROW_TAG:${item.id}")
+    // An item without its own message reads by its spec label (`readiness.item.<id>`).
+    val label = item.msg.ifBlank { SpecText(LocalCockpitStrings.current).readinessItemLabel(item.id) }
+    CheckRow(icon, tint, label, item.ok, "$PREFLIGHT_ROW_TAG:${item.id}")
 }
 
 @Composable
