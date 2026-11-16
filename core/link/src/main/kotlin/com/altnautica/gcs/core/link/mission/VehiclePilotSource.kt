@@ -127,7 +127,7 @@ class AgentVehiclePilotSource @Inject constructor(
 
     /** One action on an in-process pilot's stream, answered by its `action_result`. */
     private suspend fun pilotAction(api: AutonomyFeedApi, action: PilotAction): PilotActionResult {
-        val sent = PilotWire.action(action, PilotWire.SRC_ANDROID, ACTION_ID)
+        val sent = PilotWire.action(action, PilotWire.SRC_ANDROID, PilotWire.PROCESS_SID, ACTION_ID)
         val answer = withTimeoutOrNull(ANSWER_MS) {
             api.pilotStream(flowOf(sent))
                 .mapNotNull { PilotWire.parseFrame(it, 0L) as? PilotFrame.ActionResult }
