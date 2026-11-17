@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -35,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.requiredSize
-import com.altnautica.gcs.core.skills.controls.StickMode
 import com.altnautica.gcs.feature.cockpit.camera.FrameGrabEffect
 import com.altnautica.gcs.feature.cockpit.camera.LocalShownVideo
 import com.altnautica.gcs.feature.cockpit.camera.ShownVideo
@@ -98,7 +96,6 @@ import com.altnautica.gcs.feature.cockpit.hud.HudCanvas
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerLevel
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerSpec
 import com.altnautica.gcs.feature.cockpit.hud.layers.VisionSidePanel
-import com.altnautica.gcs.feature.cockpit.pilot.ThumbPad
 import com.altnautica.gcs.feature.cockpit.pilot.ON_SCREEN_PAD
 import com.altnautica.gcs.feature.cockpit.skillbar.SkillPickerChip
 import com.altnautica.gcs.feature.cockpit.skillbar.WidthClass
@@ -432,18 +429,6 @@ private fun SplitView(vm: CockpitViewModel, savedRatio: Float, hudInset: Padding
 private fun PickerChip(vm: CockpitViewModel, modifier: Modifier = Modifier) {
     val chip by vm.pickerChip.collectAsStateWithLifecycle()
     SkillPickerChip(chip, onOpen = { vm.setPicker(true) }, modifier = modifier)
-}
-
-@Composable
-private fun OnScreenSticksRow(vm: CockpitViewModel, modifier: Modifier) {
-    val sticks = vm.onScreenSticks
-    val conditioning by vm.conditioning.collectAsStateWithLifecycle()
-    Row(modifier, horizontalArrangement = Arrangement.SpaceBetween) {
-        // Mode 1 swaps pitch and throttle between the sticks, so the pads say so.
-        val suffix = if (conditioning.mode == StickMode.Mode1) "_mode1" else ""
-        ThumbPad(specText("cockpit.sticks.left_aria$suffix"), conditioning.deadzone, sticks::setLeft, sticks::touch)
-        ThumbPad(specText("cockpit.sticks.right_aria$suffix"), conditioning.deadzone, sticks::setRight, sticks::touch)
-    }
 }
 
 /** The spec's `video.state.*` word for a video that is not live. */

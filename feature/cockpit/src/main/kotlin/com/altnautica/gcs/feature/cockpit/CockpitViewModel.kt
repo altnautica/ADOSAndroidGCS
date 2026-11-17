@@ -44,7 +44,6 @@ import com.altnautica.gcs.core.skills.binding.Loadout
 import com.altnautica.gcs.core.skills.builtin.BuiltinIds
 import com.altnautica.gcs.core.skills.builtin.SetModeSkill
 import com.altnautica.gcs.core.skills.builtin.SkillArgs
-import com.altnautica.gcs.core.skills.cockpit.CockpitSummary
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
 import com.altnautica.gcs.core.skills.controls.ControlsRepository
 import com.altnautica.gcs.core.skills.hud.SpecText
@@ -600,28 +599,8 @@ class CockpitViewModel @AssistedInject constructor(
      */
     internal val followPrompt = com.altnautica.gcs.feature.cockpit.autonomy.FollowPromptRunner(viewModelScope, autonomy, { activate(it) }, _events)
 
-    private val _followPromptFocus = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-
-    /** Requests to move focus into the follow waiting prompt (the controller's select while it is shown). */
-    val followPromptFocus: SharedFlow<Unit> = _followPromptFocus.asSharedFlow()
-
-    /** The prompt reports whether focus is inside it. */
-    fun setFollowPromptFocused(focused: Boolean) {
-        overlays.followPrompt.value = focused
-    }
-
-    /** The controller's select while the waiting prompt is shown: focus moves into it. False with no prompt shown. */
-    internal fun enterFollowPrompt(): Boolean {
-        if (autonomy.followPrompt() == null) return false
-        _followPromptFocus.tryEmit(Unit)
-        return true
-    }
-
-    /** The bare keys the waiting prompt answers while focus is inside it; empty otherwise, so they stay the cockpit's. */
-    internal fun followPromptKeys(): Set<String> {
-        if (!overlays.followPrompt.value) return emptySet()
-        return autonomy.followPrompt()?.actions?.mapTo(HashSet()) { it.key.toString() }.orEmpty()
-    }
+    /** Keyboard and controller focus for the follow waiting prompt. */
+    internal val promptFocus = FollowPromptFocus(autonomy, overlays)
 
     private val widthClass = MutableStateFlow<WidthClass?>(null)
 
@@ -828,13 +807,7 @@ class CockpitViewModel @AssistedInject constructor(
         if (!padInput.attach()) return
         streamer.start()
         feedback.start()
-        summaryJob = viewModelScope.launch {
-            // The mission without its age, so the summary changes only when what it shows does.
-            val mission = pilot.state.map { it?.mission?.copy(ageMs = null) }.distinctUntilChanged()
-            combine(preflight, alerts, sticks.stickOn, mission) { p, a, on, m ->
-                CockpitSummary(cockpitNodeId, p.passed, p.total, a.size, a.firstOrNull()?.let(announcer::alertText), on, m)
-            }.distinctUntilChanged().collect(summaries::publish)
-        }
+        summaryJob = viewModelScope.publishCockpitSummary(cockpitNodeId, pilot.state, preflight, alerts, sticks.stickOn, announcer::alertText, summaries)
     }
 
     /**
@@ -855,9 +828,7 @@ class CockpitViewModel @AssistedInject constructor(
     }
 
     /** The window lost input focus (a system dialog, the shade): centre the sticks and release buttons. */
-    fun onWindowFocusLost() {
-        router.neutralize()
-    }
+    fun onWindowFocusLost() = router.neutralize()
 
     internal val camera: CockpitCamera = CockpitCamera(viewModelScope) { vehicle.value?.control }
 

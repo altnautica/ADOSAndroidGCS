@@ -81,7 +81,7 @@ internal class CockpitPadInput(
 
     private val capture = object : InputCapture {
         // The waiting prompt's bare keys are its own only while focus is inside it.
-        override fun consumesChord(chord: String) = CockpitInputMapper.consumesChord(chord, vm.loadout.value, vm.followPromptKeys())
+        override fun consumesChord(chord: String) = CockpitInputMapper.consumesChord(chord, vm.loadout.value, vm.promptFocus.keys())
         override val capturesEnter: Boolean get() = confirm.isOpen
 
         // Sheets other than the skill picker, and the waiting prompt once focus is in it, navigate
@@ -164,7 +164,7 @@ internal class CockpitPadInput(
             // Select opens the skill picker, or moves focus into the waiting prompt while it is shown.
             CockpitControllerAction.SkillSelect -> when {
                 overlays.picker.value -> picker.selected.value?.let { picker.actions.onGo(it) }
-                vm.enterFollowPrompt() -> Unit
+                vm.promptFocus.enter() -> Unit
                 else -> picker.setOpen(true)
             }
             CockpitControllerAction.SkillStop -> vm.stopOrBack()

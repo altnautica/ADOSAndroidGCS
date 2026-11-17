@@ -223,7 +223,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
             if (prompt != null && state != null) {
                 FollowAwaitPrompt(
                     prompt, width, onAction = { vm.followPrompt.run(it, state.operatorResumeSeq) },
-                    focusRequests = vm.followPromptFocus, onFocusedChange = vm::setFollowPromptFocused,
+                    focusRequests = vm.promptFocus.requests, onFocusedChange = vm.promptFocus::setFocused,
                 )
             } else if (followingMode && state != null && expanded) {
                 val panelWidth = if (width.isWide() && !short) 320.dp else Dp.Unspecified

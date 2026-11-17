@@ -181,7 +181,7 @@ class FollowRecoveryFlowTest {
         val router = testRouter().also { every { it.snapshot } returns pad }
         val vm = testCockpitVm(FakeVehicle(), agent.apis, router = router)
         val focusRequests = mutableListOf<Unit>()
-        backgroundScope.launch { vm.followPromptFocus.collect { focusRequests += it } }
+        backgroundScope.launch { vm.promptFocus.requests.collect { focusRequests += it } }
         fun step(ms: Long = 100) {
             advanceTimeBy(ms)
             runCurrent()
@@ -212,14 +212,14 @@ class FollowRecoveryFlowTest {
         assertFalse(vm.pickerOpen.value)
 
         // Focus inside: its bare keys are left to it, other cockpit keys still act, and the pad navigates it.
-        vm.setFollowPromptFocused(true)
+        vm.promptFocus.setFocused(true)
         for (k in listOf("r", "p", "h", "l", "x")) assertFalse(k, capture.consumesChord(k))
         assertTrue(capture.consumesChord("v"))
         assertTrue(capture.consumesChord("shift+l"))
         assertTrue(capture.uiNavigation)
 
         // Focus out again: everything is the cockpit's.
-        vm.setFollowPromptFocused(false)
+        vm.promptFocus.setFocused(false)
         assertTrue(capture.consumesChord("p"))
         assertFalse(capture.uiNavigation)
 

@@ -9,7 +9,6 @@ import com.altnautica.gcs.core.data.cockpit.CockpitSettingsRepository
 import com.altnautica.gcs.core.extensions.data.ApiResult
 import com.altnautica.gcs.core.extensions.data.ExtensionRepository
 import com.altnautica.gcs.core.extensions.data.PerceptionFeed
-import com.altnautica.gcs.core.extensions.data.WriteOutcome
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.GpsFix
@@ -26,7 +25,6 @@ import com.altnautica.gcs.feature.cockpit.UI_STOP_MS
 import com.altnautica.gcs.feature.cockpit.VideoUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.altnautica.gcs.feature.cockpit.hud.layers.ArRules
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerController
@@ -43,7 +41,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.launch
@@ -274,7 +271,7 @@ internal class CockpitAutonomy(
                 if (tracking && _designation.value?.trackId != f.trackId) {
                     _designation.value = Designation(f.predicted?.cameraId ?: mainCamera(), f.trackId, null)
                 }
-                settleEchoed(f)
+                followSettings.settleEchoed(f)
             }
         }
         scope.launch {
@@ -354,59 +351,16 @@ internal class CockpitAutonomy(
 
     // ---- Follow-me settings (re-acquire mode, when unsure, predictive search) ---------
 
-    private val pendingSettings = MutableStateFlow<Map<String, JsonPrimitive>>(emptyMap())
+    private val followSettings = FollowSettings(scope, node, feed, repository, events)
 
-    /** Written follow-me settings not yet echoed by `follow.state`, by config key; the rail outlines them dashed. */
-    val followSettingsPending: StateFlow<Map<String, JsonPrimitive>> = pendingSettings.asStateFlow()
-    private val pendingJobs = HashMap<String, Job>()
+    /** Written follow-me settings not yet echoed by `follow.state` ([FollowSettings.pending]). */
+    val followSettingsPending: StateFlow<Map<String, JsonPrimitive>> get() = followSettings.pending
 
-    /**
-     * Writes follow-me setting [key] = [value] (`reacquire_mode`, `uncertain_mode`,
-     * `predictive_search`). It shows pending until `follow.state` echoes it; a refused write or
-     * no echo within [ECHO_TIMEOUT_MS] clears it with [CockpitEvent.FollowSettingNotApplied].
-     */
-    fun setFollowSetting(key: String, value: JsonPrimitive) {
-        node.value ?: return
-        pendingSettings.update { it + (key to value) }
-        pendingJobs.remove(key)?.cancel()
-        pendingJobs[key] = scope.launch {
-            val ok = writeFollowConfig(key, value)
-            if (ok) delay(ECHO_TIMEOUT_MS)
-            if (pendingSettings.value[key] == value) {
-                pendingSettings.update { it - key }
-                events.tryEmit(CockpitEvent.FollowSettingNotApplied(key))
-            }
-        }
-    }
+    /** Writes follow-me setting [key] = [value] ([FollowSettings.set]). */
+    fun setFollowSetting(key: String, value: JsonPrimitive) = followSettings.set(key, value)
 
     /** Writes one follow-me config key on the flown node; true once the node took it. */
-    suspend fun writeFollowConfig(key: String, value: JsonPrimitive): Boolean {
-        val id = node.value ?: return false
-        val local = feed.local(id)
-        return if (local != null) {
-            (local as? AutonomyControlApi)?.putPluginConfig(FOLLOW_PLUGIN_ID, key, value) is AgentResult.Ok
-        } else {
-            repository.writeConfig(id, FOLLOW_PLUGIN_ID, key, value) == WriteOutcome.Done
-        }
-    }
-
-    /** Clears the pending settings [f] echoes. */
-    private fun settleEchoed(f: FollowState) {
-        val pending = pendingSettings.value
-        if (pending.isEmpty()) return
-        val echoed = pending.filter { (key, want) -> echo(f, key) == want }.keys
-        if (echoed.isEmpty()) return
-        echoed.forEach { pendingJobs.remove(it)?.cancel() }
-        pendingSettings.update { it - echoed }
-    }
-
-    /** The value `follow.state` reports for setting [key], as written. */
-    private fun echo(f: FollowState, key: String): JsonPrimitive? = when (key) {
-        REACQUIRE_KEY -> f.reacquireMode?.let(::JsonPrimitive)
-        UNCERTAIN_KEY -> f.uncertainMode?.let(::JsonPrimitive)
-        PREDICTIVE_KEY -> f.predictiveSearch?.let(::JsonPrimitive)
-        else -> null
-    }
+    suspend fun writeFollowConfig(key: String, value: JsonPrimitive): Boolean = followSettings.write(key, value)
 
     // ---- Nav source -------------------------------------------------------------------
 
