@@ -15,7 +15,7 @@ class NoRcTextTest {
 
     @Test
     fun `the chip and strip show only with no RC declared`() {
-        assertEquals("No RC", text.chip(noRc))
+        assertEquals("No controller", text.chip(noRc))
         assertNull(text.chip(adosPilot()))
         assertNull(text.chip(null))
         assertNull(text.strip(adosPilot()))
@@ -24,11 +24,11 @@ class NoRcTextTest {
     @Test
     fun `the strip names the pilot's link-loss action and window, a return after 10 s by default`() {
         assertEquals(
-            "No RC · Pause, Land and Return stop the drone · link lost → Return home in 10 s",
+            "No controller · Stop it from this phone: Pause, Land or Return · If the link drops for 10 s: Return home",
             text.strip(noRc.copy(linkLossAction = null, linkLossS = null)),
         )
         assertEquals(
-            "No RC · Pause, Land and Return stop the drone · link lost → Land in 8 s",
+            "No controller · Stop it from this phone: Pause, Land or Return · If the link drops for 8 s: Land",
             text.strip(noRc.copy(linkLossAction = "land", linkLossS = 7.2f)),
         )
     }
@@ -44,7 +44,7 @@ class NoRcTextTest {
     @Test
     fun `the lock-screen warning shows only with no RC and the notification hidden`() {
         assertEquals(
-            "Notifications are hidden on the lock screen: with the phone locked, the drone will Return home after 10 s",
+            "Lock-screen notifications are hidden, so locking the phone starts Return home after 10 s.",
             text.lockScreenHidden(noRc.copy(linkLossAction = "rth"), hidden = true),
         )
         assertNull(text.lockScreenHidden(noRc, hidden = false))
@@ -53,12 +53,12 @@ class NoRcTextTest {
 
     @Test
     fun `the declaration's readiness items and refusals read through the generic spec keys`() {
-        assertEquals("Not ready: RC receiver", spec.refusalText("not_ready:rc_seen"))
+        assertEquals("Not ready: Controller detected", spec.refusalText("not_ready:rc_seen"))
         assertEquals("Not ready: Link-loss action", spec.refusalText("not_ready:link_loss_posture"))
-        assertEquals("Not ready: No RC", spec.refusalText("not_ready:rc_receiver"))
-        assertEquals("Not while flying with no RC", spec.refusalText("rc_receiver_absent"))
+        assertEquals("Not ready: No controller", spec.refusalText("not_ready:rc_receiver"))
+        assertEquals("Not while flying with no controller", spec.refusalText("rc_receiver_absent"))
         assertEquals("Needs ArduCopter", spec.refusalText("firmware"))
         assertEquals("Not in a confined place", spec.refusalText("confined"))
-        assertEquals("A surface's link was lost: reconnect it or land first", spec.refusalText("link_loss_unrecovered"))
+        assertEquals("A phone or browser lost its link: reconnect it or land first", spec.refusalText("link_loss_unrecovered"))
     }
 }
