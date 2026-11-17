@@ -490,7 +490,7 @@ class CockpitViewModel @AssistedInject constructor(
     private val boundButtons: StateFlow<Int> = controlRows.map { Ds4Bindings.boundButtonMask(spec.ds4, it) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
-    private val conditioning: StateFlow<StickConditioning> = combine(controls.stickMode, controls.deadzone, controls.calibrations) { mode, dz, cal ->
+    internal val conditioning: StateFlow<StickConditioning> = combine(controls.stickMode, controls.deadzone, controls.calibrations) { mode, dz, cal ->
         StickConditioning(mode = mode, deadzone = dz, calibrations = cal, triggerPressed = spec.ds4.stream.triggerPressedThreshold)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, StickConditioning())
 
@@ -773,7 +773,7 @@ class CockpitViewModel @AssistedInject constructor(
     /** Only a fresh pilot frame decides armed and landed; an old one falls back to the heartbeat. */
     internal val controllerContext: StateFlow<ControllerContext> = facts.controllerContext
 
-    internal val feedback: ControllerFeedback = ControllerFeedback(viewModelScope, controllerManager, alerts, controllerContext, spec.ds4.lightbar, spec.ds4.rumble, work)
+    internal val feedback: ControllerFeedback = ControllerFeedback(viewModelScope, controllerManager, alerts, controllerContext, spec.ds4.lightbar, spec.ds4.rumble, spec.ds4.feedback, work)
 
     /** The current theme's colours for the controller light bar. */
     fun setControllerPalette(colors: AdosColorRoles) = feedback.setPalette(colors)

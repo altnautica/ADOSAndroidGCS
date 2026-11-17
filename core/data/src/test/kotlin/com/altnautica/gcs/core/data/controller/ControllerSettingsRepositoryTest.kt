@@ -27,13 +27,12 @@ class ControllerSettingsRepositoryTest {
     }
 
     @Test
-    fun `dead zone and expo are clamped to their ranges`() = runBlocking {
+    fun `expo is clamped to its range`() = runBlocking {
         val repo = ControllerSettingsRepository(MemoryPreferences())
-        repo.setDeadZonePct(35)
         repo.setExpoPct(-5)
-        val s = repo.settings.first()
-        assertEquals(20, s.deadZonePct)
-        assertEquals(0, s.expoPct)
+        assertEquals(0, repo.settings.first().expoPct)
+        repo.setExpoPct(90)
+        assertEquals(ControllerSettingsRepository.MAX_EXPO_PCT, repo.settings.first().expoPct)
     }
 
     @Test

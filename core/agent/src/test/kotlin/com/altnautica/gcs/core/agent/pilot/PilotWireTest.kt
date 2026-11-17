@@ -21,7 +21,9 @@ import com.altnautica.gcs.core.model.RcReceiver
 import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
+import com.altnautica.gcs.core.model.ProfileLimits
 import com.altnautica.gcs.core.model.SpeedCap
+import com.altnautica.gcs.core.model.StickCommand
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -78,7 +80,7 @@ class PilotWireTest {
         assertEquals(0L, m.ageMs)
         assertFalse(m.landingSeq)
         assertNull(m.uploadsSeen)
-        assertEquals(InputSession("mc", "Mission Control"), s.inputSession)
+        assertEquals(InputSession("mc", "Mission Control", 7L), s.inputSession)
         assertNull(s.gate)
         assertNull(s.sequence)
         val b = checkNotNull(s.banner)
@@ -353,6 +355,24 @@ class PilotWireTest {
     fun `the process instance id is 32 lowercase hex and fresh ids differ`() {
         assertTrue(Regex("[0-9a-f]{32}").matches(PilotWire.PROCESS_SID))
         assertTrue(PilotWire.newSid() != PilotWire.newSid())
+    }
+
+    @Test
+    fun `the effective profile limits parse, absent on an older pilot or without a horizontal limit`() {
+        assertNull(checkNotNull(PilotWire.parseState(data, 0L)).profileLimits)
+        fun parse(limits: String) = checkNotNull(PilotWire.parseState(Json.parseToJsonElement("""{"owner":"pilot","profile_limits":$limits}""") as JsonObject, 0L)).profileLimits
+        assertEquals(
+            ProfileLimits(PilotProfile.Sport, 8f, 1.5f),
+            parse("""{"profile":"sport","v_h_mps":8.0,"v_up_mps":3.0,"v_down_mps":2.0,"yaw_dps":150.0,"stop_m":20.1,"margin_m":1.5}"""),
+        )
+        assertNull(parse("""{"profile":"sport"}"""))
+    }
+
+    @Test
+    fun `the stick command parses its input age, absent while the sticks do not own`() {
+        assertNull(checkNotNull(PilotWire.parseState(data, 0L)).stick)
+        val frame = """{"owner":"pilot","stick":{"ask_ne_mps":[1.0,0.0],"v_ne_mps":[0.5,0.0],"vz_mps":0.0,"braking":false,"input_age_ms":140,"input_seq":9}}"""
+        assertEquals(StickCommand(140L), checkNotNull(PilotWire.parseState(Json.parseToJsonElement(frame) as JsonObject, 0L)).stick)
     }
 
     @Test

@@ -229,7 +229,7 @@ data class ReadinessItem(val id: String, val ok: Boolean, val severity: Readines
 data class PilotSkillRef(val pluginId: String, val skillId: String, val label: String)
 
 /** The surface whose sticks the pilot currently accepts. */
-data class InputSession(val src: String, val label: String)
+data class InputSession(val src: String, val label: String, val session: Long? = null)
 
 /** The centred-sticks handover gate: pending until the incoming sticks rest centred. */
 data class HandoverGate(val pending: Boolean, val progress: Float)
@@ -329,6 +329,10 @@ data class PilotState(
     val rcReceiver: RcReceiver = RcReceiver.Present,
     /** How long a silent operator link may last before [linkLossAction], when the pilot reports it. */
     val linkLossS: Float? = null,
+    /** The limits the pilot flies now (the profile capped by the FC, the vehicle and the place); an older agent sends none. */
+    val profileLimits: ProfileLimits? = null,
+    /** Present while the operator's sticks own the vehicle. */
+    val stick: StickCommand? = null,
 ) {
     /** Declared to fly with no RC transmitter: the app's controls are the only way to stop the drone. */
     val noRc: Boolean get() = rcReceiver == RcReceiver.Absent
@@ -356,6 +360,15 @@ data class PilotStatusText(val severity: Int, val text: String, val ageMs: Long?
 
 /** The pilot's horizontal speed cap: why ([reason], e.g. `gnss-denied`, `confined-near`) and the limit [vHMps] in m/s. */
 data class SpeedCap(val reason: String, val vHMps: Float)
+
+/**
+ * The effective limits the pilot flies: [profile]'s row capped by the FC, the vehicle and the
+ * place; [vHMps] in m/s; [marginM] the obstacle margin it keeps (null or 0 when not sent).
+ */
+data class ProfileLimits(val profile: PilotProfile?, val vHMps: Float, val marginM: Float? = null)
+
+/** The stick command the pilot flew this tick; [inputAgeMs] is the age of the stick frame it flew. */
+data class StickCommand(val inputAgeMs: Long)
 
 /**
  * The pilot does not trust the horizontal position: [reason] is `flow_disagrees`,

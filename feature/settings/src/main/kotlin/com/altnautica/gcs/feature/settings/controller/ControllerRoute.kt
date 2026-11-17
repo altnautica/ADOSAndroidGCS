@@ -171,6 +171,10 @@ fun ControllerRoute(
                         onExpo = status::setExpo,
                         onRemoveAllModes = status::removeAllModes,
                     ),
+                    expo = SettingText(
+                        controls.spec.setupStrings.format("controls.expo_direct_only"),
+                        controls.spec.setupStrings.format("controls.expo_direct_only_summary"),
+                    ),
                     padding = padding,
                 )
             }
