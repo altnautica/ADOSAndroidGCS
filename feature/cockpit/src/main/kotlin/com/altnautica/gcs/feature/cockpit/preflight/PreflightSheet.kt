@@ -51,7 +51,7 @@ fun preflightItemLabel(item: PreflightItem, known: Boolean): String {
 /**
  * The pre-flight checklist: the surface checks, then the pilot's readiness items. When
  * [gating] is true an arm waits on it, and Continue (enabled once nothing blocks) lets it go.
- * A readiness item for which [fixOffered] holds carries a fix button calling [onFix].
+ * A readiness item for which [fixLabelKey] names a label carries a fix button calling [onFix].
  * Drawn in the cockpit window; place it in a full-size box.
  */
 @Composable
@@ -60,8 +60,8 @@ fun PreflightSheet(
     gating: Boolean,
     onContinue: () -> Unit,
     onDismiss: () -> Unit,
-    fixOffered: (ReadinessItem) -> Boolean = { false },
-    onFix: () -> Unit = {},
+    fixLabelKey: (ReadinessItem) -> String? = { null },
+    onFix: (ReadinessItem) -> Unit = {},
 ) {
     val colors = AdosTheme.colors
     AdosSheet(onDismiss, title = specText("flow.preflight.title")) {
@@ -81,10 +81,10 @@ fun PreflightSheet(
             }
             for (item in result.readiness) {
                 ReadinessRow(item)
-                if (fixOffered(item)) {
+                fixLabelKey(item)?.let { labelKey ->
                     AdosButton(
-                        specText(BatteryFailsafeFix.LABEL_KEY),
-                        onClick = onFix,
+                        specText(labelKey),
+                        onClick = { onFix(item) },
                         modifier = Modifier.fillMaxWidth().testTag("$PREFLIGHT_FIX_TAG:${item.id}"),
                     )
                 }

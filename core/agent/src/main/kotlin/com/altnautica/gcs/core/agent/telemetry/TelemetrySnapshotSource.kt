@@ -50,7 +50,7 @@ class TelemetrySnapshotSource @Inject constructor(
                 if (r.value.accepted) {
                     CommandResult.Accepted
                 } else {
-                    CommandResult.Rejected(r.value.ack?.result ?: -1, r.value.message ?: "rejected")
+                    CommandResult.Rejected(r.value.ack?.result ?: -1, rejectReason(r.value.message))
                 }
             is AgentResult.Err -> when (val e = r.error) {
                 is AgentError.Network -> CommandResult.Timeout
@@ -58,7 +58,7 @@ class TelemetrySnapshotSource @Inject constructor(
                 is AgentError.PinRequired -> CommandResult.Denied("pinRequired")
                 is AgentError.FeatureAbsent -> CommandResult.Unsupported
                 is AgentError.Armed -> CommandResult.Denied("armed")
-                is AgentError.Server -> CommandResult.Rejected(e.code, e.message ?: "failed")
+                is AgentError.Server -> CommandResult.Rejected(e.code, e.message?.let(::rejectReason) ?: "failed")
                 else -> CommandResult.Rejected(-1, "failed")
             }
         }
@@ -66,6 +66,18 @@ class TelemetrySnapshotSource @Inject constructor(
 
     companion object {
         const val INTERVAL_MS = 200L
+
+        private const val PILOT_REFUSED = "pilot refused "
+
+        /**
+         * The reason of a refused `/api/command`: a pilot refusal ("pilot refused launch: not_ready:airframe_balance")
+         * as its code (`not_ready:airframe_balance`), read through the spec's refusal texts; any other message as-is.
+         */
+        fun rejectReason(message: String?): String {
+            val m = message ?: return "rejected"
+            if (!m.startsWith(PILOT_REFUSED)) return m
+            return m.substringAfter(": ", "").trim().ifEmpty { m }
+        }
     }
 }
 

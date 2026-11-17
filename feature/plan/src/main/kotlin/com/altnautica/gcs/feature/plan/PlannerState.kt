@@ -125,6 +125,9 @@ sealed interface StartError {
 
     /** A confined plan the pilot has not route-checked within the read-back: nothing was armed. */
     data object RouteNotChecked : StartError
+
+    /** The onboard pilot did not take the launch into the mission: [result] is its answer. */
+    data class LaunchRefused(val result: PilotActionResult) : StartError
 }
 
 /** "Start mission" confirm sheet (slide tier). */

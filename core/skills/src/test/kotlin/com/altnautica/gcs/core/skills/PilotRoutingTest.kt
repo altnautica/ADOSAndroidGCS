@@ -367,4 +367,28 @@ class PilotRoutingTest {
         activator.activate(skill, copter, emptyMap(), SkillConfirmer { ConfirmResult.Confirmed() })
         assertTrue(skill.fired)
     }
+
+    @Test
+    fun `take-off with a pilot channel sends the supervised launch in every control mode`() = runTest {
+        for (mode in ControlMode.entries) {
+            val link = FakePilotLink()
+            val c = ctx(link, pilot = adosPilot(armed = false).copy(controlMode = mode)).copy(armed = false)
+            assertTrue("$mode: take-off enabled", builtin("takeoff").state(c).enabled)
+            assertEquals(CommandResult.Accepted, builtin("takeoff").activate(c, mapOf(SkillArgs.ALTITUDE_M to 8f)))
+            assertEquals("$mode", listOf(PilotAction(PilotAction.LAUNCH, mapOf("after" to "hold", "alt_m" to 8f))), link.actions)
+        }
+        assertTrue("nothing went straight to the flight controller", vehicle.control.sent.isEmpty())
+    }
+
+    @Test
+    fun `take-off without a pilot channel in FC control runs guided, arm and take-off on the flight controller`() = runTest {
+        val link = FakePilotLink(connected = false)
+        val c = ctx(link, pilot = adosPilot(armed = false).copy(controlMode = ControlMode.FcManual)).copy(armed = false)
+        assertEquals(CommandResult.Accepted, builtin("takeoff").activate(c, mapOf(SkillArgs.ALTITUDE_M to 8f)))
+        assertTrue(link.actions.isEmpty())
+        assertEquals(
+            listOf(VehicleCommand.SetMode(FlightMode(4, "GUIDED")), VehicleCommand.Arm(), VehicleCommand.Takeoff(8f)),
+            vehicle.control.sent,
+        )
+    }
 }

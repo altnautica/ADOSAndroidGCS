@@ -15,6 +15,9 @@ import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Vehicle
 import com.altnautica.gcs.core.model.VehicleCommand
+import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.link.mission.VehiclePilotSource
 import com.altnautica.gcs.core.model.VehicleProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -84,6 +87,7 @@ class ExtensionHandlersFactory @Inject constructor(
     private val confirm: ConfirmBroker,
     private val notifier: ExtensionNotifier,
     private val mission: ExtensionMissionPort,
+    private val pilots: VehiclePilotSource,
     @ExtensionScope private val appScope: CoroutineScope,
 ) {
     private val rates = ConcurrentHashMap<String, CommandRateLimiter>()
@@ -376,8 +380,22 @@ class ExtensionHandlersFactory @Inject constructor(
             else -> return fail("command '$command' is not permitted from extensions")
         }
         val before = vehicle() ?: return fail("command.send not supported")
+        // A take-off may arm on some transports (the agent's take-off is the pilot's launch,
+        // which arms). An extension never arms: the operator arms first, on every transport.
+        if (cmd is VehicleCommand.Takeoff && before.telemetry.heartbeat.value?.armed != true) return fail("Arm first")
         approve(pluginId, before, "Extension command", "$pluginId wants to send \"$command\" to ${node.value}", rate, vehicle)
             ?.let { return fail(it) }
+        // With a live onboard pilot, a take-off is its supervised launch, holding where it climbed.
+        if (cmd is VehicleCommand.Takeoff && pilots.read(node).let { it.present && it.fresh }) {
+            val answer = pilots.action(node, PilotAction.launch(PilotAction.AFTER_HOLD, cmd.altM))
+            if (answer != PilotActionResult.Accepted) {
+                notifier.post(pluginId, "approved \"$command\" for ${node.value} was not taken by the pilot ($answer)", NoticeLevel.Error)
+            }
+            return buildJsonObject {
+                put("ok", answer == PilotActionResult.Accepted)
+                put("result", answer.toString())
+            }
+        }
         return when (val result = before.control.run(cmd)) {
             CommandResult.Accepted -> buildJsonObject {
                 put("ok", true)

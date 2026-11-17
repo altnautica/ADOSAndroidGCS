@@ -7,6 +7,8 @@ import com.altnautica.gcs.core.model.HandoverGate
 import com.altnautica.gcs.core.model.InputSession
 import com.altnautica.gcs.core.model.LaunchSequence
 import com.altnautica.gcs.core.model.LaunchStep
+import com.altnautica.gcs.core.model.Liftoff
+import com.altnautica.gcs.core.model.LiftoffPhase
 import com.altnautica.gcs.core.model.MissionGap
 import com.altnautica.gcs.core.model.MissionStall
 import com.altnautica.gcs.core.model.MissionStallKind
@@ -150,7 +152,11 @@ object PilotWire {
             },
             sequence = (data["sequence"] as? JsonObject)?.let { s ->
                 val step = LaunchStep.of(s.str("step")) ?: return@let null
-                LaunchSequence(step, s.str("after"), s.str("error"))
+                val liftoff = (s["liftoff"] as? JsonObject)?.let { l ->
+                    val phase = LiftoffPhase.of(l.str("phase")) ?: return@let null
+                    Liftoff(phase, l.str("text"), l.str("trim"), l.float("tilt_deg"), l.str("detail")?.takeIf { it.isNotBlank() })
+                }
+                LaunchSequence(step, s.str("after"), s.str("error"), liftoff)
             },
             banner = (data["banner"] as? JsonObject)?.let { b ->
                 val key = b.str("text_key") ?: return@let null

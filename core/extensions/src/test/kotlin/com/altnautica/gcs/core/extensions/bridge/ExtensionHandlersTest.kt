@@ -18,6 +18,11 @@ import com.altnautica.gcs.core.model.HeartbeatState
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Vehicle
 import com.altnautica.gcs.core.model.VehicleCommand
+import com.altnautica.gcs.core.link.mission.PilotPlanView
+import com.altnautica.gcs.core.link.mission.VehiclePilotSource
+import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.PilotActionResult
+import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.model.VehicleControl
 import com.altnautica.gcs.core.model.VehicleProvider
 import com.altnautica.gcs.core.model.VehicleTelemetry
@@ -65,6 +70,20 @@ class ExtensionHandlersTest {
     private val confirm = ConfirmBroker()
     private val bus = ExtensionEventBus()
 
+    /** The vehicle's onboard pilot: present or not, and the actions sent to it. */
+    private var pilotPresent = false
+    private var pilotAgeMs: Long? = 0
+    private val pilotActions = mutableListOf<PilotAction>()
+    private val pilots = object : VehiclePilotSource {
+        override fun observe(id: DeviceId) = flowOf(PilotPlanView(ageMs = pilotAgeMs, present = pilotPresent))
+        override suspend fun read(id: DeviceId) = PilotPlanView(ageMs = pilotAgeMs, present = pilotPresent)
+        override suspend fun setPlaceClass(id: DeviceId, placeClass: PlaceClass) = PilotActionResult.Unavailable
+        override suspend fun action(id: DeviceId, action: PilotAction): PilotActionResult {
+            pilotActions += action
+            return PilotActionResult.Accepted
+        }
+    }
+
     private fun TestScope.factory(reaches: List<Reach> = listOf(Reach.Lan)): ExtensionHandlersFactory {
         val repo = repository(api, FakeNodeSource(listOf(summary(reaches))), backgroundScope)
         val mission = mockk<ExtensionMissionPort>()
@@ -81,6 +100,7 @@ class ExtensionHandlersTest {
             confirm = confirm,
             notifier = notifier,
             mission = mission,
+            pilots = pilots,
             appScope = backgroundScope,
         )
     }
@@ -115,6 +135,57 @@ class ExtensionHandlersTest {
         approved.join()
         assertEquals(listOf<VehicleCommand>(VehicleCommand.Takeoff(120f)), commands)
         assertEquals("true", result!!.jsonObject["ok"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun takeoffWithAnOnboardPilotIsItsSupervisedLaunch() = runTest {
+        pilotPresent = true
+        val h = factory().create("com.example.ext", NODE, "m1")
+        runCurrent()
+        var result: JsonElement? = null
+        val job = backgroundScope.launch { result = h.call("command.send", """{"command":"takeoff","args":{"alt":6}}""") }
+        runCurrent()
+        confirm.answer(confirm.pending.value.single().id, true)
+        runCurrent()
+        job.join()
+        assertEquals(listOf(PilotAction(PilotAction.LAUNCH, mapOf("after" to "hold", "alt_m" to 6f))), pilotActions)
+        assertTrue("nothing went straight to the flight controller", commands.isEmpty())
+        assertEquals("true", result!!.jsonObject["ok"]!!.jsonPrimitive.content)
+    }
+
+    private fun TestScope.approvedTakeoff() {
+        val h = factory().create("com.example.ext", NODE, "m1")
+        runCurrent()
+        val job = backgroundScope.launch { h.call("command.send", """{"command":"takeoff","args":{"alt":6}}""") }
+        runCurrent()
+        confirm.answer(confirm.pending.value.single().id, true)
+        runCurrent()
+        check(job.isCompleted)
+    }
+
+    @Test
+    fun takeoffWithAStalePilotGoesToTheFlightController() = runTest {
+        pilotPresent = true
+        pilotAgeMs = 30_000
+        approvedTakeoff()
+        assertTrue("a stopped pilot gets no launch", pilotActions.isEmpty())
+        assertEquals(listOf<VehicleCommand>(VehicleCommand.Takeoff(6f)), commands)
+    }
+
+    @Test
+    fun takeoffWhileNotKnownArmedIsRefusedOnEveryTransport() = runTest {
+        pilotPresent = true
+        for (armed in listOf<Boolean?>(false, null)) {
+            heartbeat.value = armed?.let { HeartbeatState(it, FlightMode(4, "GUIDED"), 2, 3, 0) }
+            val h = factory().create("com.example.ext", NODE, "m1")
+            runCurrent()
+            val result = h.call("command.send", """{"command":"takeoff","args":{"alt":6}}""")!!.jsonObject
+            assertEquals("false", result["ok"]!!.jsonPrimitive.content)
+            assertEquals("Arm first", result["error"]!!.jsonPrimitive.content)
+            assertTrue("no prompt for a refused take-off", confirm.pending.value.isEmpty())
+        }
+        assertTrue("an extension never arms through the pilot", pilotActions.isEmpty())
+        assertTrue("nothing reaches any transport", commands.isEmpty())
     }
 
     @Test

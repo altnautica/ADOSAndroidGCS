@@ -214,6 +214,10 @@ internal class PlannerHarness {
     private var lagged = com.altnautica.gcs.core.link.mission.PilotPlanView.None
     private var lagLeft = 0
 
+    /** Pilot actions the planner sent, and the answer each gets. */
+    val pilotActions = mutableListOf<com.altnautica.gcs.core.model.PilotAction>()
+    var actionAnswer: com.altnautica.gcs.core.model.PilotActionResult = com.altnautica.gcs.core.model.PilotActionResult.Accepted
+
     private val pilotSource = object : com.altnautica.gcs.core.link.mission.VehiclePilotSource {
         override fun observe(id: DeviceId) = pilot
         override suspend fun read(id: DeviceId) = if (lagLeft > 0) lagged.also { lagLeft-- } else pilot.value
@@ -228,6 +232,11 @@ internal class PlannerHarness {
                 pilot.value = pilot.value.copy(placeClass = placeClass, routeCheck = rc, tsMs = (pilot.value.tsMs ?: 0L) + 100)
             }
             return placeClassAnswer
+        }
+
+        override suspend fun action(id: DeviceId, action: com.altnautica.gcs.core.model.PilotAction): com.altnautica.gcs.core.model.PilotActionResult {
+            pilotActions += action
+            return actionAnswer
         }
     }
 

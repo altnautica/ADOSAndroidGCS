@@ -125,12 +125,15 @@ fun SkillContext.routesToPilot(): Boolean = pilotLink != null && pilot?.controlM
 internal val RECOVERY_BUILTINS = setOf(BuiltinIds.PAUSE, BuiltinIds.RTH, BuiltinIds.LAND, BuiltinIds.KILL)
 
 /**
- * Where built-in [id] goes. In ADOS Pilot control it goes to the onboard pilot; a
- * recovery action (pause, return, land, kill) goes to the pilot only while its state is
- * fresh. A channel kept up by keepalives alone, or a stale one, sends it to the flight
- * controller's command path instead, so it never waits on a pilot that stopped answering.
+ * Where built-in [id] goes. Take-off goes to the onboard pilot whenever its channel is up, in
+ * any control mode: the pilot runs the supervised lift-off. Otherwise, in ADOS Pilot control
+ * it goes to the onboard pilot; a recovery action (pause, return, land, kill) goes to the
+ * pilot only while its state is fresh. A channel kept up by keepalives alone, or a stale one,
+ * sends it to the flight controller's command path instead, so it never waits on a pilot that
+ * stopped answering.
  */
 internal fun SkillContext.builtinRoutesToPilot(id: String): Boolean {
+    if (id == BuiltinIds.TAKEOFF) return pilotLink?.connected?.value == true || routesToPilot()
     if (!routesToPilot()) return false
     return id !in RECOVERY_BUILTINS || pilotLink?.stateFresh == true
 }
@@ -376,9 +379,10 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
         // A second recovery press while the first still waits on the pilot goes to the FC at once.
         val escalate = recovery && link != null && link in pendingRecovery
         if (!escalate && ctx.builtinRoutesToPilot(spec.id)) {
-            val pilotArgs = if (spec.id == BuiltinIds.TAKEOFF) mapOf(PILOT_ARG_ALT_M to takeoffAltitude(args)) else emptyMap()
-            if (!recovery || link == null) return ctx.sendPilot(PilotAction(spec.pilotAction, pilotArgs))
-            val action = PilotAction(spec.pilotAction, pilotArgs)
+            // Take-off is the pilot's supervised launch, holding where it climbed.
+            if (spec.id == BuiltinIds.TAKEOFF) return ctx.sendPilot(PilotAction.launch(PilotAction.AFTER_HOLD, takeoffAltitude(args)))
+            if (!recovery || link == null) return ctx.sendPilot(PilotAction(spec.pilotAction))
+            val action = PilotAction(spec.pilotAction)
             // Every recovery press supersedes the commands before it on this link: an older press
             // still waiting on the pilot never runs after a newer one went out.
             val generation = CommandOrder.supersede(link) { link.action(action) }
@@ -463,7 +467,6 @@ class TableBuiltinSkill(val spec: BuiltinSpec) : BuiltinSkill(
 
     private companion object {
         const val GUIDED = "GUIDED"
-        const val PILOT_ARG_ALT_M = "alt_m"
 
         /** Pilot links with a recovery action still waiting on the pilot's answer. */
         val pendingRecovery: MutableSet<PilotLink> = ConcurrentHashMap.newKeySet()

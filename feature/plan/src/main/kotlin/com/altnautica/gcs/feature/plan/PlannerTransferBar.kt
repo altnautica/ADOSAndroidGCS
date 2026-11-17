@@ -235,6 +235,7 @@ internal fun StartMissionSheetView(sheet: StartMissionSheet, actions: PlannerAct
                 is StartError.PlaceClassNotSet -> stringResource(R.string.plan_start_error_place_unconfirmed, classLabel(error.reported))
                 StartError.RouteInfeasible -> refusal("route_infeasible")
                 StartError.RouteNotChecked -> stringResource(R.string.plan_start_error_route_unchecked)
+                is StartError.LaunchRefused -> stringResource(R.string.plan_start_error_launch, refusal(placeClassRefusalCode(error.result)))
             }
             StatusChip(level = StatusLevel.Error, label = text)
         }

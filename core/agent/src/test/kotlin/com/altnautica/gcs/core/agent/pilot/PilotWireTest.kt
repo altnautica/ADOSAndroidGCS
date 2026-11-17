@@ -409,6 +409,25 @@ class PilotWireTest {
         )
     }
 
+    @Test
+    fun `the launch sequence carries the steady take-off`() {
+        val text = """{"owner":"idle","armed":true,"landed":true,"sequence":{"step":"takeoff","after":"hold","error":null,
+            |"liftoff":{"phase":"level","text":"Setting trim","trim":"learned","tilt_deg":1.5}}}""".trimMargin()
+        val s = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(text) as JsonObject, 0L)).sequence!!
+        assertEquals(com.altnautica.gcs.core.model.Liftoff(com.altnautica.gcs.core.model.LiftoffPhase.Level, "Setting trim", "learned", 1.5f, null), s.liftoff)
+
+        val stopped = """{"owner":"idle","armed":false,"landed":true,"sequence":{"step":"takeoff","after":"hold","error":"liftoff_tipping",
+            |"liftoff":{"phase":"stopped","text":"Take-off stopped","detail":"The drone started to tip. Motors off.","trim":"probe","tilt_deg":null}}}""".trimMargin()
+        val l = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(stopped) as JsonObject, 0L)).sequence!!.liftoff!!
+        assertEquals(com.altnautica.gcs.core.model.LiftoffPhase.Stopped, l.phase)
+        assertEquals("Take-off stopped", l.text)
+        assertEquals("The drone started to tip. Motors off.", l.detail)
+        assertNull(l.tiltDeg)
+
+        val unknown = """{"owner":"idle","armed":true,"landed":true,"sequence":{"step":"takeoff","after":"hold","liftoff":{"phase":"hover"}}}"""
+        assertNull(checkNotNull(PilotWire.parseState(Json.parseToJsonElement(unknown) as JsonObject, 0L)).sequence!!.liftoff)
+    }
+
     private companion object {
         const val SID = "0123456789abcdef0123456789abcdef"
     }
