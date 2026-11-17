@@ -29,6 +29,8 @@ import com.altnautica.gcs.core.skills.SkillRegistry
 import com.altnautica.gcs.core.skills.SkillSessionFactory
 import com.altnautica.gcs.core.skills.binding.BindingStore
 import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
+import com.altnautica.gcs.core.skills.cockpit.NotificationControls
+import com.altnautica.gcs.core.skills.cockpit.StopControls
 import com.altnautica.gcs.core.skills.controls.ControlsRepository
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.GamepadAxes
@@ -70,7 +72,7 @@ internal fun FakeVehicle.heartbeatAt(now: Long, armed: Boolean, mode: String = "
 /**
  * A cockpit for [vehicle] on the test scheduler with in-memory collaborators, its
  * screen-only flows kept hot like a visible cockpit. The caller sets the main dispatcher.
- * Without [videoSessions] no source can play.
+ * Without [videoSessions] no source can play; without [stopControls] the link notification is unreachable.
  */
 internal fun TestScope.testCockpitVm(
     vehicle: com.altnautica.gcs.core.model.Vehicle,
@@ -79,6 +81,7 @@ internal fun TestScope.testCockpitVm(
     videoSelector: VideoSourceSelector = VideoSourceSelector(emptySet()),
     videoSessions: VideoSessionManager = mockk<VideoSessionManager>(relaxed = true) { every { canPlay(any()) } returns false },
     router: AdosInputRouter = testRouter(),
+    stopControls: StopControls = StopControls(FakeNotificationControls()),
 ): CockpitViewModel {
     val clock = MonotonicClock { testScheduler.currentTime }
     val dataStore = MemoryPreferences()
@@ -121,6 +124,7 @@ internal fun TestScope.testCockpitVm(
         spec = testSpec,
         controls = ControlsRepository(dataStore, testSpec, flowOf(emptyList())),
         missionMirror = com.altnautica.gcs.core.link.mission.MissionMirrorSource { MutableStateFlow(null) },
+        stopControls = stopControls,
     )
     listOf(
         vm.status, vm.chip, vm.band, vm.flightValues, vm.minimap, vm.statusItems, vm.preflight, vm.alerts,
@@ -137,6 +141,16 @@ internal fun testRouter(): AdosInputRouter = mockk<AdosInputRouter>(relaxed = tr
     every { gamepadConnected } returns MutableStateFlow(false)
     every { events } returns MutableSharedFlow<InputEvent>(extraBufferCapacity = 16)
     every { snapshot } returns MutableStateFlow(PadSnapshot.Neutral)
+}
+
+/** The link notification as a stop control, reachable ([canReach]) and hidden on the lock screen ([hidden]) as a test sets them. */
+internal class FakeNotificationControls(
+    @Volatile var canReach: Boolean = false,
+    @Volatile var hidden: Boolean = false,
+) : NotificationControls {
+    override fun reachable() = canReach
+
+    override fun lockScreenHidden() = hidden
 }
 
 /**

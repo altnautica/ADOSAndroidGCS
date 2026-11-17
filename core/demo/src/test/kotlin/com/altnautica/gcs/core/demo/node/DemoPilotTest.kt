@@ -8,6 +8,7 @@ import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.GUIDED
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.SET_MODE
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.TAKEOFF
 import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RcReceiver
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
 import com.altnautica.gcs.core.model.SpeedCap
@@ -123,6 +124,20 @@ class DemoPilotTest {
         fly(500)
         assertEquals("armed", action("place_class:open").str("err"))
         assertEquals("confined", state().str("place_class"))
+    }
+
+    @Test
+    fun `no RC is declared on the ground in an open place, keeps the vehicle in ADOS control, and shows on the live frame`() {
+        assertEquals(null, state()["rc_receiver"])
+        action("place_class:confined")
+        assertEquals("confined", action("rc_receiver:absent").str("err"))
+        action("place_class:open")
+        assertEquals(true, action("rc_receiver:absent")["ok"]!!.jsonPrimitive.boolean)
+        assertEquals(RcReceiver.Absent, PilotWire.parseState(state(), 0L)!!.rcReceiver)
+        assertEquals("rc_receiver_absent", action("control_mode:fc_manual").str("err"))
+        assertEquals("rc_receiver_absent", action("place_class:confined").str("err"))
+        assertEquals(true, action("rc_receiver:present")["ok"]!!.jsonPrimitive.boolean)
+        assertEquals(null, state()["rc_receiver"])
     }
 
     @Test

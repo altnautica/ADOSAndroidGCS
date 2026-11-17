@@ -112,4 +112,38 @@ class PilotChannelTest {
         assertEquals(false, ch.state.value?.armed)
         ch.stop()
     }
+
+    @Test
+    fun `a deliberate leave says bye on the socket before the channel stops`() = runTest {
+        val sent = mutableListOf<String>()
+        val ch = PilotChannel(backgroundScope, MonotonicClock { testScheduler.currentTime }, sid = SID) { outgoing ->
+            flow {
+                emit("""{"kind":"keepalive","ts_ms":1}""")
+                outgoing.collect { sent += it }
+            }
+        }
+        ch.start()
+        runCurrent()
+        assertTrue(ch.connected.value)
+        ch.leave()
+        assertEquals("""{"op":"bye","src":"android","sid":"$SID"}""", sent.last())
+        assertFalse("the channel stopped", ch.connected.value)
+    }
+
+    @Test
+    fun `a leave on a down link sends nothing and still stops`() = runTest {
+        val sent = mutableListOf<String>()
+        val ch = PilotChannel(backgroundScope, MonotonicClock { testScheduler.currentTime }) { outgoing ->
+            flow<String> { outgoing.collect { sent += it } }
+        }
+        ch.start()
+        runCurrent()
+        ch.leave()
+        assertTrue(sent.isEmpty())
+        assertFalse(ch.connected.value)
+    }
+
+    private companion object {
+        const val SID = "0123456789abcdef0123456789abcdef"
+    }
 }

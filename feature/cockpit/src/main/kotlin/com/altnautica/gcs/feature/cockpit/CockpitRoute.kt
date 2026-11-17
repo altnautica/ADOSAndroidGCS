@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,8 +88,10 @@ fun CockpitRoute(
     val snackbar = remember { SnackbarHostState() }
     val toastScope = androidx.compose.runtime.rememberCoroutineScope()
 
+    // Armed, or with no RC declared and not known disarmed: leaving asks first; with no RC it names the link-loss action.
     fun guardLeave(proceed: () -> Unit) {
-        if (vm.vehicle.value?.telemetry?.heartbeat?.value?.armed == true) pendingLeave = proceed else proceed()
+        val armed = vm.vehicle.value?.telemetry?.heartbeat?.value?.armed == true
+        if (armed || vm.noRc.text.leave(vm.pilotState.value) != null) pendingLeave = proceed else proceed()
     }
 
     fun requestExit() = guardLeave { currentExit() }
@@ -103,6 +106,11 @@ fun CockpitRoute(
     LifecycleStartEffect(vm) {
         vm.setFlightViewShown(true)
         onStopOrDispose { vm.setFlightViewShown(false) }
+    }
+    // While resumed, the cockpit's own Pause (brake) is a reachable stop control: with no RC the heartbeat may flow.
+    LifecycleResumeEffect(vm) {
+        vm.pilot.resumed = true
+        onPauseOrDispose { vm.pilot.resumed = false }
     }
 
     KeepScreenOn()
@@ -195,6 +203,7 @@ fun CockpitRoute(
             pendingLeave?.let { leave ->
                 CompositionLocalProvider(LocalCockpitStrings provides vm.specStrings) {
                     LeaveArmedSheet(
+                        noRcMessage = vm.noRc.text.leave(vm.pilotState.value),
                         onStay = { pendingLeave = null },
                         onLeave = {
                             pendingLeave = null

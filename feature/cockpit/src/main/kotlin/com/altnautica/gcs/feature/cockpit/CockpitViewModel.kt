@@ -173,6 +173,7 @@ class CockpitViewModel @AssistedInject constructor(
     private val spec: CockpitSpecRepository,
     private val controls: ControlsRepository,
     missionMirror: MissionMirrorSource,
+    stopControls: com.altnautica.gcs.core.skills.cockpit.StopControls,
     @com.altnautica.gcs.feature.cockpit.di.CockpitWork work: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
 ) : ViewModel() {
 
@@ -221,9 +222,7 @@ class CockpitViewModel @AssistedInject constructor(
     val maxBrightness: StateFlow<Boolean> = combine(_maxBrightness, settings) { override, s -> override ?: s.maxBrightnessDefault }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
 
-    fun setMaxBrightness(on: Boolean) {
-        _maxBrightness.value = on
-    }
+    fun setMaxBrightness(on: Boolean) { _maxBrightness.value = on }
 
     fun setAltitudeReference(ref: AltitudeReference) = viewModelScope.launch { settingsRepo.setAltitudeReference(ref) }
 
@@ -304,7 +303,7 @@ class CockpitViewModel @AssistedInject constructor(
     private suspend fun autonomyApi(id: DeviceId): AutonomyFeedApi? =
         localApis.firstNotNullOfOrNull { it.autonomy(id) } ?: extensions.api(id)
 
-    internal val pilot = CockpitPilot(viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot, vehicle.flatMapLatest { it?.reach ?: flowOf(null) }, work)
+    internal val pilot = CockpitPilot(viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot, vehicle.flatMapLatest { it?.reach ?: flowOf(null) }, work, stopControls.notification::reachable)
 
     /** The onboard pilot's state, or null for a vehicle without one. */
     val pilotState: StateFlow<PilotState?> = pilot.state
@@ -498,6 +497,9 @@ class CockpitViewModel @AssistedInject constructor(
     /** The on-screen sticks; they stream only while a finger holds a pad. */
     val onScreenSticks = OnScreenSticks()
 
+    /** Flying with no RC transmitter: the posture's flows, and the link notification's Pause, Land and Return, which run here as a held press. */
+    internal val noRc = com.altnautica.gcs.feature.cockpit.pilot.CockpitNoRc(viewModelScope, stopControls, specText, pilot.state, onScreenSticksEnabled) { activate(it, mapOf(ARG_HELD to true)) }
+
     private fun streamPad(): PadSnapshot {
         val screen = onScreenSticks.snapshot(clock.nowMs())
         return if (screen.deviceId != null) screen else router.snapshot.value
@@ -626,16 +628,14 @@ class CockpitViewModel @AssistedInject constructor(
     private val widthClass = MutableStateFlow<WidthClass?>(null)
 
     /** The screen's width class, which decides whether the on-screen sticks show. */
-    fun setWidthClass(width: WidthClass) {
-        widthClass.value = width
-    }
+    fun setWidthClass(width: WidthClass) { widthClass.value = width }
 
     init {
         viewModelScope.launch { autonomy.feed.pilot.collect { navPilot.value = it } }
         viewModelScope.launch {
             // On-screen sticks shown at this width fly as well as a pad; an equal context re-evaluates nothing.
-            combine(pilot.state, router.gamepadConnected, onScreenSticksEnabled, widthClass, autonomy.navChip) { p, pad, on, w, nav ->
-                PreflightContext.of(p, sticksAvailable(pad, on, w, spec.layout.onScreenSticks.classes), nav)
+            combine(pilot.state, router.gamepadConnected, noRc.sticksEnabled, widthClass, autonomy.navChip) { p, pad, on, w, nav ->
+                PreflightContext.of(p, sticksAvailable(pad, on, w, spec.layout.onScreenSticks.classes), nav, noRc.lockScreenItem(p))
             }.collect { preflightContext.value = it }
         }
     }

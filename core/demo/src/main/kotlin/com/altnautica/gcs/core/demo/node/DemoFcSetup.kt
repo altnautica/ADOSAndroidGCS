@@ -149,6 +149,10 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
                     s.done(mapOf("applied" to profileRows(), "absent" to JsonArray(emptyList())))
                     finished(s)
                 }
+                "ados_intro" -> INTRO_MODES[action]?.let { mode ->
+                    s.done(mapOf("control_mode" to JsonPrimitive(mode)))
+                    finished(s)
+                }
                 else -> if (action == "start") timed(s)
             }
         }
@@ -187,6 +191,12 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
             "ados_profile" -> {
                 s.args["params"] = profileRows()
                 s.waitUser(primary(APPLY))
+            }
+            // The pilot choice as the engine offers it; the demo vehicle has an RC receiver.
+            "ados_intro" -> {
+                s.args["fallback_mode"] = JsonPrimitive("elrs")
+                s.args["rc_present"] = JsonPrimitive(true)
+                s.waitUser(primary("use_ados"), secondary("use_ados_no_rc"), secondary("keep_fc"))
             }
             else -> s.waitUser(primary("start"), secondary("skip"))
         }
@@ -409,6 +419,9 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
         const val WIZARD_GROUND = "ground"
         const val WIZARD_AIR = "air"
         const val APPLY = "apply"
+
+        /** The control mode each `ados_intro` choice sets (the demo vehicle has an RC receiver). */
+        val INTRO_MODES = mapOf("use_ados" to "ados", "use_ados_no_rc" to "ados", "keep_fc" to "elrs")
 
         /** The ArduCopter failsafe profile the `ados_profile` step writes on apply. */
         val COPTER_PROFILE = listOf(

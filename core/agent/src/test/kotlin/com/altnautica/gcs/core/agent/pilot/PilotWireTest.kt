@@ -17,6 +17,7 @@ import com.altnautica.gcs.core.model.PilotSkillRef
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RcReceiver
 import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
@@ -334,35 +335,61 @@ class PilotWireTest {
     }
 
     @Test
+    fun `the rc declaration and the link-loss window parse, a pilot without them reads present`() {
+        val absent = """{"owner":"pilot","rc_receiver":"absent","link_loss_s":12}"""
+        val a = checkNotNull(PilotWire.parseState(Json.parseToJsonElement(absent) as JsonObject, 0L))
+        assertEquals(RcReceiver.Absent, a.rcReceiver)
+        assertTrue(a.noRc)
+        assertEquals(12f, a.linkLossS)
+        val bare = checkNotNull(PilotWire.parseState(data, 0L))
+        assertEquals(RcReceiver.Present, bare.rcReceiver)
+        assertFalse(bare.noRc)
+        assertNull(bare.linkLossS)
+        val odd = """{"owner":"pilot","rc_receiver":"maybe"}"""
+        assertEquals(RcReceiver.Present, checkNotNull(PilotWire.parseState(Json.parseToJsonElement(odd) as JsonObject, 0L)).rcReceiver)
+    }
+
+    @Test
+    fun `the process instance id is 32 lowercase hex and fresh ids differ`() {
+        assertTrue(Regex("[0-9a-f]{32}").matches(PilotWire.PROCESS_SID))
+        assertTrue(PilotWire.newSid() != PilotWire.newSid())
+    }
+
+    @Test
     fun `the place class action encodes by name and value`() {
         assertEquals(
-            """{"op":"action","name":"place_class:confined","src":"android"}""",
-            PilotWire.action(PilotAction.placeClass(PlaceClass.Confined), "android", null),
+            """{"op":"action","name":"place_class:confined","src":"android","sid":"$SID"}""",
+            PilotWire.action(PilotAction.placeClass(PlaceClass.Confined), "android", SID, null),
         )
     }
 
     @Test
     fun `the waypoint skip action encodes by name`() {
-        assertEquals("""{"op":"action","name":"mission_skip","src":"android"}""", PilotWire.action(PilotAction(PilotAction.MISSION_SKIP), "android", null))
+        assertEquals("""{"op":"action","name":"mission_skip","src":"android","sid":"$SID"}""", PilotWire.action(PilotAction(PilotAction.MISSION_SKIP), "android", SID, null))
     }
 
     @Test
     fun `client frames encode the pilot wire`() {
         assertEquals(
-            """{"op":"input","src":"android","session":7,"seq":12,"t_ms":3400,"axes":[0.25,-1.0,0.0,0.5],"buttons":65537}""",
-            PilotWire.input("android", 7, 12, 3400, PilotInput(0.25f, -1f, 0f, 0.5f, 65537)),
+            """{"op":"input","src":"android","sid":"$SID","session":7,"seq":12,"t_ms":3400,"axes":[0.25,-1.0,0.0,0.5],"buttons":65537}""",
+            PilotWire.input("android", SID, 7, 12, 3400, PilotInput(0.25f, -1f, 0f, 0.5f, 65537)),
         )
-        assertEquals("""{"op":"release","src":"android","session":7}""", PilotWire.release("android", 7))
-        assertEquals("""{"op":"session.take","src":"android","session":8}""", PilotWire.sessionTake("android", 8))
-        assertEquals("""{"op":"hb","src":"android"}""", PilotWire.hb("android"))
-        assertEquals("""{"op":"action","name":"pause","src":"android"}""", PilotWire.action(PilotAction(PilotAction.PAUSE), "android", null))
+        assertEquals("""{"op":"release","src":"android","sid":"$SID","session":7}""", PilotWire.release("android", SID, 7))
+        assertEquals("""{"op":"session.take","src":"android","sid":"$SID","session":8}""", PilotWire.sessionTake("android", SID, 8))
+        assertEquals("""{"op":"hb","src":"android","sid":"$SID"}""", PilotWire.hb("android", SID))
+        assertEquals("""{"op":"bye","src":"android","sid":"$SID"}""", PilotWire.bye("android", SID))
+        assertEquals("""{"op":"action","name":"pause","src":"android","sid":"$SID"}""", PilotWire.action(PilotAction(PilotAction.PAUSE), "android", SID, null))
         assertEquals(
-            """{"op":"action","name":"hand_to_fc","src":"android","args":{"mode":"loiter"},"id":"3"}""",
-            PilotWire.action(PilotAction(PilotAction.HAND_TO_FC, mapOf("mode" to "loiter")), "android", "3"),
+            """{"op":"action","name":"hand_to_fc","src":"android","sid":"$SID","args":{"mode":"loiter"},"id":"3"}""",
+            PilotWire.action(PilotAction(PilotAction.HAND_TO_FC, mapOf("mode" to "loiter")), "android", SID, "3"),
         )
         assertEquals(
-            """{"op":"action","name":"launch","src":"android","args":{"after":"goto","goto":{"n":1.5,"e":-2,"d":-3},"alt_m":3}}""",
-            PilotWire.action(PilotAction(PilotAction.LAUNCH, mapOf("after" to "goto", "goto" to mapOf("n" to 1.5, "e" to -2, "d" to -3), "alt_m" to 3)), "android", null),
+            """{"op":"action","name":"launch","src":"android","sid":"$SID","args":{"after":"goto","goto":{"n":1.5,"e":-2,"d":-3},"alt_m":3}}""",
+            PilotWire.action(PilotAction(PilotAction.LAUNCH, mapOf("after" to "goto", "goto" to mapOf("n" to 1.5, "e" to -2, "d" to -3), "alt_m" to 3)), "android", SID, null),
         )
+    }
+
+    private companion object {
+        const val SID = "0123456789abcdef0123456789abcdef"
     }
 }

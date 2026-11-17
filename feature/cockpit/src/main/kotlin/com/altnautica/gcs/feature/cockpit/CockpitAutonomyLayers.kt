@@ -124,7 +124,7 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
     }
 }
 
-/** The nav-source chip for the safety band (item 6), and the "Confined" chip beside it while the confined profile flies. */
+/** The nav-source chip for the safety band (item 6), and the "Confined" and "No RC" chips beside it while those postures fly. */
 @Composable
 internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
     val chip by vm.autonomy.navChip.collectAsStateWithLifecycle()
@@ -132,6 +132,7 @@ internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         NavSourceChip(chip, inputs, compact = width == WidthClass.Compact, onUseSet = vm.autonomy::useSourceSet)
         ConfinedChipSlot(vm)
+        NoRcChipSlot(vm)
     }
 }
 
@@ -233,6 +234,8 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                         .let { m -> if (panelWidth != Dp.Unspecified) m.widthIn(min = panelWidth) else m },
                 )
             }
+            // With no RC, the strip names what stops the drone and what a lost link does.
+            NoRcStrip(vm)
         }
         if (!followingMode) return@BoxWithConstraints
         val belly = video.streams.firstOrNull { it.role == CockpitAutonomy.ROLE_DOWN && it.live }

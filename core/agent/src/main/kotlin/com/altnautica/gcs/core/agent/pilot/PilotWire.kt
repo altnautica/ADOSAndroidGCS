@@ -24,6 +24,7 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.PositionUnverified
 import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.RcReceiver
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import com.altnautica.gcs.core.model.RouteCheck
@@ -42,6 +43,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import java.security.SecureRandom
 
 /** One server frame of the pilot WebSocket (`/api/v1/pilot/stream`). */
 sealed interface PilotFrame {
@@ -63,6 +65,20 @@ sealed interface PilotFrame {
 object PilotWire {
     /** Input source name this app reports. */
     const val SRC_ANDROID = "android"
+
+    /**
+     * This app process's instance id (`sid`, 32 lowercase hex), on every client frame. The pilot
+     * watches each instance's link on its own; a reconnect keeps the id, so it continues the same watch.
+     */
+    val PROCESS_SID: String = newSid()
+
+    /** A random instance id: 128 bits as 32 lowercase hex digits. */
+    fun newSid(): String {
+        val bytes = ByteArray(SID_BYTES).also(SecureRandom()::nextBytes)
+        return bytes.joinToString("") { "%02x".format(it.toInt() and 0xFF) }
+    }
+
+    private const val SID_BYTES = 16
 
     /** WebSocket path of the pilot channel (needs a [TICKET_SCOPE] ticket). */
     const val STREAM_WS_PATH = "api/v1/pilot/stream"
@@ -168,6 +184,9 @@ object PilotWire {
             // Absent on a pilot without the confined profile: open.
             placeClass = PlaceClass.of(data.str("place_class")) ?: PlaceClass.Open,
             routeCheck = (data["route_check"] as? JsonObject)?.let(::routeCheck),
+            // Absent on a pilot without the declaration: an RC transmitter flies with the vehicle.
+            rcReceiver = RcReceiver.of(data.str("rc_receiver")) ?: RcReceiver.Present,
+            linkLossS = data.float("link_loss_s"),
         )
     }
 
@@ -243,10 +262,11 @@ object PilotWire {
         )
     }
 
-    /** `{op:"input", src, session, seq, t_ms, axes:[roll,pitch,thr,yaw], buttons}`. */
-    fun input(src: String, session: Long, seq: Long, tMs: Long, frame: PilotInput): String = buildJsonObject {
+    /** `{op:"input", src, sid, session, seq, t_ms, axes:[roll,pitch,thr,yaw], buttons}`. */
+    fun input(src: String, sid: String, session: Long, seq: Long, tMs: Long, frame: PilotInput): String = buildJsonObject {
         put("op", "input")
         put("src", src)
+        put("sid", sid)
         put("session", session)
         put("seq", seq)
         put("t_ms", tMs)
@@ -262,30 +282,38 @@ object PilotWire {
         put("buttons", frame.buttons)
     }.toString()
 
-    /** `{op:"release", src, session}`: the pilot brakes to a hold. */
-    fun release(src: String, session: Long): String = srcSession("release", src, session)
+    /** `{op:"release", src, sid, session}`: the pilot brakes to a hold. */
+    fun release(src: String, sid: String, session: Long): String = srcSession("release", src, sid, session)
 
-    /** `{op:"session.take", src, session}`: takes the stick session from another surface. */
-    fun sessionTake(src: String, session: Long): String = srcSession("session.take", src, session)
+    /** `{op:"session.take", src, sid, session}`: takes the stick session from another surface. */
+    fun sessionTake(src: String, sid: String, session: Long): String = srcSession("session.take", src, sid, session)
 
-    /** `{op:"hb", src}`: keeps the link-loss timer alive while no input streams. */
-    fun hb(src: String): String = buildJsonObject {
-        put("op", "hb")
-        put("src", src)
-    }.toString()
+    /** `{op:"hb", src, sid}`: keeps this instance's link-loss timer alive while no input streams. */
+    fun hb(src: String, sid: String): String = srcSid("hb", src, sid)
 
-    /** `{op:"action", name, src, args?, id?}`. */
-    fun action(action: PilotAction, src: String, id: String?): String = buildJsonObject {
+    /** `{op:"bye", src, sid}`: this instance leaves on purpose, sent just before a deliberate close. */
+    fun bye(src: String, sid: String): String = srcSid("bye", src, sid)
+
+    /** `{op:"action", name, src, sid, args?, id?}`. */
+    fun action(action: PilotAction, src: String, sid: String, id: String?): String = buildJsonObject {
         put("op", "action")
         put("name", action.name)
         put("src", src)
+        put("sid", sid)
         if (action.args.isNotEmpty()) put("args", toJson(action.args))
         if (id != null) put("id", id)
     }.toString()
 
-    private fun srcSession(op: String, src: String, session: Long) = buildJsonObject {
+    private fun srcSid(op: String, src: String, sid: String) = buildJsonObject {
         put("op", op)
         put("src", src)
+        put("sid", sid)
+    }.toString()
+
+    private fun srcSession(op: String, src: String, sid: String, session: Long) = buildJsonObject {
+        put("op", op)
+        put("src", src)
+        put("sid", sid)
         put("session", session)
     }.toString()
 

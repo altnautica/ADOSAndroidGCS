@@ -22,23 +22,27 @@ class PilotRequestGoldenTest {
 
     @Test
     fun `stick input matches the agent's decoder fixture`() =
-        assertFrame("input", PilotWire.input(PilotWire.SRC_ANDROID, 7, 12, 3400, PilotInput(0.25f, -1f, 0f, 0.5f, 65537)))
+        assertFrame("input", PilotWire.input(PilotWire.SRC_ANDROID, SID, 7, 12, 3400, PilotInput(0.25f, -1f, 0f, 0.5f, 65537)))
 
     @Test
     fun `stick release matches the agent's decoder fixture`() =
-        assertFrame("release", PilotWire.release(PilotWire.SRC_ANDROID, 7))
+        assertFrame("release", PilotWire.release(PilotWire.SRC_ANDROID, SID, 7))
 
     @Test
     fun `session take-over matches the agent's decoder fixture`() =
-        assertFrame("session_take", PilotWire.sessionTake(PilotWire.SRC_ANDROID, 8))
+        assertFrame("session_take", PilotWire.sessionTake(PilotWire.SRC_ANDROID, SID, 8))
 
     @Test
     fun `heartbeat matches the agent's decoder fixture`() =
-        assertFrame("hb", PilotWire.hb(PilotWire.SRC_ANDROID))
+        assertFrame("hb", PilotWire.hb(PilotWire.SRC_ANDROID, SID))
+
+    @Test
+    fun `a deliberate leave matches the agent's decoder fixture`() =
+        assertFrame("bye", PilotWire.bye(PilotWire.SRC_ANDROID, SID))
 
     @Test
     fun `an action with arguments and an id matches the agent's decoder fixture`() =
-        assertFrame("action", PilotWire.action(PilotAction(PilotAction.HAND_TO_FC, mapOf("mode" to "loiter")), PilotWire.SRC_ANDROID, "3"))
+        assertFrame("action", PilotWire.action(PilotAction(PilotAction.HAND_TO_FC, mapOf("mode" to "loiter")), PilotWire.SRC_ANDROID, SID, "3"))
 
     @Test
     fun `a map-point goto matches the agent's decoder fixture`() =
@@ -47,7 +51,13 @@ class PilotRequestGoldenTest {
             PilotWire.action(
                 PilotAction(PilotAction.GOTO, mapOf("lat" to 12.9716, "lon" to 77.5946, "alt_m" to 25.5)),
                 PilotWire.SRC_ANDROID,
+                SID,
                 "4",
             ),
         )
+
+    private companion object {
+        /** The instance id the fixture's frames carry. */
+        const val SID = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+    }
 }

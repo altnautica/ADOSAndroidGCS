@@ -40,12 +40,38 @@ import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.feature.configure.R
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 
 /** How long a hold-confirm action must be held. */
 const val SETUP_HOLD_MS = 1_500
 
 /** The step that ends the ground wizard by offering the onboard pilot. */
 const val ADOS_INTRO_STEP = "ados_intro"
+
+/** The `ados_intro` choice to fly with ADOS Pilot and no RC transmitter, and its body. */
+const val USE_ADOS_NO_RC = "use_ados_no_rc"
+const val ADOS_INTRO_NO_RC_BODY = "setup.ados_intro.body.no_rc"
+private const val USE_ADOS = "use_ados"
+
+/**
+ * The step's actions as shown. In `ados_intro` with the no-RC choice offered, the step's
+ * `rc_present` decides which pilot choice leads: with no RC receiver seen, flying with no
+ * RC is the primary action; with one, ADOS Pilot with RC is, and the no-RC choice a secondary.
+ */
+internal fun shownActions(step: SetupStep): List<SetupAction> {
+    if (step.step != ADOS_INTRO_STEP || step.actions.none { it.id == USE_ADOS_NO_RC }) return step.actions
+    val noRcLeads = (step.args["rc_present"] as? JsonPrimitive)?.booleanOrNull == false
+    val lead = if (noRcLeads) USE_ADOS_NO_RC else USE_ADOS
+    return step.actions
+        .map { a ->
+            when (a.id) {
+                USE_ADOS, USE_ADOS_NO_RC -> a.copy(style = if (a.id == lead) SetupActionStyle.Primary else SetupActionStyle.Secondary)
+                else -> a
+            }
+        }
+        .sortedBy { if (it.id == lead) 0 else 1 }
+}
 
 /** The engine sends bare live and result keys (`pose`, `gains_after`); their labels live under these prefixes. */
 private const val LIVE_PREFIX = "setup.live."
@@ -80,7 +106,9 @@ fun WizardStepView(
             val body = text.format(key, args)
             if (step.step == ADOS_INTRO_STEP) {
                 // Three short lines: what the pilot flies, what the flight controller still does, how to take over.
-                body.lines().filter { it.isNotBlank() }.forEach { line ->
+                val offered = key != ADOS_INTRO_NO_RC_BODY && step.actions.any { it.id == USE_ADOS_NO_RC }
+                val noRc = if (offered) "\n" + text.format(ADOS_INTRO_NO_RC_BODY, args) else ""
+                (body + noRc).lines().filter { it.isNotBlank() }.forEach { line ->
                     Text("• $line", style = MaterialTheme.typography.bodyLarge, color = colors.fgPrimary)
                 }
             } else {
@@ -103,7 +131,7 @@ fun WizardStepView(
         SetupInputFields(inputs)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             val blocked = step.blockers.isNotEmpty()
-            step.actions.forEach { action ->
+            shownActions(step).forEach { action ->
                 ActionControl(
                     action = action,
                     label = text.format(action.labelKey, args),

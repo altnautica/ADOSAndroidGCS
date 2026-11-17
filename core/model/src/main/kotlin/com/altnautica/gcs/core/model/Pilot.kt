@@ -163,6 +163,18 @@ enum class PlaceClass(val wire: String) {
     }
 }
 
+/** Whether the vehicle flies with an RC transmitter, as the operator declared it in setup (`rc_receiver`). */
+enum class RcReceiver(val wire: String) {
+    Present("present"),
+
+    /** No RC transmitter: the app is the only control, and the pilot watches each app instance's link on its own. */
+    Absent("absent");
+
+    companion object {
+        fun of(wire: String?): RcReceiver? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
 /** How the loaded mission's legs compare with the clearance the confined profile needs. */
 enum class RouteCheckState(val wire: String) {
     /** Every sampled point is observed and clear by at least the required distance. */
@@ -313,7 +325,14 @@ data class PilotState(
     val placeClass: PlaceClass = PlaceClass.Open,
     /** The confined profile's route check of the loaded mission; null in the open profile or with no mission. */
     val routeCheck: RouteCheck? = null,
+    /** The RC declaration; a pilot that does not report one flies with an RC transmitter. */
+    val rcReceiver: RcReceiver = RcReceiver.Present,
+    /** How long a silent operator link may last before [linkLossAction], when the pilot reports it. */
+    val linkLossS: Float? = null,
 ) {
+    /** Declared to fly with no RC transmitter: the app's controls are the only way to stop the drone. */
+    val noRc: Boolean get() = rcReceiver == RcReceiver.Absent
+
     /** The first unmet blocking readiness item, or null when nothing blocks. */
     val firstBlock: ReadinessItem? get() = readiness.firstOrNull { !it.ok && it.severity == ReadinessSeverity.Block }
 

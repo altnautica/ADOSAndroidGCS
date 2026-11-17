@@ -12,6 +12,31 @@ app's `versionName`.
   other people and objects no longer blink at the whole-frame rate. A batch
   from an older agent, without the window, draws as before. The demo follow
   sends the same windowed batches.
+- **Flying with no RC transmitter.** The pilot's `rc_receiver` declaration
+  reads from its state. While it is `absent`, a "No RC" chip sits beside the
+  "Confined" chip. The follow strip names what stops the drone and what a
+  lost link does ("link lost → Return home in 10 s"). The on-screen sticks
+  show at the widths that offer them, whatever the setting. The pre-flight
+  checklist warns when the lock screen hides the link notification.
+- **Instance id and leave.** Every pilot-stream frame carries this app
+  process's instance id (`sid`), the same across reconnects. Closing the
+  cockpit's pilot channel sends `bye` first. Leaving the cockpit with no
+  RC declared and the drone not known to be disarmed first asks, naming
+  the link-loss action and its delay. Stay cancels.
+- **Heartbeat with no RC.** With no RC declared, the pilot heartbeat comes
+  from a main-thread tick and goes out only while a stop control is
+  reachable: the cockpit is on screen, or the link notification shows
+  Pause, Land and Return where the operator can reach them (on the lock
+  screen too while the phone is locked). A hung app or an unreachable
+  control ends in the drone's link-loss action. With an RC transmitter the
+  heartbeat is unchanged.
+- **Notification controls.** While a cockpit is open, the link notification
+  offers Pause, Land and Return in place of Disconnect, shown on the lock
+  screen. They run the cockpit's Pause, Land and Return through the pilot,
+  and reach the flight controller when the pilot does not answer.
+- **Setup: no RC choice.** The "Meet ADOS Pilot" step offers ADOS Pilot
+  with no RC transmitter when the vehicle offers it, with its explanation.
+  It leads when no RC receiver was seen.
 - **Radar: No returns.** A fresh lidar scan with no return in any bin and
   no other distance reads "NO RETURNS" in the warning colour, where it read
   "—". A return is a finite range above 5 cm, the pilot's own rule, so a

@@ -43,8 +43,9 @@ internal data class PreflightContext(
     val navChip: NavChip?,
 ) {
     companion object {
-        fun of(pilot: PilotState?, controllerConnected: Boolean, navChip: NavChip?) =
-            PreflightContext(pilot?.readiness.orEmpty(), pilot?.controlMode, controllerConnected, navChip)
+        /** [extra] is a row the cockpit adds itself (the no-RC lock-screen warning), after the pilot's. */
+        fun of(pilot: PilotState?, controllerConnected: Boolean, navChip: NavChip?, extra: ReadinessItem? = null) =
+            PreflightContext(pilot?.readiness.orEmpty() + listOfNotNull(extra), pilot?.controlMode, controllerConnected, navChip)
     }
 }
 

@@ -36,6 +36,14 @@ internal val PROFILES = setOf("cine", "normal", "sport")
 internal val CONTROL_MODES = setOf("ados", "fc_manual", "elrs")
 internal val AVOID_MODES = setOf("brake", "bypass", "off")
 internal val PLACE_CLASSES = setOf("open", "confined")
+internal val RC_RECEIVERS = setOf("present", "absent")
+
+/** Why declaring no RC is refused: outside ADOS control or in a confined place; null when it is accepted. */
+internal fun noRcRefusal(controlMode: String, placeClass: String): String? = when {
+    controlMode != "ados" -> "control_mode"
+    placeClass == "confined" -> "confined"
+    else -> null
+}
 
 /** Actions refused while the flight controller flies its own failsafe (pause and goto check it themselves). */
 internal val FAILSAFE_REFUSED = setOf("take_control", "resume", "takeoff", "launch")
