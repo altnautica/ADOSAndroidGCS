@@ -7,6 +7,7 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -109,7 +110,7 @@ internal class CockpitPilot(
         // scope ends. Taken when the owner starts cancelling, not when it has completed: a child
         // of the owner that takes a while to finish must not keep the channel's ticks running,
         // and the scope ends even if the leave fails.
-        scope.launch {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
             try {
                 awaitCancellation()
             } finally {
