@@ -23,7 +23,7 @@ class LiftoffSurfaceTest {
     fun `the running take-off shows its status line and detail`() {
         assertEquals("Spinning up. Motors at idle, checking they're steady.", liftoffLine(seq(LiftoffPhase.Spool, "Spinning up", "Motors at idle, checking they're steady")))
         assertEquals("Lifting off.", liftoffLine(seq(LiftoffPhase.Lift, "Lifting off")))
-        assertNull(liftoffLine(seq(LiftoffPhase.Done, "Airborne", "Climbing to 3 m")))
+        assertEquals("Airborne. Climbing to 3 m.", liftoffLine(seq(LiftoffPhase.Done, "Airborne", "Climbing to 3 m")))
         assertNull(liftoffLine(LaunchSequence(LaunchStep.Takeoff, "hold", null)))
         assertNull(liftoffStopText(seq(LiftoffPhase.Lift, "Lifting off")))
     }
@@ -49,6 +49,26 @@ class LiftoffSurfaceTest {
             "Take-off stopped. The flight controller did not take the steady take-off settings (GUID_OPTIONS, GCS_PID_MASK).",
             com.altnautica.gcs.feature.cockpit.skillbar.reasonTextOf(strings, "liftoff_fc_params"),
         )
+    }
+
+    @Test
+    fun `no rate data reads the agent's current words`() {
+        val strings = testSpec.setupStrings
+        val words = "Take-off stopped. The flight controller sends no rate data to balance the drone with. Motors off."
+        assertEquals(words, strings.format("refusal.liftoff_no_rate_data"))
+        assertEquals(words, strings.format("setup.blocker.liftoff_no_rate_data"))
+    }
+
+    @Test
+    fun `a relayed pilot refusal reads its refusal text`() {
+        val strings = testSpec.setupStrings
+        val notice = com.altnautica.gcs.core.skills.SkillNotice(
+            "takeoff",
+            com.altnautica.gcs.core.skills.NoticeLevel.Error,
+            com.altnautica.gcs.core.skills.SkillReason.COMMAND_REJECTED,
+            com.altnautica.gcs.core.agent.telemetry.TelemetrySnapshotSource.rejectReason("pilot refused launch: not_ready:airframe_balance"),
+        )
+        assertEquals("Not ready: Balance check", com.altnautica.gcs.feature.cockpit.skillbar.noticeTextOf(strings, notice))
     }
 
     @Test

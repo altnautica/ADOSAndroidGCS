@@ -318,11 +318,14 @@ private fun joinLines(text: String?, detail: String?): String? {
     return parts.joinToString(" ") { if (it.endsWith('.')) it else "$it." }
 }
 
-/** The steady take-off's status and detail while it runs ("Spinning up. Motors at idle, checking they're steady."); none once done, stopped or refused. */
+/**
+ * The steady take-off's status and detail while it runs ("Spinning up. Motors at idle, checking they're steady."),
+ * and after the hand-over while the climb finishes ("Airborne. Climbing to 3 m."); none once stopped or refused.
+ */
 internal fun liftoffLine(sequence: LaunchSequence): String? {
     if (sequence.error != null) return null
     val liftoff = sequence.liftoff ?: return null
-    if (liftoff.phase == LiftoffPhase.Done || liftoff.phase == LiftoffPhase.Stopped) return null
+    if (liftoff.phase == LiftoffPhase.Stopped) return null
     return joinLines(liftoff.text, liftoff.detail)
 }
 
