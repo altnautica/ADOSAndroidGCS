@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -104,11 +105,21 @@ internal class CockpitPilot(
         .stateIn(scope, SharingStarted.Eagerly, null)
 
     init {
-        // The owner is gone (the cockpit closed): the channel leaves on purpose, then its scope ends.
-        scope.coroutineContext[Job]?.invokeOnCompletion {
-            channelScope.launch {
-                link.value?.leave()
-                channelScope.cancel()
+        // The owner is going (the cockpit is closing): the channel leaves on purpose, then its
+        // scope ends. Taken when the owner starts cancelling, not when it has completed: a child
+        // of the owner that takes a while to finish must not keep the channel's ticks running,
+        // and the scope ends even if the leave fails.
+        scope.launch {
+            try {
+                awaitCancellation()
+            } finally {
+                channelScope.launch {
+                    try {
+                        link.value?.leave()
+                    } finally {
+                        channelScope.cancel()
+                    }
+                }
             }
         }
     }

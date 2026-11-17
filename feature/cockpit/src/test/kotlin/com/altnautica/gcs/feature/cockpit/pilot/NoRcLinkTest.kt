@@ -114,6 +114,8 @@ class NoRcLinkTest {
         assertEquals("a hung main thread sends no hb", emptyList<String>(), stream.ops().filter { it == "hb" })
 
         main.idleFor(Duration.ofSeconds(2))
+        // The tick queues the frame; the socket takes it on the test dispatcher.
+        runCurrent()
         assertTrue("the main-looper tick sends hb", "hb" in stream.ops())
         ch.stop()
     }
