@@ -82,6 +82,7 @@ fun CockpitRoute(
     val status by vm.status.collectAsStateWithLifecycle()
     val maxBrightness by vm.maxBrightness.collectAsStateWithLifecycle()
     val extensionNode by vm.extensionNodeId.collectAsStateWithLifecycle()
+    val pilotState by vm.pilotState.collectAsStateWithLifecycle()
     val currentExit by rememberUpdatedState(onExit)
     // The leave waiting on the armed confirm: back out of the cockpit, or an app-level move.
     var pendingLeave by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -203,7 +204,7 @@ fun CockpitRoute(
             pendingLeave?.let { leave ->
                 CompositionLocalProvider(LocalCockpitStrings provides vm.specStrings) {
                     LeaveArmedSheet(
-                        noRcMessage = vm.noRc.text.leave(vm.pilotState.value),
+                        noRcMessage = vm.noRc.text.leave(pilotState),
                         onStay = { pendingLeave = null },
                         onLeave = {
                             pendingLeave = null

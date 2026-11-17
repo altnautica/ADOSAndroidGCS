@@ -40,7 +40,7 @@ class CockpitSpecTest {
         assertEquals(listOf("gimbal_pad", "zoom"), layout.zones.first { it.id == "right_column" }.dropOrder)
         assertEquals("controller", layout.zones.first { it.id == "top_bar" }.overflow!!.toMenuOrder.first())
         assertEquals(90, layout.statusPill!!.storageWarnPct)
-        assertEquals(20, layout.battery!!.lowFallbackPct)
+        assertEquals(30, layout.battery!!.lowFallbackPct)
         val split = testSpec.views.views.first { it.id == "split" }.divider!!
         assertEquals(0.3f, split.min)
         assertEquals("bottom_left_card", testSpec.views.views.first { it.id == "map" }.videoSlot)

@@ -5,6 +5,18 @@ app's `versionName`.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-17
+
+- **Steady take-off on the launch sheet.** A take-off goes through the
+  pilot's launch. While the drone's steady take-off runs, the launch sheet
+  shows its status line and detail ("Airborne. Climbing to 3 m", or the stop
+  reason), and the pre-flight checklist shows the Balance check and Steady
+  take-off rows from the drone. The steady take-off ships switched off on the
+  agent; switched off, the row reads "Standard take-off. Steady take-off is
+  off."
+- **Extension take-off needs the drone armed.** An extension's take-off
+  command is refused until the drone is known to be armed: the operator arms
+  first.
 - **Steady boxes while following.** While a target is designated, the
   agent's vision engine detects most frames only in a window around the subject.
   The detection overlay keeps the boxes from the last whole frame that lie
@@ -13,11 +25,12 @@ app's `versionName`.
   from an older agent, without the window, draws as before. The demo follow
   sends the same windowed batches.
 - **Flying with no RC transmitter.** The pilot's `rc_receiver` declaration
-  reads from its state. While it is `absent`, a "No RC" chip sits beside the
-  "Confined" chip. The follow strip names what stops the drone and what a
-  lost link does ("link lost → Return home in 10 s"). The on-screen sticks
-  show at the widths that offer them, whatever the setting. The pre-flight
-  checklist warns when the lock screen hides the link notification.
+  reads from its state. While it is `absent`, a "No controller" chip sits
+  beside the "Confined" chip. The follow strip names what stops the drone and
+  what a lost link does ("If the link drops for 10 s: Return home"). The
+  on-screen sticks show at the widths that offer them, whatever the setting.
+  The pre-flight checklist warns when the lock screen hides the link
+  notification.
 - **Instance id and leave.** Every pilot-stream frame carries this app
   process's instance id (`sid`), the same across reconnects. Closing the
   cockpit's pilot channel sends `bye` first. Leaving the cockpit with no
