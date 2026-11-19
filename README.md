@@ -15,7 +15,7 @@
   <a href="https://discord.gg/uxbvuD4d5q"><img src="https://img.shields.io/badge/Discord-Join-5865F2.svg" alt="Discord"></a>
 </p>
 <p align="center">
-  <strong><a href="https://github.com/altnautica/ADOSMissionControl">Mission Control</a></strong> |
+  <strong><a href="https://github.com/altnautica/ADOSMissionControlGCS">Mission Control</a></strong> |
   <strong><a href="https://github.com/altnautica/ADOSDroneAgent">Drone Agent</a></strong> |
   <strong><a href="https://github.com/altnautica/ADOSAndroidGCS">Android GCS</a></strong> |
   <strong><a href="https://github.com/altnautica/ADOSExtensions">Extensions</a></strong> |
@@ -39,7 +39,7 @@
 
 ADOS Android GCS is the native Android ground station of ADOS, an open-source platform for software-defined drones. It is written in Kotlin with Jetpack Compose for phones, tablets and handheld controllers running Android 10 (API 29) or later, in either screen orientation. It reaches an ADOS Drone Agent on the LAN, a flight controller directly over USB, UDP or TCP, and your fleet through the opt-in cloud.
 
-It is the handheld counterpart to [ADOS Mission Control](https://github.com/altnautica/ADOSMissionControl): the same drones and the same agents, from a device you carry into the field. The app grows with each release, and contributions are welcome (see [Contributing](#contributing)).
+It is the handheld counterpart to [ADOS Mission Control](https://github.com/altnautica/ADOSMissionControlGCS): the same drones and the same agents, from a device you carry into the field. The app grows with each release, and contributions are welcome (see [Contributing](#contributing)).
 
 ## Quick start
 
@@ -118,7 +118,7 @@ ADOS Ground Agent is the Drone Agent running its ground-station profile.
 <!-- ados-family:repos -->
 | Repo | Runs on | What it does | Link |
 |---|---|---|---|
-| ADOS Mission Control | Browser, desktop (Electron) | Ground control station: FC setup, mission planning, flight, 3D simulation, fleet | [ADOSMissionControl](https://github.com/altnautica/ADOSMissionControl) |
+| ADOS Mission Control | Browser, desktop (Electron) | Ground control station: FC setup, mission planning, flight, 3D simulation, fleet | [ADOSMissionControlGCS](https://github.com/altnautica/ADOSMissionControlGCS) |
 | ADOS Drone Agent | Companion computer on the drone, or a ground node | Onboard agent: MAVLink routing, HD video, long-range radio link, plugins, remote control | [ADOSDroneAgent](https://github.com/altnautica/ADOSDroneAgent) |
 | ADOS Android GCS | Android phones and tablets | Native ground control app for agents on the LAN, direct flight controllers and the cloud | [ADOSAndroidGCS](https://github.com/altnautica/ADOSAndroidGCS) |
 | ADOS Extensions | Drone Agent and Mission Control | First-party signed plugins, each with an agent half and a GCS half | [ADOSExtensions](https://github.com/altnautica/ADOSExtensions) |

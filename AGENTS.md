@@ -172,5 +172,5 @@ flow and verify with the smallest Gradle task that proves it.
 
 - [ADOS Drone Agent](https://github.com/altnautica/ADOSDroneAgent) - companion
   and ground-node agent this Android app can connect to.
-- [ADOS Mission Control](https://github.com/altnautica/ADOSMissionControl) -
+- [ADOS Mission Control](https://github.com/altnautica/ADOSMissionControlGCS) -
   browser ground control station with shared product concepts and protocols.
