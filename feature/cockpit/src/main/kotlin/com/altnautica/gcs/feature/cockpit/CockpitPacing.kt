@@ -2,12 +2,15 @@ package com.altnautica.gcs.feature.cockpit
 
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
+import com.altnautica.gcs.core.data.cockpit.CockpitSettings
+import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.band.BatteryReserve
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -21,6 +24,17 @@ internal fun batteryReservePolls(api: suspend () -> AutonomyFeedApi?): Flow<Batt
         delay(BatteryReserve.POLL_MS)
     }
 }
+
+/** The settings with the battery bands the cockpit flies by: the spec's fallback ([lowFallbackPct]), raised to the engine's reserve. */
+internal fun batteryFlightSettings(
+    scope: CoroutineScope,
+    settings: StateFlow<CockpitSettings>,
+    reserve: StateFlow<BatteryReserve?>,
+    lowFallbackPct: () -> Int?,
+): StateFlow<CockpitSettings> = combine(settings, reserve) { s, r ->
+    val bands = AlertEngine.flightBands(s.batteryBands, lowFallbackPct(), r?.reservePct)
+    if (bands == s.batteryBands) s else s.copy(batteryBands = bands)
+}.stateIn(scope, SharingStarted.Eagerly, settings.value)
 
 /**
  * [source]'s newest value, published only when [tick] fires: a value that changes on its own

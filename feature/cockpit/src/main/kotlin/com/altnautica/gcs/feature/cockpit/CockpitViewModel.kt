@@ -54,7 +54,6 @@ import com.altnautica.gcs.core.skills.input.controller.ControllerManager
 import com.altnautica.gcs.core.skills.spec.CockpitSpecRepository
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
-import com.altnautica.gcs.feature.cockpit.alerts.AlertEngine
 import com.altnautica.gcs.feature.cockpit.alerts.CockpitAlertsController
 import com.altnautica.gcs.feature.cockpit.alerts.ControllerFeedback
 import com.altnautica.gcs.feature.cockpit.alerts.FcTexts
@@ -326,10 +325,7 @@ class CockpitViewModel @AssistedInject constructor(
     }, tick500, null)
 
     /** The settings with the battery bands the cockpit flies by: the spec's fallback, raised to the engine's reserve. */
-    private val flightSettings: StateFlow<CockpitSettings> = combine(settings, batteryReserve) { s, r ->
-        val bands = AlertEngine.flightBands(s.batteryBands, spec.layout.battery?.lowFallbackPct, r?.reservePct)
-        if (bands == s.batteryBands) s else s.copy(batteryBands = bands)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, settings.value)
+    private val flightSettings: StateFlow<CockpitSettings> = batteryFlightSettings(viewModelScope, settings, batteryReserve) { spec.layout.battery?.lowFallbackPct }
 
     init {
         // The pilot's relayed FC texts go through the same classification as the link's.
@@ -695,11 +691,7 @@ class CockpitViewModel @AssistedInject constructor(
     val minimap: StateFlow<MinimapState> = hud.minimap
 
     /** The route the vehicle holds (its agent's mission mirror), drawn on every cockpit map. */
-    val missionRoute: StateFlow<MapOverlays> = combine(
-        vehicleNodeId.flatMapLatest { id -> id?.let(missionMirror::observe) ?: flowOf(null) },
-        minimap.map { it.home }.distinctUntilChanged(),
-    ) { mirror, home -> missionRouteOverlays(mirror, home) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), MapOverlays.Empty)
+    val missionRoute: StateFlow<MapOverlays> = missionRouteFlow(viewModelScope, vehicleNodeId, missionMirror, minimap)
 
     /** True when the map fills the screen and the video sits in the inset. */
     val minimapSwapped: StateFlow<Boolean> = hud.minimapSwapped

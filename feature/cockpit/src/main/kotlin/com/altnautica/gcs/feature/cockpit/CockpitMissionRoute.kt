@@ -1,12 +1,24 @@
 package com.altnautica.gcs.feature.cockpit
 
 import com.altnautica.gcs.core.agent.mission.MissionMirror
+import com.altnautica.gcs.core.link.mission.MissionMirrorSource
 import com.altnautica.gcs.core.map.GeoPoint
 import com.altnautica.gcs.core.map.LineKind
 import com.altnautica.gcs.core.map.MapLine
 import com.altnautica.gcs.core.map.MapOverlays
 import com.altnautica.gcs.core.map.MapWaypoint
 import com.altnautica.gcs.core.map.WaypointKind
+import com.altnautica.gcs.core.model.DeviceId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 
 /*
  * The cockpit maps draw the plan the vehicle actually holds, as its agent mirrors it. That
@@ -52,3 +64,16 @@ fun missionRouteOverlays(mirror: MissionMirror?, home: GeoPoint?): MapOverlays {
     val lines = if (path.size >= 2) listOf(MapLine("mission", path, LineKind.MissionPath)) else emptyList()
     return MapOverlays(waypoints = waypoints, lines = lines)
 }
+
+/** The route the flown vehicle holds ([missionMirror]) drawn from the [minimap]'s home, for every cockpit map. */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun missionRouteFlow(
+    scope: CoroutineScope,
+    vehicleNodeId: StateFlow<DeviceId?>,
+    missionMirror: MissionMirrorSource,
+    minimap: StateFlow<MinimapState>,
+): StateFlow<MapOverlays> = combine(
+    vehicleNodeId.flatMapLatest { id -> id?.let(missionMirror::observe) ?: flowOf(null) },
+    minimap.map { it.home }.distinctUntilChanged(),
+) { mirror, home -> missionRouteOverlays(mirror, home) }
+    .stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), MapOverlays.Empty)
