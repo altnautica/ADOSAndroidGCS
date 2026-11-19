@@ -255,7 +255,7 @@ class PhoneRadioSession @Inject constructor(
         var radio: IUsbRadio? = null
         try {
             withContext(Dispatchers.IO) {
-                val r = source.open(plan.bundle)
+                val r = source.openChannels(plan.rxChannels(), plan.txChannels())
                 radio = r
                 r.open(null, 0, 0)
                 r.setChannel(plan.bundle.channel, plan.bundle.bandwidthMhz)
@@ -315,7 +315,10 @@ class PhoneRadioSession @Inject constructor(
         }
 
         override fun droneBeacon(deviceId: String) {
-            scope.launch { fleetGround.enrol(deviceId) }
+            scope.launch {
+                val slot = runCatching { fleetGround.enrol(deviceId) }.getOrNull()
+                Log.i(FLEET_TAG, "fleet enrol $deviceId slot=${slot ?: "refused"}")
+            }
         }
 
         override fun keyProven() {
@@ -381,6 +384,7 @@ class PhoneRadioSession @Inject constructor(
 
     private companion object {
         const val TAG = "AdosPhoneRadio"
+        const val FLEET_TAG = "AdosPhoneFleet"
         const val VIDEO_BUFFER = 512
         const val RELEASE_POLL_MS = 200L
         const val RELEASE_QUIET_MS = 1_000L

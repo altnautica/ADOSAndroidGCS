@@ -2,9 +2,6 @@ package com.altnautica.gcs.radio.rx.bench
 
 import android.content.Context
 import com.altnautica.gcs.radio.rx.AlternateRadio
-import com.altnautica.gcs.radio.rx.invite.InviteBundle
-import com.altnautica.gcs.radio.rx.link.LinkParams
-import com.altnautica.gcs.radio.rx.tx.GroundTxParams
 import com.altnautica.gcs.radio.usb.IUsbRadio
 import dagger.Binds
 import dagger.Module
@@ -55,16 +52,6 @@ class BenchRelaySource @Inject constructor(@ApplicationContext private val conte
 
     /** The bench holds the uplink from the start unless its config hands that to the handover. */
     override val holdsUplink: Boolean get() = config()?.holdUplink == true
-
-    override fun open(bundle: InviteBundle): IUsbRadio {
-        val cfg = requireNotNull(config()) { "no bench relay configured" }
-        val ports = bundle.radioPorts
-        val rx = bundle.links().flatMap { link ->
-            listOf(ports.video, ports.control, ports.auxDown).map { LinkParams.channelId(link.linkId, it) }
-        }
-        val (control, aux) = GroundTxParams.of(bundle)
-        return BenchRelayRadio(cfg, rx, listOf(control.channelId, aux.channelId))
-    }
 
     override fun openChannels(rxChannels: List<Long>, txChannels: List<Long>): IUsbRadio =
         BenchRelayRadio(requireNotNull(config()) { "no bench relay configured" }, rxChannels, txChannels)

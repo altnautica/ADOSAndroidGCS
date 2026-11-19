@@ -1,6 +1,5 @@
 package com.altnautica.gcs.radio.rx
 
-import com.altnautica.gcs.radio.rx.invite.InviteBundle
 import com.altnautica.gcs.radio.usb.IUsbRadio
 
 /**
@@ -15,12 +14,9 @@ interface AlternateRadio {
     /** Whether the phone holds the uplink while it runs on this radio, and so transmits. */
     val holdsUplink: Boolean
 
-    /** A radio ready for [IUsbRadio.open], carrying [bundle]'s channels. */
-    fun open(bundle: InviteBundle): IUsbRadio
-
     /**
      * A radio ready for [IUsbRadio.open] carrying exactly these channel ids
-     * (`link_id << 8 | port`): the bind session's planes, which no invite names.
+     * (`link_id << 8 | port`): a run's planes, or the bind session's.
      */
     fun openChannels(rxChannels: List<Long>, txChannels: List<Long>): IUsbRadio
 }

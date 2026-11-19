@@ -1,5 +1,6 @@
 package com.altnautica.gcs.radio.rx.aux
 
+import android.util.Log
 import com.altnautica.gcs.core.link.fleet.FleetGroundStore
 import com.altnautica.gcs.core.link.fleet.FleetRequestLane
 import com.altnautica.gcs.core.model.DeviceId
@@ -50,7 +51,12 @@ class SessionUplink @Inject constructor(
     }
 }
 
-/** The fleet's ground calls on the Request lane: slot assignment and the secret offer. */
+/**
+ * The fleet's ground calls on the Request lane: slot assignment and the secret
+ * offer. Each call logs one line under [TAG]
+ * (`fleet reconcile <device> <method> <path> status=<code|failed:reason>`), so a
+ * bench run names why a drone did not take its slot or secret.
+ */
 @Singleton
 class SessionFleetLane @Inject constructor(private val session: PhoneRadioSession) : FleetRequestLane {
     override suspend fun request(
@@ -60,9 +66,16 @@ class SessionFleetLane @Inject constructor(private val session: PhoneRadioSessio
         contentType: String?,
         body: ByteArray,
         relaySecretHex: String?,
-    ): Int? = when (val r = session.lanes.relay.call(deviceId, method, path, contentType, body, relaySecretHex)) {
-        is RelayResult.Answered -> r.response.status
-        is RelayResult.Failed -> null
+    ): Int? {
+        val r = session.lanes.relay.call(deviceId, method, path, contentType, body, relaySecretHex)
+        val status = (r as? RelayResult.Answered)?.response?.status
+        val outcome = status?.toString() ?: "failed:${(r as RelayResult.Failed).reason}"
+        Log.i(TAG, "fleet reconcile $deviceId $method $path status=$outcome")
+        return status
+    }
+
+    private companion object {
+        const val TAG = "AdosPhoneFleet"
     }
 }
 

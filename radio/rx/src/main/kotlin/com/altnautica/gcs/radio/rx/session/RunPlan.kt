@@ -26,6 +26,29 @@ internal class RunPlan(
     /** Whether the fleet's key has been seen to decode a drone's traffic. */
     val keyProven: Boolean,
 ) {
+    /**
+     * The channel ids (`link_id << 8 | port`) this run receives: every plane of
+     * every drone slot it listens on, and the control plane of the fleet's
+     * ground link (other grounds' beacons). A radio that filters by channel (the
+     * bench relay) must be opened with these, not with the bundle's slot list:
+     * a just-bound fleet lists no drone yet, and its drones are found only by
+     * listening on every slot.
+     */
+    fun rxChannels(): List<Long> {
+        val ports = bundle.radioPorts
+        val drones = slots.flatMap { slot ->
+            val link = LinkParams.linkId(bundle.fleetId, slot)
+            listOf(ports.video, ports.control, ports.auxDown).map { LinkParams.channelId(link, it) }
+        }
+        return drones + LinkParams.channelId(LinkParams.linkId(bundle.fleetId, LinkParams.SLOT_GROUND), ports.control)
+    }
+
+    /** The channel ids the phone transmits on while it holds the uplink: the ground's control plane and aux uplink. */
+    fun txChannels(): List<Long> {
+        val (control, aux) = GroundTxParams.of(bundle)
+        return listOf(control.channelId, aux.channelId)
+    }
+
     companion object {
         fun of(invite: StoredInvite): RunPlan {
             val bundle = invite.bundle
