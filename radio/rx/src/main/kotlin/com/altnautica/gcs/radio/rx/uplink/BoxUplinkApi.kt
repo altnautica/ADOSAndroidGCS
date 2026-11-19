@@ -94,7 +94,7 @@ class SignedRequest(val body: ByteArray, val headers: Map<String, String>) {
                 mapOf(
                     UplinkMac.PHONE_KEY_HEADER to Base64.getEncoder().encodeToString(auth.phonePublic),
                     UplinkMac.TS_HEADER to nowMs.toString(),
-                    UplinkMac.MAC_HEADER to UplinkMac.macBase64(auth.handoverKey, nowMs, bytes),
+                    UplinkMac.MAC_HEADER to UplinkMac.macBase64(UplinkMac.Domain.Request, auth.handoverKey, nowMs, bytes),
                 ),
             )
         }
@@ -116,9 +116,11 @@ interface BoxUplinkApi {
 @Singleton
 class HttpBoxUplinkApi @Inject constructor(base: OkHttpClient) : BoxUplinkApi {
 
-    private val client = base.newBuilder()
+    internal val client = base.newBuilder()
         .connectTimeout(CONNECT_S, TimeUnit.SECONDS)
-        // The box answers a take only after both of its transmitters exited (up to 8 s).
+        // The box answers a take only after its operation lock (an in-flight
+        // resume holds it up to 8 s) and then both of its transmitters exiting
+        // (up to 8 s more).
         .readTimeout(READ_S, TimeUnit.SECONDS)
         .writeTimeout(CONNECT_S, TimeUnit.SECONDS)
         .build()
@@ -155,7 +157,7 @@ class HttpBoxUplinkApi @Inject constructor(base: OkHttpClient) : BoxUplinkApi {
     companion object {
         private val JSON = "application/json".toMediaType()
         private const val CONNECT_S = 4L
-        private const val READ_S = 12L
+        private const val READ_S = 20L
 
         fun parseReply(code: Int, text: String): BoxReply {
             val obj = runCatching { Json.parseToJsonElement(text) as? JsonObject }.getOrNull()

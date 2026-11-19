@@ -1,5 +1,6 @@
 package com.altnautica.gcs.radio.rx.uplink
 
+import okhttp3.OkHttpClient
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,8 +18,26 @@ class UplinkMacTest {
      */
     @Test
     fun theMacMatchesTheAgentsVector() {
-        val mac = UplinkMac.mac(key, NOW, TAKE.encodeToByteArray())
+        val mac = UplinkMac.mac(UplinkMac.Domain.Request, key, NOW, TAKE.encodeToByteArray())
         assertEquals("bb00e64b4ccd8554d9c7f466b08f7c3546bd6ae53dd395fdeeb1f629820ac163", mac.toHex())
+    }
+
+    /**
+     * The agent's take-back signing: the `ados-control` test
+     * `the_yield_mac_vector` pins `af2ace…` for this key, time and the body
+     * the box sends. The same inputs under the phone's own context give
+     * `013cc7…`, which must not verify as a take-back.
+     */
+    @Test
+    fun theTakeBackMacMatchesTheAgentsVectorAndOnlyItsOwnContext() {
+        val body = YIELD_VECTOR.encodeToByteArray()
+        assertEquals(
+            "af2aceac943790b74e28d4692ab1c2301c8cf3f8bfa22f47511650cd2b7e9cfc",
+            UplinkMac.mac(UplinkMac.Domain.Yield, key, NOW, body).toHex(),
+        )
+        val phoneSigned = UplinkMac.mac(UplinkMac.Domain.Request, key, NOW, body)
+        assertEquals("013cc7565b5e4fce990998ca1b7ee74f21e41d94e5b10944a51c305fd2429331", phoneSigned.toHex())
+        assertFalse(UplinkMac.verify(UplinkMac.Domain.Yield, key, NOW, body, Base64.getEncoder().encodeToString(phoneSigned)))
     }
 
     @Test
@@ -34,27 +53,41 @@ class UplinkMacTest {
 
     @Test
     fun everyInputIsBound() {
-        val good = UplinkMac.macBase64(key, NOW, TAKE.encodeToByteArray())
-        assertTrue(UplinkMac.verify(key, NOW, TAKE.encodeToByteArray(), good))
-        assertFalse(UplinkMac.verify(ByteArray(32), NOW, TAKE.encodeToByteArray(), good))
-        assertFalse(UplinkMac.verify(key, NOW + 1, TAKE.encodeToByteArray(), good))
-        assertFalse(UplinkMac.verify(key, NOW, "{}".encodeToByteArray(), good))
-        assertFalse(UplinkMac.verify(key, NOW, TAKE.encodeToByteArray(), "not base64!"))
+        val d = UplinkMac.Domain.Request
+        val good = UplinkMac.macBase64(d, key, NOW, TAKE.encodeToByteArray())
+        assertTrue(UplinkMac.verify(d, key, NOW, TAKE.encodeToByteArray(), good))
+        assertFalse(UplinkMac.verify(UplinkMac.Domain.Yield, key, NOW, TAKE.encodeToByteArray(), good))
+        assertFalse(UplinkMac.verify(d, ByteArray(32), NOW, TAKE.encodeToByteArray(), good))
+        assertFalse(UplinkMac.verify(d, key, NOW + 1, TAKE.encodeToByteArray(), good))
+        assertFalse(UplinkMac.verify(d, key, NOW, "{}".encodeToByteArray(), good))
+        assertFalse(UplinkMac.verify(d, key, NOW, TAKE.encodeToByteArray(), "not base64!"))
     }
 
     @Test
-    fun theGuardAcceptsEachGoodCallOnceInsideTheClockWindow() {
-        val guard = UplinkReplayGuard()
+    fun theGuardAcceptsEachGoodTakeBackOnceInsideTheClockWindow() {
+        val guard = YieldGuard()
         val body = YIELD.encodeToByteArray()
-        fun sign(ts: Long) = UplinkMac.macBase64(key, ts, body)
-        assertEquals(MacVerdict.Missing, guard.check(key, null, body, sign(NOW), NOW))
-        assertEquals(MacVerdict.Mismatch, guard.check(key, NOW, body, UplinkMac.macBase64(ByteArray(32), NOW, body), NOW))
-        assertEquals(MacVerdict.Clock, guard.check(key, NOW - 120_001, body, sign(NOW - 120_001), NOW))
-        assertEquals(MacVerdict.Clock, guard.check(key, NOW + 120_001, body, sign(NOW + 120_001), NOW))
-        assertEquals(MacVerdict.Accepted, guard.check(key, NOW, body, sign(NOW), NOW))
-        assertEquals(MacVerdict.Replay, guard.check(key, NOW, body, sign(NOW), NOW))
-        assertEquals(MacVerdict.Replay, guard.check(key, NOW - 1, body, sign(NOW - 1), NOW))
-        assertEquals(MacVerdict.Accepted, guard.check(key, NOW + 1, body, sign(NOW + 1), NOW))
+        fun sign(ts: Long, b: ByteArray = body) = UplinkMac.macBase64(UplinkMac.Domain.Yield, key, ts, b)
+        fun check(ts: Long?, mac: String?, b: ByteArray = body) = guard.check(key, ts, b, mac, BOX, NOW)
+        assertEquals(MacVerdict.Missing, check(null, sign(NOW)))
+        assertEquals(MacVerdict.Mismatch, check(NOW, UplinkMac.macBase64(UplinkMac.Domain.Yield, ByteArray(32), NOW, body)))
+        assertEquals(MacVerdict.Mismatch, check(NOW, UplinkMac.macBase64(UplinkMac.Domain.Request, key, NOW, body)))
+        assertEquals(MacVerdict.Clock, check(NOW - 120_001, sign(NOW - 120_001)))
+        assertEquals(MacVerdict.Clock, check(NOW + 120_001, sign(NOW + 120_001)))
+        val take = TAKE.encodeToByteArray()
+        assertEquals(MacVerdict.NotAYield, check(NOW, sign(NOW, take), take))
+        val otherBox = """{"box_device_id":"gs-other","op":"yield"}""".encodeToByteArray()
+        assertEquals(MacVerdict.NotAYield, check(NOW, sign(NOW, otherBox), otherBox))
+        assertEquals(MacVerdict.Accepted, check(NOW, sign(NOW)))
+        assertEquals(MacVerdict.Replay, check(NOW, sign(NOW)))
+        assertEquals(MacVerdict.Replay, check(NOW - 1, sign(NOW - 1)))
+        assertEquals(MacVerdict.Accepted, check(NOW + 1, sign(NOW + 1)))
+    }
+
+    /** The box may hold its operation lock 8 s for a resume, then take 8 s to stop. */
+    @Test
+    fun aTakeWaitsOutTheBoxsSlowestAnswer() {
+        assertTrue(HttpBoxUplinkApi(OkHttpClient()).client.readTimeoutMillis >= 16_000)
     }
 
     @Test
@@ -76,7 +109,9 @@ class UplinkMacTest {
 
     companion object {
         const val NOW = 1_800_000_000_000L
+        const val BOX = "gs-box-1"
         const val TAKE = """{"op":"take","holder_device_id":"a1b2c3d4e5f6","holder_name":"Ops phone","yield_port":47811}"""
-        const val YIELD = """{"op":"yield","box_device_id":"gs-box-1"}"""
+        const val YIELD = """{"box_device_id":"gs-box-1","op":"yield"}"""
+        const val YIELD_VECTOR = """{"box_device_id":"gs-0a1b2c","op":"yield"}"""
     }
 }

@@ -8,13 +8,17 @@ import com.altnautica.gcs.radio.rx.session.PhoneRadioSession
 import com.altnautica.gcs.radio.rx.tx.PhoneGroundId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,11 +36,14 @@ import javax.inject.Singleton
  * - Give back: the transmitters stop first and must read quiet for a second,
  *   then a signed `give_back` tells the box to resume.
  * - Take-back: the box calls `POST /uplink/yield` ([YieldListener]) signed with
- *   the same key; the phone stops, then answers.
+ *   the same key under the take-back's own MAC context; the phone stops, then
+ *   answers.
  * - Tie rule: while transmitting, a presence beacon from any other ground on
  *   this fleet's ground link stops the phone at once. The phone always yields.
  *
- * Every transition is logged under `AdosPhoneUplink` as
+ * A take and a give-back run on the handover's own scope: a caller that goes
+ * away (the screen closed) does not cut one short, and its outcome lands in
+ * [state]. Every transition is logged under `AdosPhoneUplink` as
  * `uplink state <from> -> <to> reason=<…>`, every take-back call as
  * `uplink yield received from=<box> verdict=<…>`.
  */
@@ -71,7 +78,7 @@ class UplinkHandover internal constructor(
     val state: StateFlow<HandoverState> = _state.asStateFlow()
 
     private val ops = Mutex()
-    private val guard = UplinkReplayGuard()
+    private val guard = YieldGuard()
     private val otherGrounds = ConcurrentHashMap<String, Long>()
     private var listener: YieldListener? = null
 
@@ -79,6 +86,13 @@ class UplinkHandover internal constructor(
     internal val yieldListenerPort: Int? get() = listener?.localPort
     private var takenFrom: String? = null
     private var takenAtMs = 0L
+
+    /**
+     * The box of the take in progress or held, with its handover key, from
+     * the take until the handover ends: a take-back call is checked against
+     * it without opening the vault.
+     */
+    @Volatile private var held: BoxAccess? = null
 
     /** A take-back arrived while the take was still in flight. */
     @Volatile private var yieldDuringTake = false
@@ -89,74 +103,125 @@ class UplinkHandover internal constructor(
     }
 
     /** Takes the uplink from the box; a refusal is the result's [HandoverState.note]. */
-    suspend fun take(): HandoverState = ops.withLock {
+    suspend fun take(): HandoverState = scope.async { ops.withLock { takeLocked() } }.await()
+
+    private suspend fun takeLocked(): HandoverState {
         val start = _state.value
-        if (start.phase == HandoverPhase.Taking || start.phase == HandoverPhase.Transmitting) return@withLock start
+        if (start.phase == HandoverPhase.Taking || start.phase == HandoverPhase.Transmitting) return start
         fun refuse(note: HandoverNote): HandoverState {
             log("uplink take refused reason=${note.english}")
             return HandoverState(start.phase, note = note).also { _state.value = it }
         }
-        if (!radio.receiving.value) return@withLock refuse(HandoverNote.NoRadio)
-        val box = boxes.load() ?: return@withLock refuse(HandoverNote.NoHandoverKey)
-        val auth = box.auth ?: return@withLock refuse(HandoverNote.NoHandoverKey)
-        val target = box.target ?: return@withLock refuse(HandoverNote.NoLanReach(box.name))
+        if (!radio.receiving.value) return refuse(HandoverNote.NoRadio)
+        val box = boxes.load() ?: return refuse(HandoverNote.NoHandoverKey)
+        val auth = box.auth ?: return refuse(HandoverNote.NoHandoverKey)
+        val target = box.target ?: return refuse(HandoverNote.NoLanReach(box.name))
         val now = clock.elapsedMs()
         otherGrounds.entries.firstOrNull { it.key != box.deviceId && now - it.value < PEER_STALE_MS }
-            ?.let { return@withLock refuse(HandoverNote.OtherGround(it.key)) }
+            ?.let { return refuse(HandoverNote.OtherGround(it.key)) }
         val yielder = listener ?: YieldListener(yieldPort, scope, ::onYield).also { listener = it }
-        if (!yielder.start()) return@withLock refuse(HandoverNote.ListenerFailed(yieldPort))
+        if (!yielder.start()) return refuse(HandoverNote.ListenerFailed(yieldPort))
+        held = box
         yieldDuringTake = false
         move(HandoverState(HandoverPhase.Taking, busy = true), "take requested from ${box.deviceId}")
-        val request = SignedRequest.take(holderId(), holderName(), yielder.localPort ?: yieldPort, auth, clock.wallMs())
-        val reply = api.post(target, request)
-        val standby = reply is BoxReply.Ok && reply.state == STANDBY
-        if (standby && yieldDuringTake) {
-            // The box's operator took it back before the phone started: nothing went out.
-            return@withLock end(HandoverPhase.Yielded, HandoverNote.TakenBack(box.name))
+        var holdTried = false
+        try {
+            val request = SignedRequest.take(holderId(), holderName(), yielder.localPort ?: yieldPort, auth, clock.wallMs())
+            val reply = api.post(target, request)
+            val standby = reply is BoxReply.Ok && reply.state == STANDBY
+            if (standby && yieldDuringTake) {
+                // The box's operator took it back before the phone started: nothing went out.
+                return end(HandoverPhase.Yielded, HandoverNote.TakenBack(box.name))
+            }
+            if (standby) {
+                holdTried = true
+                if (radio.hold()) {
+                    takenFrom = box.deviceId
+                    takenAtMs = clock.elapsedMs()
+                    return move(HandoverState(HandoverPhase.Transmitting, HoldSource.Taken), "box ${box.deviceId} in standby")
+                }
+                // The box stopped for nothing: hand it straight back.
+                api.post(target, SignedRequest.giveBack(holderId(), auth, clock.wallMs()))
+                return end(HandoverPhase.ReceiveOnly, HandoverNote.TxDidNotOpen(box.name))
+            }
+            val note = when (reply) {
+                is BoxReply.Refused -> HandoverNote.BoxRefused(reply.detail)
+                is BoxReply.Ok -> HandoverNote.BoxRefused(
+                    "${box.name} answered ${reply.state ?: "without a state"} rather than standby, so the phone did not transmit.",
+                )
+                BoxReply.Unreachable -> HandoverNote.NoLanReach(box.name)
+            }
+            return end(HandoverPhase.ReceiveOnly, note)
+        } finally {
+            if (_state.value.phase == HandoverPhase.Taking) {
+                withContext(NonCancellable) { abandonTake(box.name, target, auth, holdTried) }
+            }
         }
-        if (standby && radio.hold()) {
-            takenFrom = box.deviceId
-            takenAtMs = clock.elapsedMs()
-            return@withLock move(HandoverState(HandoverPhase.Transmitting, HoldSource.Taken), "box ${box.deviceId} in standby")
-        }
-        if (standby) {
-            // The box stopped for nothing: hand it straight back.
+    }
+
+    /**
+     * A take that ended without settling (it threw, or the handover's own
+     * scope ended): the box may already sit in standby, so the phone makes
+     * sure it is quiet and hands the uplink straight back.
+     */
+    private suspend fun abandonTake(boxName: String, target: BoxTarget, auth: PhoneAuth, holdTried: Boolean) {
+        var note: HandoverNote = HandoverNote.TxNotQuiet(boxName)
+        try {
+            if (holdTried && !radio.release()) return
+            note = HandoverNote.TxDidNotOpen(boxName)
             api.post(target, SignedRequest.giveBack(holderId(), auth, clock.wallMs()))
-            return@withLock end(HandoverPhase.ReceiveOnly, HandoverNote.TxDidNotOpen(box.name))
+        } finally {
+            end(HandoverPhase.ReceiveOnly, note)
         }
-        val note = when (reply) {
-            is BoxReply.Refused -> HandoverNote.BoxRefused(reply.detail)
-            is BoxReply.Ok -> HandoverNote.BoxRefused(
-                "${box.name} answered ${reply.state ?: "without a state"} rather than standby, so the phone did not transmit.",
-            )
-            BoxReply.Unreachable -> HandoverNote.NoLanReach(box.name)
-        }
-        end(HandoverPhase.ReceiveOnly, note)
     }
 
     /** Gives a taken uplink back: stop, confirm quiet for a second, then tell the box. */
-    suspend fun giveBack(): HandoverState = ops.withLock {
+    suspend fun giveBack(): HandoverState = scope.async { ops.withLock { giveBackLocked() } }.await()
+
+    private suspend fun giveBackLocked(): HandoverState {
         val start = _state.value
-        if (start.phase != HandoverPhase.Transmitting || start.source != HoldSource.Taken) return@withLock start
+        if (start.phase != HandoverPhase.Transmitting || start.source != HoldSource.Taken) return start
         _state.value = start.copy(busy = true)
-        val box = boxes.load()
+        val box = held
         val name = box?.name ?: takenFrom.orEmpty()
-        if (!radio.release()) return@withLock end(HandoverPhase.Yielded, HandoverNote.TxNotQuiet(name))
-        val auth = box?.auth
-        val target = box?.target
-        val reply = if (auth != null && target != null) {
-            api.post(target, SignedRequest.giveBack(holderId(), auth, clock.wallMs()))
-        } else {
-            BoxReply.Unreachable
+        var quiet: Boolean? = null
+        try {
+            val stopped = radio.release()
+            quiet = stopped
+            if (!stopped) return end(HandoverPhase.Yielded, HandoverNote.TxNotQuiet(name))
+            val auth = box?.auth
+            val target = box?.target
+            val reply = if (auth != null && target != null) {
+                api.post(target, SignedRequest.giveBack(holderId(), auth, clock.wallMs()))
+            } else {
+                BoxReply.Unreachable
+            }
+            return end(
+                HandoverPhase.Yielded,
+                when (reply) {
+                    is BoxReply.Ok -> HandoverNote.GaveBack(name)
+                    is BoxReply.Refused -> HandoverNote.GiveBackUnconfirmed(name, reply.detail)
+                    BoxReply.Unreachable -> HandoverNote.GiveBackUnconfirmed(name, null)
+                },
+            )
+        } finally {
+            val now = _state.value
+            if (now.busy && now.phase == HandoverPhase.Transmitting) {
+                // The give-back ended without settling: the phone stops for
+                // certain and the box resumes on its own fallback.
+                withContext(NonCancellable) {
+                    var stopped = quiet ?: false
+                    try {
+                        if (quiet == null) stopped = radio.release()
+                    } finally {
+                        end(
+                            HandoverPhase.Yielded,
+                            if (stopped) HandoverNote.GiveBackUnconfirmed(name, null) else HandoverNote.TxNotQuiet(name),
+                        )
+                    }
+                }
+            }
         }
-        end(
-            HandoverPhase.Yielded,
-            when (reply) {
-                is BoxReply.Ok -> HandoverNote.GaveBack(name)
-                is BoxReply.Refused -> HandoverNote.GiveBackUnconfirmed(name, reply.detail)
-                BoxReply.Unreachable -> HandoverNote.GiveBackUnconfirmed(name, null)
-            },
-        )
     }
 
     /** The box and its uplink as its LAN route reports it now; null with no ground-role invite. */
@@ -177,14 +242,24 @@ class UplinkHandover internal constructor(
     }
 
     private suspend fun onYield(request: YieldRequest): YieldAnswer {
-        val box = boxes.load()
+        val box = held
         val from = runCatching {
             ((Json.parseToJsonElement(request.body.decodeToString()) as JsonObject)["box_device_id"] as JsonPrimitive).content
         }.getOrNull()
-        val verdict = box?.auth?.let { guard.check(it.handoverKey, request.tsMs, request.body, request.macB64, clock.wallMs()) }
+        val key = box?.auth?.handoverKey
+        val verdict = if (box != null && key != null) {
+            guard.check(key, request.tsMs, request.body, request.macB64, box.deviceId, clock.wallMs())
+        } else {
+            null
+        }
         log("uplink yield received from=${from ?: "unknown"} verdict=${verdict?.wire ?: "no_key"}")
-        if (verdict != MacVerdict.Accepted) {
-            return YieldAnswer(401, YieldListener.error("E_UPLINK_UNAUTHORIZED", "The take-back call does not verify under this phone's handover key."))
+        if (box == null || verdict != MacVerdict.Accepted) {
+            val detail = if (verdict == MacVerdict.NotAYield) {
+                "The call is not a take-back from the ground station this phone took the uplink from."
+            } else {
+                "The take-back call does not verify under this phone's handover key."
+            }
+            return YieldAnswer(401, YieldListener.error("E_UPLINK_UNAUTHORIZED", detail))
         }
         when (_state.value.phase) {
             HandoverPhase.Taking -> {
@@ -194,7 +269,7 @@ class UplinkHandover internal constructor(
             HandoverPhase.Transmitting -> Unit
             else -> return YieldAnswer(200, """{"ok":true,"state":"${_state.value.phase.wire}"}""")
         }
-        val quiet = stopAtOnce(HandoverNote.TakenBack(box?.name ?: from.orEmpty()))
+        val quiet = stopAtOnce(HandoverNote.TakenBack(box.name))
         return if (quiet) {
             YieldAnswer(200, """{"ok":true,"state":"yielded"}""")
         } else {
@@ -202,14 +277,19 @@ class UplinkHandover internal constructor(
         }
     }
 
-    /** Closes the transmitters now, then moves to yielded with [note]; true when they read quiet. */
-    private suspend fun stopAtOnce(note: HandoverNote): Boolean {
-        _state.value = _state.value.copy(busy = true)
-        val quiet = radio.release()
-        ops.withLock {
-            if (_state.value.phase == HandoverPhase.Transmitting) end(HandoverPhase.Yielded, note)
+    /**
+     * Closes the transmitters now, then moves to yielded with [note]; true
+     * when they read quiet. Runs to the end even when its caller is cancelled.
+     */
+    private suspend fun stopAtOnce(note: HandoverNote): Boolean = withContext(NonCancellable) {
+        _state.update { if (it.phase == HandoverPhase.Transmitting) it.copy(busy = true) else it }
+        try {
+            radio.release()
+        } finally {
+            ops.withLock {
+                if (_state.value.phase == HandoverPhase.Transmitting) end(HandoverPhase.Yielded, note)
+            }
         }
-        return quiet
     }
 
     private fun onHolding(holding: Boolean) {
@@ -234,6 +314,7 @@ class UplinkHandover internal constructor(
     /** A move that ends a take, give-back or yield: the listener closes with it. */
     private fun end(phase: HandoverPhase, note: HandoverNote): HandoverState {
         listener?.close()
+        held = null
         takenFrom = null
         return move(HandoverState(phase, note = note), note.english)
     }

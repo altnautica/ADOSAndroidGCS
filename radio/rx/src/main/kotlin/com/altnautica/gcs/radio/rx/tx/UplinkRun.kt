@@ -9,7 +9,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The phone's uplink for one radio run while it holds the uplink: the box's
@@ -27,7 +30,7 @@ class UplinkRun(
 ) : AutoCloseable {
 
     private val judge = UplinkJudge()
-    private var transmitters: GroundTransmitters? = null
+    @Volatile private var transmitters: GroundTransmitters? = null
     private val jobs = mutableListOf<Job>()
 
     /** Opens the transmitters and starts the beacon and the judge; true when transmitting. */
@@ -87,14 +90,23 @@ class UplinkRun(
         }
     }
 
+    /**
+     * Stops the beacon and the judge, waits for each to finish the pass it is
+     * in, then closes the transmitters: neither loop sends nor reports once
+     * the run is closed.
+     */
     override fun close() {
-        jobs.forEach { it.cancel() }
+        val loops = jobs.toList()
         jobs.clear()
+        loops.forEach { it.cancel() }
+        val joined = runBlocking { withTimeoutOrNull(JOIN_MS) { loops.joinAll() } }
+        if (joined == null) Log.w(TAG, "the uplink loops did not stop within $JOIN_MS ms")
         transmitters?.close()
         transmitters = null
     }
 
     private companion object {
         const val TAG = "AdosPhoneUplink"
+        const val JOIN_MS = 2_000L
     }
 }

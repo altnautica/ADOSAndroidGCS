@@ -204,12 +204,14 @@ jlong native_open(JNIEnv *env, jclass, jint pipe_fd, jbyteArray key_bytes, jint 
     return reinterpret_cast<jlong>(handle.release());
 }
 
-// Sends one datagram; false when it is larger than one WFB packet carries.
+// Sends one datagram; false when it is larger than one WFB packet carries or
+// the transmitter is closed.
 jboolean native_send(JNIEnv *env, jclass, jlong ptr, jbyteArray payload) {
     auto *h = reinterpret_cast<TransmitterHandle *>(ptr);
     if (h == nullptr) return JNI_FALSE;
     const jsize size = env->GetArrayLength(payload);
     std::lock_guard<std::mutex> guard(h->lock);
+    if (!h->tx) return JNI_FALSE;
     h->packets_in += 1;
     h->bytes_in += size;
     if (static_cast<size_t>(size) > MAX_PAYLOAD_SIZE) {
@@ -240,20 +242,32 @@ jlongArray native_stats(JNIEnv *env, jclass, jlong ptr) {
     jlong values[6] = {0, 0, 0, 0, 0, 0};
     if (h != nullptr) {
         std::lock_guard<std::mutex> guard(h->lock);
-        values[0] = h->packets_in;
-        values[1] = h->bytes_in;
-        values[2] = h->tx->injected;
-        values[3] = h->tx->injected_bytes_;
-        values[4] = h->tx->dropped;
-        values[5] = h->oversize;
+        if (h->tx) {
+            values[0] = h->packets_in;
+            values[1] = h->bytes_in;
+            values[2] = h->tx->injected;
+            values[3] = h->tx->injected_bytes_;
+            values[4] = h->tx->dropped;
+            values[5] = h->oversize;
+        }
     }
     jlongArray out = env->NewLongArray(6);
     if (out != nullptr) env->SetLongArrayRegion(out, 0, 6, values);
     return out;
 }
 
+// The transmitter, and with it the pipe's descriptor, is destroyed under the
+// handle's lock, so a send still inside never writes to a closed or reused
+// descriptor. That a call cannot start on the handle once close began, and so
+// that the handle itself may go after, is WfbTransmitter's lock.
 void native_close(JNIEnv *, jclass, jlong ptr) {
-    delete reinterpret_cast<TransmitterHandle *>(ptr);
+    auto *h = reinterpret_cast<TransmitterHandle *>(ptr);
+    if (h == nullptr) return;
+    {
+        std::lock_guard<std::mutex> guard(h->lock);
+        h->tx.reset();
+    }
+    delete h;
 }
 
 const JNINativeMethod kMethods[] = {
