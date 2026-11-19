@@ -19,6 +19,7 @@ import com.altnautica.gcs.radio.rx.usb.DongleStatus
 import com.altnautica.gcs.radio.rx.usb.UsbDongleMonitor
 import com.altnautica.gcs.radio.rx.uplink.HandoverState
 import com.altnautica.gcs.radio.rx.uplink.UplinkHandover
+import com.altnautica.gcs.radio.rx.video.PhoneRadioDecoderReport
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -71,6 +72,7 @@ class PhoneRadioViewModelTest {
             every { state } returns MutableStateFlow(HandoverState())
             coEvery { boxStatus() } returns null
         },
+        decoderReport = PhoneRadioDecoderReport(),
     )
 
     @Before

@@ -13,6 +13,7 @@ build/
 /captures
 .externalNativeBuild
 .cxx
+.kotlin/
 *.apk
 *.aab
 *.jks

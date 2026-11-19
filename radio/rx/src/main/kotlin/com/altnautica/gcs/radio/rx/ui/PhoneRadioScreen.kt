@@ -44,6 +44,7 @@ import com.altnautica.gcs.core.designsystem.component.StatusLevel
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.video.codec.DecoderInfo
 import com.altnautica.gcs.radio.rx.R
 import com.altnautica.gcs.radio.rx.invite.EnrollmentState
 import com.altnautica.gcs.radio.rx.invite.InviteFailure
@@ -321,7 +322,7 @@ private fun ReceiverSection(state: PhoneRadioUiState, onStart: () -> Unit, onSto
                 Text(stringResource(R.string.phone_radio_needs), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgTertiary)
             }
         }
-        state.stats?.let { Stats(it) }
+        state.stats?.let { Stats(it, state.decoder) }
         if (state.links.isNotEmpty()) Drones(state.links)
     }
 }
@@ -344,7 +345,7 @@ private fun radioFailure(state: PhoneRadioState.Failed): String {
 }
 
 @Composable
-private fun Stats(stats: PhoneRadioStats) {
+private fun Stats(stats: PhoneRadioStats, decoder: DecoderInfo?) {
     val none = stringResource(R.string.phone_radio_no_value)
     Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1)) {
         StatRow(R.string.phone_radio_stat_channel, stringResource(R.string.phone_radio_stat_channel_value, stats.channel, stats.bandwidthMhz))
@@ -358,11 +359,23 @@ private fun Stats(stats: PhoneRadioStats) {
         StatRow(R.string.phone_radio_stat_usb, perSecond(stats.usbFramesPerSec))
         StatRow(R.string.phone_radio_stat_dropped, perSecond(stats.usbDroppedPerSec))
         StatRow(R.string.phone_radio_stat_hops, stats.hopsFollowed.toString())
+        StatRow(R.string.phone_radio_stat_decoder, decoder?.let { decoderLine(it) } ?: none)
     }
 }
 
 @Composable
 private fun perSecond(value: Long): String = stringResource(R.string.phone_radio_per_second, value.toInt())
+
+/** "c2.qti.avc.decoder · hardware · low latency", or the software fallback named as such. */
+@Composable
+private fun decoderLine(d: DecoderInfo): String = stringResource(
+    when {
+        !d.hardware -> R.string.phone_radio_decoder_software
+        d.lowLatency -> R.string.phone_radio_decoder_hardware_low_latency
+        else -> R.string.phone_radio_decoder_hardware
+    },
+    d.name,
+)
 
 @Composable
 private fun StatRow(@StringRes label: Int, value: String) {

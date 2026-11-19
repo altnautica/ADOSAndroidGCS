@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong
  * records, and every record written to [txFrames] goes to the relay under the
  * channel its 802.11 header names. [open] registers one receiving lane per
  * channel the session's receivers listen on, and [addTxChannel] the channels
- * the phone transmits on, with the relay (`fleet-bench-airmux.py`).
+ * the phone transmits on, with the bench relay.
  */
 class BenchRelayRadio(private val config: BenchRelayConfig, private val rxChannels: List<Long>, txChannels: List<Long>) :
     IUsbRadio.Stub() {

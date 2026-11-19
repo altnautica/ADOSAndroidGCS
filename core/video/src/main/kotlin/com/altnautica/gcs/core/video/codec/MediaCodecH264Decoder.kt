@@ -1,10 +1,8 @@
 package com.altnautica.gcs.core.video.codec
 
 import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaCodecList
 import android.media.MediaFormat
-import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import com.altnautica.gcs.core.video.rtp.H264AccessUnit
@@ -14,21 +12,22 @@ import com.altnautica.gcs.core.video.rtp.H264AccessUnit
  *
  * Synchronous mode on the caller's thread: [submit] queues one unit and
  * renders whatever output is ready, so a receive thread drives decode with
- * no extra threads or callbacks. Low-latency decoding is requested when the
- * chosen codec reports [MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency].
- * [onFrameRendered] fires once per picture released to the surface.
+ * no extra threads or callbacks. The decoder is the best one the device has
+ * ([PlatformDecoders]): hardware first, in low-latency mode where offered.
+ * [onFrameRendered] fires once per picture released to the surface;
+ * [onOpened] once per decoder opened, with which one it is.
  */
 class MediaCodecH264Decoder(
     private val onFrameRendered: () -> Unit = {},
+    private val onOpened: (DecoderInfo) -> Unit = {},
 ) {
     private var codec: MediaCodec? = null
     private var surface: Surface? = null
     private val info = MediaCodec.BufferInfo()
 
-    /** Name of the active decoder and whether low latency was granted, for logs and stats. */
-    var codecName: String? = null
-        private set
-    var lowLatency: Boolean = false
+    /** The open decoder, or null before the first key frame. */
+    @Volatile
+    var decoder: DecoderInfo? = null
         private set
 
     /** Attaches or replaces the output surface; null releases the codec. */
@@ -48,8 +47,8 @@ class MediaCodecH264Decoder(
     @Synchronized
     fun submit(unit: H264AccessUnit, presentationUs: Long): Boolean {
         val target = surface ?: return false
-        val c = codec ?: if (unit.keyFrame || unit.configOnly) open(target) else return false
         return try {
+            val c = codec ?: if (unit.keyFrame || unit.configOnly) open(target) ?: return false else return false
             val index = c.dequeueInputBuffer(INPUT_TIMEOUT_US)
             if (index < 0) {
                 drain(c)
@@ -92,28 +91,35 @@ class MediaCodecH264Decoder(
         }
     }
 
-    private fun open(target: Surface): MediaCodec {
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, DEFAULT_W, DEFAULT_H)
-        val name = MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format)
-        val c = if (name != null) MediaCodec.createByCodecName(name) else MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-        val low = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            c.codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC)
-                .isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency)
-        if (low) {
-            format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
+    /** Earliest time another open is tried after every decoder refused (elapsed ms). */
+    private var reopenAfterMs = 0L
+
+    /**
+     * Opens the best decoder, or null while backing off: a full walk of the
+     * device's decoders runs on the receive thread, so after one that opened
+     * nothing the next is held off for [REOPEN_BACKOFF_MS], not tried on every
+     * key frame.
+     */
+    private fun open(target: Surface): MediaCodec? {
+        val now = SystemClock.elapsedRealtime()
+        if (now < reopenAfterMs) return null
+        val (c, opened) = try {
+            PlatformDecoders.open(MediaFormat.MIMETYPE_VIDEO_AVC, DEFAULT_W, DEFAULT_H, target)
+        } catch (e: IllegalStateException) {
+            reopenAfterMs = now + REOPEN_BACKOFF_MS
+            Log.w(TAG, "no decoder opened; trying again in ${REOPEN_BACKOFF_MS / 1000} s", e)
+            return null
         }
-        c.configure(format, target, null, 0)
-        c.start()
         codec = c
-        codecName = c.name
-        lowLatency = low
-        Log.i(TAG, "decoder ${c.name} lowLatency=$low")
+        decoder = opened
+        onOpened(opened)
         return c
     }
 
     companion object {
         private const val TAG = "AdosVideoDecoder"
         private const val INPUT_TIMEOUT_US = 10_000L
+        private const val REOPEN_BACKOFF_MS = 2_000L
         private const val DEFAULT_W = 1280
         private const val DEFAULT_H = 720
     }

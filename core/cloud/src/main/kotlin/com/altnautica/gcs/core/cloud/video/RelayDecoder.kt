@@ -1,13 +1,11 @@
 package com.altnautica.gcs.core.cloud.video
 
 import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaCodecList
 import android.media.MediaFormat
-import android.os.Build
 import android.util.Log
 import android.view.Surface
 import com.altnautica.gcs.core.video.codec.MediaCodecH264Decoder
+import com.altnautica.gcs.core.video.codec.PlatformDecoders
 import com.altnautica.gcs.core.video.rtp.H264AccessUnit
 
 /** Decodes relay samples into a surface. Kept behind an interface so the session is testable without MediaCodec. */
@@ -117,23 +115,9 @@ private class HevcSurfaceDecoder(private val onFrame: () -> Unit) {
     }
 
     private fun open(target: Surface): MediaCodec {
-        val mime = MediaFormat.MIMETYPE_VIDEO_HEVC
-        val format = MediaFormat.createVideoFormat(mime, 1280, 720)
-        val name = MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format)
-        val c = if (name != null) MediaCodec.createByCodecName(name) else MediaCodec.createDecoderByType(mime)
-        try {
-            val low = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-                c.codecInfo.getCapabilitiesForType(mime).isFeatureSupported(MediaCodecInfo.CodecCapabilities.FEATURE_LowLatency)
-            if (low) format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1)
-            c.configure(format, target, null, 0)
-            c.start()
-            codec = c
-            Log.i(TAG, "decoder ${c.name} lowLatency=$low")
-            return c
-        } catch (e: Exception) {
-            runCatching { c.release() }
-            throw e
-        }
+        val (c, _) = PlatformDecoders.open(MediaFormat.MIMETYPE_VIDEO_HEVC, 1280, 720, target)
+        codec = c
+        return c
     }
 
     private companion object {

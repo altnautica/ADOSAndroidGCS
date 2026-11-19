@@ -12,6 +12,7 @@ import com.altnautica.gcs.core.video.VideoRecording
 import com.altnautica.gcs.core.video.VideoScope
 import com.altnautica.gcs.core.video.VideoSessionHandle
 import com.altnautica.gcs.core.video.VideoSourceFactory
+import com.altnautica.gcs.core.video.codec.DecoderInfo
 import com.altnautica.gcs.core.video.codec.MediaCodecH264Decoder
 import com.altnautica.gcs.core.video.record.H264Dvr
 import com.altnautica.gcs.core.video.rtp.H264RtpDepacketizer
@@ -39,13 +40,16 @@ class PhoneRadioVideoFactory @Inject constructor(
     @ApplicationContext private val context: Context,
     private val session: PhoneRadioSession,
     @VideoScope private val scope: CoroutineScope,
+    private val decoderReport: PhoneRadioDecoderReport,
 ) : VideoSourceFactory {
 
     override fun supports(src: VideoSource): Boolean = src is VideoSource.PhoneRadio
 
     override fun create(src: VideoSource): VideoSessionHandle {
         require(src is VideoSource.PhoneRadio) { "unsupported source $src" }
-        return PhoneRadioVideoSession(src, src.node, session, scope, File(context.filesDir, DVR_DIR), VideoClock.Elapsed)
+        return PhoneRadioVideoSession(
+            src, src.node, session, scope, File(context.filesDir, DVR_DIR), VideoClock.Elapsed, decoderReport::opened,
+        )
     }
 
     companion object {
@@ -61,13 +65,14 @@ internal class PhoneRadioVideoSession(
     private val scope: CoroutineScope,
     dvrDir: File,
     private val clock: VideoClock,
+    onDecoderOpened: (DecoderInfo) -> Unit = {},
 ) : VideoSessionHandle {
 
     private val _state = MutableStateFlow<VideoState>(VideoState.Idle)
     override val state: StateFlow<VideoState> = _state.asStateFlow()
 
     private val watchdog = FrameWatchdog(clock)
-    private val decoder = MediaCodecH264Decoder(onFrameRendered = watchdog::onFrame)
+    private val decoder = MediaCodecH264Decoder(onFrameRendered = watchdog::onFrame, onOpened = onDecoderOpened)
     private val dvr = H264Dvr(dvrDir)
     override val recording: VideoRecording = dvr
 

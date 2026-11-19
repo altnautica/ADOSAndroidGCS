@@ -106,6 +106,10 @@
     <string name="phone_radio_stat_usb">USB frames</string>
     <string name="phone_radio_stat_dropped">Dropped (phone busy)</string>
     <string name="phone_radio_stat_hops">Channel hops followed</string>
+    <string name="phone_radio_stat_decoder">Video decoder</string>
+    <string name="phone_radio_decoder_hardware_low_latency">%1$s · hardware · low latency</string>
+    <string name="phone_radio_decoder_hardware">%1$s · hardware</string>
+    <string name="phone_radio_decoder_software">%1$s · software, higher latency</string>
     <string name="phone_radio_per_second">%1$d/s</string>
     <string name="phone_radio_no_value">—</string>
     <string name="phone_radio_drones">Drones</string>

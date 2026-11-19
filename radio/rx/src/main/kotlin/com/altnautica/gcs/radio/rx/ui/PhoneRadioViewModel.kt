@@ -38,6 +38,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import com.altnautica.gcs.radio.rx.uplink.HandoverState
 import com.altnautica.gcs.radio.rx.uplink.UplinkHandover
+import com.altnautica.gcs.radio.rx.video.PhoneRadioDecoderReport
+import com.altnautica.gcs.core.video.codec.DecoderInfo
 import javax.inject.Inject
 
 /** The USB radio as the screen shows it. */
@@ -84,6 +86,8 @@ data class PhoneRadioUiState(
     val bind: BindState = BindState.Idle,
     /** The operator opened the Bind section ("Bind a drone"), or a bind ran. */
     val bindOpen: Boolean = false,
+    /** The decoder the drone's video last opened on; null until video has played. */
+    val decoder: DecoderInfo? = null,
 ) {
     val canStart: Boolean get() = (invite != null || fleet != null) && (dongle is DongleUi.Ready || alternateRadio)
 }
@@ -99,6 +103,7 @@ class PhoneRadioViewModel @Inject constructor(
     private val binder: BindController,
     reconciler: SlotReconciler,
     private val handover: UplinkHandover,
+    decoderReport: PhoneRadioDecoderReport,
 ) : ViewModel() {
 
     private val enrollmentState = MutableStateFlow<EnrollmentState?>(null)
@@ -135,9 +140,9 @@ class PhoneRadioViewModel @Inject constructor(
         dongles.status.map(::toUi),
         store.invite,
         combine(enrollmentState, loaded, keysError) { e, l, k -> Triple(e, l, k) },
-        combine(grounds, bindPart, ::Pair),
+        combine(grounds, bindPart, decoderReport.decoder, ::Triple),
         radioPart,
-    ) { dongle, invite, (enroll, isLoaded, error), (groundList, bind), radio ->
+    ) { dongle, invite, (enroll, isLoaded, error), (groundList, bind, decoder), radio ->
         PhoneRadioUiState(
             loading = !isLoaded,
             dongle = dongle,
@@ -156,6 +161,7 @@ class PhoneRadioViewModel @Inject constructor(
             fleet = bind.fleet,
             bind = bind.state,
             bindOpen = bind.open,
+            decoder = decoder,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_MS), PhoneRadioUiState())
 
