@@ -22,10 +22,10 @@ class LiftoffSurfaceTest {
     @Test
     fun `the running take-off shows its status line and detail`() {
         assertEquals("Spinning up. Motors at idle, checking they're steady.", liftoffLine(seq(LiftoffPhase.Spool, "Spinning up", "Motors at idle, checking they're steady")))
-        assertEquals("Lifting off.", liftoffLine(seq(LiftoffPhase.Lift, "Lifting off")))
+        assertEquals("Lifting off.", liftoffLine(seq(LiftoffPhase.Commit, "Lifting off")))
         assertEquals("Airborne. Climbing to 3 m.", liftoffLine(seq(LiftoffPhase.Done, "Airborne", "Climbing to 3 m")))
         assertNull(liftoffLine(LaunchSequence(LaunchStep.Takeoff, "hold", null)))
-        assertNull(liftoffStopText(seq(LiftoffPhase.Lift, "Lifting off")))
+        assertNull(liftoffStopText(seq(LiftoffPhase.Commit, "Lifting off")))
     }
 
     @Test

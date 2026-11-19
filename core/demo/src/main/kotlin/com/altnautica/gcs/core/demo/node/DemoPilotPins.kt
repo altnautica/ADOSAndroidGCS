@@ -129,11 +129,16 @@ internal class DemoPilotPins(
                 put("rth_countdown_s", round1((LOW_BATTERY_MS - sinceMs % LOW_BATTERY_MS) / 1000.0))
                 // A GNSS-free copter lands: the countdown banner names the landing.
                 banner("pilot.banner.low_battery_land_in", "pct" to LOW_BATTERY_PCT, "need_pct" to LOW_BATTERY_NEED_PCT, "in_s" to "${LOW_BATTERY_MS / 1000}")
+                // Landing where it is needs no charge for the way home: the floor.
+                batteryReserve("floor")
             }
             DemoScenario.LowBatteryLand -> lowBatteryFired("land", PILOT, LAND, "pilot.banner.low_battery_land", LOW_BATTERY_LAND_TEXT, sinceMs)
             // A multirotor's low-battery return is SmartRTL, the flight controller flying the recorded path.
-            DemoScenario.LowBatteryRth ->
+            DemoScenario.LowBatteryRth -> {
                 lowBatteryFired("rth", FC_MODE, SMART_RTL, "pilot.banner.low_battery_smart_rtl", LOW_BATTERY_RTH_TEXT, sinceMs)
+                // The estimate of the way home asked for the return above the floor.
+                batteryReserve("energy")
+            }
             // The pilot's own readiness ids; the lost fix itself shows on the flight controller's telemetry.
             DemoScenario.NoGnss -> putJsonArray("readiness") {
                 add(FC_PROFILE_OK)
@@ -283,6 +288,15 @@ internal class DemoPilotPins(
         }
     }
 
+    /** The charge the return home needs: the fixed floor, or the estimate of the way home above it. */
+    private fun JsonObjectBuilder.batteryReserve(basis: String) {
+        putJsonObject("battery_reserve") {
+            put("need_pct", if (basis == "energy") LOW_BATTERY_ENERGY_NEED_PCT else LOW_BATTERY_NEED_PCT.toInt())
+            put("basis", basis)
+            put("return_s", LOW_BATTERY_RETURN_S)
+        }
+    }
+
     private fun JsonObjectBuilder.flying(owner: String, mode: Int, label: String = ownerLabel(owner, profile)) {
         put("owner", owner)
         put("owner_label", label)
@@ -346,6 +360,8 @@ internal class DemoPilotPins(
         private const val LOW_BATTERY_MS = 10_000L
         private const val LOW_BATTERY_PCT = "18"
         private const val LOW_BATTERY_NEED_PCT = "20"
+        private const val LOW_BATTERY_ENERGY_NEED_PCT = 26
+        private const val LOW_BATTERY_RETURN_S = 95
         private const val MISSION_SEQ = 4
         private const val MISSION_TOTAL = 6
 

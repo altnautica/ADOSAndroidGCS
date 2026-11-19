@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.agent.pilot
 
 import com.altnautica.gcs.core.model.AvoidMode
 import com.altnautica.gcs.core.model.AvoidState
+import com.altnautica.gcs.core.model.BatteryReserve
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.HandoverGate
 import com.altnautica.gcs.core.model.InputSession
@@ -33,6 +34,7 @@ import com.altnautica.gcs.core.model.ProfileLimits
 import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
+import com.altnautica.gcs.core.model.SimClock
 import com.altnautica.gcs.core.model.SpeedCap
 import com.altnautica.gcs.core.model.StickCommand
 import kotlinx.serialization.json.Json
@@ -182,6 +184,13 @@ object PilotWire {
             failsafeCause = data.str("failsafe_cause"),
             setupAbort = data.str("setup_abort"),
             lowBatteryAction = data.str("low_battery_action")?.takeIf { it in LOW_BATTERY_ACTIONS },
+            batteryReserve = (data["battery_reserve"] as? JsonObject)?.let { r ->
+                BatteryReserve(
+                    r.long("need_pct")?.toInt() ?: return@let null,
+                    r.str("basis")?.takeIf { it == "energy" || it == "floor" } ?: return@let null,
+                    r.long("return_s")?.toInt() ?: return@let null,
+                )
+            },
             speedCap = (data["speed_cap"] as? JsonObject)?.let { c ->
                 SpeedCap(c.str("reason") ?: return@let null, c.float("v_h_mps") ?: return@let null)
             },
@@ -201,6 +210,10 @@ object PilotWire {
             stick = (data["stick"] as? JsonObject)?.let { c -> StickCommand(c.long("input_age_ms") ?: return@let null) },
             commandLimits = ((data["command"] as? JsonObject)?.get("limits") as? JsonArray).orEmpty()
                 .mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content },
+            // Only while the pilot follows a simulator's clock.
+            simClock = (data["clock"] as? JsonObject)
+                ?.takeIf { it.str("source") == "sim" }
+                ?.let { SimClock(it.double("speed")) },
         )
     }
 

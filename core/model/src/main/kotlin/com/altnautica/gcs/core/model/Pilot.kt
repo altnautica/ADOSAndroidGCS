@@ -247,12 +247,17 @@ enum class LaunchStep(val wire: String) {
     }
 }
 
-/** Phases of the supervised lift-off: spool, level on the ground (or probe for trim), lift, climb, then done or stopped. */
+/**
+ * Phases of the supervised lift-off: spool, level a learned trim, find the thrust a side unloads at, bracket the
+ * trim on the skids, settle, commit off the ground, climb, then done or stopped.
+ */
 enum class LiftoffPhase(val wire: String) {
     Spool("spool"),
     Level("level"),
-    Probe("probe"),
-    Lift("lift"),
+    Find("find"),
+    Bracket("bracket"),
+    Settle("settle"),
+    Commit("commit"),
     Climb("climb"),
     Done("done"),
     Stopped("stopped");
@@ -337,6 +342,8 @@ data class PilotState(
      * countdown runs ([rthCountdownS]) and after it fired; null while none.
      */
     val lowBatteryAction: String? = null,
+    /** The charge a low-battery return home needs, published airborne; null on the ground. */
+    val batteryReserve: BatteryReserve? = null,
     /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`, `confined-near`), or null. */
     val speedCap: SpeedCap? = null,
     /** The pilot does not trust the horizontal position (an older agent sends none), or null. */
@@ -357,6 +364,8 @@ data class PilotState(
     val stick: StickCommand? = null,
     /** The limits that cut the asked velocity since the previous frame (`command.limits`, first bound first); empty while it flies none. */
     val commandLimits: List<String> = emptyList(),
+    /** The simulator's clock while the pilot follows one (the "SIM ×N" badge); null on wall time and from an older agent. */
+    val simClock: SimClock? = null,
 ) {
     /** Declared to fly with no RC transmitter: the app's controls are the only way to stop the drone. */
     val noRc: Boolean get() = rcReceiver == RcReceiver.Absent
@@ -386,6 +395,13 @@ data class PilotStatusText(val severity: Int, val text: String, val ageMs: Long?
 data class SpeedCap(val reason: String, val vHMps: Float)
 
 /**
+ * The charge a low-battery return home needs: the return fires at [needPct] %, set by the
+ * estimate of the way home ([basis] `energy`) or the fixed floor (`floor`); [returnS] the
+ * seconds home, countdown included.
+ */
+data class BatteryReserve(val needPct: Int, val basis: String, val returnS: Int)
+
+/**
  * The effective limits the pilot flies: [profile]'s row capped by the FC, the vehicle and the
  * place; [vHMps] in m/s; [marginM] the obstacle margin it keeps (null or 0 when not sent).
  */
@@ -393,6 +409,20 @@ data class ProfileLimits(val profile: PilotProfile?, val vHMps: Float, val margi
 
 /** The stick command the pilot flew this tick; [inputAgeMs] is the age of the stick frame it flew. */
 data class StickCommand(val inputAgeMs: Long)
+
+/**
+ * The simulator's clock the pilot follows: [speed] its pacing (0 as fast as it can), null when the
+ * frame did not say. A run on a simulator's clock never reads as real time.
+ */
+data class SimClock(val speed: Double?) {
+    /** The badge, as every surface writes it: "SIM ×3", "SIM ×0.5", "SIM ×max" or "SIM". */
+    val label: String get() {
+        val s = speed ?: return "SIM"
+        if (s <= 0.0) return "SIM ×max"
+        val n = Math.round(s * 10.0) / 10.0
+        return if (n % 1.0 == 0.0) "SIM ×${n.toLong()}" else "SIM ×$n"
+    }
+}
 
 /**
  * The pilot does not trust the horizontal position: [reason] is `flow_disagrees`,

@@ -133,6 +133,7 @@ internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
         NavSourceChip(chip, inputs, compact = width == WidthClass.Compact, onUseSet = vm.autonomy::useSourceSet)
         ConfinedChipSlot(vm)
         NoRcChipSlot(vm)
+        SimClockChipSlot(vm)
     }
 }
 

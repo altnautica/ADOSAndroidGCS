@@ -2,6 +2,7 @@ package com.altnautica.gcs.core.agent.pilot
 
 import com.altnautica.gcs.core.model.AvoidMode
 import com.altnautica.gcs.core.model.AvoidState
+import com.altnautica.gcs.core.model.BatteryReserve
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.InputSession
 import com.altnautica.gcs.core.model.MissionGap
@@ -185,6 +186,18 @@ class PilotWireTest {
             val s = checkNotNull(PilotWire.parseState(JsonObject(data + ("low_battery_action" to other)), 0L))
             assertNull(other.toString(), s.lowBatteryAction)
         }
+    }
+
+    @Test
+    fun `the battery reserve parses need, basis and time home, and is null while none`() {
+        assertNull(checkNotNull(PilotWire.parseState(data, 0L)).batteryReserve)
+        val reserve = JsonObject(
+            mapOf("need_pct" to JsonPrimitive(52), "basis" to JsonPrimitive("energy"), "return_s" to JsonPrimitive(248)),
+        )
+        val s = checkNotNull(PilotWire.parseState(JsonObject(data + ("battery_reserve" to reserve)), 0L))
+        assertEquals(BatteryReserve(52, "energy", 248), s.batteryReserve)
+        val odd = JsonObject(reserve + ("basis" to JsonPrimitive("guess")))
+        assertNull(checkNotNull(PilotWire.parseState(JsonObject(data + ("battery_reserve" to odd)), 0L)).batteryReserve)
     }
 
     @Test

@@ -5,6 +5,16 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Simulator clock badge.** While the pilot frame's `clock.source` is `sim`, the top bar shows "SIM ×N" (or "SIM ×max"), so a run at another speed never reads as real time.
+
+- **Steady take-off phases.** The lift-off phases parsed from the pilot
+  frame are the agent's new ones: `find`, `bracket`, `settle` and
+  `commit` in place of `probe` and `lift`.
+- **Energy-aware low-battery return.** The pilot frame's
+  `battery_reserve` (the charge the return home needs, set by the
+  estimate of the way home or the fixed floor) is parsed, and the
+  cockpit spec carries the energy-aware return's banner string. The
+  demo's low-battery scenarios carry the reserve.
 - **Compute-node live map.** When the drone's capture forwarder names a
   compute node, the cockpit reads the drone's live stream on that node's
   Reconstruct extension (`/x/ws/live/<drone>`) and merges its occupancy
