@@ -217,6 +217,12 @@ std::vector<Bytes> sent_packets() {
     return packets;
 }
 
+// Whether [p] is a FIN from the phone with sequence number [seq].
+bool is_fin(const Bytes &p, uint32_t seq) {
+    const size_t ihl = (p[0] & 0xf) * 4u;
+    return get32(&p[12]) == kPhone && (p[ihl + 13] & 0x01) != 0 && get32(&p[ihl + 4]) == seq;
+}
+
 void test_tcp_exchange_over_the_framing() {
     CHECK(stack_open(kPhone));
     CHECK(!stack_open(kPhone));
@@ -257,16 +263,77 @@ void test_tcp_exchange_over_the_framing() {
     CHECK(std::string(got.begin(), got.end()) == "OK\t2.0\r\n");
     CHECK(tcp_take().empty());
 
-    const Bytes fin = frame(segment(5555, phone_port, 1009, isn + 1 + static_cast<uint32_t>(version.size()), 0x11, ""));
+    // The drone closes first; the phone's FIN then follows and is acknowledged.
+    const uint32_t phone_next = isn + 1 + static_cast<uint32_t>(version.size());
+    const Bytes fin = frame(segment(5555, phone_port, 1009, phone_next, 0x11, ""));
     stack_input(fin.data(), fin.size());
     CHECK(tcp_state() == TcpState::Closed);
+    sent_packets();  // the ACK of the drone's FIN
+    CHECK(tcp_close_progress() == CloseProgress::NotClosing);
+    CHECK(tcp_finish());
+    out = sent_packets();
+    CHECK(out.size() == 1 && is_fin(out[0], phone_next));
+    CHECK(tcp_close_progress() == CloseProgress::FinSent);
+    const Bytes ack = frame(segment(5555, phone_port, 1010, phone_next + 1, 0x10, ""));
+    stack_input(ack.data(), ack.size());
+    CHECK(tcp_close_progress() == CloseProgress::Complete);
 
     stack_close();
     CHECK(tcp_state() == TcpState::Idle);
-    // A second session in the same process.
+    CHECK(tcp_close_progress() == CloseProgress::NotClosing);
+}
+
+// The phone closes first, as it does after the drone's OK to BIND: its FIN
+// goes out, is acknowledged, and the drone's own FIN is acknowledged in turn.
+void test_the_phone_closes_first_and_waits_for_the_ack() {
     CHECK(stack_open(kPhone));
     CHECK(tcp_open(kDrone, 5555));
-    CHECK(sent_packets().size() == 1);
+    auto out = sent_packets();
+    CHECK(out.size() == 1);
+    if (out.size() != 1) return;
+    const uint8_t *t = &out[0][(out[0][0] & 0xf) * 4];
+    const uint16_t phone_port = static_cast<uint16_t>(t[0] << 8 | t[1]);
+    const uint32_t isn = get32(t + 4);
+    const Bytes synack = frame(segment(5555, phone_port, 5000, isn + 1, 0x12, ""));
+    stack_input(synack.data(), synack.size());
+    CHECK(tcp_state() == TcpState::Connected);
+    sent_packets();
+
+    CHECK(tcp_finish());
+    CHECK(tcp_finish());  // idempotent
+    out = sent_packets();
+    CHECK(out.size() == 1 && is_fin(out[0], isn + 1));
+    CHECK(tcp_close_progress() == CloseProgress::FinSent);
+
+    // Unacknowledged, lwIP retransmits the FIN rather than dropping it.
+    bool retransmitted = false;
+    for (int i = 0; i < 120 && !retransmitted; i++) {
+        for (const auto &p : sent_packets()) retransmitted = retransmitted || is_fin(p, isn + 1);
+        sleep_ms(40);
+    }
+    CHECK(retransmitted);
+    CHECK(tcp_close_progress() == CloseProgress::FinSent);
+
+    const Bytes ack = frame(segment(5555, phone_port, 5001, isn + 2, 0x10, ""));
+    stack_input(ack.data(), ack.size());
+    CHECK(tcp_close_progress() == CloseProgress::FinAcked);
+
+    const Bytes fin = frame(segment(5555, phone_port, 5001, isn + 2, 0x11, ""));
+    stack_input(fin.data(), fin.size());
+    CHECK(tcp_close_progress() == CloseProgress::Complete);
+    out = sent_packets();
+    CHECK(out.size() == 1);
+    if (out.size() == 1) {
+        const uint8_t *a = &out[0][(out[0][0] & 0xf) * 4];
+        CHECK((a[13] & 0x10) != 0 && get32(a + 8) == 5002);  // the drone's FIN acknowledged
+    }
+    stack_close();
+}
+
+void test_no_connection_has_nothing_to_finish() {
+    CHECK(stack_open(kPhone));
+    CHECK(!tcp_finish());
+    CHECK(tcp_close_progress() == CloseProgress::NotClosing);
     stack_close();
 }
 
@@ -280,6 +347,8 @@ int main() {
     test_ping_only_after_a_silent_interval();
     test_malformed_datagrams_stop_cleanly();
     test_tcp_exchange_over_the_framing();
+    test_the_phone_closes_first_and_waits_for_the_ack();
+    test_no_connection_has_nothing_to_finish();
     if (failures == 0) std::printf("bind tunnel tests passed\n");
     return failures == 0 ? 0 : 1;
 }

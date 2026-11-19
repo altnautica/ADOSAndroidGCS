@@ -2,6 +2,9 @@ package com.altnautica.gcs.radio.rx.bind
 
 import com.altnautica.gcs.radio.rx.WfbReceiver
 
+/** How far the orderly close of the bind connection has come (matches bind_tunnel_core.h). */
+enum class CloseProgress { NotClosing, FinSent, FinAcked, Complete, Failed }
+
 /** The TCP connection's state on the bind tunnel. */
 enum class TunnelTcpState { Idle, Connecting, Connected, Closed, Failed }
 
@@ -38,6 +41,11 @@ class BindTunnel : AutoCloseable {
 
     val state: TunnelTcpState get() = if (open) TunnelTcpState.entries[BindTunnelNative.nativeState()] else TunnelTcpState.Idle
 
+    /** Sends this side's FIN, leaving receive open for the drone's; false with no connection to close. */
+    fun finish(): Boolean = open && BindTunnelNative.nativeFinish()
+
+    val closeProgress: CloseProgress get() = if (open) CloseProgress.entries[BindTunnelNative.nativeCloseProgress()] else CloseProgress.NotClosing
+
     override fun close() {
         if (open) {
             open = false
@@ -63,4 +71,8 @@ object BindTunnelNative {
     @JvmStatic external fun nativeTake(): ByteArray?
 
     @JvmStatic external fun nativeState(): Int
+
+    @JvmStatic external fun nativeFinish(): Boolean
+
+    @JvmStatic external fun nativeCloseProgress(): Int
 }

@@ -78,4 +78,14 @@ Java_com_altnautica_gcs_radio_rx_bind_BindTunnelNative_nativeState(JNIEnv *, jcl
     return static_cast<jint>(bt::tcp_state());
 }
 
+JNIEXPORT jboolean JNICALL
+Java_com_altnautica_gcs_radio_rx_bind_BindTunnelNative_nativeFinish(JNIEnv *, jclass) {
+    return bt::tcp_finish() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jint JNICALL
+Java_com_altnautica_gcs_radio_rx_bind_BindTunnelNative_nativeCloseProgress(JNIEnv *, jclass) {
+    return static_cast<jint>(bt::tcp_close_progress());
+}
+
 }  // extern "C"

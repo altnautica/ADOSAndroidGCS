@@ -93,7 +93,14 @@ class BindClient(
                 report(BindStage.WaitingForDrone)
                 if (!connect(tunnel)) return@coroutineScope BindOutcome.Failed(NO_DRONE)
                 report(BindStage.Exchanging)
-                val result = BindExchange().run(TunnelStream(tunnel), BindBundle.encode(droneKey))
+                val result = try {
+                    BindExchange().run(TunnelStream(tunnel), BindBundle.encode(droneKey))
+                } finally {
+                    // The drone's bind server ends its session only at end of
+                    // stream: send the FIN and keep the planes up until it is acknowledged.
+                    val clean = OrderlyClose(nowMs = SystemClock::elapsedRealtime).run(tunnel::finish) { tunnel.closeProgress }
+                    Log.i(TAG, "bind tunnel closed cleanly=$clean")
+                }
                 val frames = framesDecoded.get()
                 Log.i(TAG, "bind exchange: $result, frames decoded $frames")
                 when {

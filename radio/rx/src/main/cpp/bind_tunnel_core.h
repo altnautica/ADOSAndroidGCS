@@ -41,6 +41,16 @@ std::vector<uint8_t> tcp_take();
 
 TcpState tcp_state();
 
+// How far an orderly close has come: our FIN sent, acknowledged, and the
+// connection finished (TIME_WAIT after the peer's FIN, or closed after it).
+enum class CloseProgress : int { NotClosing = 0, FinSent = 1, FinAcked = 2, Complete = 3, Failed = 4 };
+
+// Closes the send side with a FIN, leaving receive open for the peer's FIN.
+// False when there is no open connection to close.
+bool tcp_finish();
+
+CloseProgress tcp_close_progress();
+
 uint64_t monotonic_ms();
 
 }  // namespace ados::bindtun

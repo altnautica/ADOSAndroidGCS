@@ -27,6 +27,10 @@ struct Endpoint {
     struct tcp_pcb *pcb = nullptr;
     TcpState state = TcpState::Idle;
     std::vector<uint8_t> received;
+    // Set once this side sent its FIN (tcp_finish).
+    bool fin_sent = false;
+    // lwIP freed the connection after our FIN was acknowledged (the peer had closed first).
+    bool closed_after_fin = false;
 };
 
 Endpoint g;
@@ -70,10 +74,15 @@ err_t on_recv(void *, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
     return ERR_OK;
 }
 
-void on_error(void *, err_t) {
-    // lwIP has already freed the pcb.
+void on_error(void *, err_t err) {
+    // lwIP has already freed the pcb. ERR_CLSD after our FIN is the orderly
+    // end of a connection the peer closed first: our FIN was acknowledged.
     g.pcb = nullptr;
-    g.state = TcpState::Failed;
+    if (err == ERR_CLSD && g.fin_sent) {
+        g.closed_after_fin = true;
+    } else {
+        g.state = TcpState::Failed;
+    }
 }
 
 }  // namespace
@@ -96,6 +105,8 @@ bool stack_open(uint32_t local_ip) {
     g.received.clear();
     g.state = TcpState::Idle;
     g.pcb = nullptr;
+    g.fin_sent = false;
+    g.closed_after_fin = false;
     ip4_addr_t addr, mask, gw;
     addr.addr = lwip_htonl(local_ip);
     mask.addr = lwip_htonl(0xffffff00u);
@@ -122,6 +133,8 @@ void stack_close() {
     g.pending.clear();
     g.received.clear();
     g.state = TcpState::Idle;
+    g.fin_sent = false;
+    g.closed_after_fin = false;
     g.open = false;
 }
 
@@ -181,6 +194,29 @@ std::vector<uint8_t> tcp_take() {
 }
 
 TcpState tcp_state() { return g.state; }
+
+bool tcp_finish() {
+    if (g.fin_sent) return true;
+    if (g.pcb == nullptr || (g.state != TcpState::Connected && g.state != TcpState::Closed)) return false;
+    // Shut the send side only: the peer's FIN still arrives as an end of
+    // stream, and data it sends meanwhile is not answered with a reset.
+    if (tcp_shutdown(g.pcb, 0, 1) != ERR_OK) return false;
+    g.fin_sent = true;
+    if (g.pcb != nullptr) tcp_output(g.pcb);
+    return true;
+}
+
+CloseProgress tcp_close_progress() {
+    if (!g.fin_sent) return CloseProgress::NotClosing;
+    if (g.closed_after_fin) return CloseProgress::Complete;
+    if (g.pcb == nullptr) return CloseProgress::Failed;
+    switch (g.pcb->state) {
+        case FIN_WAIT_2: return CloseProgress::FinAcked;
+        case TIME_WAIT:
+        case CLOSED: return CloseProgress::Complete;
+        default: return CloseProgress::FinSent;  // FIN_WAIT_1, CLOSING, LAST_ACK
+    }
+}
 
 }  // namespace ados::bindtun
 
