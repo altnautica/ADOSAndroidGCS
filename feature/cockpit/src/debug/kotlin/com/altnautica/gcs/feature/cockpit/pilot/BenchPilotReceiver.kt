@@ -14,11 +14,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 /**
@@ -62,15 +65,20 @@ class BenchPilotReceiver : BroadcastReceiver() {
         if (intent.action == PILOT_OPEN) {
             channels.remove(node)?.leave()
             val hz = intent.getIntExtra("hz", PilotStickStreamer.RATE_HZ)
-            val link = RadioPilotLink(radio, DeviceId(node), { hz })
+            val counted = CountingUplink(radio)
+            counters[node] = counted
+            val link = RadioPilotLink(counted, DeviceId(node), { hz })
             val channel = PilotChannel(scope, clock, mainTicker = BenchTicker()) { outgoing -> link.open(outgoing) }
             channels[node] = channel
             channel.start()
             scope.launch { channel.state.collect { s -> s?.let { log("state node=$node owner=${it.owner} input_src=${it.inputSrc} input_age_ms=${it.inputAgeMs}") } } }
             val up = withTimeoutOrNull(OPEN_WAIT_MS) { channel.connected.first { it } } == true
-            return log("pilot_open node=$node connected=$up")
+            return log("pilot_open node=$node connected=$up ${counted.report()}")
         }
         val channel = channels[node] ?: return log("${intent.action} node=$node refused=not_open")
+        val counted = counters.getValue(node)
+        val sentBefore = counted.up.get()
+        fun air() = "uplink_frames=${counted.up.get() - sentBefore} ${counted.report()}"
         when (intent.action) {
             PILOT_INPUT -> {
                 val axes = (intent.getStringExtra("axes") ?: "0,0.5,0,0").split(',').mapNotNull { it.trim().toFloatOrNull() }
@@ -85,27 +93,52 @@ class BenchPilotReceiver : BroadcastReceiver() {
                     frames++
                     delay(1_000L / PilotStickStreamer.RATE_HZ)
                 }
-                log("pilot_input node=$node frames=$frames connected=${channel.connected.value}")
+                delay(FLUSH_MS)
+                log("pilot_input node=$node frames=$frames ms=$ms ${air()} connected=${channel.connected.value}")
             }
             PILOT_RELEASE -> {
                 channel.release()
-                log("pilot_release node=$node")
+                delay(FLUSH_MS)
+                log("pilot_release node=$node ${air()}")
             }
-            PILOT_TAKE -> log("pilot_take node=$node sent=${channel.takeSession()}")
+            PILOT_TAKE -> {
+                val sent = channel.takeSession()
+                delay(FLUSH_MS)
+                log("pilot_take node=$node sent=$sent ${air()}")
+            }
             PILOT_HB -> {
                 channel.watchdog()
-                log("pilot_hb node=$node connected=${channel.connected.value}")
+                delay(FLUSH_MS)
+                log("pilot_hb node=$node connected=${channel.connected.value} ${air()}")
             }
             PILOT_ACTION -> {
                 val name = intent.getStringExtra("name") ?: return log("pilot_action node=$node refused=no_name")
-                log("pilot_action node=$node name=$name result=${channel.action(PilotAction(name))}")
+                log("pilot_action node=$node name=$name result=${channel.action(PilotAction(name))} ${air()}")
             }
             PILOT_BYE -> {
                 channels.remove(node)
                 channel.leave()
-                log("pilot_bye node=$node")
+                log("pilot_bye node=$node ${air()}")
             }
         }
+    }
+
+    /**
+     * The phone radio as the pilot link sees it, counting what crosses the air:
+     * `pilot.v1` requests the uplink took ([up]) and pilot bodies the drone sent
+     * down ([down], before any translation), so a bench run tells "the drone sent
+     * nothing" apart from "the phone could not read it" and measures the real
+     * stick rate.
+     */
+    private class CountingUplink(private val inner: PhoneRadioUplink) : PhoneRadioUplink by inner {
+        val up = AtomicInteger()
+        val down = AtomicInteger()
+
+        override fun sendPilot(node: DeviceId, body: ByteArray): Boolean = inner.sendPilot(node, body).also { if (it) up.incrementAndGet() }
+
+        override fun pilotFrom(node: DeviceId): Flow<ByteArray> = inner.pilotFrom(node).onEach { down.incrementAndGet() }
+
+        fun report() = "uplink_total=${up.get()} downlink_total=${down.get()} transmitting=${inner.transmitting.value}"
     }
 
     /** The no-RC heartbeat tick without the main looper: a bench has no screen to keep reachable. */
@@ -143,7 +176,11 @@ class BenchPilotReceiver : BroadcastReceiver() {
         private const val TAG = "AdosPhonePilot"
         private const val OPEN_WAIT_MS = 10_000L
         private const val DEFAULT_INPUT_MS = 2_000
+
+        /** How long a single-frame op waits for the channel's queue to reach the uplink before counting it. */
+        private const val FLUSH_MS = 200L
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private val channels = ConcurrentHashMap<String, PilotChannel>()
+        private val counters = ConcurrentHashMap<String, CountingUplink>()
     }
 }
