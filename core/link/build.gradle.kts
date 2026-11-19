@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.ados.android.library)
     alias(libs.plugins.ados.android.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 dependencies {
@@ -11,4 +12,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.usb.serial.android)
+    implementation(libs.kotlinx.serialization.json)
+
+    testImplementation(libs.androidx.datastore.preferences)
 }

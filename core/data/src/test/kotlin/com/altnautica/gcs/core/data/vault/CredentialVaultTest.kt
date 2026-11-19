@@ -112,6 +112,7 @@ class CredentialVaultTest {
         val (first, _) = vault("b", key)
         first.putNode(drone)
         first.putWfbInvite(byteArrayOf(1, 2, 3, 4))
+        first.putPhoneGround(byteArrayOf(9, 8, 7))
         first.putCloudRefreshToken("refresh-1")
         first.putMavlinkSigningKey(drone.id, ByteArray(32) { it.toByte() })
         val id = first.installId()
@@ -120,6 +121,10 @@ class CredentialVaultTest {
 
         val (second, _) = vault("b", key)
         assertEquals(drone, second.node(drone.id))
+        assertArrayEquals(byteArrayOf(1, 2, 3, 4), second.wfbInvite())
+        assertArrayEquals(byteArrayOf(9, 8, 7), second.phoneGround())
+        second.putPhoneGround(null)
+        assertNull(second.phoneGround())
         assertArrayEquals(byteArrayOf(1, 2, 3, 4), second.wfbInvite())
         assertEquals("refresh-1", second.cloudRefreshToken())
         assertArrayEquals(ByteArray(32) { it.toByte() }, second.mavlinkSigningKey(drone.id))

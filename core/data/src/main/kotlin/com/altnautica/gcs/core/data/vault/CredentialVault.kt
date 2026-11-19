@@ -46,6 +46,7 @@ data class NodeCredential(
 internal data class VaultDocument(
     val nodes: Map<String, NodeCredential> = emptyMap(),
     @SerialName("wfb_invite") val wfbInvite: String? = null,
+    @SerialName("phone_ground") val phoneGround: String? = null,
     @SerialName("cloud_refresh_token") val cloudRefreshToken: String? = null,
     @SerialName("install_id") val installId: String? = null,
     @SerialName("mavlink_signing_keys") val mavlinkSigningKeys: Map<String, String> = emptyMap(),
@@ -163,6 +164,16 @@ class CredentialVault(
 
     suspend fun putWfbInvite(blob: ByteArray?) = mutate {
         it.copy(wfbInvite = blob?.let { b -> Base64.getEncoder().encodeToString(b) })
+    }
+
+    /**
+     * The fleet this phone is the ground of after an over-the-air bind (its
+     * radio keys and fleet registry), or null when it bound none.
+     */
+    suspend fun phoneGround(): ByteArray? = load().phoneGround?.let { Base64.getDecoder().decode(it) }
+
+    suspend fun putPhoneGround(blob: ByteArray?) = mutate {
+        it.copy(phoneGround = blob?.let { b -> Base64.getEncoder().encodeToString(b) })
     }
 
     /** The MAVLink v2 signing key (32 bytes) used on links to [id], or null. */
