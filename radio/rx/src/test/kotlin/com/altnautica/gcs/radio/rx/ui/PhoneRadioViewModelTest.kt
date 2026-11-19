@@ -3,6 +3,10 @@ package com.altnautica.gcs.radio.rx.ui
 import com.altnautica.gcs.core.agent.node.LanNodeSource
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.link.fleet.FleetGroundStore
+import com.altnautica.gcs.core.link.fleet.SlotReconciler
+import com.altnautica.gcs.radio.rx.bind.BindController
+import com.altnautica.gcs.radio.rx.bind.BindState
 import com.altnautica.gcs.radio.rx.invite.EnrollmentState
 import com.altnautica.gcs.radio.rx.invite.FlakyCipher
 import com.altnautica.gcs.radio.rx.invite.InviteEnrollment
@@ -58,6 +62,9 @@ class PhoneRadioViewModelTest {
         enrollment = enrollment,
         session = session,
         lan = mockk<LanNodeSource> { every { nodes } returns flowOf(emptyList()) },
+        fleetStore = FleetGroundStore(CredentialVault(prefs, cipher, vaultScope)),
+        binder = mockk<BindController>(relaxed = true) { every { state } returns MutableStateFlow(BindState.Idle) },
+        reconciler = mockk<SlotReconciler> { every { secrets } returns MutableStateFlow(emptyMap()) },
     )
 
     @Before

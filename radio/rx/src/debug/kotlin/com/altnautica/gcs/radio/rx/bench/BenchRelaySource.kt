@@ -60,6 +60,9 @@ class BenchRelaySource @Inject constructor(@ApplicationContext private val conte
         return BenchRelayRadio(cfg, rx, listOf(control.channelId, aux.channelId))
     }
 
+    override fun openChannels(rxChannels: List<Long>, txChannels: List<Long>): IUsbRadio =
+        BenchRelayRadio(requireNotNull(config()) { "no bench relay configured" }, rxChannels, txChannels)
+
     private companion object {
         const val CONFIG_FILE = "bench-relay.json"
         val json = Json { ignoreUnknownKeys = true }

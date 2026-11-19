@@ -19,6 +19,12 @@ import com.altnautica.gcs.radio.rx.session.PhoneRadioStats
 import com.altnautica.gcs.radio.rx.tx.UplinkState
 import com.altnautica.gcs.radio.rx.usb.DongleStatus
 import com.altnautica.gcs.radio.rx.usb.UsbDongleMonitor
+import com.altnautica.gcs.core.link.fleet.BoundFleet
+import com.altnautica.gcs.core.link.fleet.FleetGroundStore
+import com.altnautica.gcs.core.link.fleet.RelaySecretState
+import com.altnautica.gcs.core.link.fleet.SlotReconciler
+import com.altnautica.gcs.radio.rx.bind.BindController
+import com.altnautica.gcs.radio.rx.bind.BindState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,8 +69,13 @@ data class PhoneRadioUiState(
     val uplink: UplinkState? = null,
     /** The session runs on a radio that is not the USB dongle (a debug build's bench relay). */
     val alternateRadio: Boolean = false,
+    /** The fleet this phone bound over the air, null when it bound none. */
+    val fleet: BoundFleetUi? = null,
+    val bind: BindState = BindState.Idle,
+    /** The operator opened the Bind section ("Bind a drone"), or a bind ran. */
+    val bindOpen: Boolean = false,
 ) {
-    val canStart: Boolean get() = invite != null && (dongle is DongleUi.Ready || alternateRadio)
+    val canStart: Boolean get() = (invite != null || fleet != null) && (dongle is DongleUi.Ready || alternateRadio)
 }
 
 @HiltViewModel
@@ -74,12 +85,20 @@ class PhoneRadioViewModel @Inject constructor(
     private val enrollment: InviteEnrollment,
     private val session: PhoneRadioSession,
     lan: LanNodeSource,
+    private val fleetStore: FleetGroundStore,
+    private val binder: BindController,
+    reconciler: SlotReconciler,
 ) : ViewModel() {
 
     private val enrollmentState = MutableStateFlow<EnrollmentState?>(null)
     private val loaded = MutableStateFlow(false)
     private val keysError = MutableStateFlow<KeysError?>(null)
+    private val bindOpen = MutableStateFlow(false)
     private var enrollJob: Job? = null
+
+    private val bindPart = combine(fleetStore.fleet, reconciler.secrets, binder.state, bindOpen) { fleet, secrets, bind, open ->
+        BindPart(fleet?.let { toUi(it, secrets) }, bind, open || bind != BindState.Idle)
+    }
 
     private val grounds = lan.nodes.map { nodes ->
         nodes.filter { it.profile == NodeProfile.GroundStation }
@@ -94,9 +113,9 @@ class PhoneRadioViewModel @Inject constructor(
         dongles.status.map(::toUi),
         store.invite,
         combine(enrollmentState, loaded, keysError) { e, l, k -> Triple(e, l, k) },
-        grounds,
+        combine(grounds, bindPart, ::Pair),
         radioPart,
-    ) { dongle, invite, (enroll, isLoaded, error), groundList, radio ->
+    ) { dongle, invite, (enroll, isLoaded, error), (groundList, bind), radio ->
         PhoneRadioUiState(
             loading = !isLoaded,
             dongle = dongle,
@@ -109,11 +128,19 @@ class PhoneRadioViewModel @Inject constructor(
             links = radio.links,
             uplink = radio.uplink,
             alternateRadio = session.alternateRadioAvailable,
+            fleet = bind.fleet,
+            bind = bind.state,
+            bindOpen = bind.open,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_MS), PhoneRadioUiState())
 
     init {
-        viewModelScope.launch { loadKeys { store.load() } }
+        viewModelScope.launch {
+            loadKeys {
+                store.load()
+                fleetStore.load()
+            }
+        }
     }
 
     fun requestPermission() {
@@ -139,6 +166,7 @@ class PhoneRadioViewModel @Inject constructor(
             session.stop()
             try {
                 store.forget()
+                fleetStore.forget()
             } catch (_: VaultUnreadableException) {
                 keysError.value = KeysError.NotForgotten
                 return@launch
@@ -151,7 +179,12 @@ class PhoneRadioViewModel @Inject constructor(
     /** Retries what the vault refused: reading the keys again, or forgetting them again. */
     fun retryKeys() {
         when (keysError.value) {
-            KeysError.Unreadable -> viewModelScope.launch { loadKeys { store.reload() } }
+            KeysError.Unreadable -> viewModelScope.launch {
+                loadKeys {
+                    store.reload()
+                    fleetStore.load()
+                }
+            }
             KeysError.NotForgotten -> forget()
             null -> Unit
         }
@@ -172,6 +205,26 @@ class PhoneRadioViewModel @Inject constructor(
         }
         loaded.value = true
     }
+
+    /** "Bind a drone": opens the Bind section. */
+    fun openBind() {
+        bindOpen.value = true
+    }
+
+    fun startBind() {
+        bindOpen.value = true
+        binder.start()
+    }
+
+    fun cancelBind() = binder.cancel()
+
+    private fun toUi(fleet: BoundFleet, secrets: Map<String, RelaySecretState>) = BoundFleetUi(
+        fleetId = fleet.fleetId,
+        channel = fleet.channel,
+        keyFingerprint = fleet.keyFingerprint,
+        keyProven = fleet.keyProven,
+        drones = fleet.slots.map { FleetDroneUi(it.slot, it.deviceId, secrets[it.deviceId] ?: RelaySecretState.Pending) },
+    )
 
     fun start() = session.start()
 
@@ -202,3 +255,5 @@ private data class RadioPart(
     val links: List<DroneLinkStatus>,
     val uplink: UplinkState?,
 )
+
+private data class BindPart(val fleet: BoundFleetUi?, val state: BindState, val open: Boolean)

@@ -17,4 +17,10 @@ interface AlternateRadio {
 
     /** A radio ready for [IUsbRadio.open], carrying [bundle]'s channels. */
     fun open(bundle: InviteBundle): IUsbRadio
+
+    /**
+     * A radio ready for [IUsbRadio.open] carrying exactly these channel ids
+     * (`link_id << 8 | port`): the bind session's planes, which no invite names.
+     */
+    fun openChannels(rxChannels: List<Long>, txChannels: List<Long>): IUsbRadio
 }

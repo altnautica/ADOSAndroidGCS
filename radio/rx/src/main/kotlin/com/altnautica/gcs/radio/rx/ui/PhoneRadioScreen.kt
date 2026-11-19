@@ -71,6 +71,7 @@ fun PhoneRadioRoute(modifier: Modifier = Modifier, viewModel: PhoneRadioViewMode
         onSaveAgain = viewModel::saveAgain,
         onStart = viewModel::start,
         onStop = viewModel::stop,
+        bindActions = BindActions(viewModel::openBind, viewModel::startBind, viewModel::cancelBind),
         modifier = modifier,
     )
 }
@@ -86,6 +87,7 @@ fun PhoneRadioScreen(
     onSaveAgain: () -> Unit,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    bindActions: BindActions = BindActions(),
     modifier: Modifier = Modifier,
 ) {
     if (state.loading) {
@@ -102,7 +104,11 @@ fun PhoneRadioScreen(
         SectionHeader(stringResource(R.string.phone_radio_section_dongle))
         DongleSection(state.dongle, onAllowUsb)
         SectionHeader(stringResource(R.string.phone_radio_section_keys))
-        KeysSection(state, onEnroll, onCancelEnroll, onForget, onRetryKeys, onSaveAgain)
+        KeysSection(state, onEnroll, onCancelEnroll, onForget, onRetryKeys, onSaveAgain, bindActions.onBind)
+        if (state.invite == null && state.bindOpen) {
+            SectionHeader(stringResource(R.string.phone_radio_section_bind))
+            BindSection(state.bind, bindActions.onStart, bindActions.onCancel)
+        }
         SectionHeader(stringResource(R.string.phone_radio_section_receiver))
         ReceiverSection(state, onStart, onStop)
     }
@@ -137,6 +143,7 @@ private fun KeysSection(
     onForget: () -> Unit,
     onRetryKeys: () -> Unit,
     onSaveAgain: () -> Unit,
+    onBind: () -> Unit,
 ) {
     val invite = state.invite
     val enrollment = state.enrollment
@@ -160,7 +167,13 @@ private fun KeysSection(
         is EnrollmentState.NotSaved -> VaultError(R.string.phone_radio_keys_not_saved, R.string.phone_radio_keys_save_again, onSaveAgain)
         else -> {
             enrollment?.let { Body { StatusChip(StatusLevel.Error, enrollmentMessage(it)) } }
-            GroundPicker(state.grounds, onEnroll)
+            // A phone that bound its own fleet is that fleet's ground; otherwise it may enrol from a box.
+            val fleet = state.fleet
+            if (fleet != null) BoundFleetKeys(fleet, onForget) else GroundPicker(state.grounds, onEnroll)
+            if (state.keysError == KeysError.NotForgotten) {
+                VaultError(R.string.phone_radio_keys_not_forgotten, R.string.phone_radio_keys_forget_again, onRetryKeys)
+            }
+            BindAction(onBind)
         }
     }
 }
