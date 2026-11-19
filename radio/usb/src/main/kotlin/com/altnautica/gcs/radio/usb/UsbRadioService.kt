@@ -99,6 +99,15 @@ class UsbRadioService : Service() {
         override fun stats(): LongArray = synchronized(lock) {
             if (handle == 0L) LongArray(STAT_FIELDS) else NativeUsbRadio.nativeStats(handle)
         }
+
+        override fun txFrames(): ParcelFileDescriptor = synchronized(lock) {
+            check(handle != 0L) { "Radio not open" }
+            ParcelFileDescriptor.adoptFd(NativeUsbRadio.nativeTxFrames(handle))
+        }
+
+        override fun txStats(): LongArray = synchronized(lock) {
+            if (handle == 0L) LongArray(TX_STAT_FIELDS) else NativeUsbRadio.nativeTxStats(handle)
+        }
     }
 
     private fun shutdown() {
@@ -139,6 +148,7 @@ class UsbRadioService : Service() {
         private const val NOTIFICATION_ID = 0x5241
         private const val DEFAULT_BANDWIDTH_MHZ = 20
         const val STAT_FIELDS = 6
+        const val TX_STAT_FIELDS = 5
 
         fun intent(context: Context): Intent = Intent(context, UsbRadioService::class.java)
     }

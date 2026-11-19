@@ -13,6 +13,15 @@
 // pipe's write end is non-blocking and every record fits in PIPE_BUF, so a
 // record is written whole or not at all; when the reader falls behind,
 // records are dropped and counted rather than stalling the USB receive loop.
+//
+// Transmit is the mirror image: the client writes records to the pipe
+// txFrames() returns, each written whole in one write() (so at most PIPE_BUF):
+//
+//   u32 le length | radiotap header | 802.11 frame
+//
+// and a transmit thread hands every whole record it reads to the chip in one
+// batch. The chip adds the FCS. Nothing is retried here: the planes carry
+// their own FEC, and MAC retries would flood the air.
 
 #include <jni.h>
 
@@ -20,6 +29,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <poll.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 
 #include <atomic>
@@ -30,6 +41,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <libusb.h>
 
@@ -50,6 +62,9 @@ constexpr size_t kMinFrame = 24;
 constexpr int kMaxAntennas = 4;
 // Realtek reports path power as a 0..110 scale and SNR in half-dB steps.
 constexpr int kRssiOffset = 110;
+// A transmit record is written whole, so it fits in PIPE_BUF with its length.
+constexpr size_t kTxMaxRecord = PIPE_BUF;
+constexpr size_t kTxReadBuffer = 64 * 1024;
 
 struct Radio {
     Logger_t logger;
@@ -70,6 +85,108 @@ struct Radio {
     std::atomic<int64_t> frames_forwarded{0};
     std::atomic<int64_t> frames_dropped{0};
     std::atomic<int64_t> frames_corrupt{0};
+
+    // Transmit: the read end of the client's record pipe, and an eventfd
+    // that wakes the thread to stop.
+    int tx_fd = -1;
+    int tx_stop_fd = -1;
+    std::thread tx_thread;
+    std::atomic<int64_t> tx_frames_offered{0};
+    std::atomic<int64_t> tx_frames_sent{0};
+    std::atomic<int64_t> tx_frames_refused{0};
+    std::atomic<int64_t> tx_bytes_offered{0};
+    std::atomic<int64_t> tx_bytes_sent{0};
+
+    /** Starts the transmit thread once the chip is up and a pipe exists. */
+    void maybe_start_tx() {
+        if (!running.load() || tx_fd < 0 || tx_thread.joinable()) return;
+        tx_thread = std::thread([this]() { tx_loop(); });
+    }
+
+    void tx_loop() {
+        std::vector<uint8_t> buf(kTxReadBuffer);
+        std::vector<TxPacketView> batch;
+        std::vector<size_t> lengths;
+        size_t have = 0;
+        for (;;) {
+            pollfd fds[2] = {{tx_fd, POLLIN, 0}, {tx_stop_fd, POLLIN, 0}};
+            if (poll(fds, 2, -1) < 0) {
+                if (errno == EINTR) continue;
+                break;
+            }
+            if (fds[1].revents != 0) break;
+            const ssize_t n = read(tx_fd, buf.data() + have, buf.size() - have);
+            if (n == 0) break;  // the client closed its end
+            if (n < 0) {
+                if (errno == EINTR || errno == EAGAIN) continue;
+                break;
+            }
+            have += static_cast<size_t>(n);
+
+            batch.clear();
+            lengths.clear();
+            size_t at = 0;
+            bool desync = false;
+            while (have - at >= 4) {
+                const uint8_t *p = buf.data() + at;
+                const size_t len = static_cast<size_t>(p[0]) | (static_cast<size_t>(p[1]) << 8) |
+                                   (static_cast<size_t>(p[2]) << 16) | (static_cast<size_t>(p[3]) << 24);
+                if (len == 0 || 4 + len > kTxMaxRecord) {
+                    desync = true;
+                    break;
+                }
+                if (have - at < 4 + len) break;
+                batch.push_back(TxPacketView{p + 4, len});
+                lengths.push_back(len);
+                at += 4 + len;
+            }
+            if (desync) {
+                // Records are written whole by one writer, so a bad length
+                // means the stream is not ours to parse: stop transmitting.
+                __android_log_print(ANDROID_LOG_ERROR, kTag, "transmit stream out of step; transmit stopped");
+                break;
+            }
+            if (!batch.empty()) {
+                size_t bytes = 0;
+                for (size_t l : lengths) bytes += l;
+                tx_frames_offered.fetch_add(static_cast<int64_t>(batch.size()), std::memory_order_relaxed);
+                tx_bytes_offered.fetch_add(static_cast<int64_t>(bytes), std::memory_order_relaxed);
+                size_t sent = 0;
+                try {
+                    sent = device->send_packets(batch.data(), batch.size());
+                } catch (const std::exception &e) {
+                    __android_log_print(ANDROID_LOG_ERROR, kTag, "transmit failed: %s", e.what());
+                }
+                // send_packets counts the frames it submitted, skipping any it
+                // refused; the byte count assumes the refused ones were last.
+                size_t sent_bytes = 0;
+                for (size_t i = 0; i < sent && i < lengths.size(); i++) sent_bytes += lengths[i];
+                tx_frames_sent.fetch_add(static_cast<int64_t>(sent), std::memory_order_relaxed);
+                tx_bytes_sent.fetch_add(static_cast<int64_t>(sent_bytes), std::memory_order_relaxed);
+                tx_frames_refused.fetch_add(static_cast<int64_t>(batch.size() - sent), std::memory_order_relaxed);
+            }
+            if (at > 0) {
+                memmove(buf.data(), buf.data() + at, have - at);
+                have -= at;
+            }
+        }
+    }
+
+    void stop_tx() {
+        if (tx_thread.joinable()) {
+            const uint64_t one = 1;
+            (void)!write(tx_stop_fd, &one, sizeof(one));
+            tx_thread.join();
+        }
+        if (tx_fd >= 0) {
+            close(tx_fd);
+            tx_fd = -1;
+        }
+        if (tx_stop_fd >= 0) {
+            close(tx_stop_fd);
+            tx_stop_fd = -1;
+        }
+    }
 
     void on_packet(const Packet &packet) {
         frames_seen.fetch_add(1, std::memory_order_relaxed);
@@ -115,6 +232,7 @@ struct Radio {
     }
 
     void close_all() {
+        stop_tx();
         if (device) device->StopRxLoop();
         if (rx_thread.joinable()) rx_thread.join();
         device.reset();
@@ -242,6 +360,7 @@ jboolean native_start(JNIEnv *env, jclass, jlong ptr, jint channel, jint bandwid
         }
         radio->running = false;
     });
+    radio->maybe_start_tx();
     return JNI_TRUE;
 }
 
@@ -283,6 +402,50 @@ jlongArray native_stats(JNIEnv *env, jclass, jlong ptr) {
     return out;
 }
 
+// The write end of a new transmit record pipe; the native side keeps the read
+// end and transmits from it once the chip is up. -1 with an exception on failure.
+jint native_tx_frames(JNIEnv *env, jclass, jlong ptr) {
+    auto *radio = reinterpret_cast<Radio *>(ptr);
+    if (radio == nullptr) return -1;
+    std::lock_guard<std::mutex> guard(radio->control);
+    if (radio->tx_fd >= 0) {
+        throw_state(env, "Transmit already open");
+        return -1;
+    }
+    int fds[2];
+    if (pipe2(fds, O_CLOEXEC) != 0) {
+        throw_state(env, std::string("Transmit pipe failed: ") + strerror(errno));
+        return -1;
+    }
+    const int stop = eventfd(0, EFD_CLOEXEC);
+    if (stop < 0) {
+        close(fds[0]);
+        close(fds[1]);
+        throw_state(env, std::string("Transmit stop signal failed: ") + strerror(errno));
+        return -1;
+    }
+    radio->tx_fd = fds[0];
+    radio->tx_stop_fd = stop;
+    radio->maybe_start_tx();
+    return fds[1];
+}
+
+// [framesOffered, framesSent, framesRefused, bytesOffered, bytesSent], cumulative since open.
+jlongArray native_tx_stats(JNIEnv *env, jclass, jlong ptr) {
+    auto *radio = reinterpret_cast<Radio *>(ptr);
+    jlong values[5] = {0, 0, 0, 0, 0};
+    if (radio != nullptr) {
+        values[0] = radio->tx_frames_offered.load();
+        values[1] = radio->tx_frames_sent.load();
+        values[2] = radio->tx_frames_refused.load();
+        values[3] = radio->tx_bytes_offered.load();
+        values[4] = radio->tx_bytes_sent.load();
+    }
+    jlongArray out = env->NewLongArray(5);
+    if (out != nullptr) env->SetLongArrayRegion(out, 0, 5, values);
+    return out;
+}
+
 void native_close(JNIEnv *, jclass, jlong ptr) {
     auto *radio = reinterpret_cast<Radio *>(ptr);
     if (radio == nullptr) return;
@@ -298,6 +461,8 @@ const JNINativeMethod kMethods[] = {
     {const_cast<char *>("nativeStart"), const_cast<char *>("(JIII)Z"), reinterpret_cast<void *>(native_start)},
     {const_cast<char *>("nativeSetChannel"), const_cast<char *>("(JII)Z"), reinterpret_cast<void *>(native_set_channel)},
     {const_cast<char *>("nativeStats"), const_cast<char *>("(J)[J"), reinterpret_cast<void *>(native_stats)},
+    {const_cast<char *>("nativeTxFrames"), const_cast<char *>("(J)I"), reinterpret_cast<void *>(native_tx_frames)},
+    {const_cast<char *>("nativeTxStats"), const_cast<char *>("(J)[J"), reinterpret_cast<void *>(native_tx_stats)},
     {const_cast<char *>("nativeClose"), const_cast<char *>("(J)V"), reinterpret_cast<void *>(native_close)},
 };
 

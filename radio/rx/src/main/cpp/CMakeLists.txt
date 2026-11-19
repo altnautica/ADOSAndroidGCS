@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# Phone-radio receive library: libsodium + the vendored WFB receive core,
-# wrapped by the JNI bridge in wfb_receiver_jni.cpp.
+# Phone-radio WFB library: libsodium + the vendored WFB receive and transmit
+# cores, wrapped by the JNI bridges in wfb_receiver_jni.cpp and
+# wfb_transmitter_jni.cpp.
 
 cmake_minimum_required(VERSION 3.22.1)
 project(ados_wfbrx C CXX)
@@ -55,10 +56,14 @@ target_compile_options(sodium PRIVATE
     -fvisibility=hidden -fno-strict-aliasing -fno-strict-overflow -fwrapv
     -Wno-unused-function -Wno-unknown-pragmas)
 
-# ------------------------------------------------------------------ WFB receive core
+# ------------------------------------------------------------------ WFB receive and transmit core
+# tx.cpp's command-line half (its main and the socket loops only main uses)
+# sits behind __WFB_TX_SHARED_LIBRARY__, a recorded local patch
+# (THIRD_PARTY_NOTICES.md), as rx.cpp's sits behind __WFB_RX_SHARED_LIBRARY__.
 set(WFB_SRC ${VENDOR}/wfb-ng/src)
 add_library(wfbrx_core STATIC
     ${WFB_SRC}/rx.cpp
+    ${WFB_SRC}/tx.cpp
     ${WFB_SRC}/wifibroadcast.cpp
     ${WFB_SRC}/zfex.c
     ${WFB_SRC}/radiotap.c)
@@ -67,6 +72,7 @@ target_include_directories(wfbrx_core
 target_compile_definitions(wfbrx_core
     PUBLIC
         __WFB_RX_SHARED_LIBRARY__
+        __WFB_TX_SHARED_LIBRARY__
         PREINCLUDE_FILE=<${CMAKE_CURRENT_SOURCE_DIR}/wfb_log.h>
     PRIVATE
         ZFEX_UNROLL_ADDMUL_SIMD=8
@@ -77,7 +83,7 @@ target_compile_definitions(wfbrx_core
 target_link_libraries(wfbrx_core PUBLIC sodium log)
 
 # ------------------------------------------------------------------ JNI library
-add_library(ados_wfbrx SHARED wfb_receiver_jni.cpp)
+add_library(ados_wfbrx SHARED wfb_receiver_jni.cpp wfb_transmitter_jni.cpp)
 target_link_libraries(ados_wfbrx PRIVATE wfbrx_core sodium android log)
 target_link_options(ados_wfbrx PRIVATE
     -Wl,--gc-sections

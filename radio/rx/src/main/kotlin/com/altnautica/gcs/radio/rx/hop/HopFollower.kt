@@ -14,6 +14,11 @@ import kotlinx.coroutines.launch
  * ignored, and a copy for a different channel replaces the plan. Frames
  * that fail verification under the invite's hop key are ignored, so nobody
  * in range can steer the receiver off its drone.
+ *
+ * While the phone holds the uplink, [ack] is set: every verified copy is
+ * echoed verbatim through it as the HopAck, as the box's listener does. A
+ * drone executes a hop only after a HopAck, so a receive-only phone (no [ack])
+ * follows hops a box acknowledged.
  */
 class HopFollower(
     private val pairKey: ByteArray,
@@ -34,10 +39,14 @@ class HopFollower(
     private var job: Job? = null
     private val lock = Any()
 
+    /** Sends a HopAck (the verified announce, verbatim); null while receive-only. */
+    @Volatile var ack: ((ByteArray) -> Unit)? = null
+
     /** Feeds one control-plane datagram; returns the decoded announcement when it verified. */
     fun onControlPacket(packet: ByteArray): HopAnnounce? {
         if (packet.size != HopAnnounce.LENGTH) return null
         val announce = HopAnnounce.parse(packet, pairKey) ?: return null
+        ack?.invoke(packet)
         synchronized(lock) {
             val target = announce.targetChannel
             if (target == pendingChannel) return announce

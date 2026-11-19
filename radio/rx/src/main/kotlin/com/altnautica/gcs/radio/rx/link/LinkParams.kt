@@ -16,6 +16,9 @@ object LinkParams {
     const val PORT_CONTROL = 1
     const val PORT_AUX_DOWN = 2
 
+    /** Uplink planes the ground transmits under its own link id (slot 0): control is [PORT_CONTROL]. */
+    const val PORT_AUX_UP = 3
+
     fun linkId(fleetId: Int, slot: Int): Int {
         require(fleetId in 1..0xFFFF) { "fleet id $fleetId out of range" }
         require(slot in 0..0xFF) { "slot $slot out of range" }

@@ -33,5 +33,11 @@ internal object NativeUsbRadio {
     /** [running, framesSeen, framesForwarded, framesDropped, framesCorrupt, channel] */
     @JvmStatic external fun nativeStats(handle: Long): LongArray
 
+    /** The write end of a new transmit record pipe (the native side keeps the read end). */
+    @JvmStatic external fun nativeTxFrames(handle: Long): Int
+
+    /** [framesOffered, framesSent, framesRefused, bytesOffered, bytesSent] */
+    @JvmStatic external fun nativeTxStats(handle: Long): LongArray
+
     @JvmStatic external fun nativeClose(handle: Long)
 }

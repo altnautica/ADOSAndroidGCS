@@ -4,6 +4,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -84,5 +85,19 @@ class HopFollowerTest {
         runCurrent()
         assertEquals(149, follower.currentChannel)
         assertEquals(0, follower.hopsFollowed)
+    }
+
+    @Test
+    fun `while holding the uplink every verified copy is echoed verbatim and nothing else is`() = runTest {
+        val follower = HopFollower(key, 149, backgroundScope) { true }
+        val acks = mutableListOf<ByteArray>()
+        val announce = HopAnnounce.build(3000, 157, HopTrigger.PERIODIC, key)
+        follower.onControlPacket(announce)
+        follower.ack = { acks += it }
+        follower.onControlPacket(announce)
+        follower.onControlPacket(announce)
+        follower.onControlPacket(HopAnnounce.build(3000, 157, HopTrigger.PERIODIC, ByteArray(32)))
+        assertEquals(2, acks.size)
+        acks.forEach { assertArrayEquals(announce, it) }
     }
 }

@@ -373,6 +373,8 @@ const JNINativeMethod kInstanceMethods[] = {
 
 }  // namespace
 
+bool ados_register_wfb_transmitter(JNIEnv *env);  // wfb_transmitter_jni.cpp
+
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     JNIEnv *env = nullptr;
     if (vm->GetEnv(reinterpret_cast<void **>(&env), JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
@@ -384,5 +386,6 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *) {
     if (cls == nullptr) return JNI_ERR;
     const jint count = static_cast<jint>(sizeof(kInstanceMethods) / sizeof(kInstanceMethods[0]));
     if (env->RegisterNatives(cls, kInstanceMethods, count) != JNI_OK) return JNI_ERR;
+    if (!ados_register_wfb_transmitter(env)) return JNI_ERR;
     return JNI_VERSION_1_6;
 }
