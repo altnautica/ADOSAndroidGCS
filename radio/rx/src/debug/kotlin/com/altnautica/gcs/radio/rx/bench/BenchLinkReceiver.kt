@@ -12,14 +12,18 @@ import com.altnautica.gcs.core.link.mission.MissionResult
 import com.altnautica.gcs.core.link.mission.MissionType
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
+import com.altnautica.gcs.core.link.vehicle.MavlinkVehicle
 import com.altnautica.gcs.core.mavlink.enums.MavCmd
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.radio.rx.aux.TunnelResult
 import com.altnautica.gcs.radio.rx.session.PhoneRadioSession
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -73,23 +77,44 @@ class BenchLinkReceiver : BroadcastReceiver() {
         }
     }
 
-    private suspend fun vehicle(node: String): VehicleServices? =
-        withTimeoutOrNull(SERVICES_WAIT_MS) { services.services(DeviceId(node)).filterNotNull().first() }
+    /**
+     * Runs [op] on [node]'s vehicle the way a screen does: the vehicle stays observed
+     * (so its link stays up) for the whole call, and the call waits until the link has
+     * heard the flight controller's HEARTBEAT, at most [LINK_WAIT_MS]. The logged line
+     * names the vehicle's active reach, its transport state and its target, so a failure
+     * says which link it was on.
+     */
+    private suspend fun withVehicle(name: String, node: String, op: suspend (VehicleServices) -> String) = coroutineScope {
+        val held = MutableStateFlow<VehicleServices?>(null)
+        val observe = launch { services.services(DeviceId(node)).collect { held.value = it } }
+        try {
+            val v = withTimeoutOrNull(LINK_WAIT_MS) { held.filterNotNull().first() }
+                ?: return@coroutineScope log("$name node=$node result=no_vehicle")
+            val link = (v.vehicle as? MavlinkVehicle)?.link
+            withTimeoutOrNull(LINK_WAIT_MS) { link?.target?.first { it != null } }
+            val reach = when (val r = v.vehicle.reach.value) {
+                is Reach.ViaGround -> "ViaGround(${r.groundId.value})"
+                else -> r.toString()
+            }
+            val transport = link?.transportState?.value?.let { it::class.simpleName } ?: "none"
+            val target = link?.target?.value?.let { "${it.sysId}/${it.compId}" } ?: "none"
+            log("$name node=$node reach=$reach transport=$transport target=$target ${op(v)}")
+        } finally {
+            observe.cancel()
+        }
+    }
 
-    private suspend fun paramRead(node: String, name: String) {
-        val v = vehicle(node) ?: return log("param_read node=$node result=no_vehicle")
+    private suspend fun paramRead(node: String, name: String) = withVehicle("param_read", node) { v ->
         val value = v.params.read(name)
-        log("param_read node=$node name=$name result=${if (value == null) "timeout" else "ok"} value=${value?.value}")
+        "name=$name result=${if (value == null) "timeout" else "ok"} value=${value?.value}"
     }
 
     private suspend fun paramSet(node: String, name: String, value: Double?) {
         if (value == null) return log("param_set node=$node result=bad_value")
-        val v = vehicle(node) ?: return log("param_set node=$node result=no_vehicle")
-        log("param_set node=$node name=$name result=${v.params.set(name, value)}")
+        withVehicle("param_set", node) { v -> "name=$name result=${v.params.set(name, value)}" }
     }
 
-    private suspend fun missionUpload(node: String, intent: Intent) {
-        val v = vehicle(node) ?: return log("mission_upload node=$node result=no_vehicle")
+    private suspend fun missionUpload(node: String, intent: Intent) = withVehicle("mission_upload", node) { v ->
         val count = intent.getIntExtra("count", DEFAULT_ITEMS)
         val lat = intent.getStringExtra("lat")?.toDoubleOrNull() ?: DEFAULT_LAT
         val lon = intent.getStringExtra("lon")?.toDoubleOrNull() ?: DEFAULT_LON
@@ -106,7 +131,7 @@ class BenchLinkReceiver : BroadcastReceiver() {
             is MissionResult.Success -> "accepted opaque_id=${r.value.opaqueId}"
             is MissionResult.Failure -> "failed error=${r.error}"
         }
-        log("mission_upload node=$node items=$count result=$result")
+        "items=$count result=$result"
     }
 
     private suspend fun relayCall(node: String, intent: Intent) {
@@ -145,7 +170,8 @@ class BenchLinkReceiver : BroadcastReceiver() {
         const val CONFIG_GET = "com.altnautica.gcs.bench.CONFIG_GET"
         const val CONFIG_PUT = "com.altnautica.gcs.bench.CONFIG_PUT"
         private const val TAG = "AdosPhoneBench"
-        private const val SERVICES_WAIT_MS = 10_000L
+        /** How long a call waits for the vehicle's link to hear the flight controller (a fallback between reaches takes ~10 s). */
+        private const val LINK_WAIT_MS = 30_000L
         private const val DEFAULT_ITEMS = 20
         private const val DEFAULT_LAT = 12.9716
         private const val DEFAULT_LON = 77.5946
