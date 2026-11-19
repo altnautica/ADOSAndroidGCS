@@ -16,6 +16,7 @@ import com.altnautica.gcs.radio.rx.session.DroneLinkStatus
 import com.altnautica.gcs.radio.rx.session.PhoneRadioSession
 import com.altnautica.gcs.radio.rx.session.PhoneRadioState
 import com.altnautica.gcs.radio.rx.session.PhoneRadioStats
+import com.altnautica.gcs.radio.rx.tx.UplinkState
 import com.altnautica.gcs.radio.rx.usb.DongleStatus
 import com.altnautica.gcs.radio.rx.usb.UsbDongleMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -58,8 +59,12 @@ data class PhoneRadioUiState(
     val radio: PhoneRadioState = PhoneRadioState.Stopped,
     val stats: PhoneRadioStats? = null,
     val links: List<DroneLinkStatus> = emptyList(),
+    /** The uplink while the phone holds it; null while receive only. */
+    val uplink: UplinkState? = null,
+    /** The session runs on a radio that is not the USB dongle (a debug build's bench relay). */
+    val alternateRadio: Boolean = false,
 ) {
-    val canStart: Boolean get() = invite != null && dongle is DongleUi.Ready
+    val canStart: Boolean get() = invite != null && (dongle is DongleUi.Ready || alternateRadio)
 }
 
 @HiltViewModel
@@ -81,7 +86,9 @@ class PhoneRadioViewModel @Inject constructor(
             .map { GroundOption(it.id, it.name, it.liveness == Liveness.Live) }
     }
 
-    private val radioPart = combine(session.state, session.stats, session.links) { radio, stats, links -> Triple(radio, stats, links) }
+    private val radioPart = combine(session.state, session.stats, session.links, session.uplink) { radio, stats, links, uplink ->
+        RadioPart(radio, stats, links, uplink)
+    }
 
     val state: StateFlow<PhoneRadioUiState> = combine(
         dongles.status.map(::toUi),
@@ -89,7 +96,7 @@ class PhoneRadioViewModel @Inject constructor(
         combine(enrollmentState, loaded, keysError) { e, l, k -> Triple(e, l, k) },
         grounds,
         radioPart,
-    ) { dongle, invite, (enroll, isLoaded, error), groundList, (radio, stats, links) ->
+    ) { dongle, invite, (enroll, isLoaded, error), groundList, radio ->
         PhoneRadioUiState(
             loading = !isLoaded,
             dongle = dongle,
@@ -97,9 +104,11 @@ class PhoneRadioViewModel @Inject constructor(
             enrollment = enroll,
             keysError = error,
             grounds = groundList,
-            radio = radio,
-            stats = stats,
-            links = links,
+            radio = radio.state,
+            stats = radio.stats,
+            links = radio.links,
+            uplink = radio.uplink,
+            alternateRadio = session.alternateRadioAvailable,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_MS), PhoneRadioUiState())
 
@@ -186,3 +195,10 @@ class PhoneRadioViewModel @Inject constructor(
         const val STOP_MS = 5_000L
     }
 }
+
+private data class RadioPart(
+    val state: PhoneRadioState,
+    val stats: PhoneRadioStats?,
+    val links: List<DroneLinkStatus>,
+    val uplink: UplinkState?,
+)

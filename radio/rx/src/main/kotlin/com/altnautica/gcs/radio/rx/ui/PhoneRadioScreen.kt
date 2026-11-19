@@ -53,6 +53,7 @@ import com.altnautica.gcs.radio.rx.session.DroneLinkStatus
 import com.altnautica.gcs.radio.rx.session.PhoneRadioFailure
 import com.altnautica.gcs.radio.rx.session.PhoneRadioState
 import com.altnautica.gcs.radio.rx.session.PhoneRadioStats
+import com.altnautica.gcs.radio.rx.tx.UplinkState
 import com.altnautica.gcs.core.model.Liveness
 import kotlinx.coroutines.delay
 
@@ -300,6 +301,7 @@ private fun ReceiverSection(state: PhoneRadioUiState, onStart: () -> Unit, onSto
                 Text(stringResource(R.string.phone_radio_needs), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgTertiary)
             }
         }
+        state.uplink?.let { Uplink(it) }
         state.stats?.let { Stats(it) }
         if (state.links.isNotEmpty()) Drones(state.links)
     }
@@ -338,6 +340,17 @@ private fun Stats(stats: PhoneRadioStats) {
         StatRow(R.string.phone_radio_stat_dropped, perSecond(stats.usbDroppedPerSec))
         StatRow(R.string.phone_radio_stat_hops, stats.hopsFollowed.toString())
     }
+}
+
+/** The uplink while the phone holds it. Only Active may read as transmitting. */
+@Composable
+private fun Uplink(uplink: UplinkState) {
+    val (level, label) = when (uplink) {
+        UplinkState.Active -> StatusLevel.Success to R.string.phone_radio_uplink_active
+        UplinkState.Unverified -> StatusLevel.Info to R.string.phone_radio_uplink_unverified
+        UplinkState.Down -> StatusLevel.Error to R.string.phone_radio_uplink_down
+    }
+    StatusChip(level, stringResource(label), modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
 }
 
 @Composable

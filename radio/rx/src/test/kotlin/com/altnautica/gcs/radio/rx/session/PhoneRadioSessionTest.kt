@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.util.Optional
 
 /** A start whose USB open fails reports why: the radio went, or access was refused. */
 class PhoneRadioSessionTest {
@@ -29,7 +30,7 @@ class PhoneRadioSessionTest {
             every { current() } returnsMany listOf(DongleStatus.Ready(device, "RTL8812EU"), afterOpen)
             every { open(device) } returns null
         }
-        return PhoneRadioSession(mockk<Context>(relaxed = true), store, dongles)
+        return PhoneRadioSession(mockk<Context>(relaxed = true), store, dongles, Optional.empty(), mockk(relaxed = true))
     }
 
     private fun failureOf(session: PhoneRadioSession): PhoneRadioFailure = runBlocking {

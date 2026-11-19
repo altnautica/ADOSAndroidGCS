@@ -56,6 +56,9 @@
     <string name="phone_radio_state_starting">Starting the radio…</string>
     <string name="phone_radio_state_receiving">Receiving on channel %1$d</string>
     <string name="phone_radio_state_failed">Stopped: %1$s</string>
+    <string name="phone_radio_uplink_active">Uplink: transmitting, the drone is answering</string>
+    <string name="phone_radio_uplink_unverified">Uplink: sending, not yet confirmed by the drone</string>
+    <string name="phone_radio_uplink_down">Uplink down</string>
     <string name="phone_radio_failed_no_invite">no radio keys</string>
     <string name="phone_radio_failed_keys_unreadable">radio keys could not be read just now; start again</string>
     <string name="phone_radio_failed_no_dongle">no USB radio</string>

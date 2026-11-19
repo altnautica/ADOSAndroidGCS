@@ -3,6 +3,7 @@ package com.altnautica.gcs.radio.rx.di
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.TransportProvider
 import com.altnautica.gcs.core.video.VideoSourceFactory
+import com.altnautica.gcs.radio.rx.AlternateRadio
 import com.altnautica.gcs.radio.rx.invite.AgentPhoneInviteApi
 import com.altnautica.gcs.radio.rx.invite.InviteCipher
 import com.altnautica.gcs.radio.rx.invite.NativeInviteCipher
@@ -11,6 +12,7 @@ import com.altnautica.gcs.radio.rx.link.PhoneRadioTransportProvider
 import com.altnautica.gcs.radio.rx.node.PhoneRadioNodeSource
 import com.altnautica.gcs.radio.rx.video.PhoneRadioVideoFactory
 import dagger.Binds
+import dagger.BindsOptionalOf
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -37,4 +39,8 @@ abstract class RadioRxModule {
 
     @Binds
     abstract fun inviteCipher(cipher: NativeInviteCipher): InviteCipher
+
+    /** Bound only in a debug build (the fleet bench relay). */
+    @BindsOptionalOf
+    abstract fun alternateRadio(): AlternateRadio
 }

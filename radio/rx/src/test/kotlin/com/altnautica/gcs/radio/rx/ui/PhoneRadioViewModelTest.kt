@@ -47,6 +47,7 @@ class PhoneRadioViewModelTest {
         every { state } returns MutableStateFlow(PhoneRadioState.Stopped)
         every { stats } returns MutableStateFlow(null)
         every { links } returns MutableStateFlow(emptyList())
+        every { uplink } returns MutableStateFlow(null)
     }
 
     private fun store() = InviteStore(CredentialVault(prefs, cipher, vaultScope))
