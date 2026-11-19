@@ -188,7 +188,13 @@ jlong native_open(JNIEnv *env, jclass, jint fd, jstring lock_dir) {
     }
     try {
         WiFiDriver driver(radio->logger);
-        radio->device = driver.CreateRtlDevice(radio->handle, radio->ctx, radio->lock);
+        devourer::DeviceConfig cfg;
+        // 8812EU/8822EU: the RX path must be enabled during the bring-up;
+        // enabling it afterwards is unreliable on this chip generation. The
+        // flag is inert on the 8812AU.
+        cfg.rx.enable_with_tx = true;
+        // tx.retry_limit stays 0: FEC gives reliability, MAC retries flood the air.
+        radio->device = driver.CreateRtlDevice(radio->handle, radio->ctx, radio->lock, cfg);
     } catch (const std::exception &e) {
         radio->close_all();
         throw_state(env, std::string("Radio driver failed: ") + e.what());

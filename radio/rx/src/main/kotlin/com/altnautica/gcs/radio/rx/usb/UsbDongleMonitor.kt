@@ -9,6 +9,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
 import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 import com.altnautica.gcs.radio.usb.RadioDongles
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
@@ -74,6 +75,19 @@ class UsbDongleMonitor @Inject constructor(@ApplicationContext private val conte
             context.unregisterReceiver(receiver)
         }
     }.distinctUntilChanged { a, b -> a.key() == b.key() }
+
+    /** The device name of each USB device unplugged from the phone. */
+    val detached: Flow<String> = callbackFlow {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                    ?.let { trySend(it.deviceName) }
+            }
+        }
+        val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        awaitClose { context.unregisterReceiver(receiver) }
+    }
 
     /** Shows the system USB permission prompt for [device]. */
     fun requestPermission(device: UsbDevice) {

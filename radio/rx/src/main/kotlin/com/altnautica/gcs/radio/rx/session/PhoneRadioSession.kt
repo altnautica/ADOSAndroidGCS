@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -55,8 +56,11 @@ sealed interface PhoneRadioState {
     data class Failed(val reason: PhoneRadioFailure, val detail: String? = null) : PhoneRadioState
 }
 
-/** Why the receiver stopped. [KeysUnreadable]: the credential vault could not be read just now; starting again retries. */
-enum class PhoneRadioFailure { NoInvite, KeysUnreadable, NoDongle, NoPermission, OpenFailed, ServiceLost, RadioStopped }
+/**
+ * Why the receiver stopped. [KeysUnreadable]: the credential vault could not be read just now; starting again retries.
+ * [DongleRemoved]: the radio this session was using was unplugged.
+ */
+enum class PhoneRadioFailure { NoInvite, KeysUnreadable, NoDongle, DongleRemoved, NoPermission, OpenFailed, ServiceLost, RadioStopped }
 
 /** One drone of the invite as the receiver hears it. */
 data class DroneLinkStatus(
@@ -141,7 +145,11 @@ class PhoneRadioSession @Inject constructor(
             is DongleStatus.NeedsPermission -> return fail(PhoneRadioFailure.NoPermission)
             else -> return fail(PhoneRadioFailure.NoDongle)
         }
-        val usbConnection = dongles.open(device) ?: return fail(PhoneRadioFailure.NoPermission)
+        val usbConnection = dongles.open(device)
+            ?: return fail(
+                // The radio went between the read above and the open.
+                if (dongles.current() is DongleStatus.None) PhoneRadioFailure.DongleRemoved else PhoneRadioFailure.NoPermission,
+            )
         val binding = UsbRadioConnection(context) { scope.launch { onServiceLost() } }
         var frames: ParcelFileDescriptor? = null
         try {
@@ -153,7 +161,7 @@ class PhoneRadioSession @Inject constructor(
                 radio.setChannel(invite.bundle.channel, invite.bundle.bandwidthMhz)
                 frames = radio.frames()
             }
-            val running = Running(invite, radio, binding, usbConnection, requireNotNull(frames))
+            val running = Running(invite, radio, binding, usbConnection, requireNotNull(frames), device.deviceName)
             active = running
             running.begin()
             _state.value = PhoneRadioState.Receiving(invite.bundle.channel)
@@ -179,6 +187,10 @@ class PhoneRadioSession @Inject constructor(
         if (!running.stopping) stopLocked(PhoneRadioState.Failed(PhoneRadioFailure.RadioStopped))
     }
 
+    private suspend fun onDongleRemoved(running: Running) = control.withLock {
+        if (active === running) stopLocked(PhoneRadioState.Failed(PhoneRadioFailure.DongleRemoved))
+    }
+
     private suspend fun stopLocked(next: PhoneRadioState) {
         val running = active
         active = null
@@ -198,6 +210,8 @@ class PhoneRadioSession @Inject constructor(
         val binding: UsbRadioConnection,
         val usbConnection: UsbDeviceConnection,
         val frames: ParcelFileDescriptor,
+        /** The USB device name of this run's radio, matched against detaches. */
+        val deviceName: String,
     ) {
         @Volatile var stopping = false
         private val bundle = invite.bundle
@@ -216,6 +230,7 @@ class PhoneRadioSession @Inject constructor(
         private val follower = HopFollower(bundle.hopKey, bundle.channel, scope) { target -> retune(target) }
         private var reader: Thread? = null
         private var ticker: Job? = null
+        private var unplugWatch: Job? = null
         private var lastUsb: LongArray? = null
 
         fun begin() {
@@ -233,6 +248,13 @@ class PhoneRadioSession @Inject constructor(
                     delay(STATS_MS)
                     tick(receivers.values)
                 }
+            }
+            // Unplugging the radio closes nothing on its own; the run ends
+            // here, outside this watch, so its cancellation does not wait on
+            // itself.
+            unplugWatch = scope.launch {
+                dongles.detached.first { it == deviceName }
+                scope.launch { onDongleRemoved(this@Running) }
             }
         }
 
@@ -340,6 +362,7 @@ class PhoneRadioSession @Inject constructor(
             stopping = true
             follower.cancel()
             ticker?.cancelAndJoin()
+            unplugWatch?.cancelAndJoin()
             withContext(Dispatchers.IO) {
                 // Closing the radio closes the pipe's write end; the reader
                 // then sees end of stream and releases the receivers.

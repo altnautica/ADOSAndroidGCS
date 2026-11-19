@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -15,6 +17,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.content.IntentCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.altnautica.gcs.core.designsystem.component.CancelledConfirmGuard
 import com.altnautica.gcs.core.designsystem.component.console.ConsoleCommandDispatcher
@@ -36,6 +39,7 @@ import com.altnautica.gcs.feature.settings.AppLocales
 import com.altnautica.gcs.feature.settings.AppSettingsRepository
 import com.altnautica.gcs.feature.settings.AppearanceSettings
 import com.altnautica.gcs.navigation.PairLink
+import com.altnautica.gcs.radio.usb.RadioDongles
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
@@ -62,6 +66,10 @@ class MainActivity : ComponentActivity() {
     /** Pair deep links (`adosgcs://pair?code=&host=`), from launch and from later intents. */
     private val pairLinks = Channel<PairLink>(Channel.BUFFERED)
     private val pairLinkFlow = pairLinks.receiveAsFlow()
+
+    /** A supported USB radio plugged in while the app was chosen to handle it. */
+    private val radioAttaches = Channel<Unit>(Channel.CONFLATED)
+    private val radioAttachFlow = radioAttaches.receiveAsFlow()
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocales.wrap(newBase))
@@ -108,7 +116,7 @@ class MainActivity : ComponentActivity() {
                     CancelledConfirmGuard {
                         ProvideOverlayHost {
                             // Nothing, deep links included, opens until the current safety disclaimer is accepted.
-                            DisclaimerGate { AppRoot(pairLinks = pairLinkFlow) }
+                            DisclaimerGate { AppRoot(pairLinks = pairLinkFlow, radioAttaches = radioAttachFlow) }
                         }
                     }
                 }
@@ -123,6 +131,7 @@ class MainActivity : ComponentActivity() {
 
     private fun handleIntent(intent: Intent?) {
         parsePairLink(intent)?.let { pairLinks.trySend(it) }
+        if (isRadioAttach(intent)) radioAttaches.trySend(Unit)
     }
 
     // Gamepad axes and hardware keys reach the input router before the view
@@ -150,6 +159,13 @@ class MainActivity : ComponentActivity() {
             val code = uri.getQueryParameter("code")?.takeIf { it.isNotBlank() }
             val host = uri.getQueryParameter("host")?.takeIf { it.isNotBlank() }
             return if (code == null && host == null) null else PairLink(code, host)
+        }
+
+        /** A `USB_DEVICE_ATTACHED` intent for a radio the phone receiver drives. */
+        fun isRadioAttach(intent: Intent?): Boolean {
+            if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return false
+            val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java) ?: return false
+            return RadioDongles.isSupported(device.vendorId, device.productId)
         }
     }
 }

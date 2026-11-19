@@ -83,7 +83,7 @@ import kotlinx.coroutines.flow.Flow
  * Home command) go through the [LeaveGuard], so an armed cockpit can confirm first.
  */
 @Composable
-fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()) {
+fun AppRoot(pairLinks: Flow<PairLink>, radioAttaches: Flow<Unit>, viewModel: AppViewModel = hiltViewModel()) {
     val backStack = rememberNavBackStack(HomeKey)
     val leaveGuard = remember { LeaveGuard() }
     var quickMenuOpen by rememberSaveable { mutableStateOf(false) }
@@ -93,6 +93,12 @@ fun AppRoot(pairLinks: Flow<PairLink>, viewModel: AppViewModel = hiltViewModel()
     LaunchedEffect(pairLinks) {
         // An outside pair link goes through the leave guard, so it asks first over an armed cockpit.
         pairLinks.collect { link -> leaveGuard.navigate { BackStackOps.push(backStack, ConnectKey(link.code, link.host)) } }
+    }
+    LaunchedEffect(radioAttaches) {
+        // A radio the operator chose this app for opens the phone receiver, through the same guard.
+        radioAttaches.collect {
+            if (backStack.lastOrNull() != PhoneRadioKey) leaveGuard.navigate { BackStackOps.push(backStack, PhoneRadioKey) }
+        }
     }
     val topRoute = backStack.lastOrNull()
     LaunchedEffect(topRoute) { viewModel.topRouteChanged(topRoute) }

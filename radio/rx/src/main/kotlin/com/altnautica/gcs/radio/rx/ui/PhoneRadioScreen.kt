@@ -312,6 +312,7 @@ private fun radioFailure(state: PhoneRadioState.Failed): String {
             PhoneRadioFailure.NoInvite -> R.string.phone_radio_failed_no_invite
             PhoneRadioFailure.KeysUnreadable -> R.string.phone_radio_failed_keys_unreadable
             PhoneRadioFailure.NoDongle -> R.string.phone_radio_failed_no_dongle
+            PhoneRadioFailure.DongleRemoved -> R.string.phone_radio_failed_dongle_removed
             PhoneRadioFailure.NoPermission -> R.string.phone_radio_failed_no_permission
             PhoneRadioFailure.OpenFailed -> R.string.phone_radio_failed_open
             PhoneRadioFailure.ServiceLost -> R.string.phone_radio_failed_service

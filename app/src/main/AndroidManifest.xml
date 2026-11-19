@@ -67,6 +67,15 @@
                     android:host="pair"
                     android:scheme="adosgcs" />
             </intent-filter>
+
+            <!-- A supported USB radio plugged in: "always open with" this app
+                 grants USB access without a prompt on later attaches. -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/radio_device_filter" />
         </activity>
 
         <!-- Keeps vehicle links alive in the background while any link is open. -->

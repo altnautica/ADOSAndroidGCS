@@ -59,6 +59,7 @@
     <string name="phone_radio_failed_no_invite">no radio keys</string>
     <string name="phone_radio_failed_keys_unreadable">radio keys could not be read just now; start again</string>
     <string name="phone_radio_failed_no_dongle">no USB radio</string>
+    <string name="phone_radio_failed_dongle_removed">the radio was unplugged</string>
     <string name="phone_radio_failed_no_permission">USB access not allowed</string>
     <string name="phone_radio_failed_open">the radio did not start</string>
     <string name="phone_radio_failed_service">the radio service stopped</string>
