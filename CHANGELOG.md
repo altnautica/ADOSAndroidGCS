@@ -11,6 +11,60 @@ app's `versionName`.
 - **Visor-only extension pages.** An extension page or surface declared for
   the Visor profile is offered on a Visor; the profile was dropped as
   unknown, so a Visor-only page read as offered on every node.
+- **The phone radio transmits as the ground.** With the fleet's keys the
+  phone runs the ground's control and aux transmitters next to its
+  receivers, announces itself with a presence beacon under its own ground id,
+  acknowledges a drone's channel hop and follows it. The radio screen shows
+  whether the uplink is sending and whether a completed hop has confirmed it.
+- **Commands over the phone radio.** MAVLink (parameters, missions, commands)
+  goes up the aux uplink; node-API calls go as relay requests under a fresh
+  relay ticket on a fleet the phone bound itself (a box's invite carries no
+  relay secret, so those are refused with the box's own reason); link
+  feedback reports the phone's measurement of each drone's downlink; the
+  pilot link carries sticks, release, actions and heartbeats, at a stick rate
+  set in Controls (50, 20 or 10 Hz). Relay answers are RaptorQ-decoded.
+- **Bind a drone over the air.** "Bind a drone" pairs a factory drone with
+  no ground station: the phone opens the bind channel, sends the drone its
+  key bundle through its own TCP/IP endpoint over the bind tunnel, and closes
+  the connection in order before the radio stops. The bound fleet's drones
+  are enrolled from their beacons and get their slot and relay secret from
+  the phone; a drone that holds another ground's secret is shown as
+  belonging to another ground.
+- **Version 2 ground-role invites.** A box's invite now carries what the
+  phone needs to stand in for it (relay secrets, system ids, transmit
+  settings, regulatory domain, the box's identity and address, and the
+  handover key); version 1 invites still read. Invites enrolled before this
+  change carry no phone key for the handover: request keys again before
+  taking the uplink.
+- **Take the uplink from a ground station.** With a box's ground-role invite
+  the phone receives beside the box and can take the uplink: it signs the
+  request with the handover key, starts transmitting only once the box
+  reports standby, and gives it back once its own transmitters read quiet.
+  The box's operator can take it back; the phone answers on a local
+  listener whose calls are signed by the box in their own context and must
+  name that box, so a captured phone request cannot make it yield. The
+  listener cuts off slow clients, serves at most four connections and runs
+  on its own threads. A take or give-back finishes even if the screen is
+  left, and one that fails hands the uplink back to the box. If the phone
+  hears another ground transmitting while it holds the uplink, it stops at
+  once. Closing the transmitters waits for any send in progress. The phone
+  radio screen has Uplink and Handover sections, and a ground station's
+  node page shows who holds its uplink, with a confirmed take-back.
+- **Hardware video decoding, chosen and shown.** The drone's video is
+  decoded by the best decoder the phone has: every decoder for the type is
+  ranked, hardware before software and low-latency capable first, and
+  opened in that order, falling back only when one refuses. Low-latency
+  mode is requested through the platform flag and, on Qualcomm, Exynos,
+  Kirin and Amlogic decoders, through their own low-latency options. The
+  phone radio screen names the decoder, whether it is hardware, and low
+  latency only when the decoder declares it (the platform feature, or a
+  vendor option the decoder lists on Android 12+); a software fallback is
+  labelled as higher latency.
+- **A silent ground station relays nothing.** A drone was still reached "via
+  ground station" from that station's last answer after it stopped
+  answering, so a link to the drone went to the dead station first. The
+  relayed reach now lasts only while the station answers.
+- **lwIP licence** in the in-app licences.
 
 ## [0.7.0] - 2026-11-17
 
