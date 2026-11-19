@@ -161,10 +161,10 @@ sealed interface FollowEvent {
     data class Stopped(val reason: String, override val atMs: Long) : FollowEvent
 }
 
-/** Extnav health vision-nav reports. */
+/** Extnav health Navigation reports. */
 enum class ExtNavHealth { Good, Degraded, Lost }
 
-/** The fields of vision-nav `nav.state` the surfaces draw. */
+/** The fields of Navigation `nav.state` the surfaces draw. */
 data class NavState(
     val mode: String?,
     val activeSet: Int?,

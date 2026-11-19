@@ -5,7 +5,7 @@ import com.altnautica.gcs.core.agent.http.AgentResult
 import kotlinx.serialization.json.JsonElement
 
 /**
- * Capture session routes served by the World Engine extension. An interface so
+ * Capture session routes served by the Capture extension. An interface so
  * screens can be driven by the agent or by demo data alike.
  */
 interface CaptureApi {
@@ -27,25 +27,25 @@ interface CaptureApi {
 /** [CaptureApi] over the extension's plugin route mount (`/api/plugins/{id}/x/...`). */
 class AgentCaptureApi internal constructor(private val client: AgentClient) : CaptureApi {
 
-    override suspend fun state() = client.get(route("atlas/capture/state"), CaptureState.serializer())
+    override suspend fun state() = client.get(route("capture/state"), CaptureState.serializer())
 
     override suspend fun start(request: CaptureStartRequest) = client.send(
         "POST",
-        route("atlas/capture/start"),
+        route("capture/start"),
         CaptureStartRequest.serializer(),
         request,
         CaptureStartResponse.serializer(),
     )
 
-    override suspend fun stop() = post("atlas/capture/stop")
+    override suspend fun stop() = post("capture/stop")
 
-    override suspend fun pause() = post("atlas/capture/pause")
+    override suspend fun pause() = post("capture/pause")
 
-    override suspend fun resume() = post("atlas/capture/resume")
+    override suspend fun resume() = post("capture/resume")
 
     override suspend fun mark(room: String, floor: Int) = client.send(
         "POST",
-        route("atlas/capture/mark"),
+        route("capture/mark"),
         CaptureMarkRequest.serializer(),
         CaptureMarkRequest(room, floor),
         CaptureMarkResponse.serializer(),
@@ -53,19 +53,19 @@ class AgentCaptureApi internal constructor(private val client: AgentClient) : Ca
 
     override suspend fun exposure(exposure: CaptureExposure) = client.send(
         "PUT",
-        route("atlas/capture/exposure"),
+        route("capture/exposure"),
         CaptureExposure.serializer(),
         exposure,
         CaptureExposure.serializer(),
     )
 
-    override suspend fun sessions() = client.get(route("atlas/sessions"), CaptureSessions.serializer())
+    override suspend fun sessions() = client.get(route("capture/sessions"), CaptureSessions.serializer())
 
-    override suspend fun upload(sessionId: String) = post("atlas/sessions/${seg(sessionId)}/upload")
+    override suspend fun upload(sessionId: String) = post("capture/sessions/${seg(sessionId)}/upload")
 
     override suspend fun delete(sessionId: String, force: Boolean) = client.sendJson(
         "DELETE",
-        route("atlas/sessions/${seg(sessionId)}"),
+        route("capture/sessions/${seg(sessionId)}"),
         null,
         JsonElement.serializer(),
         query = if (force) mapOf("force" to "true") else emptyMap(),
@@ -73,7 +73,7 @@ class AgentCaptureApi internal constructor(private val client: AgentClient) : Ca
 
     override suspend fun reconstruct(sessionId: String, preset: String) = client.send(
         "POST",
-        route("atlas/sessions/${seg(sessionId)}/reconstruct"),
+        route("capture/sessions/${seg(sessionId)}/reconstruct"),
         ReconstructRequest.serializer(),
         ReconstructRequest(preset),
         ReconstructResponse.serializer(),
@@ -84,7 +84,7 @@ class AgentCaptureApi internal constructor(private val client: AgentClient) : Ca
     private fun seg(value: String) = AgentClient.segment(value)
 
     companion object {
-        const val PLUGIN_ID = "com.altnautica.world-engine"
+        const val PLUGIN_ID = "com.altnautica.capture"
 
         /** The extension route [path] under the agent's plugin mount. */
         fun route(path: String): String = "api/plugins/${AgentClient.segment(PLUGIN_ID)}/x/$path"

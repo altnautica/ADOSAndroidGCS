@@ -66,7 +66,7 @@ class AgentClient internal constructor(
     /** Sensor, clock, storage, GNSS and LoRa routes (`/api/v1/...`). */
     val sensors: SensorsApi = AgentSensorsApi(this)
 
-    /** World Engine capture routes (extension plugin mount). */
+    /** Capture extension routes (extension plugin mount). */
     val capture: CaptureApi = AgentCaptureApi(this)
 
     /** Host navigation and live map routes (`/api/v1/nav/...`, `/api/v1/map/...`). */

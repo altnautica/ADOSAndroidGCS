@@ -5,6 +5,13 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Capture extension routes.** The Visor's capture screen talks to the
+  Capture extension (`com.altnautica.capture`, `/x/capture/…`), which took
+  over capture from the retired single 3D-capture extension.
+- **Visor-only extension pages.** An extension page or surface declared for
+  the Visor profile is offered on a Visor; the profile was dropped as
+  unknown, so a Visor-only page read as offered on every node.
+
 ## [0.7.0] - 2026-11-17
 
 - **Steady take-off on the launch sheet.** A take-off goes through the

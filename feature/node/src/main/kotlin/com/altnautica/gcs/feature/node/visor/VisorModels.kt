@@ -21,7 +21,7 @@ enum class ChipLevel { Ok, Warn, Bad }
 /** One capture health chip (`blur`, `texture`, `flicker`, `corridor`, `storage`, `clock`). */
 data class HealthChip(val id: String, val level: ChipLevel, val value: Double?)
 
-/** The capture tab's view of `atlas/capture/state`. */
+/** The capture tab's view of `capture/state`. */
 data class CaptureUi(
     val mode: CaptureMode,
     val sessionId: String?,

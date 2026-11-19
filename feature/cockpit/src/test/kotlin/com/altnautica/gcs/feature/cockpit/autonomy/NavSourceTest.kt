@@ -42,7 +42,7 @@ class NavSourceTest {
     }
 
     @Test
-    fun `N3 flow set from vision-nav active set 2`() {
+    fun `N3 flow set from Navigation active set 2`() {
         val chip = NavSource.resolve(inputs(2, nav = nav(2), params = mapOf("EK3_SRC2_POSXY" to 0, "EK3_SRC2_VELXY" to 5)))
         assertEquals("FLOW", text.navLabel(chip))
         assertEquals("HOLD OK", text.quality(chip.quality!!))
@@ -58,7 +58,7 @@ class NavSourceTest {
     }
 
     @Test
-    fun `N5 unknown params derive external nav from vision-nav`() {
+    fun `N5 unknown params derive external nav from Navigation`() {
         val chip = NavSource.resolve(inputs(2 + 8, nav = nav(health = ExtNavHealth.Good, mode = "external_nav")))
         assertEquals("EXT NAV", text.navLabel(chip))
         assertEquals("GOOD", text.quality(chip.quality!!))

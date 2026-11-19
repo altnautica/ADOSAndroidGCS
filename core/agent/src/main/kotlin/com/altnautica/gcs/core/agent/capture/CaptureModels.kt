@@ -5,9 +5,9 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// World Engine capture routes (extension `com.altnautica.world-engine`).
+// Capture routes (extension `com.altnautica.capture`).
 
-/** `GET atlas/capture/state`. */
+/** `GET capture/state`. */
 @Serializable
 data class CaptureState(
     /** `idle` | `recording` | `paused` | `closing`. */
@@ -58,7 +58,7 @@ data class CaptureCoverage(
 @Serializable
 data class CaptureHealth(val id: String, val level: String = "ok", val value: Double? = null)
 
-/** Exposure state; also the body and answer of `PUT atlas/capture/exposure`. */
+/** Exposure state; also the body and answer of `PUT capture/exposure`. */
 /** [locked] is always encoded so an unlock request carries `"locked":false`. */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -79,7 +79,7 @@ data class CaptureStorageLeft(
     @SerialName("est_remaining_s") val estRemainingS: Double? = null,
 )
 
-/** Optional `POST atlas/capture/start` body. */
+/** Optional `POST capture/start` body. */
 @Serializable
 data class CaptureStartRequest(
     val site: String? = null,
@@ -105,7 +105,7 @@ data class CaptureMarkRequest(val room: String, val floor: Int)
 @Serializable
 data class CaptureMarkResponse(val ok: Boolean = false, val segment: Int? = null)
 
-/** `GET atlas/sessions`. */
+/** `GET capture/sessions`. */
 @Serializable
 data class CaptureSessions(val sessions: List<CaptureSession> = emptyList())
 

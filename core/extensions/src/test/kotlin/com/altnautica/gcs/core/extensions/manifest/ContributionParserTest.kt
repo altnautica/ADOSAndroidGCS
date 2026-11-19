@@ -65,14 +65,15 @@ class ContributionParserTest {
     }
 
     @Test
-    fun worldEngineAgentPagesAndSurfaces() {
-        val slots = detail("world-engine").contributions.slots
-        val setup = slots.single { it.panelId == "world-model-setup" }
+    fun captureAndReconstructPagesAndSurfaces() {
+        val capture = detail("capture").contributions.slots
+        val setup = capture.single { it.panelId == "capture-setup" }
         assertEquals(ExtensionSlots.NODE_AGENT_PAGE, setup.slot)
-        assertEquals("world-model", setup.setupFor)
-        val relay = slots.single { it.panelId == "atlas-relay" }
+        assertEquals(listOf("drone", "visor"), setup.profile)
+        val relay = capture.single { it.panelId == "relay" }
         assertEquals(listOf("ground-station"), relay.profile)
-        val surface = slots.single { it.panelId == "overview" && it.slot == ExtensionSlots.NODE_SURFACE }
+        val surface = detail("reconstruct").contributions.slots
+            .single { it.panelId == "reconstruct" && it.slot == ExtensionSlots.NODE_SURFACE }
         assertEquals("status", surface.group)
         // `compute` is a recognised profile; unknown profile names are dropped.
         assertEquals(listOf("workstation", "compute"), surface.profile)
@@ -80,7 +81,10 @@ class ContributionParserTest {
 
     @Test
     fun everyFirstPartyFixtureParses() {
-        for (n in listOf("follow-me", "mavlink-gimbal-v2", "siyi-pod", "thermal-camera-flir-lepton-usb", "vision-nav", "world-engine")) {
+        for (n in listOf(
+            "follow-me", "mavlink-gimbal-v2", "siyi-pod", "thermal-camera-flir-lepton-usb",
+            "capture", "reconstruct", "navigation",
+        )) {
             val d = detail(n)
             assertTrue(n, d.name.isNotBlank())
         }

@@ -394,7 +394,7 @@ data class StickCommand(val inputAgeMs: Long)
 
 /**
  * The pilot does not trust the horizontal position: [reason] is `flow_disagrees`,
- * `extnav_lost` or `extnav_degraded`; [detail] vision-nav's own reason when it named one;
+ * `extnav_lost` or `extnav_degraded`; [detail] Navigation's own reason when it named one;
  * [flowMps] / [estimateMps] the measured flow speed and the estimate's speed when sent.
  */
 data class PositionUnverified(val reason: String, val detail: String?, val flowMps: Float?, val estimateMps: Float?)

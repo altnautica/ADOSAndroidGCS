@@ -130,10 +130,10 @@ class VisorViewModel @AssistedInject constructor(
 
     /** The preview cameras come from the session; before one runs, from the rig's camera sensors. */
     internal suspend fun resolvePreview() {
-        // The extension serves each capture camera at `atlas/capture/whep?camera=<id>` under its plugin mount;
+        // The extension serves each capture camera at `capture/whep?camera=<id>` under its plugin mount;
         // an in-process node supplies its own preview instead.
         if (apis.local(id) == null) {
-            whepBase = endpoints.endpointFor(id)?.url(AgentCaptureApi.route("atlas/capture/"))?.toString()
+            whepBase = endpoints.endpointFor(id)?.url(AgentCaptureApi.route("capture/"))?.toString()
         }
         if (_state.value.cameras.isEmpty()) {
             val rig = apis.sensors(id)?.sensors()?.getOrNull()?.takeIf { it.present }

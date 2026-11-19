@@ -125,7 +125,7 @@ data class ExtensionContributions(
 
 object ContributionParser {
 
-    private val NODE_PROFILES = listOf("drone", "ground-station", "workstation", "compute")
+    private val NODE_PROFILES = listOf("drone", "ground-station", "workstation", "compute", "visor")
     private val SURFACE_GROUPS = setOf("status", "vehicle", "link", "device", "compute")
     private val VEHICLE_CLASSES = listOf("multirotor", "fixedwing", "vtol")
     private val PAGE_ID = Regex("^[a-z0-9-]{1,48}$")

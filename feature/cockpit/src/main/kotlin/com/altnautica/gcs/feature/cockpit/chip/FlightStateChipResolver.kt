@@ -236,7 +236,7 @@ class FlightStateChipResolver(
     fun holdReasonLabel(reason: String): String =
         spec.holdReasonLabels[reason] ?: reason.replace('-', ' ').replace('_', ' ')
 
-    /** The label key of the pilot's `position_unverified`: vision-nav's detail when the spec labels it, else the reason. */
+    /** The label key of the pilot's `position_unverified`: Navigation's detail when the spec labels it, else the reason. */
     fun positionUnverifiedKey(p: PilotState): String? {
         val u = p.positionUnverified ?: return null
         return u.detail?.takeIf { it in spec.positionUnverifiedLabels } ?: u.reason

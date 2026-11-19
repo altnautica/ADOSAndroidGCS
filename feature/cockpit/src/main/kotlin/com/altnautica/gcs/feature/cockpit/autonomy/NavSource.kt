@@ -70,7 +70,7 @@ object NavSource {
 
     fun param(set: Int, field: String) = "EK3_SRC${set}_$field"
 
-    /** Active set: fresh vision-nav, else the set this GCS last commanded, else 1. */
+    /** Active set: fresh Navigation, else the set this GCS last commanded, else 1. */
     fun activeSet(i: NavInputs): Int = i.nav?.activeSet?.takeIf { i.navFresh && it in 1..3 } ?: i.commandedSet ?: 1
 
     /**
@@ -115,7 +115,7 @@ object NavSource {
     }
 
     private fun extNav(nav: NavState?, flags: Int, set: Int): NavChip {
-        // A reason from vision-nav on a degraded or lost pose says why the position cannot be trusted.
+        // A reason from Navigation on a degraded or lost pose says why the position cannot be trusted.
         val why = nav?.healthReason
         if (why != null && (nav.extnavHealth == ExtNavHealth.Degraded || nav.extnavHealth == ExtNavHealth.Lost)) {
             return NavChip(NavLabel.ExtNav, unverifiedWord(why), NavTone.Crit, activeSet = set)

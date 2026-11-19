@@ -231,7 +231,7 @@ class VisorViewModelTest {
         vm.resolvePreview()
 
         val preview = vm.state.value.preview as VideoSource.AgentWhep
-        assertEquals("http://192.168.1.50:8080/api/plugins/com.altnautica.world-engine/x/atlas/capture", preview.baseUrl)
+        assertEquals("http://192.168.1.50:8080/api/plugins/com.altnautica.capture/x/capture", preview.baseUrl)
         assertEquals("cam_fl", preview.streamId)
         assertEquals(listOf("cam_fl"), vm.state.value.cameras)
     }

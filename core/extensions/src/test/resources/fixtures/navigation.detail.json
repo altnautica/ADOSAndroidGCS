@@ -1,7 +1,7 @@
 {
   "install": {
-    "plugin_id": "com.altnautica.vision-nav",
-    "version": "0.4.1",
+    "plugin_id": "com.altnautica.navigation",
+    "version": "1.0.0",
     "source": "registry",
     "source_uri": null,
     "signer_id": null,
@@ -18,15 +18,23 @@
         "granted": true,
         "granted_at": 1760000001
       },
-      "hardware.i2c": {
-        "granted": true,
-        "granted_at": 1760000001
-      },
       "telemetry.extend": {
         "granted": true,
         "granted_at": 1760000001
       },
       "event.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.subscribe": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "node.info.read": {
         "granted": true,
         "granted_at": 1760000001
       },
@@ -38,11 +46,23 @@
         "granted": true,
         "granted_at": 1760000001
       },
-      "mavlink.component.peripheral": {
+      "estimator.pose.inject": {
         "granted": true,
         "granted_at": 1760000001
       },
-      "ui.slot.node-detail-tab": {
+      "mavlink.component.vio": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "sensor.stream.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.cockpit-panel": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-agent-page": {
         "granted": true,
         "granted_at": 1760000001
       },
@@ -59,20 +79,25 @@
   "granted_capabilities": [
     "vision.frame.read",
     "hardware.uart",
-    "hardware.i2c",
     "telemetry.extend",
     "event.publish",
+    "event.subscribe",
+    "telemetry.read",
+    "node.info.read",
     "mavlink.read",
     "mavlink.write",
-    "mavlink.component.peripheral",
-    "ui.slot.node-detail-tab",
+    "estimator.pose.inject",
+    "mavlink.component.vio",
+    "sensor.stream.read",
+    "ui.slot.cockpit-panel",
+    "ui.slot.node-agent-page",
     "ui.slot.flight-skill",
     "telemetry.subscribe.navigation"
   ],
   "manifest": {
-    "id": "com.altnautica.vision-nav",
-    "version": "0.4.1",
-    "name": "ADOS Vision Navigation",
+    "id": "com.altnautica.navigation",
+    "version": "1.0.0",
+    "name": "ADOS Navigation",
     "risk": "high",
     "license": "GPL-3.0-or-later",
     "halves": [
@@ -83,15 +108,28 @@
       "entrypoint": "gcs/plugin.bundle.js",
       "isolation": "iframe",
       "contributes": {
-        "tabs": [
+        "panels": [
           {
-            "id": "vision-nav-tab",
-            "slot": "node.detail.tab",
-            "title": "Vision Nav",
+            "id": "navigation-health",
+            "slot": "cockpit.panel",
+            "title": "Navigation",
             "icon": "compass",
-            "order": 60,
+            "order": 40,
             "profile": [
               "drone"
+            ]
+          }
+        ],
+        "agent_pages": [
+          {
+            "id": "navigation",
+            "title": "Navigation",
+            "section": "videoVision",
+            "after": "vision",
+            "order": 20,
+            "profile": [
+              "drone",
+              "visor"
             ]
           }
         ],
@@ -117,10 +155,7 @@
             }
           }
         ]
-      },
-      "locales": [
-        "en"
-      ]
+      }
     },
     "permissions": [
       {
@@ -129,11 +164,7 @@
       },
       {
         "id": "hardware.uart",
-        "required": true
-      },
-      {
-        "id": "hardware.i2c",
-        "required": true
+        "required": false
       },
       {
         "id": "telemetry.extend",
@@ -141,6 +172,18 @@
       },
       {
         "id": "event.publish",
+        "required": true
+      },
+      {
+        "id": "event.subscribe",
+        "required": true
+      },
+      {
+        "id": "telemetry.read",
+        "required": true
+      },
+      {
+        "id": "node.info.read",
         "required": true
       },
       {
@@ -152,11 +195,23 @@
         "required": true
       },
       {
-        "id": "mavlink.component.peripheral",
+        "id": "estimator.pose.inject",
         "required": true
       },
       {
-        "id": "ui.slot.node-detail-tab",
+        "id": "mavlink.component.vio",
+        "required": true
+      },
+      {
+        "id": "sensor.stream.read",
+        "required": true
+      },
+      {
+        "id": "ui.slot.cockpit-panel",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-agent-page",
         "required": true
       },
       {

@@ -60,6 +60,6 @@ class SensorsApiTest {
 
     @Test
     fun captureRoutesRideThePluginMount() {
-        assertEquals("api/plugins/com.altnautica.world-engine/x/atlas/capture/state", AgentCaptureApi.route("atlas/capture/state"))
+        assertEquals("api/plugins/com.altnautica.capture/x/capture/state", AgentCaptureApi.route("capture/state"))
     }
 }

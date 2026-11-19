@@ -154,7 +154,7 @@ class SkillActivatorTest {
         vehicle.heartbeat(armed = true, tMs = now)
         val active = SkillState(true, true, null, null, null)
         val follow = Probe(id = "follow", toggle = true, category = SkillCategory.Behavior, stateValue = active, motion = true)
-        val visionNav = Probe(id = "vision-nav", toggle = true, category = SkillCategory.Navigation, stateValue = active)
+        val visionNav = Probe(id = "navigation", toggle = true, category = SkillCategory.Navigation, stateValue = active)
         val tracker = Probe(id = "tracker", toggle = true, category = SkillCategory.Camera, stateValue = active)
         activator.activate(pause, ctx(armed = true), emptyMap(), confirmAll, peers = listOf(visionNav, follow, tracker, pause))
         // Only motion peers are consulted: the estimator and the camera skill are never read or stopped.
@@ -165,12 +165,12 @@ class SkillActivatorTest {
     fun `rth and land also stop motion skills only`() = runTest {
         vehicle.heartbeat(armed = true, tMs = now)
         val follow = Probe(id = "follow", toggle = true, stateValue = SkillState(true, true, null, null, null), motion = true)
-        val visionNav = Probe(id = "vision-nav", toggle = true, stateValue = SkillState(true, true, null, null, null))
+        val visionNav = Probe(id = "navigation", toggle = true, stateValue = SkillState(true, true, null, null, null))
         for (id in listOf("rth", "land")) {
             calls.clear()
             now += 1_000
             activator.activate(builtin(id), ctx(armed = true), emptyMap(), confirmAll, peers = listOf(visionNav, follow))
-            assertFalse(id, "deactivate:vision-nav" in calls)
+            assertFalse(id, "deactivate:navigation" in calls)
         }
         assertFalse(follow.state(ctx()).active)
     }

@@ -280,7 +280,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
     }
 }
 
-/** The proximity radar with the companion's scan and the vision-nav obstacle rate. */
+/** The proximity radar with the companion's scan and the Navigation obstacle rate. */
 @Composable
 internal fun AutonomyRadar(vm: CockpitViewModel, modifier: Modifier, diameter: Dp) {
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()

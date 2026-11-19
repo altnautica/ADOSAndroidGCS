@@ -1,7 +1,7 @@
 {
   "install": {
-    "plugin_id": "com.altnautica.world-engine",
-    "version": "1.0.1",
+    "plugin_id": "com.altnautica.reconstruct",
+    "version": "1.0.0",
     "source": "registry",
     "source_uri": null,
     "signer_id": null,
@@ -14,11 +14,15 @@
         "granted": true,
         "granted_at": 1760000001
       },
-      "event.publish": {
+      "event.subscribe": {
         "granted": true,
         "granted_at": 1760000001
       },
       "telemetry.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "plugin.navigation.map.read": {
         "granted": true,
         "granted_at": 1760000001
       },
@@ -38,10 +42,6 @@
         "granted": true,
         "granted_at": 1760000001
       },
-      "radio.aux_stream": {
-        "granted": true,
-        "granted_at": 1760000001
-      },
       "network.outbound": {
         "granted": true,
         "granted_at": 1760000001
@@ -54,15 +54,15 @@
         "granted": true,
         "granted_at": 1760000001
       },
-      "cloud.publish": {
-        "granted": true,
-        "granted_at": 1760000001
-      },
       "cloud.records": {
         "granted": true,
         "granted_at": 1760000001
       },
-      "ui.slot.node-agent-page": {
+      "capture.storage.write": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mcp.expose": {
         "granted": true,
         "granted_at": 1760000001
       },
@@ -70,11 +70,15 @@
         "granted": true,
         "granted_at": 1760000001
       },
-      "perception.read": {
+      "ui.slot.node-agent-page": {
         "granted": true,
         "granted_at": 1760000001
       },
       "telemetry.subscribe.status": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "perception.read": {
         "granted": true,
         "granted_at": 1760000001
       }
@@ -82,28 +86,29 @@
   },
   "granted_capabilities": [
     "telemetry.extend",
-    "event.publish",
+    "event.subscribe",
     "telemetry.read",
+    "plugin.navigation.map.read",
     "node.info.read",
     "vision.frame.read",
     "vision.detection.publish",
     "vision.offload.advertise",
-    "radio.aux_stream",
     "network.outbound",
     "network.listen",
     "hardware.gpu",
-    "cloud.publish",
     "cloud.records",
-    "ui.slot.node-agent-page",
+    "capture.storage.write",
+    "mcp.expose",
     "ui.slot.node-surface",
-    "cloud.records",
+    "ui.slot.node-agent-page",
+    "telemetry.subscribe.status",
     "perception.read",
-    "telemetry.subscribe.status"
+    "cloud.records"
   ],
   "manifest": {
-    "id": "com.altnautica.world-engine",
-    "version": "1.0.1",
-    "name": "ADOS World Engine",
+    "id": "com.altnautica.reconstruct",
+    "version": "1.0.0",
+    "name": "ADOS Reconstruct",
     "risk": "high",
     "license": "GPL-3.0-or-later",
     "halves": [
@@ -111,81 +116,34 @@
       "gcs"
     ],
     "gcs": {
-      "entrypoint": "gcs/world-engine.mjs",
+      "entrypoint": "gcs/reconstruct.mjs",
       "isolation": "inline",
       "contributes": {
-        "agent_pages": [
-          {
-            "id": "world-model",
-            "title": "World Model",
-            "section": "videoVision",
-            "profile": [
-              "drone"
-            ]
-          },
-          {
-            "id": "world-model-setup",
-            "title": "World Model setup",
-            "setup_for": "world-model",
-            "profile": [
-              "drone"
-            ]
-          },
-          {
-            "id": "live-world",
-            "title": "Live World",
-            "section": "videoVision",
-            "after": "world-model",
-            "profile": [
-              "drone"
-            ]
-          },
-          {
-            "id": "offload",
-            "title": "Perception offload",
-            "section": "videoVision",
-            "after": "vision",
-            "profile": [
-              "drone",
-              "workstation",
-              "compute"
-            ]
-          },
-          {
-            "id": "atlas-relay",
-            "title": "Atlas relay",
-            "section": "radioLink",
-            "profile": [
-              "ground-station"
-            ]
-          }
-        ],
         "node_surfaces": [
           {
-            "id": "overview",
-            "title": "Compute",
+            "id": "reconstruct",
+            "title": "Reconstruct",
             "profile": [
               "workstation",
               "compute"
             ],
             "group": "status",
-            "order": 10
-          },
-          {
-            "id": "compute",
-            "title": "Jobs & outputs",
-            "profile": [
-              "workstation",
-              "compute"
-            ],
-            "group": "compute",
             "order": 20
           }
+        ],
+        "agent_pages": [
+          {
+            "id": "offload",
+            "title": "Perception offload",
+            "section": "videoVision",
+            "after": "vision",
+            "order": 10,
+            "profile": [
+              "drone"
+            ]
+          }
         ]
-      },
-      "locales": [
-        "en"
-      ]
+      }
     },
     "permissions": [
       {
@@ -193,12 +151,16 @@
         "required": true
       },
       {
-        "id": "event.publish",
+        "id": "event.subscribe",
         "required": true
       },
       {
         "id": "telemetry.read",
         "required": true
+      },
+      {
+        "id": "plugin.navigation.map.read",
+        "required": false
       },
       {
         "id": "node.info.read",
@@ -217,10 +179,6 @@
         "required": true
       },
       {
-        "id": "radio.aux_stream",
-        "required": true
-      },
-      {
         "id": "network.outbound",
         "required": true
       },
@@ -233,15 +191,15 @@
         "required": true
       },
       {
-        "id": "cloud.publish",
-        "required": true
-      },
-      {
         "id": "cloud.records",
         "required": true
       },
       {
-        "id": "ui.slot.node-agent-page",
+        "id": "capture.storage.write",
+        "required": true
+      },
+      {
+        "id": "mcp.expose",
         "required": true
       },
       {
@@ -249,7 +207,11 @@
         "required": true
       },
       {
-        "id": "cloud.records",
+        "id": "ui.slot.node-agent-page",
+        "required": true
+      },
+      {
+        "id": "telemetry.subscribe.status",
         "required": true
       },
       {
@@ -257,7 +219,7 @@
         "required": true
       },
       {
-        "id": "telemetry.subscribe.status",
+        "id": "cloud.records",
         "required": true
       }
     ],

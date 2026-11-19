@@ -1,0 +1,328 @@
+{
+  "install": {
+    "plugin_id": "com.altnautica.capture",
+    "version": "1.0.0",
+    "source": "registry",
+    "source_uri": null,
+    "signer_id": null,
+    "manifest_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "status": "enabled",
+    "installed_at": 1760000000,
+    "enabled_at": 1760000001,
+    "permissions": {
+      "telemetry.extend": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "event.subscribe": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "plugin.navigation.map.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "node.info.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "vision.frame.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "radio.aux_stream": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "network.outbound": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "cloud.publish": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "sensor.stream.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "capture.storage.write": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mavlink.read": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "display.oled.page": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "button.subscribe": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "mcp.expose": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "video.whep.relay": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "sensors.rig.write": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "camera.control.write": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-surface": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.cockpit-panel": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.map-overlay": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "ui.slot.node-agent-page": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "telemetry.subscribe.status": {
+        "granted": true,
+        "granted_at": 1760000001
+      },
+      "plugin.http.com.altnautica.reconstruct": {
+        "granted": true,
+        "granted_at": 1760000001
+      }
+    }
+  },
+  "granted_capabilities": [
+    "telemetry.extend",
+    "event.publish",
+    "event.subscribe",
+    "telemetry.read",
+    "plugin.navigation.map.read",
+    "node.info.read",
+    "vision.frame.read",
+    "radio.aux_stream",
+    "network.outbound",
+    "cloud.publish",
+    "sensor.stream.read",
+    "capture.storage.write",
+    "mavlink.read",
+    "display.oled.page",
+    "button.subscribe",
+    "mcp.expose",
+    "video.whep.relay",
+    "sensors.rig.write",
+    "camera.control.write",
+    "ui.slot.node-surface",
+    "ui.slot.cockpit-panel",
+    "ui.slot.map-overlay",
+    "ui.slot.node-agent-page",
+    "telemetry.subscribe.status",
+    "plugin.http.com.altnautica.reconstruct"
+  ],
+  "manifest": {
+    "id": "com.altnautica.capture",
+    "version": "1.0.0",
+    "name": "ADOS Capture",
+    "risk": "high",
+    "license": "GPL-3.0-or-later",
+    "halves": [
+      "agent",
+      "gcs"
+    ],
+    "gcs": {
+      "entrypoint": "gcs/capture.mjs",
+      "isolation": "inline",
+      "contributes": {
+        "node_surfaces": [
+          {
+            "id": "capture",
+            "title": "Capture",
+            "profile": [
+              "drone",
+              "visor"
+            ],
+            "group": "status",
+            "order": 20
+          }
+        ],
+        "panels": [
+          {
+            "id": "capture-chips",
+            "slot": "cockpit.panel",
+            "profile": [
+              "drone"
+            ],
+            "title": "Capture",
+            "icon": "scan",
+            "order": 45
+          },
+          {
+            "id": "capture-coverage",
+            "slot": "map.overlay",
+            "profile": [
+              "drone",
+              "visor"
+            ],
+            "title": "Coverage"
+          }
+        ],
+        "agent_pages": [
+          {
+            "id": "capture-setup",
+            "title": "Capture setup",
+            "section": "videoVision",
+            "after": "cameras",
+            "profile": [
+              "drone",
+              "visor"
+            ]
+          },
+          {
+            "id": "calibration",
+            "title": "Calibration",
+            "section": "videoVision",
+            "after": "capture-setup",
+            "profile": [
+              "visor"
+            ]
+          },
+          {
+            "id": "relay",
+            "title": "Relay",
+            "section": "radioLink",
+            "profile": [
+              "ground-station"
+            ]
+          }
+        ]
+      }
+    },
+    "permissions": [
+      {
+        "id": "telemetry.extend",
+        "required": true
+      },
+      {
+        "id": "event.publish",
+        "required": true
+      },
+      {
+        "id": "event.subscribe",
+        "required": true
+      },
+      {
+        "id": "telemetry.read",
+        "required": true
+      },
+      {
+        "id": "plugin.navigation.map.read",
+        "required": false
+      },
+      {
+        "id": "node.info.read",
+        "required": true
+      },
+      {
+        "id": "vision.frame.read",
+        "required": true
+      },
+      {
+        "id": "radio.aux_stream",
+        "required": true
+      },
+      {
+        "id": "network.outbound",
+        "required": true
+      },
+      {
+        "id": "cloud.publish",
+        "required": true
+      },
+      {
+        "id": "sensor.stream.read",
+        "required": true
+      },
+      {
+        "id": "capture.storage.write",
+        "required": true
+      },
+      {
+        "id": "mavlink.read",
+        "required": true
+      },
+      {
+        "id": "display.oled.page",
+        "required": true
+      },
+      {
+        "id": "button.subscribe",
+        "required": true
+      },
+      {
+        "id": "mcp.expose",
+        "required": true
+      },
+      {
+        "id": "video.whep.relay",
+        "required": true
+      },
+      {
+        "id": "sensors.rig.write",
+        "required": true
+      },
+      {
+        "id": "camera.control.write",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-surface",
+        "required": true
+      },
+      {
+        "id": "ui.slot.cockpit-panel",
+        "required": true
+      },
+      {
+        "id": "ui.slot.map-overlay",
+        "required": true
+      },
+      {
+        "id": "ui.slot.node-agent-page",
+        "required": true
+      },
+      {
+        "id": "telemetry.subscribe.status",
+        "required": true
+      },
+      {
+        "id": "plugin.http.com.altnautica.reconstruct",
+        "required": true
+      }
+    ],
+    "mcp": {
+      "tools": [],
+      "resources": [],
+      "prompts": []
+    }
+  }
+}
