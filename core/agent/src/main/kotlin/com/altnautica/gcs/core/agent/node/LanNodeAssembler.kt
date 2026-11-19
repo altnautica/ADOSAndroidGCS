@@ -60,11 +60,15 @@ object LanNodeAssembler {
             )
         }
 
-        // Drones carried by a reachable ground station gain a relayed reach.
+        // Drones carried by a reachable ground station gain a relayed reach. A ground
+        // that has stopped answering (past the live window) relays nothing: its last
+        // poll still names the drone, but a relayed reach through it would rank ahead
+        // of a working link (the phone radio) and take every command to a ground that
+        // is gone.
         for (cred in stored) {
             val carried = polls[cred.deviceId]?.carriedDroneId ?: continue
             val ground = out[cred.deviceId] ?: continue
-            if (ground.profile != NodeProfile.GroundStation) continue
+            if (ground.profile != NodeProfile.GroundStation || ground.liveness != Liveness.Live) continue
             val via = Reach.ViaGround(ground.id)
             val existing = out[carried]
             out[carried] = existing?.copy(reaches = (existing.reaches + via).distinct())

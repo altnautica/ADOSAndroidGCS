@@ -75,6 +75,29 @@ class LanNodeAssemblerTest {
     }
 
     @Test
+    fun `a ground station that stopped answering relays nothing`() {
+        // The ground's last poll still names the drone it carried, but the ground has
+        // been silent past the live window: a relayed reach through it would rank ahead
+        // of a working phone radio and send every command to a ground that is gone.
+        val nodes = LanNodeAssembler.assemble(
+            stored = listOf(cred("gs01", "Ground", "ground-station"), cred("d3", "Drone three", "drone")),
+            discovered = emptyList(),
+            polls = mapOf("gs01" to NodePoll(StatusFull(profile = "ground-station"), now - 50_000, "d2", null)),
+            nowMs = now,
+        ).associateBy { it.id.value }
+        assertEquals(Liveness.Stale, nodes.getValue("gs01").liveness)
+        assertEquals(null, nodes["d2"])
+
+        val paired = LanNodeAssembler.assemble(
+            stored = listOf(cred("gs01", "Ground", "ground-station"), cred("d2", "Drone two", "drone")),
+            discovered = emptyList(),
+            polls = mapOf("gs01" to NodePoll(StatusFull(profile = "ground-station"), now - 61_000, "d2", null)),
+            nowMs = now,
+        ).associateBy { it.id.value }
+        assertEquals(listOf<Reach>(Reach.Lan), paired.getValue("d2").reaches)
+    }
+
+    @Test
     fun `fc variant mapping`() {
         assertEquals(FcVariant.MavlinkArdupilot, LanNodeAssembler.fcVariant(StatusFull(fcFirmware = "ardupilot")))
         assertEquals(FcVariant.Msp, LanNodeAssembler.fcVariant(StatusFull(fcVariant = "betaflight")))
