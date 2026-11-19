@@ -20,6 +20,7 @@ private val BY_COMPONENT: List<Pair<String, List<String>>> = listOf(
     "libusb" to listOf("licenses/libusb-lgpl-2.1.txt"),
     "wfb-ng" to listOf("licenses/wfb-ng-gpl-3.0.txt"),
     "libsodium" to listOf("licenses/libsodium-isc.txt"),
+    "lwIP" to listOf("licenses/lwip-bsd-3.txt"),
 )
 
 private const val APACHE_ASSET = "licenses/apache-2.0.txt"

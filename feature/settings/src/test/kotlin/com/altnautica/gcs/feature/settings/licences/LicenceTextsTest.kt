@@ -32,6 +32,7 @@ class LicenceTextsTest {
             "radio/usb/src/main/cpp/vendor/devourer/LICENSE" to "devourer-gpl-2.0.txt",
             "radio/usb/src/main/cpp/vendor/libusb/COPYING" to "libusb-lgpl-2.1.txt",
             "radio/rx/src/main/cpp/vendor/wfb-ng/LICENSE.txt" to "wfb-ng-gpl-3.0.txt",
+            "radio/rx/src/main/cpp/vendor/lwip/LICENSE" to "lwip-bsd-3.txt",
             "radio/rx/src/main/cpp/vendor/libsodium/LICENSE" to "libsodium-isc.txt",
             "core/mavlink/definitions/COPYING" to "mavlink.txt",
         ).forEach { (source, copy) ->
