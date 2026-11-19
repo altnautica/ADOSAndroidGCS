@@ -199,6 +199,8 @@ object PilotWire {
                 ProfileLimits(PilotProfile.of(l.str("profile")), l.float("v_h_mps") ?: return@let null, l.float("margin_m"))
             },
             stick = (data["stick"] as? JsonObject)?.let { c -> StickCommand(c.long("input_age_ms") ?: return@let null) },
+            commandLimits = ((data["command"] as? JsonObject)?.get("limits") as? JsonArray).orEmpty()
+                .mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content },
         )
     }
 

@@ -12,6 +12,8 @@ data class FlightStateSpec(
     @SerialName("hold_reason_labels") val holdReasonLabels: Map<String, String> = emptyMap(),
     /** Labels for the pilot's `position_unverified`, keyed by its labelled `detail`, else its `reason`. */
     @SerialName("position_unverified_labels") val positionUnverifiedLabels: Map<String, String> = emptyMap(),
+    /** Words for the pilot's `command.limits` codes; a code with none is not shown. */
+    @SerialName("command_limit_labels") val commandLimitLabels: Map<String, String> = emptyMap(),
     @SerialName("stale_after_ms") val staleAfterMs: Long,
     val tap: String,
     @SerialName("mode_sheet") val modeSheet: ModeSheetSpec,
@@ -74,6 +76,7 @@ data class FlightStateSecondarySpec(
     @SerialName("input_age") val inputAge: InputAgeTextSpec? = null,
     @SerialName("h_speed") val hSpeed: OwnerTextSpec? = null,
     @SerialName("v_speed") val vSpeed: OwnerTextSpec? = null,
+    @SerialName("command_limit") val commandLimit: CommandLimitSpec? = null,
 )
 
 /** A part whose text is the `setup-strings` entry [textKey]. */
@@ -103,6 +106,20 @@ data class MatchedTextSpec(val match: FlightStateMatchSpec, val text: String, va
 
 @Serializable
 data class SecondaryTextSpec(val text: String, val color: String)
+
+/**
+ * The limit that cut the commanded speed: the first code of the pilot's `command.limits` not in
+ * [skip], while one of [owners] flies, worded by [FlightStateSpec.commandLimitLabels]; the
+ * [suppressWhileBlocked] codes hide while avoidance reports blocked.
+ */
+@Serializable
+data class CommandLimitSpec(
+    val owners: List<String>,
+    val skip: List<String>,
+    @SerialName("suppress_while_blocked") val suppressWhileBlocked: List<String>,
+    val color: String,
+    val colors: Map<String, String> = emptyMap(),
+)
 
 @Serializable
 data class ModeSheetSpec(

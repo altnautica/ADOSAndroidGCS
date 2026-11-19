@@ -355,6 +355,8 @@ data class PilotState(
     val profileLimits: ProfileLimits? = null,
     /** Present while the operator's sticks own the vehicle. */
     val stick: StickCommand? = null,
+    /** The limits that cut the asked velocity since the previous frame (`command.limits`, first bound first); empty while it flies none. */
+    val commandLimits: List<String> = emptyList(),
 ) {
     /** Declared to fly with no RC transmitter: the app's controls are the only way to stop the drone. */
     val noRc: Boolean get() = rcReceiver == RcReceiver.Absent

@@ -190,13 +190,16 @@ class FlightStateChipResolver(
         return strings[key] ?: step.wire
     }
 
-    /** The secondary line in the spec's order (failsafe, clearance, input age, speed cap, paused mission, hold reason, avoidance, control mode, speeds). */
+    /** The secondary line in the spec's order (failsafe, clearance, input age, speed cap, command limit, paused mission, hold reason, avoidance, control mode, speeds). */
     private fun secondary(p: PilotState, ctx: ChipContext, stale: Boolean): List<ChipText> = spec.secondary.order.mapNotNull { part ->
         when (part) {
             "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
             // The reason's own spec line (`pilot.speed_cap.confined_near`); the spec's default line for a reason it does not name.
             "speed_cap" -> p.speedCap?.let { cap ->
                 spec.secondary.speedCap?.let { chipText(confined.speedCapLine(cap) ?: it.text.replace("{v}", ConfinedText.speedCapText(cap.vHMps.toDouble())), it.color) }
+            }
+            "command_limit" -> spec.secondary.commandLimit?.let { c ->
+                commandLimitCode(p)?.let { code -> chipText(spec.commandLimitLabels.getValue(code), c.colors[code] ?: c.color) }
             }
             "mission_paused_line" -> spec.secondary.missionPausedLine?.takeIf { matches(it.match, p, ctx, stale) }?.let {
                 chipText(fill(it.text, values(p, ctx)), it.color)
@@ -242,6 +245,19 @@ class FlightStateChipResolver(
         return u.detail?.takeIf { it in spec.positionUnverifiedLabels } ?: u.reason
     }
 
+    /**
+     * The `command.limits` code the chip shows: the first the spec does not skip, while a skill,
+     * goto or the sticks fly; one with no label, or one the blocked avoidance part already says, is not shown.
+     */
+    fun commandLimitCode(p: PilotState): String? {
+        val c = spec.secondary.commandLimit ?: return null
+        if (p.owner.wire !in c.owners) return null
+        val code = p.commandLimits.firstOrNull { it !in c.skip } ?: return null
+        if (code !in spec.commandLimitLabels) return null
+        if (p.avoidState?.wire == BLOCKED && code in c.suppressWhileBlocked) return null
+        return code
+    }
+
     private fun chipText(text: String, colorKey: String) = ChipText(text, colorKey, color(colorKey))
 
     /** The `tokens.json` state colour for [key]; the FC colour when the key is unknown. */
@@ -255,6 +271,7 @@ class FlightStateChipResolver(
         /** Rule id reported when no spec rule matches. */
         const val RULE_NONE = "none"
         private const val FC_KEY = "fc"
+        private const val BLOCKED = "blocked"
 
         /** One decimal with a dot whatever the locale; under 0.05 either way reads `0.0`, never `-0.0`. */
         fun oneDecimal(v: Float): String = if (kotlin.math.abs(v) < HALF_TENTH) "0.0" else String.format(Locale.ROOT, "%.1f", v)

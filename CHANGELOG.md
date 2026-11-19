@@ -5,6 +5,10 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Speed limit on the flight-state chip.** While a skill, a goto or
+  the sticks fly, the chip's secondary line says which limit cut the
+  commanded speed, from the pilot's `command.limits` ("Slowed:
+  obstacle", "Slowed: sensor range", "Stopped: obstacle", ...).
 - **Capture extension routes.** The Visor's capture screen talks to the
   Capture extension (`com.altnautica.capture`, `/x/capture/…`), which took
   over capture from the retired single 3D-capture extension.
