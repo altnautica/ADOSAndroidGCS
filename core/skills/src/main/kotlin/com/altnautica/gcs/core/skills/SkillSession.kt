@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.HeartbeatState
 import com.altnautica.gcs.core.model.MissionState
+import com.altnautica.gcs.core.model.PhoneRadioUplink
 import com.altnautica.gcs.core.model.PilotLink
 import com.altnautica.gcs.core.model.PilotProfile
 import com.altnautica.gcs.core.model.PilotState
@@ -14,6 +15,7 @@ import com.altnautica.gcs.core.model.SkillContext
 import com.altnautica.gcs.core.model.SkillSource
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.Vehicle
+import java.util.Optional
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -83,7 +85,10 @@ class SkillSession internal constructor(
     private val clock: MonotonicClock,
     private val scope: CoroutineScope,
     private val stopReason: (pluginId: String) -> String = { REASON_STOPPED },
+    /** True while the phone holds the radio uplink and it is not down. */
+    phoneRadioTransmitting: Flow<Boolean> = flowOf(false),
 ) {
+    private val radioTx: StateFlow<Boolean> = phoneRadioTransmitting.stateIn(scope, SharingStarted.Eagerly, false)
     private val vehicleState: StateFlow<Vehicle?> = vehicle.stateIn(scope, SharingStarted.Eagerly, null)
     private val checklist: StateFlow<Boolean> = checklistReady.stateIn(scope, SharingStarted.Eagerly, false)
     private val pilotState: StateFlow<PilotState?> = pilot.stateIn(scope, SharingStarted.Eagerly, null)
@@ -123,9 +128,9 @@ class SkillSession internal constructor(
                 }.distinctUntilChanged(),
                 freshness(v),
                 checklist,
-                combine(v.reach, v.control.availableModes) { r, m -> r to m },
+                combine(v.reach, v.control.availableModes, radioTx) { r, m, tx -> Triple(r, m, tx) },
                 pilotInputs,
-            ) { (hb, status, fcLanded), fresh, ready, _, (p, l) ->
+            ) { (hb, status, fcLanded), fresh, ready, (_, _, tx), (p, l) ->
                 SkillContext(
                     vehicle = v,
                     armed = hb?.first,
@@ -137,6 +142,7 @@ class SkillSession internal constructor(
                     pilotLink = l,
                     systemStatus = status,
                     fcLanded = fcLanded,
+                    phoneRadioTransmitting = tx,
                 )
             }
         }
@@ -348,6 +354,7 @@ class SkillSessionFactory @Inject constructor(
     private val registry: SkillRegistry,
     private val activator: SkillActivator,
     private val clock: MonotonicClock,
+    private val phoneRadio: Optional<PhoneRadioUplink> = Optional.empty(),
 ) {
     fun create(
         vehicle: Flow<Vehicle?>,
@@ -356,7 +363,10 @@ class SkillSessionFactory @Inject constructor(
         pilot: Flow<PilotState?> = flowOf(null),
         pilotLink: Flow<PilotLink?> = flowOf(null),
         stopReason: (pluginId: String) -> String = { REASON_STOPPED },
-    ): SkillSession = SkillSession(vehicle, checklistReady, pilot, pilotLink, registry, activator, clock, scope, stopReason)
+    ): SkillSession = SkillSession(
+        vehicle, checklistReady, pilot, pilotLink, registry, activator, clock, scope, stopReason,
+        phoneRadio.orElse(null)?.transmitting ?: flowOf(false),
+    )
 }
 
 /** Stop reason when the extension's status is unknown. */

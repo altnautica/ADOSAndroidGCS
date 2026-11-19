@@ -30,7 +30,10 @@ class PhoneRadioSessionTest {
             every { current() } returnsMany listOf(DongleStatus.Ready(device, "RTL8812EU"), afterOpen)
             every { open(device) } returns null
         }
-        return PhoneRadioSession(mockk<Context>(relaxed = true), store, dongles, Optional.empty(), mockk(relaxed = true))
+        return PhoneRadioSession(
+            mockk<Context>(relaxed = true), store, dongles, Optional.empty(), mockk(relaxed = true),
+            mockk(relaxed = true), { mockk(relaxed = true) },
+        )
     }
 
     private fun failureOf(session: PhoneRadioSession): PhoneRadioFailure = runBlocking {

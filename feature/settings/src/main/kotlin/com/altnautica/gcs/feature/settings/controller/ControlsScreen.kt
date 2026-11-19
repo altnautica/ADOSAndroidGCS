@@ -134,6 +134,8 @@ fun ControlsScreen(
     actions: ControlsActions,
     actionLabel: (String) -> String,
     modifier: Modifier = Modifier,
+    /** The phone-radio stick rate setting, shown under the sticks. */
+    radioRate: @Composable () -> Unit = {},
 ) {
     val strings = spec.setupStrings
     fun t(key: String, vararg args: Pair<String, String>) = strings.format(key, args.toMap())
@@ -196,6 +198,7 @@ fun ControlsScreen(
             AdosButton(t("controls.import"), onClick = actions::importFile, variant = AdosButtonVariant.Secondary, modifier = Modifier.testTag("controls-import"))
         }
         SticksCard(state, ::t, actions, ds4.conditioning.deadzoneMin, ds4.conditioning.deadzoneMax)
+        radioRate()
         TestRow(state, input, ::t, actions)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S3)) {
             Text(t("flow.on_screen_sticks"), modifier = Modifier.weight(1f))

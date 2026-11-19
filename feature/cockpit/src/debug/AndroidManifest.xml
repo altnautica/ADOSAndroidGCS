@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: the fleet bench flies a drone's pilot over the phone radio through adb. -->
+        <receiver
+            android:name="com.altnautica.gcs.feature.cockpit.pilot.BenchPilotReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.altnautica.gcs.bench.PILOT_OPEN" />
+                <action android:name="com.altnautica.gcs.bench.PILOT_INPUT" />
+                <action android:name="com.altnautica.gcs.bench.PILOT_RELEASE" />
+                <action android:name="com.altnautica.gcs.bench.PILOT_TAKE" />
+                <action android:name="com.altnautica.gcs.bench.PILOT_HB" />
+                <action android:name="com.altnautica.gcs.bench.PILOT_ACTION" />
+                <action android:name="com.altnautica.gcs.bench.PILOT_BYE" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

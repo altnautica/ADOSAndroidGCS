@@ -4,8 +4,10 @@ import com.altnautica.gcs.core.agent.mavlink.AgentMavlinkTransportProvider
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.node.LanNodeSource
 import com.altnautica.gcs.core.model.NodeSource
+import com.altnautica.gcs.core.model.PhoneRadioUplink
 import com.altnautica.gcs.core.model.TransportProvider
 import dagger.Binds
+import dagger.BindsOptionalOf
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -42,4 +44,8 @@ abstract class AgentBindingsModule {
 
     @Multibinds
     abstract fun localNodeApis(): Set<LocalNodeApis>
+
+    /** Bound by the phone radio where the app carries one. */
+    @BindsOptionalOf
+    abstract fun phoneRadioUplink(): PhoneRadioUplink
 }

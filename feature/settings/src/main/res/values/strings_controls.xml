@@ -53,4 +53,7 @@
     <string name="controls_control_ps">PS button</string>
     <string name="controls_control_touchpad">Touchpad</string>
     <string name="controls_control_lightbar">Light bar</string>
+    <string name="controls_radio_input_rate">Stick rate over the phone radio</string>
+    <string name="controls_radio_input_rate_hint">Fewer sticks per second leave more of the radio for everything else. The drone brakes after 300 ms without input.</string>
+    <string name="controls_radio_input_rate_hz">%1$d Hz</string>
 </resources>

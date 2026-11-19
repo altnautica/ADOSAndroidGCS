@@ -138,11 +138,14 @@ internal fun SkillContext.builtinRoutesToPilot(id: String): Boolean {
     return id !in RECOVERY_BUILTINS || pilotLink?.stateFresh == true
 }
 
-/** The vehicle can be commanded at all: present and not receive-only. */
+/**
+ * The vehicle can be commanded at all: present and not receive-only. Over the phone
+ * radio that holds only while the phone holds the uplink and it is not down.
+ */
 private fun disabledIfNoCommandPath(ctx: SkillContext): SkillState? {
     val vehicle = ctx.vehicle ?: return disabledState(SkillReason.NO_FC_LINK)
     val reach = vehicle.reach.value
-    if (reach is Reach.PhoneRadio) return disabledState(SkillReason.RECEIVE_ONLY)
+    if (reach is Reach.PhoneRadio && !ctx.phoneRadioTransmitting) return disabledState(SkillReason.RECEIVE_ONLY)
     if (reach is Reach.Blocked) {
         return disabledState(if (reach.reason == BlockReason.ReceiveOnly) SkillReason.RECEIVE_ONLY else SkillReason.NO_FC_LINK)
     }

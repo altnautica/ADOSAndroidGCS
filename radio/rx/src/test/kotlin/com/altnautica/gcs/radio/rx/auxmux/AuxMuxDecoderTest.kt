@@ -83,7 +83,9 @@ class AuxMuxDecoderTest {
         assertEquals(AuxChannel.APP_STREAM, AuxChannel.fromByte(8))
         assertEquals(AuxChannel.APP_COMMAND, AuxChannel.fromByte(9))
         assertNull(AuxChannel.fromByte(0))
-        assertNull(AuxChannel.fromByte(10))
+        assertEquals(AuxChannel.PILOT, AuxChannel.fromByte(10))
+        // 11 is the next free value: a channel this build does not know is dropped.
+        assertNull(AuxChannel.fromByte(11))
     }
 
     private fun v2(payloadLen: Int, signed: Boolean): ByteArray {

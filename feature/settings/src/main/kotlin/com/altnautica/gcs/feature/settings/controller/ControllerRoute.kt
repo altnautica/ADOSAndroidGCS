@@ -162,6 +162,7 @@ fun ControllerRoute(
                     actions = actions,
                     actionLabel = controls::actionLabel,
                     modifier = Modifier.padding(padding),
+                    radioRate = { RadioInputRateRow() },
                 )
                 ControllerTab.Status -> ControllerStatusTab(
                     state = statusState,

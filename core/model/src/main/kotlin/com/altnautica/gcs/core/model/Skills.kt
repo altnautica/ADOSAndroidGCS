@@ -69,6 +69,8 @@ data class SkillContext(
     val systemStatus: Int? = null,
     /** On the ground by the FC's own `EXTENDED_SYS_STATE.landed_state`; null when never received. */
     val fcLanded: Boolean? = null,
+    /** The phone holds the radio uplink and it is not down: a drone reached over the phone radio can be commanded. */
+    val phoneRadioTransmitting: Boolean = false,
 )
 
 data class Binding(

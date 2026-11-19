@@ -6,8 +6,10 @@ import com.altnautica.gcs.core.agent.http.AgentHttp
 import com.altnautica.gcs.core.agent.model.AgentVersion
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.PhoneRadioUplink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,20 +40,26 @@ class VersionCache @Inject constructor() {
 }
 
 /**
- * Resolves where a paired node is reachable right now: the address it was last
- * discovered at on the LAN, else the address stored at pairing time, else its
- * mDNS host name.
+ * Resolves where a node is reachable right now: the address it was last
+ * discovered at on the LAN, else, when the phone radio hears it and holds
+ * the uplink, the radio's relay request lane, else the address stored at
+ * pairing time, else its mDNS host name.
  */
 @Singleton
 class AgentEndpoints @Inject constructor(
     private val vault: CredentialVault,
     private val discovery: LanDiscovery,
+    private val radio: Optional<PhoneRadioUplink> = Optional.empty(),
 ) {
 
-    /** The endpoint for [node], or null when the node is not paired. */
+    /** The endpoint for [node], or null when it is neither paired nor reached over the phone radio. */
     suspend fun endpointFor(node: DeviceId): AgentEndpoint? = withContext(Dispatchers.IO) {
-        val credential = vault.node(node) ?: return@withContext null
         val discovered = discovery.agents.value.firstOrNull { it.deviceId == node.value }
+        val uplink = radio.orElse(null)
+        if (discovered == null && uplink != null && uplink.transmitting.value && uplink.hears(node)) {
+            return@withContext AgentEndpoint.overRadio(node)
+        }
+        val credential = vault.node(node) ?: return@withContext null
         val lastIp = credential.lastIp
         val host = when {
             discovered != null -> "${hostLiteral(discovered.host)}:${discovered.port}"

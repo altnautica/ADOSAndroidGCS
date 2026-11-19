@@ -3,7 +3,9 @@ package com.altnautica.gcs.feature.cockpit.pilot
 import com.altnautica.gcs.core.agent.nav.AutonomyFeedApi
 import com.altnautica.gcs.core.model.ControlMode
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.PhoneRadioUplink
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.skills.controls.ControlsRepository
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.skills.MonotonicClock
 import kotlinx.coroutines.CoroutineScope
@@ -87,8 +89,15 @@ internal class CockpitPilot(
     private val notificationReachable: () -> Boolean = { false },
     /** The no-RC heartbeat's main-looper tick, one per channel. */
     private val ticker: () -> Ticker = { MainLooperTicker(PilotChannel.TICK_MS) },
+    /** The phone radio's uplink, where the app carries one. */
+    private val radio: PhoneRadioUplink? = null,
+    /** Stick frames per second on the phone-radio path. */
+    private val radioInputHz: () -> Int = { ControlsRepository.RADIO_INPUT_DEFAULT_HZ },
 ) {
     private val channelScope = CoroutineScope(scope.coroutineContext.minusKey(Job) + SupervisorJob())
+
+    /** How the flown vehicle is reached right now. */
+    private val reachNow: StateFlow<Reach?> = reach.stateIn(scope, SharingStarted.Eagerly, null)
 
     /** True while the cockpit screen is resumed: its Pause (brake) is under the operator's finger. */
     @Volatile var resumed: Boolean = false
@@ -144,7 +153,17 @@ internal class CockpitPilot(
     private fun channelFor(id: DeviceId) =
         PilotChannel(channelScope, clock, parseContext, ::controlReachable, ticker()) { outgoing -> pilotStream(id, outgoing) }
 
+    /**
+     * The pilot stream of [id]: over the phone radio when that is the vehicle's only reach
+     * (the link refuses, and the channel retries, while the phone does not hold the uplink),
+     * otherwise the agent's WebSocket.
+     */
     private fun pilotStream(id: DeviceId, outgoing: Flow<String>): Flow<String> = flow {
+        val r = radio
+        if (r != null && reachNow.value == Reach.PhoneRadio) {
+            emitAll(RadioPilotLink(r, id, radioInputHz).open(outgoing))
+            return@flow
+        }
         val a = api(id) ?: throw IOException("no agent path to the vehicle")
         emitAll(a.pilotStream(outgoing))
     }

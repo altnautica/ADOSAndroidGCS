@@ -174,6 +174,7 @@ class CockpitViewModel @AssistedInject constructor(
     missionMirror: MissionMirrorSource,
     stopControls: com.altnautica.gcs.core.skills.cockpit.StopControls,
     @com.altnautica.gcs.feature.cockpit.di.CockpitWork work: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
+    phoneRadio: java.util.Optional<com.altnautica.gcs.core.model.PhoneRadioUplink> = java.util.Optional.empty(),
 ) : ViewModel() {
 
     @AssistedFactory
@@ -302,7 +303,12 @@ class CockpitViewModel @AssistedInject constructor(
     private suspend fun autonomyApi(id: DeviceId): AutonomyFeedApi? =
         localApis.firstNotNullOfOrNull { it.autonomy(id) } ?: extensions.api(id)
 
-    internal val pilot = CockpitPilot(viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot, vehicle.flatMapLatest { it?.reach ?: flowOf(null) }, work, stopControls.notification::reachable)
+    private val radioInputHz = controls.radioInputHz.stateIn(viewModelScope, SharingStarted.Eagerly, ControlsRepository.RADIO_INPUT_DEFAULT_HZ)
+
+    internal val pilot = CockpitPilot(
+        viewModelScope, clock, vehicleNodeId, ::autonomyApi, navPilot, vehicle.flatMapLatest { it?.reach ?: flowOf(null) }, work,
+        stopControls.notification::reachable, radio = phoneRadio.orElse(null), radioInputHz = radioInputHz::value,
+    )
 
     /** The onboard pilot's state, or null for a vehicle without one. */
     val pilotState: StateFlow<PilotState?> = pilot.state

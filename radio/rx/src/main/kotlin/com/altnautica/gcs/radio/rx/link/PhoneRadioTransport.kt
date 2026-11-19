@@ -23,8 +23,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * MAVLink from one drone over the phone radio. The phone never transmits on
- * the drone link, so every write answers [WriteResult.ReceiveOnly].
+ * MAVLink with one drone over the phone radio. While the phone holds the
+ * uplink and it is not down, writes go up the aux uplink as MAVLink frames
+ * ([WriteResult.Sent]); otherwise the link is receive only and every write
+ * answers [WriteResult.ReceiveOnly].
  */
 class PhoneRadioTransport(
     private val node: DeviceId,
@@ -51,7 +53,10 @@ class PhoneRadioTransport(
 
     override val incoming: Flow<ByteArray> = session.mavlink(node).takeWhile { _state.value !is TransportState.Closed }
 
-    override suspend fun write(bytes: ByteArray): WriteResult = WriteResult.ReceiveOnly
+    override suspend fun write(bytes: ByteArray): WriteResult {
+        if (!session.transmitting.value) return WriteResult.ReceiveOnly
+        return if (session.lanes.sendMavlink(bytes)) WriteResult.Sent else WriteResult.Failed("phone radio uplink did not take the frame")
+    }
 
     override suspend fun close() {
         _state.value = TransportState.Closed(null)

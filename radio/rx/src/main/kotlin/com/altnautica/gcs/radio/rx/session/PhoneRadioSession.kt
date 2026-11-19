@@ -6,21 +6,15 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
 import com.altnautica.gcs.core.data.vault.VaultUnreadableException
+import com.altnautica.gcs.core.link.fleet.FleetGroundStore
+import com.altnautica.gcs.core.link.fleet.SlotReconciler
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.radio.rx.AlternateRadio
-import com.altnautica.gcs.radio.rx.WfbReceiver
-import com.altnautica.gcs.radio.rx.auxmux.AuxChannel
-import com.altnautica.gcs.radio.rx.auxmux.AuxDecodeResult
-import com.altnautica.gcs.radio.rx.auxmux.AuxMuxDecoder
-import com.altnautica.gcs.radio.rx.hop.HopFollower
+import com.altnautica.gcs.radio.rx.aux.AuxLanes
 import com.altnautica.gcs.radio.rx.invite.InviteStore
-import com.altnautica.gcs.radio.rx.invite.StoredInvite
 import com.altnautica.gcs.radio.rx.tx.PhoneGroundId
-import com.altnautica.gcs.radio.rx.tx.UplinkRun
 import com.altnautica.gcs.radio.rx.tx.UplinkState
 import com.altnautica.gcs.radio.rx.usb.DongleStatus
-import com.altnautica.gcs.radio.rx.usb.FrameRecord
-import com.altnautica.gcs.radio.rx.usb.FrameRecordReader
 import com.altnautica.gcs.radio.rx.usb.UsbDongleMonitor
 import com.altnautica.gcs.radio.rx.usb.UsbRadioConnection
 import com.altnautica.gcs.radio.usb.IUsbRadio
@@ -35,22 +29,21 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.FileInputStream
-import java.io.IOException
 import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 /** Whether the phone radio is receiving. */
@@ -75,6 +68,9 @@ data class DroneLinkStatus(
     val lastPacketMs: Long?,
 )
 
+/** Another ground's presence beacon, heard on this fleet's ground link. */
+data class GroundBeacon(val deviceId: String, val channel: Int)
+
 /** One second of receive statistics. */
 data class PhoneRadioStats(
     val channel: Int,
@@ -93,16 +89,18 @@ data class PhoneRadioStats(
 
 /**
  * The phone-radio session: drives the USB radio service, recovers each
- * drone's WFB downlink with the invite's keys, follows authenticated channel
- * hops, and fans the planes out: video RTP per drone ([video]) and MAVLink
- * from the aux lane per drone ([mavlink]).
+ * drone's WFB downlink, follows authenticated channel hops, and fans the
+ * planes out: video RTP per drone ([video]) and the aux lane per drone
+ * ([lanes]: MAVLink, the pilot, relayed calls, the config channel).
  *
- * Receive only, unless the phone holds the uplink. Today only a debug build's
- * bench radio holds it ([AlternateRadio.holdsUplink]); the over-the-air bind
- * and the handover from a box are the other two ways in, not built yet. While
- * it holds the uplink the session runs the box's two ground transmitters,
- * echoes every verified hop announcement as the HopAck, sends the presence
- * beacon, and judges the uplink ([uplink]).
+ * A run listens with a box's invite, or, when the phone bound a fleet over
+ * the air, as that fleet's own ground ([FleetGroundStore]): then it holds the
+ * uplink from the start and enrols every drone whose beacon it hears.
+ * Otherwise it is receive only until it holds the uplink: on a debug build's
+ * bench radio ([AlternateRadio.holdsUplink]) or through [holdUplink]. While it
+ * holds the uplink it runs the box's two ground transmitters, echoes hop
+ * announcements as the HopAck, sends the presence beacon, reports link
+ * feedback once a second, and judges the uplink ([uplink]).
  */
 @Singleton
 class PhoneRadioSession @Inject constructor(
@@ -111,6 +109,9 @@ class PhoneRadioSession @Inject constructor(
     private val dongles: UsbDongleMonitor,
     private val alternate: Optional<AlternateRadio>,
     private val groundId: PhoneGroundId,
+    private val fleetGround: FleetGroundStore,
+    /** Provided lazily: the reconciler calls back into this session's Request lane. */
+    private val reconciler: Provider<SlotReconciler>,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val control = Mutex()
@@ -129,27 +130,72 @@ class PhoneRadioSession @Inject constructor(
     /** The uplink while the phone holds it; null while it is receive only. */
     val uplink: StateFlow<UplinkState?> = _uplink.asStateFlow()
 
+    /** True while the phone holds the uplink and it is not down: writes go out. */
+    val transmitting: StateFlow<Boolean> = _uplink.map { it != null && it != UplinkState.Down }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    private val _groundBeacons = MutableSharedFlow<GroundBeacon>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** Presence beacons of other grounds on this fleet's ground link, while a run is up. */
+    val groundBeacons: Flow<GroundBeacon> = _groundBeacons.asSharedFlow()
+
     /** Whether a start would run on an alternate radio (a debug build's bench relay) rather than the dongle. */
     val alternateRadioAvailable: Boolean get() = alternate.orElse(null)?.available == true
 
-    private val mavlinkFlows = ConcurrentHashMap<String, MutableSharedFlow<ByteArray>>()
+    /** The aux lane's writers and readers; writes go out only while [transmitting]. */
+    val lanes = AuxLanes { frame -> transmitting.value && sendAux(frame) }
+
     private val videoFlows = ConcurrentHashMap<String, MutableSharedFlow<ByteArray>>()
 
-    private var active: Running? = null
+    private var active: Held? = null
     private var startJob: Job? = null
 
     /** MAVLink bytes received from [node] (whole aux payloads, frames back to back). */
-    fun mavlink(node: DeviceId): Flow<ByteArray> = flowFor(mavlinkFlows, node, MAVLINK_BUFFER).asSharedFlow()
+    fun mavlink(node: DeviceId): Flow<ByteArray> = lanes.mavlink(node.value)
 
     /** RTP packets of [node]'s video plane. */
-    fun video(node: DeviceId): Flow<ByteArray> = flowFor(videoFlows, node, VIDEO_BUFFER).asSharedFlow()
+    fun video(node: DeviceId): Flow<ByteArray> = videoFor(node.value).asSharedFlow()
+
+    /** Whether [node] was heard on this run. */
+    fun hears(node: DeviceId): Boolean = active?.run?.hears(node.value) == true
 
     /**
      * Sends one aux-uplink datagram (an aux-mux frame, radio port 3 under the
      * ground link id) while the phone holds the uplink; false while receive
      * only, when the frame is larger than one WFB packet, or with no run.
      */
-    fun sendAux(payload: ByteArray): Boolean = active?.sendAux(payload) ?: false
+    fun sendAux(payload: ByteArray): Boolean = active?.run?.sendAux(payload) ?: false
+
+    /**
+     * Starts the ground transmitters on the running session exactly as a
+     * bench run does; true once transmitting, false with no run or when the
+     * transmitters did not open. Idempotent.
+     */
+    suspend fun holdUplink(): Boolean = control.withLock { active?.run?.holdUplink() ?: false }
+
+    /**
+     * Closes the ground transmitters ([uplink] reads null), then answers true
+     * once the radio's sent-frame count has stayed flat for a second, false
+     * when it did not within five. True with nothing held.
+     */
+    suspend fun releaseUplink(): Boolean {
+        val run = control.withLock { active?.run?.also { it.dropUplink() } } ?: return true
+        val deadline = SystemClock.elapsedRealtime() + RELEASE_GIVE_UP_MS
+        var last = run.framesSent() ?: return true
+        var flatSince = SystemClock.elapsedRealtime()
+        while (SystemClock.elapsedRealtime() < deadline) {
+            delay(RELEASE_POLL_MS)
+            val now = SystemClock.elapsedRealtime()
+            val sent = run.framesSent() ?: return true
+            if (sent != last) {
+                last = sent
+                flatSince = now
+            } else if (now - flatSince >= RELEASE_QUIET_MS) {
+                return true
+            }
+        }
+        return false
+    }
 
     fun start() {
         if (startJob?.isActive == true || active != null) return
@@ -164,13 +210,13 @@ class PhoneRadioSession @Inject constructor(
     private suspend fun startLocked() {
         if (active != null) return
         _state.value = PhoneRadioState.Starting
-        val invite = try {
-            store.load()
+        val plan = try {
+            store.load()?.let(RunPlan::of) ?: fleetGround.load()?.let(RunPlan::of)
         } catch (_: VaultUnreadableException) {
             return fail(PhoneRadioFailure.KeysUnreadable)
         } ?: return fail(PhoneRadioFailure.NoInvite)
         val bench = alternate.orElse(null)?.takeIf { it.available }
-        if (bench != null) return startOn(invite, bench)
+        if (bench != null) return startOn(plan, bench)
         val device = when (val d = dongles.current()) {
             is DongleStatus.Ready -> d.device
             is DongleStatus.NeedsPermission -> return fail(PhoneRadioFailure.NoPermission)
@@ -189,14 +235,10 @@ class PhoneRadioSession @Inject constructor(
                 ParcelFileDescriptor.fromFd(usbConnection.fileDescriptor).use { pfd ->
                     radio.open(pfd, device.vendorId, device.productId)
                 }
-                radio.setChannel(invite.bundle.channel, invite.bundle.bandwidthMhz)
+                radio.setChannel(plan.bundle.channel, plan.bundle.bandwidthMhz)
                 frames = radio.frames()
             }
-            val usb = UsbHold(binding, usbConnection, device.deviceName)
-            val running = Running(invite, radio, requireNotNull(frames), usb, holdsUplink = false)
-            active = running
-            running.begin()
-            _state.value = PhoneRadioState.Receiving(invite.bundle.channel)
+            begin(plan, radio, requireNotNull(frames), UsbHold(binding, usbConnection, device.deviceName), holdsUplink = false)
         } catch (e: Exception) {
             Log.w(TAG, "phone radio did not start", e)
             frames?.close()
@@ -208,26 +250,80 @@ class PhoneRadioSession @Inject constructor(
     }
 
     /** Starts on [source]'s radio instead of the USB dongle. */
-    private suspend fun startOn(invite: StoredInvite, source: AlternateRadio) {
+    private suspend fun startOn(plan: RunPlan, source: AlternateRadio) {
         var frames: ParcelFileDescriptor? = null
         var radio: IUsbRadio? = null
         try {
             withContext(Dispatchers.IO) {
-                val r = source.open(invite.bundle)
+                val r = source.open(plan.bundle)
                 radio = r
                 r.open(null, 0, 0)
-                r.setChannel(invite.bundle.channel, invite.bundle.bandwidthMhz)
+                r.setChannel(plan.bundle.channel, plan.bundle.bandwidthMhz)
                 frames = r.frames()
             }
-            val running = Running(invite, requireNotNull(radio), requireNotNull(frames), usb = null, holdsUplink = source.holdsUplink)
-            active = running
-            running.begin()
-            _state.value = PhoneRadioState.Receiving(invite.bundle.channel)
+            begin(plan, requireNotNull(radio), requireNotNull(frames), usb = null, holdsUplink = source.holdsUplink)
         } catch (e: Exception) {
             Log.w(TAG, "phone radio did not start on its alternate radio", e)
             frames?.close()
             runCatching { radio?.close() }
             fail(PhoneRadioFailure.OpenFailed, e.message)
+        }
+    }
+
+    private fun begin(plan: RunPlan, radio: IUsbRadio, frames: ParcelFileDescriptor, usb: UsbHold?, holdsUplink: Boolean) {
+        val run = RadioRun(plan, radio, frames, scope, groundId.value, lanes, Host())
+        val held = Held(run, usb)
+        active = held
+        run.begin()
+        if (holdsUplink) run.holdUplink()
+        // The fleet's own ground keeps every drone's slot and relay secret in step.
+        if (plan.ownsFleet) held.reconcile = scope.launch { reconciler.get().run() }
+        _state.value = PhoneRadioState.Receiving(plan.bundle.channel)
+        // Unplugging the radio closes nothing on its own; the run ends here,
+        // outside this watch, so its cancellation does not wait on itself. A
+        // radio already gone when the watch starts ends it too.
+        val deviceName = usb?.deviceName ?: return
+        held.unplugWatch = scope.launch {
+            dongles.unplugged(deviceName).first()
+            scope.launch { onDongleRemoved(held) }
+        }
+    }
+
+    private inner class Host : RunHost {
+        override fun retuned(channel: Int) {
+            _state.value = PhoneRadioState.Receiving(channel)
+        }
+
+        override fun links(links: List<DroneLinkStatus>) {
+            _links.value = links
+        }
+
+        override fun stats(stats: PhoneRadioStats) {
+            _stats.value = stats
+        }
+
+        override fun uplink(state: UplinkState?) {
+            _uplink.value = state
+        }
+
+        override fun video(deviceId: String, rtp: ByteArray) {
+            videoFlows[deviceId]?.tryEmit(rtp)
+        }
+
+        override fun groundBeacon(beacon: GroundBeacon) {
+            _groundBeacons.tryEmit(beacon)
+        }
+
+        override fun droneBeacon(deviceId: String) {
+            scope.launch { fleetGround.enrol(deviceId) }
+        }
+
+        override fun keyProven() {
+            scope.launch { fleetGround.markKeyProven() }
+        }
+
+        override fun readerEnded() {
+            scope.launch { onReaderEnded() }
         }
     }
 
@@ -240,25 +336,34 @@ class PhoneRadioSession @Inject constructor(
     }
 
     private suspend fun onReaderEnded() = control.withLock {
-        val running = active ?: return@withLock
-        if (!running.stopping) stopLocked(PhoneRadioState.Failed(PhoneRadioFailure.RadioStopped))
+        val held = active ?: return@withLock
+        if (!held.run.stopping) stopLocked(PhoneRadioState.Failed(PhoneRadioFailure.RadioStopped))
     }
 
-    private suspend fun onDongleRemoved(running: Running) = control.withLock {
-        if (active === running) stopLocked(PhoneRadioState.Failed(PhoneRadioFailure.DongleRemoved))
+    private suspend fun onDongleRemoved(held: Held) = control.withLock {
+        if (active === held) stopLocked(PhoneRadioState.Failed(PhoneRadioFailure.DongleRemoved))
     }
 
     private suspend fun stopLocked(next: PhoneRadioState) {
-        val running = active
+        val held = active
         active = null
-        running?.end()
+        if (held != null) {
+            held.reconcile?.cancelAndJoin()
+            held.run.end()
+            held.unplugWatch?.cancelAndJoin()
+            withContext(Dispatchers.IO) {
+                held.usb?.binding?.disconnect()
+                held.usb?.usbConnection?.close()
+            }
+        }
+        _uplink.value = null
         _stats.value = null
         _links.value = emptyList()
         _state.value = next
     }
 
-    private fun flowFor(map: ConcurrentHashMap<String, MutableSharedFlow<ByteArray>>, node: DeviceId, buffer: Int) =
-        map.getOrPut(node.value) { MutableSharedFlow(extraBufferCapacity = buffer, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
+    private fun videoFor(id: String) =
+        videoFlows.getOrPut(id) { MutableSharedFlow(extraBufferCapacity = VIDEO_BUFFER, onBufferOverflow = BufferOverflow.DROP_OLDEST) }
 
     /** What a run on the USB dongle holds besides the radio: the service binding, the device and its name. */
     private class UsbHold(
@@ -268,209 +373,17 @@ class PhoneRadioSession @Inject constructor(
         val deviceName: String,
     )
 
-    /** One run, from radio open to close. */
-    private inner class Running(
-        val invite: StoredInvite,
-        val radio: IUsbRadio,
-        val frames: ParcelFileDescriptor,
-        /** Null on an alternate radio. */
-        val usb: UsbHold?,
-        /** Whether the phone holds the uplink on this run, and so transmits. */
-        val holdsUplink: Boolean,
-    ) {
-        @Volatile var stopping = false
-        private val bundle = invite.bundle
-        private val ports = bundle.radioPorts
-        private val links = bundle.links()
-        private val lastPacket = ConcurrentHashMap<String, Long>()
-        @Volatile private var channel = bundle.channel
-        @Volatile private var lastRetuneMs = SystemClock.elapsedRealtime()
-        private val startedMs = SystemClock.elapsedRealtime()
-
-        private val rssiSum = AtomicLong()
-        private val snrSum = AtomicLong()
-        private val signalCount = AtomicLong()
-        private val telemetryPackets = AtomicInteger()
-
-        private val follower = HopFollower(bundle.hopKey, bundle.channel, scope) { target -> retune(target) }
-        private var uplinkRun: UplinkRun? = null
-        private var hopsAtLastTick = 0
-        private var reader: Thread? = null
-        private var ticker: Job? = null
-        private var unplugWatch: Job? = null
-        private var lastUsb: LongArray? = null
-
-        fun begin() {
-            val receivers = links.associate { spec ->
-                spec.linkId to WfbReceiver(bundle.rxKey, spec.linkId, ports.asArray()) { port, payload ->
-                    onDatagram(spec.deviceId, port, payload)
-                }
-            }
-            reader = Thread({ readLoop(receivers) }, "phone-radio-rx").apply {
-                priority = Thread.MAX_PRIORITY
-                start()
-            }
-            ticker = scope.launch {
-                while (isActive) {
-                    delay(STATS_MS)
-                    tick(receivers.values)
-                }
-            }
-            if (holdsUplink) {
-                val run = UplinkRun(radio, bundle, groundId.value, scope, { channel }) { _uplink.value = it }
-                if (run.begin()) {
-                    uplinkRun = run
-                    follower.ack = run::ack
-                }
-            }
-            // Unplugging the radio closes nothing on its own; the run ends
-            // here, outside this watch, so its cancellation does not wait on
-            // itself. A radio already gone when the watch starts ends it too.
-            val deviceName = usb?.deviceName ?: return
-            unplugWatch = scope.launch {
-                dongles.unplugged(deviceName).first()
-                scope.launch { onDongleRemoved(this@Running) }
-            }
-        }
-
-        private fun readLoop(receivers: Map<Int, WfbReceiver>) {
-            try {
-                FileInputStream(frames.fileDescriptor).use { input ->
-                    val records = FrameRecordReader(input)
-                    while (true) {
-                        val len = records.next()
-                        if (len < 0) break
-                        val body = records.buffer
-                        FrameRecord.bestRssi(body)?.let { rssi ->
-                            rssiSum.addAndGet(rssi.toLong())
-                            snrSum.addAndGet((FrameRecord.bestSnr(body) ?: 0).toLong())
-                            signalCount.incrementAndGet()
-                        }
-                        val link = FrameRecord.linkId(body, len) ?: continue
-                        receivers[link]?.feed(body, len)
-                    }
-                }
-            } catch (e: IOException) {
-                if (!stopping) Log.w(TAG, "frame pipe ended", e)
-            } finally {
-                receivers.values.forEach { it.close() }
-                if (!stopping) scope.launch { onReaderEnded() }
-            }
-        }
-
-        private fun onDatagram(deviceId: String, port: Int, payload: ByteArray) {
-            lastPacket[deviceId] = SystemClock.elapsedRealtime()
-            when (port) {
-                ports.video -> videoFlows[deviceId]?.tryEmit(payload)
-                ports.control -> follower.onControlPacket(payload)
-                ports.auxDown -> {
-                    val frame = AuxMuxDecoder.decode(payload)
-                    if (frame is AuxDecodeResult.Frame && frame.channel == AuxChannel.MAVLINK) {
-                        telemetryPackets.incrementAndGet()
-                        mavlinkFlows[deviceId]?.tryEmit(frame.payload)
-                    }
-                }
-            }
-        }
-
-        fun sendAux(payload: ByteArray): Boolean = uplinkRun?.sendAux(payload) ?: false
-
-        private suspend fun retune(target: Int): Boolean = withContext(Dispatchers.IO) {
-            val ok = runCatching { radio.setChannel(target, bundle.bandwidthMhz) }
-                .onFailure { Log.w(TAG, "retune to $target failed", it) }
-                .isSuccess
-            if (ok) {
-                channel = target
-                lastRetuneMs = SystemClock.elapsedRealtime()
-                if (!stopping) _state.value = PhoneRadioState.Receiving(target)
-            }
-            ok
-        }
-
-        private suspend fun tick(receivers: Collection<WfbReceiver>) {
-            val now = SystemClock.elapsedRealtime()
-            _links.value = links.map { DroneLinkStatus(DeviceId(it.deviceId), it.slot, lastPacket[it.deviceId]) }
-
-            // A drone that hopped while the phone missed the announcement is
-            // found again on the rendezvous channel, then back on the invite's.
-            val lastHeard = lastPacket.values.maxOrNull() ?: startedMs
-            if (now - lastHeard > SILENCE_MS && now - lastRetuneMs > SILENCE_MS) {
-                val other = if (channel == bundle.channel) bundle.rendezvousChannel else bundle.channel
-                if (retune(other)) follower.onRetunedElsewhere(other) else lastRetuneMs = now
-            }
-
-            // A hop this phone acknowledged that the drone carried out (its
-            // downlink came back after the retune) is the drone acting on the
-            // phone's own transmission.
-            val hops = follower.hopsFollowed
-            if (hops > hopsAtLastTick && lastHeard > lastRetuneMs) {
-                hopsAtLastTick = hops
-                uplinkRun?.evidence()
-            }
-
-            var video = 0L
-            var recovered = 0L
-            var lost = 0L
-            var decryptErrors = 0L
-            for (r in receivers) {
-                for (p in r.stats().ports) {
-                    if (p.port == ports.video) video += p.delivered
-                    recovered += p.fecRecovered
-                    lost += p.lost
-                    decryptErrors += p.decryptErrors
-                }
-            }
-            val usb = runCatching { radio.stats() }.getOrNull()
-            val prev = lastUsb
-            lastUsb = usb
-            val usbFrames = if (usb != null && prev != null) usb[2] - prev[2] else 0L
-            val usbDropped = if (usb != null && prev != null) usb[3] - prev[3] else 0L
-            val n = signalCount.getAndSet(0)
-            val rssi = rssiSum.getAndSet(0)
-            val snr = snrSum.getAndSet(0)
-            _stats.value = PhoneRadioStats(
-                channel = channel,
-                bandwidthMhz = bundle.bandwidthMhz,
-                rssiDbm = if (n > 0) (rssi / n).toInt() else null,
-                snrDb = if (n > 0) (snr / n).toInt() else null,
-                videoPacketsPerSec = video,
-                telemetryPacketsPerSec = telemetryPackets.getAndSet(0).toLong(),
-                fecRecoveredPerSec = recovered,
-                lostPerSec = lost,
-                decryptErrorsPerSec = decryptErrors,
-                usbFramesPerSec = usbFrames,
-                usbDroppedPerSec = usbDropped,
-                hopsFollowed = follower.hopsFollowed,
-            )
-        }
-
-        suspend fun end() {
-            stopping = true
-            follower.ack = null
-            follower.cancel()
-            uplinkRun?.close()
-            uplinkRun = null
-            _uplink.value = null
-            ticker?.cancelAndJoin()
-            unplugWatch?.cancelAndJoin()
-            withContext(Dispatchers.IO) {
-                // Closing the radio closes the pipe's write end; the reader
-                // then sees end of stream and releases the receivers.
-                runCatching { radio.close() }
-                reader?.join(READER_JOIN_MS)
-                runCatching { frames.close() }
-                usb?.binding?.disconnect()
-                usb?.usbConnection?.close()
-            }
-        }
+    /** The running radio and what it holds of the USB side. */
+    private class Held(val run: RadioRun, val usb: UsbHold?) {
+        var unplugWatch: Job? = null
+        var reconcile: Job? = null
     }
 
     private companion object {
         const val TAG = "AdosPhoneRadio"
-        const val STATS_MS = 1_000L
-        const val SILENCE_MS = 25_000L
-        const val READER_JOIN_MS = 2_000L
-        const val MAVLINK_BUFFER = 256
         const val VIDEO_BUFFER = 512
+        const val RELEASE_POLL_MS = 200L
+        const val RELEASE_QUIET_MS = 1_000L
+        const val RELEASE_GIVE_UP_MS = 5_000L
     }
 }

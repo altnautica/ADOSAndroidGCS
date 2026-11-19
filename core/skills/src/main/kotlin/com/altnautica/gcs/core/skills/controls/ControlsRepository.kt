@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.altnautica.gcs.core.model.Skill
 import com.altnautica.gcs.core.skills.SkillRegistry
@@ -87,6 +88,19 @@ class ControlsRepository(
     val onScreenSticks: Flow<Boolean> = stored.map { it.onScreenSticks }.distinctUntilChanged()
 
     val tourSeen: Flow<Boolean> = stored.map { it.tourSeen }.distinctUntilChanged()
+
+    /**
+     * Stick frames per second when the pilot is flown over the phone radio: the
+     * uplink's airtime lever. One of [RADIO_INPUT_RATES_HZ], 50 by default.
+     */
+    val radioInputHz: Flow<Int> = dataStore.data
+        .map { p -> p[RADIO_INPUT_HZ]?.takeIf { it in RADIO_INPUT_RATES_HZ } ?: RADIO_INPUT_DEFAULT_HZ }
+        .distinctUntilChanged()
+
+    suspend fun setRadioInputHz(hz: Int) {
+        require(hz in RADIO_INPUT_RATES_HZ) { "radio input rate $hz Hz is not offered" }
+        dataStore.edit { it[RADIO_INPUT_HZ] = hz }
+    }
 
     /**
      * Saves [rows] as the binding list after checking it: refused, with nothing written,
@@ -202,14 +216,18 @@ class ControlsRepository(
         }
     }
 
-    private companion object {
-        val BINDINGS = stringPreferencesKey("controls.ds4.bindings")
-        val STICK_MODE = stringPreferencesKey("controls.ds4.stickMode")
-        val DEADZONE = floatPreferencesKey("controls.ds4.deadzone")
-        val CALIBRATION = stringPreferencesKey("controls.ds4.calibration")
-        val ON_SCREEN_STICKS = booleanPreferencesKey("controls.ds4.onScreenSticks")
-        val TOUR_SEEN = booleanPreferencesKey("controls.ds4.tourSeen")
-        val ROWS = ListSerializer(ControlBindingSpec.serializer())
-        val CALIBRATIONS = MapSerializer(String.serializer(), PadCalibration.serializer())
+    companion object {
+        /** The radio-path stick rates offered; the drone brakes after 300 ms without input. */
+        val RADIO_INPUT_RATES_HZ = listOf(50, 20, 10)
+        const val RADIO_INPUT_DEFAULT_HZ = 50
+        private val RADIO_INPUT_HZ = intPreferencesKey("controls.radio.inputHz")
+        private val BINDINGS = stringPreferencesKey("controls.ds4.bindings")
+        private val STICK_MODE = stringPreferencesKey("controls.ds4.stickMode")
+        private val DEADZONE = floatPreferencesKey("controls.ds4.deadzone")
+        private val CALIBRATION = stringPreferencesKey("controls.ds4.calibration")
+        private val ON_SCREEN_STICKS = booleanPreferencesKey("controls.ds4.onScreenSticks")
+        private val TOUR_SEEN = booleanPreferencesKey("controls.ds4.tourSeen")
+        private val ROWS = ListSerializer(ControlBindingSpec.serializer())
+        private val CALIBRATIONS = MapSerializer(String.serializer(), PadCalibration.serializer())
     }
 }

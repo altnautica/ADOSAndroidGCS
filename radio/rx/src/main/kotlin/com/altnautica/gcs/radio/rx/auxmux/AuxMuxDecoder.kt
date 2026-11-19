@@ -1,7 +1,7 @@
 package com.altnautica.gcs.radio.rx.auxmux
 
 /**
- * The auxiliary downlink framing: one datagram is one frame,
+ * The aux-lane framing, both directions: one datagram is one frame,
  *
  * ```
  * 0xAD 0x02 | version 0x01 | channel | u16 BE length | payload
@@ -98,6 +98,9 @@ enum class AuxChannel(val wire: Int) {
     CONFIG_TUNNEL(7),
     APP_STREAM(8),
     APP_COMMAND(9),
+
+    /** The pilot's traffic: requests up (first byte the target system id, 0 = any), `state` down (first byte the sender's). */
+    PILOT(10),
     ;
 
     companion object {
