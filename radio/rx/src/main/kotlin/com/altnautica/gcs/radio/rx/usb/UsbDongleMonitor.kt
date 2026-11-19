@@ -76,16 +76,21 @@ class UsbDongleMonitor @Inject constructor(@ApplicationContext private val conte
         }
     }.distinctUntilChanged { a, b -> a.key() == b.key() }
 
-    /** The device name of each USB device unplugged from the phone. */
-    val detached: Flow<String> = callbackFlow {
+    /**
+     * Emits once [deviceName] is unplugged. A device already gone when the
+     * receiver registers emits at once, so an unplug between a caller's own
+     * check and this subscription is never missed.
+     */
+    fun unplugged(deviceName: String): Flow<Unit> = callbackFlow {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
-                IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                    ?.let { trySend(it.deviceName) }
+                val device = IntentCompat.getParcelableExtra(intent, UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                if (device?.deviceName == deviceName) trySend(Unit)
             }
         }
         val filter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (usb?.deviceList?.values?.none { it.deviceName == deviceName } != false) trySend(Unit)
         awaitClose { context.unregisterReceiver(receiver) }
     }
 

@@ -170,7 +170,8 @@ class PhoneRadioSession @Inject constructor(
             frames?.close()
             binding.disconnect()
             usbConnection.close()
-            fail(PhoneRadioFailure.OpenFailed, e.message)
+            // An unplug during the bring-up surfaces as a driver error.
+            if (dongles.current() is DongleStatus.None) fail(PhoneRadioFailure.DongleRemoved) else fail(PhoneRadioFailure.OpenFailed, e.message)
         }
     }
 
@@ -251,9 +252,9 @@ class PhoneRadioSession @Inject constructor(
             }
             // Unplugging the radio closes nothing on its own; the run ends
             // here, outside this watch, so its cancellation does not wait on
-            // itself.
+            // itself. A radio already gone when the watch starts ends it too.
             unplugWatch = scope.launch {
-                dongles.detached.first { it == deviceName }
+                dongles.unplugged(deviceName).first()
                 scope.launch { onDongleRemoved(this@Running) }
             }
         }
