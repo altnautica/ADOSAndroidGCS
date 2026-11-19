@@ -19,6 +19,8 @@ data class StoredInvite(
     @SerialName("ground_name") val groundName: String? = null,
     @SerialName("phone_fingerprint") val phoneFingerprint: String,
     @SerialName("approved_at_ms") val approvedAtMs: Long,
+    /** The phone's invite public key, base64: the box knows the phone by it when the uplink is handed over. */
+    @SerialName("phone_pub_b64") val phonePubB64: String? = null,
 )
 
 /** The phone-radio keys, sealed in the credential vault. */

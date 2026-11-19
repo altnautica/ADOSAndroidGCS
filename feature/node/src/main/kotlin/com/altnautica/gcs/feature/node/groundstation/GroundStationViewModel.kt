@@ -186,6 +186,11 @@ class GroundStationViewModel @AssistedInject constructor(
         )
     }
 
+    /** The box's operator takes the uplink back from the phone holding it. */
+    fun takeBackUplink() = write(WriteLabel(WriteAction.TakeBack)) { c, _ ->
+        c.requestJson("POST", "api/v1/ground-station/uplink", buildJsonObject { put("op", "take_back") })
+    }
+
     // ---- network -------------------------------------------------------------
 
     private suspend fun loadNetwork(client: AgentClient) {

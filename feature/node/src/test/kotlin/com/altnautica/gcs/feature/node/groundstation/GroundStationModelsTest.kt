@@ -64,6 +64,37 @@ class GroundStationModelsTest {
     }
 
     @Test
+    fun theUplinkReadsStandbyWithItsHolderNullWhileUnreportedAndAbsentOnOlderAgents() {
+        val standby = RadioLink.parse(
+            obj(
+                """{"link":{},"uplink":{"state":"standby","holder_device_id":"a1b2c3d4e5f6","holder_name":"Ops phone",
+                "since_ms":1800000000000,"watcher":{"last_beacon_ms":1800000005000}}}""",
+            ),
+            null,
+        )
+        assertTrue(standby.uplinkReported)
+        assertEquals(
+            StationUplink("standby", "a1b2c3d4e5f6", "Ops phone", 1_800_000_000_000, 1_800_000_005_000),
+            standby.uplink,
+        )
+        assertTrue(standby.uplink!!.standby)
+
+        val transmitting = RadioLink.parse(
+            obj("""{"uplink":{"state":"transmitting","holder_device_id":null,"holder_name":null,"since_ms":5,"watcher":{"last_beacon_ms":null}}}"""),
+            null,
+        ).uplink!!
+        assertEquals(false, transmitting.standby)
+        assertNull(transmitting.holderName)
+        assertNull(transmitting.lastBeaconMs)
+
+        val unreported = RadioLink.parse(obj("""{"uplink":null}"""), null)
+        assertTrue(unreported.uplinkReported)
+        assertNull(unreported.uplink)
+
+        assertEquals(false, RadioLink.parse(obj("""{"link":{}}"""), null).uplinkReported)
+    }
+
+    @Test
     fun networkCountsClientMacsAndScanDedupes() {
         val n = StationNetwork.parse(obj("""{"ap":{"enabled":true,"ssid":"ADOS-GS-1","connected_clients":["aa","bb"]},"priority":["eth0","wlan0_client"],"share_uplink":false}"""))
         assertEquals(2, n.ap!!.clients)

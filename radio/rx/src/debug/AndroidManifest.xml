@@ -22,5 +22,14 @@
                 <action android:name="com.altnautica.gcs.bench.CONFIG_PUT" />
             </intent-filter>
         </receiver>
+        <!-- Debug builds only: the fleet bench takes and gives back the uplink over adb. -->
+        <receiver
+            android:name="com.altnautica.gcs.radio.rx.bench.BenchUplinkReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.altnautica.gcs.bench.UPLINK_TAKE" />
+                <action android:name="com.altnautica.gcs.bench.UPLINK_GIVE_BACK" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

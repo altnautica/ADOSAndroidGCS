@@ -33,6 +33,12 @@ data class BenchRelayConfig(
     @SerialName("register_address") val registerAddress: String,
     /** The UDP port frames arrive on inside the phone. */
     @SerialName("listen_port") val listenPort: Int = 15802,
+    /**
+     * Whether the phone holds the uplink from the start of a run. A handover
+     * bench sets it false: the phone is then receive only until it takes the
+     * uplink from the box.
+     */
+    @SerialName("hold_uplink") val holdUplink: Boolean = true,
 )
 
 /** The bench relay as the phone's radio, when the bench configured one. */
@@ -47,8 +53,8 @@ class BenchRelaySource @Inject constructor(@ApplicationContext private val conte
 
     override val available: Boolean get() = config() != null
 
-    /** The bench holds the uplink: it is the only way a phone transmits until the bind and the handover exist. */
-    override val holdsUplink: Boolean get() = available
+    /** The bench holds the uplink from the start unless its config hands that to the handover. */
+    override val holdsUplink: Boolean get() = config()?.holdUplink == true
 
     override fun open(bundle: InviteBundle): IUsbRadio {
         val cfg = requireNotNull(config()) { "no bench relay configured" }

@@ -17,6 +17,8 @@ import com.altnautica.gcs.radio.rx.session.PhoneRadioSession
 import com.altnautica.gcs.radio.rx.session.PhoneRadioState
 import com.altnautica.gcs.radio.rx.usb.DongleStatus
 import com.altnautica.gcs.radio.rx.usb.UsbDongleMonitor
+import com.altnautica.gcs.radio.rx.uplink.HandoverState
+import com.altnautica.gcs.radio.rx.uplink.UplinkHandover
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -65,6 +67,10 @@ class PhoneRadioViewModelTest {
         fleetStore = FleetGroundStore(CredentialVault(prefs, cipher, vaultScope)),
         binder = mockk<BindController>(relaxed = true) { every { state } returns MutableStateFlow(BindState.Idle) },
         reconciler = mockk<SlotReconciler> { every { secrets } returns MutableStateFlow(emptyMap()) },
+        handover = mockk<UplinkHandover> {
+            every { state } returns MutableStateFlow(HandoverState())
+            coEvery { boxStatus() } returns null
+        },
     )
 
     @Before

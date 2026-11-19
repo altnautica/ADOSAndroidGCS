@@ -33,7 +33,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import com.altnautica.gcs.radio.rx.uplink.HandoverState
+import com.altnautica.gcs.radio.rx.uplink.UplinkHandover
 import javax.inject.Inject
 
 /** The USB radio as the screen shows it. */
@@ -67,6 +71,12 @@ data class PhoneRadioUiState(
     val links: List<DroneLinkStatus> = emptyList(),
     /** The uplink while the phone holds it; null while receive only. */
     val uplink: UplinkState? = null,
+    /** The phone's side of the uplink handover. */
+    val handover: HandoverState = HandoverState(),
+    /** The box the stored invite came from; null with no ground-role invite, or before the first read ([handoverChecked]). */
+    val handoverBox: HandoverBoxUi? = null,
+    /** The first read of the stored invite's box finished. */
+    val handoverChecked: Boolean = false,
     /** The session runs on a radio that is not the USB dongle (a debug build's bench relay). */
     val alternateRadio: Boolean = false,
     /** The fleet this phone bound over the air, null when it bound none. */
@@ -88,6 +98,7 @@ class PhoneRadioViewModel @Inject constructor(
     private val fleetStore: FleetGroundStore,
     private val binder: BindController,
     reconciler: SlotReconciler,
+    private val handover: UplinkHandover,
 ) : ViewModel() {
 
     private val enrollmentState = MutableStateFlow<EnrollmentState?>(null)
@@ -105,8 +116,19 @@ class PhoneRadioViewModel @Inject constructor(
             .map { GroundOption(it.id, it.name, it.liveness == Liveness.Live) }
     }
 
-    private val radioPart = combine(session.state, session.stats, session.links, session.uplink) { radio, stats, links, uplink ->
-        RadioPart(radio, stats, links, uplink)
+    /** The box's uplink, read every few seconds while the screen is shown; null until the first read finished. */
+    private val handoverBox = flow<BoxRead?> {
+        emit(null)
+        while (true) {
+            emit(BoxRead(handover.boxStatus()?.let { (box, status) -> HandoverBoxUi(box.deviceId, box.name, status) }))
+            delay(BOX_POLL_MS)
+        }
+    }
+
+    private val handoverPart = combine(handover.state, handoverBox, ::Pair)
+
+    private val radioPart = combine(session.state, session.stats, session.links, session.uplink, handoverPart) { radio, stats, links, uplink, part ->
+        RadioPart(radio, stats, links, uplink, part.first, part.second)
     }
 
     val state: StateFlow<PhoneRadioUiState> = combine(
@@ -127,6 +149,9 @@ class PhoneRadioViewModel @Inject constructor(
             stats = radio.stats,
             links = radio.links,
             uplink = radio.uplink,
+            handover = radio.handover,
+            handoverBox = radio.handoverBox?.box,
+            handoverChecked = radio.handoverBox != null,
             alternateRadio = session.alternateRadioAvailable,
             fleet = bind.fleet,
             bind = bind.state,
@@ -228,6 +253,14 @@ class PhoneRadioViewModel @Inject constructor(
 
     fun start() = session.start()
 
+    fun takeUplink() {
+        viewModelScope.launch { handover.take() }
+    }
+
+    fun giveBackUplink() {
+        viewModelScope.launch { handover.giveBack() }
+    }
+
     fun stop() {
         viewModelScope.launch { session.stop() }
     }
@@ -246,6 +279,7 @@ class PhoneRadioViewModel @Inject constructor(
 
     private companion object {
         const val STOP_MS = 5_000L
+        const val BOX_POLL_MS = 3_000L
     }
 }
 
@@ -254,6 +288,11 @@ private data class RadioPart(
     val stats: PhoneRadioStats?,
     val links: List<DroneLinkStatus>,
     val uplink: UplinkState?,
+    val handover: HandoverState,
+    val handoverBox: BoxRead?,
 )
+
+/** One read of the stored invite's box. */
+private data class BoxRead(val box: HandoverBoxUi?)
 
 private data class BindPart(val fleet: BoundFleetUi?, val state: BindState, val open: Boolean)

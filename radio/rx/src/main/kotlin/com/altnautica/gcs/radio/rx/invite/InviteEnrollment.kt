@@ -119,7 +119,10 @@ class InviteEnrollment @Inject constructor(
         } finally {
             plain.fill(0)
         }
-        val stored = StoredInvite(bundle, ground.value, groundName, keys.fingerprint, wallClock())
+        val stored = StoredInvite(
+            bundle, ground.value, groundName, keys.fingerprint, wallClock(),
+            phonePubB64 = java.util.Base64.getEncoder().encodeToString(keys.public),
+        )
         return save(stored)
     }
 

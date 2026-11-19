@@ -127,4 +127,39 @@
     <string name="phone_receivers_error">Could not read pending phones.</string>
     <string name="phone_receivers_retry">Retry</string>
     <string name="phone_receivers_action_failed">The ground station did not accept that.</string>
+
+    <!-- Uplink and handover -->
+    <string name="phone_radio_section_uplink">Uplink</string>
+    <string name="phone_radio_section_handover">Handover</string>
+    <string name="phone_radio_phase_receive_only">Receive only</string>
+    <string name="phone_radio_phase_taking">Taking the uplink…</string>
+    <string name="phone_radio_phase_transmitting">Transmitting</string>
+    <string name="phone_radio_phase_yielded">Yielded</string>
+    <string name="phone_radio_source_taken">Taken from %1$s</string>
+    <string name="phone_radio_source_own">This phone is its fleet\'s ground</string>
+    <string name="phone_radio_source_bench">Held by the bench relay</string>
+    <string name="phone_radio_take">Take uplink</string>
+    <string name="phone_radio_give_back">Give back</string>
+    <string name="phone_radio_giving_back">Giving the uplink back…</string>
+    <string name="phone_radio_note_no_radio">Start the phone radio before taking the uplink.</string>
+    <string name="phone_radio_note_no_key">This phone holds no handover key from a ground station; request the keys from the box again.</string>
+    <string name="phone_radio_note_no_lan">The phone cannot reach %1$s over the LAN, so it will not transmit.</string>
+    <string name="phone_radio_note_listener">The phone could not open its take-back listener on port %1$d.</string>
+    <string name="phone_radio_note_other_ground">Another ground is transmitting: %1$s</string>
+    <string name="phone_radio_note_tx_did_not_open">The phone\'s transmitters did not open, so the uplink went back to %1$s.</string>
+    <string name="phone_radio_note_gave_back">Gave the uplink back to %1$s.</string>
+    <string name="phone_radio_note_give_back_unconfirmed">%1$s did not confirm the give-back; it resumes 25 s after the phone\'s last beacon.</string>
+    <string name="phone_radio_note_give_back_refused">%1$s did not confirm the give-back (%2$s); it resumes 25 s after the phone\'s last beacon.</string>
+    <string name="phone_radio_note_tx_not_quiet">The phone\'s transmitters did not go quiet, so %1$s was not told; it resumes 25 s after the phone\'s last beacon.</string>
+    <string name="phone_radio_note_taken_back">%1$s took the uplink back.</string>
+    <string name="phone_radio_note_radio_stopped">The phone radio stopped, so the phone stopped transmitting.</string>
+    <string name="phone_radio_handover_no_role">These keys carry no ground role, so this phone cannot take the uplink. Request the keys from the box again.</string>
+    <string name="phone_radio_handover_bound_here">This phone bound its fleet itself; no ground station shares the uplink.</string>
+    <string name="phone_radio_handover_box">Ground station</string>
+    <string name="phone_radio_handover_box_transmitting">Transmitting</string>
+    <string name="phone_radio_handover_box_standby">Standby: uplink held by %1$s</string>
+    <string name="phone_radio_handover_box_unreported">Its radio service is not reporting the uplink</string>
+    <string name="phone_radio_handover_reachable">Reachable over the LAN</string>
+    <string name="phone_radio_handover_unreachable">Not reachable over the LAN</string>
+    <string name="phone_radio_handover_checking">Checking the ground station…</string>
 </resources>

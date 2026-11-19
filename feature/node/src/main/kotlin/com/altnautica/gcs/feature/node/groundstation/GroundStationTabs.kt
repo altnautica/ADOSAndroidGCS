@@ -72,7 +72,7 @@ fun GroundStationTab(nodeId: String, tab: NodeTab, onOpenNode: (DeviceId) -> Uni
             when (tab) {
                 NodeTab.CarriedDrones -> item { LoadView(state.carried, vm::retry) { CarriedView(it, busy, onOpenNode, vm::releaseSlot) } }
                 NodeTab.Radio -> {
-                    item { LoadView(state.radio, vm::retry) { RadioView(it, busy, vm::setTxPower) } }
+                    item { LoadView(state.radio, vm::retry) { RadioView(it, busy, vm::setTxPower, vm::takeBackUplink) } }
                     item { PhoneReceiversCard(nodeId) }
                 }
                 NodeTab.Network -> item {
@@ -104,7 +104,8 @@ private fun <T> LoadView(load: Load<T>, onRetry: () -> Unit, content: @Composabl
 // ---- radio -------------------------------------------------------------------
 
 @Composable
-private fun RadioView(r: RadioLink, busy: Boolean, onTxPower: (Int) -> Unit) {
+private fun RadioView(r: RadioLink, busy: Boolean, onTxPower: (Int) -> Unit, onTakeBack: () -> Unit) {
+    if (r.uplinkReported) StationUplinkCard(r.uplink, busy, onTakeBack)
     NodeCard(stringResource(R.string.gs_radio_link)) {
         KeyValueRow(stringResource(R.string.gs_radio_state), linkStateLabel(r.state))
         KeyValueRow(stringResource(R.string.gs_radio_diagnosis), linkDiagnosisLabel(r.diagnosis))

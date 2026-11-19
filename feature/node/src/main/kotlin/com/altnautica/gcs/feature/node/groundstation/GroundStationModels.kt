@@ -79,6 +79,10 @@ data class RadioLink(
     val role: String?,
     /** `GET /api/v1/radio/adapters`; null when the agent does not serve it. */
     val adapters: RadioAdapters? = null,
+    /** Whether `/status` carries the `uplink` field at all (an older agent does not). */
+    val uplinkReported: Boolean = false,
+    /** The uplink handover; null while the radio service is not reporting it. */
+    val uplink: StationUplink? = null,
 ) {
     companion object {
         fun parse(status: JsonObject, wfb: JsonObject?): RadioLink {
@@ -101,6 +105,8 @@ data class RadioLink(
                     ?.toInt()?.takeIf { it >= 1 } ?: DEFAULT_TX_MAX_DBM,
                 mcsIndex = link.int("mcs_index"),
                 role = status.obj("role")?.str("current"),
+                uplinkReported = status.containsKey("uplink"),
+                uplink = StationUplink.parse(status.obj("uplink")),
             )
         }
 
@@ -109,6 +115,34 @@ data class RadioLink(
 
         /** The stepper's start value: the current power, held inside the ceiling. */
         fun txPowerStart(current: Double?, max: Int): Int = (current?.toInt() ?: minOf(5, max)).coerceIn(1, max)
+    }
+}
+
+/**
+ * The uplink handover of a ground station (`/status` `uplink`): `transmitting`,
+ * or `standby` while a phone holds the fleet's uplink.
+ */
+data class StationUplink(
+    val state: String,
+    val holderDeviceId: String?,
+    val holderName: String?,
+    val sinceMs: Long?,
+    /** When the box's presence watcher last heard the holder, unix ms. */
+    val lastBeaconMs: Long?,
+) {
+    val standby: Boolean get() = state == "standby"
+
+    companion object {
+        fun parse(o: JsonObject?): StationUplink? {
+            o ?: return null
+            return StationUplink(
+                state = o.str("state") ?: return null,
+                holderDeviceId = o.str("holder_device_id"),
+                holderName = o.str("holder_name"),
+                sinceMs = o.long("since_ms"),
+                lastBeaconMs = o.obj("watcher")?.long("last_beacon_ms"),
+            )
+        }
     }
 }
 

@@ -11,6 +11,8 @@ import com.altnautica.gcs.radio.rx.invite.PhoneInviteApi
 import com.altnautica.gcs.radio.rx.link.PhoneRadioTransportProvider
 import com.altnautica.gcs.radio.rx.node.PhoneRadioNodeSource
 import com.altnautica.gcs.radio.rx.video.PhoneRadioVideoFactory
+import com.altnautica.gcs.radio.rx.uplink.BoxUplinkApi
+import com.altnautica.gcs.radio.rx.uplink.HttpBoxUplinkApi
 import dagger.Binds
 import dagger.BindsOptionalOf
 import dagger.Module
@@ -39,6 +41,9 @@ abstract class RadioRxModule {
 
     @Binds
     abstract fun inviteCipher(cipher: NativeInviteCipher): InviteCipher
+
+    @Binds
+    abstract fun boxUplinkApi(api: HttpBoxUplinkApi): BoxUplinkApi
 
     /** Bound only in a debug build (the fleet bench relay). */
     @BindsOptionalOf

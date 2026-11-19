@@ -32,6 +32,7 @@ enum class WriteAction(@StringRes val running: Int, @StringRes val done: Int, @S
     PairClose(R.string.gs_write_pair_close_running, R.string.gs_write_pair_close_done, R.string.gs_noun_pair),
     Approve(R.string.gs_write_approve_running, R.string.gs_write_approve_done, R.string.gs_noun_approve),
     JoinMesh(R.string.gs_write_join_mesh_running, R.string.gs_write_join_mesh_done, R.string.gs_noun_join_mesh),
+    TakeBack(R.string.gs_write_take_back_running, R.string.gs_write_take_back_done, R.string.gs_noun_take_back),
 }
 
 /** Progress of one operator write to an agent. */
