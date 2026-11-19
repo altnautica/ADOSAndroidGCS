@@ -10,10 +10,10 @@ import java.security.MessageDigest
 import java.util.Base64
 
 /**
- * What a ground station's operator hands a phone receiver once they approve
- * it: the fleet's receive key, the hop key that authenticates channel-hop
- * announcements, and the link layout. Version 1 of the plaintext the ground
- * station seals.
+ * What a ground station's operator hands a phone once they approve it: the
+ * fleet's receive key, the hop key that authenticates channel-hop
+ * announcements, the link layout, and (version 2) the ground role a phone
+ * needs to take the fleet's uplink from that ground station.
  */
 @Serializable
 data class InviteBundle(
@@ -29,6 +29,8 @@ data class InviteBundle(
     @SerialName("video_fec") val videoFec: InviteFec? = null,
     @SerialName("aux_fec") val auxFec: InviteFec? = null,
     val ports: InvitePorts,
+    /** The ground role; present from version 2. */
+    val ground: InviteGround? = null,
 ) {
     val rxKey: ByteArray get() = Base64.getDecoder().decode(rxKeyB64)
     val hopKey: ByteArray get() = Base64.getDecoder().decode(hopKeyB64)
@@ -40,7 +42,8 @@ data class InviteBundle(
     /** Throws [InvalidInviteException] when the bundle cannot drive a receiver. */
     fun validate(): InviteBundle {
         fun fail(reason: String): Nothing = throw InvalidInviteException(reason)
-        if (v != VERSION) fail("unsupported invite version $v")
+        if (v !in 1..VERSION) fail("unsupported invite version $v")
+        if (v >= 2 && ground == null) fail("version $v invite carries no ground role")
         val rx = runCatching { rxKey }.getOrNull() ?: fail("receive key is not base64")
         if (rx.size != WfbReceiver.RX_KEY_BYTES) fail("receive key must be ${WfbReceiver.RX_KEY_BYTES} bytes")
         val hop = runCatching { hopKey }.getOrNull() ?: fail("hop key is not base64")
@@ -56,7 +59,7 @@ data class InviteBundle(
     }
 
     companion object {
-        const val VERSION = 1
+        const val VERSION = 2
         const val HOP_KEY_BYTES = 32
 
         private val json = Json { ignoreUnknownKeys = true }
@@ -74,6 +77,38 @@ data class InviteBundle(
 
 @Serializable
 data class InviteSlot(val slot: Int, @SerialName("device_id") val deviceId: String)
+
+/** One drone of the ground role: its system id and the relay secret its ground issued it. */
+@Serializable
+data class InviteGroundDrone(
+    val slot: Int,
+    @SerialName("device_id") val deviceId: String,
+    val sysid: Int? = null,
+    @SerialName("relay_secret_hex") val relaySecretHex: String? = null,
+)
+
+@Serializable
+data class InviteRegulatory(val domain: String? = null, @SerialName("dfs_allowed") val dfsAllowed: Boolean = false)
+
+/**
+ * The ground station a phone may take the uplink from, and what the phone
+ * needs to stand in for it: its transmit parameters, every drone's relay
+ * secret, and the uplink key that authenticates the handover both ways.
+ */
+@Serializable
+data class InviteGround(
+    @SerialName("box_device_id") val boxDeviceId: String,
+    @SerialName("box_name") val boxName: String,
+    @SerialName("box_lan_address") val boxLanAddress: String? = null,
+    @SerialName("mcs_index") val mcsIndex: Int,
+    @SerialName("aux_tx_port") val auxTxPort: Int,
+    @SerialName("tx_power_dbm") val txPowerDbm: Int,
+    val regulatory: InviteRegulatory = InviteRegulatory(),
+    val drones: List<InviteGroundDrone> = emptyList(),
+    @SerialName("uplink_key_b64") val uplinkKeyB64: String,
+) {
+    val uplinkKey: ByteArray get() = Base64.getDecoder().decode(uplinkKeyB64)
+}
 
 @Serializable
 data class InviteFec(val k: Int, val n: Int)

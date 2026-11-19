@@ -61,7 +61,7 @@ class InviteVectorTest {
     @Test
     fun `the plaintext parses into a usable bundle`() {
         val bundle = InviteBundle.parse(text("expected_plaintext_json").toByteArray())
-        assertEquals(1, bundle.v)
+        assertEquals(2, bundle.v)
         assertEquals(7, bundle.fleetId)
         assertEquals(149, bundle.channel)
         assertEquals(149, bundle.rendezvousChannel)
@@ -80,6 +80,14 @@ class InviteVectorTest {
             bundle.links(),
         )
         assertEquals(0x0701, bundle.links()[0].linkId)
+        val ground = requireNotNull(bundle.ground)
+        assertEquals("gs-0a1b2c", ground.boxDeviceId)
+        assertEquals("192.168.1.20", ground.boxLanAddress)
+        assertEquals(5602, ground.auxTxPort)
+        assertEquals(InviteRegulatory("US", false), ground.regulatory)
+        assertEquals(InviteGroundDrone(1, "drone-a1b2c3", 1, "11".repeat(32)), ground.drones[0])
+        assertNull(ground.drones[1].relaySecretHex)
+        assertArrayEquals(ByteArray(32) { (0x80 + it).toByte() }, ground.uplinkKey)
     }
 
     @Test
