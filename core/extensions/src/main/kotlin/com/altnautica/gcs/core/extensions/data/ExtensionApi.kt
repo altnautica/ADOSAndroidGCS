@@ -168,6 +168,19 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
 
     override suspend fun battery(): AgentResult<com.altnautica.gcs.core.agent.model.BatteryHealth> = client.battery()
 
+    override suspend fun computeNodeId(): String? =
+        ((client.requestJson("GET", PluginApi.CAPTURE_READINESS_PATH) as? AgentResult.Ok<*>)?.value as? JsonObject)
+            ?.get("compute_node_id")
+            ?.let { it as? kotlinx.serialization.json.JsonPrimitive }
+            ?.takeIf { it.isString }
+            ?.content
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+    override fun worldStream(deviceId: String): Flow<ByteArray> =
+        sockets.open(client, PluginApi.worldStreamPath(deviceId), PluginApi.RECONSTRUCT_TICKET_SCOPE)
+            .mapNotNull { (it as? WsFrame.Binary)?.bytes }
+
     override suspend fun cameras(): ApiResult<List<RosterCamera>> = when (val r = client.cameraRoster()) {
         is AgentResult.Ok -> ApiResult.Ok(
             r.value.mapNotNull { c ->

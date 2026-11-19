@@ -141,6 +141,7 @@ internal class AutonomyFeed(
                     launch { pollStatus(id) }
                     launch { pollEta(id) }
                     launch { pollMap(id) }
+                    launch { worldStream(id) }
                 }
             }
         }
@@ -289,6 +290,43 @@ internal class AutonomyFeed(
         }
     }
 
+    /**
+     * The drone's world stream on its Reconstruct compute node (streamed map placement):
+     * the node the drone's capture forwarder resolved is asked for every
+     * [NODE_POLL_MS] while there is none; once there is, its occupancy tiles join the live
+     * map beside the drone's own, and a closed or failed stream is dialled again after
+     * [WORLD_RETRY_MS], with no cap. The node paints the same 5 cm map_ned tiles as the
+     * drone, so a delta on another grid is not mixed in.
+     */
+    private suspend fun worldStream(id: DeviceId) {
+        while (true) {
+            val node = api(id)?.let { runCatching { it.computeNodeId() }.getOrNull() }
+            val frames = node?.let { api(DeviceId(it))?.worldStream(id.value) }
+            if (frames == null) {
+                delay(NODE_POLL_MS)
+                continue
+            }
+            try {
+                frames.map { AutonomyParse.worldOccupancy(it, id.value) }.flowOn(parseContext)
+                    .collect { delta -> delta?.let { applyNodeOccupancy(it) } }
+            } catch (c: CancellationException) {
+                throw c
+            } catch (_: Exception) {
+                // Dropped stream or unreachable node: dial again below.
+            }
+            delay(WORLD_RETRY_MS)
+        }
+    }
+
+    private suspend fun applyNodeOccupancy(delta: OccupancyDelta) {
+        val held = _occupancy.value
+        if (held != null && (held.resM != delta.resM || held.cells != delta.tileCells)) return
+        val decoded = withContext(Dispatchers.Default) { delta.tiles.mapNotNull { t -> decodeTile(t.png)?.let { (t.ix to t.iy) to it } } }
+        if (decoded.isEmpty()) return
+        decoded.forEach { (k, v) -> tileCache[k] = v }
+        _occupancy.value = OccupancyLayer(delta.resM, delta.tileCells, LinkedHashMap(tileCache), clock.nowMs())
+    }
+
     private suspend fun retrying(block: suspend () -> Unit) {
         var backoff = RETRY_MS
         while (true) {
@@ -306,6 +344,12 @@ internal class AutonomyFeed(
 
     companion object {
         const val MAP_POLL_MS = 1_000L
+
+        /** How often a drone with no compute node is asked again for one. */
+        const val NODE_POLL_MS = 10_000L
+
+        /** The fixed delay before a closed world stream is dialled again. */
+        const val WORLD_RETRY_MS = 2_000L
         const val STATUS_POLL_MS = 500L
         /** Above the agent socket's 5 s keepalive, so a healthy but quiet socket never starts the poll. */
         const val STREAM_QUIET_MS = 6_000L

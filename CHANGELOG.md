@@ -5,6 +5,10 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Compute-node live map.** When the drone's capture forwarder names a
+  compute node, the cockpit reads the drone's live stream on that node's
+  Reconstruct extension (`/x/ws/live/<drone>`) and merges its occupancy
+  tiles into the live map; a closed stream is dialled again every 2 s.
 - **Speed limit on the flight-state chip.** While a skill, a goto or
   the sticks fly, the chip's secondary line says which limit cut the
   commanded speed, from the pilot's `command.limits` ("Slowed:

@@ -161,4 +161,37 @@ class AutonomyParseTest {
         assertEquals("\"pilot\"", f["kind"].toString())
         assertEquals("7", f["ts_ms"].toString())
     }
+
+    @Test
+    fun `a compute node's live occupancy frame reads as a map tile delta for its drone only`() {
+        val delta = AutonomyParse.worldOccupancy(hex(OCCUPANCY_FRAME), "drone-1")!!
+        assertEquals(7L, delta.seq)
+        assertEquals(0.05f, delta.resM)
+        assertEquals(64, delta.tileCells)
+        val tile = delta.tiles.single()
+        assertEquals(-1 to 2, tile.ix to tile.iy)
+        assertEquals("iVBORw0KGgo=", android.util.Base64.encodeToString(tile.png, android.util.Base64.NO_WRAP))
+        // Another drone's frame, the point-cloud topic and a truncated frame are not tiles.
+        assertNull(AutonomyParse.worldOccupancy(hex(OCCUPANCY_FRAME), "drone-2"))
+        assertNull(AutonomyParse.worldOccupancy(hex(POINTCLOUD_FRAME), "drone-1"))
+        assertNull(AutonomyParse.worldOccupancy(hex(OCCUPANCY_FRAME).copyOf(40), "drone-1"))
+    }
+
+    private fun hex(s: String) = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+
+    private companion object {
+        /** `NodeEvent::encode` of a `LiveOccupancy` (seq 7, one tile at (-1, 2)) for `drone-1`, as the node sends it. */
+        const val OCCUPANCY_FRAME =
+            "84a17602a5746f706963ba7265636f6e7374727563742e6c6976652e6f63637570616e6379a96465766963655f6964a764726f6e652d31" +
+                "a77061796c6f6164dc005acc86cca46b696e64cca46c697665cca373657107cca56672616d65cca76d61705f6e6564cca57265735f6d" +
+                "ccca3d4ccccccccdccaa74696c655f63656c6c7340cca574696c6573cc91cc83cca26978ccffcca2697902cca7706e675f623634ccac" +
+                "6956424f5277304b47676f3d"
+
+        /** `NodeEvent::encode` of a `LivePointCloud` for `drone-1`. */
+        const val POINTCLOUD_FRAME =
+            "84a17602a5746f706963bb7265636f6e7374727563742e6c6976652e706f696e74636c6f7564a96465766963655f6964a764726f6e652d31" +
+                "a77061796c6f6164dc005fcc86cca46b696e64cca46c697665cca373657103cca56672616d65cca76d61705f6e6564cca7766f78656c5f6d" +
+                "ccca3d4ccccccccdcca5636f756e7402ccaa706f696e74735f623634ccd9204141434150774141414541414141432f41414341514141416f" +
+                "454141414d6841"
+    }
 }

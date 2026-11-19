@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.agent.pilot.PilotWire
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerFrame
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerParse
+import com.altnautica.gcs.feature.cockpit.pilot.PilotMsgpack
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -230,6 +231,32 @@ internal object AutonomyParse {
         }
         return OccupancyDelta(seq, o["res_m"].f() ?: return null, o["tile_cells"].int() ?: DEFAULT_TILE_CELLS, tiles)
     }
+
+    /**
+     * One frame of a drone's world stream on its Reconstruct compute node
+     * (`/ws/live/<device_id>`): a msgpack `NodeEvent` `{v, topic, device_id?, payload}` whose
+     * `payload` (a byte array) is the topic's own msgpack struct. A
+     * `reconstruct.live.occupancy` frame for [deviceId] reads as the same tile delta as
+     * `/api/v1/map/live`; any other topic, another drone's frame, another envelope
+     * version or a malformed frame is null.
+     */
+    fun worldOccupancy(frame: ByteArray, deviceId: String): OccupancyDelta? {
+        val event = PilotMsgpack.decode(frame).obj() ?: return null
+        if (event["v"].int() != NODE_EVENT_VERSION || event["topic"].str() != LIVE_OCCUPANCY_TOPIC) return null
+        val device = event["device_id"].str()
+        if (device != null && device != deviceId) return null
+        val payload = event["payload"].arr() ?: return null
+        val bytes = ByteArray(payload.size)
+        for (i in bytes.indices) {
+            val b = payload[i].int()?.takeIf { it in 0..255 } ?: return null
+            bytes[i] = b.toByte()
+        }
+        return PilotMsgpack.decode(bytes).obj()?.let(::occupancy)
+    }
+
+    /** The `NodeEvent` envelope version the world stream speaks. */
+    const val NODE_EVENT_VERSION = 2
+    const val LIVE_OCCUPANCY_TOPIC = "reconstruct.live.occupancy"
 
     private val VANTAGE_STATES = setOf("enroute", "arrived", "no-vantage")
 

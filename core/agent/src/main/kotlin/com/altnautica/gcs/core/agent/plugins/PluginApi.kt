@@ -106,5 +106,15 @@ class PluginApi internal constructor(private val client: AgentClient) {
         /** WebSocket path of the vision detection stream (needs a `vision.detections` ticket). */
         const val DETECTIONS_WS_PATH = "api/vision/detections/ws"
         const val DETECTIONS_TICKET_SCOPE = "vision.detections"
+
+        /** The Capture extension's readiness through the plugin passthrough (`compute_node_id`). */
+        const val CAPTURE_READINESS_PATH = "api/plugins/com.altnautica.capture/x/capture/readiness"
+
+        /** WebSocket path of [deviceId]'s world stream on a compute node's Reconstruct extension. */
+        fun worldStreamPath(deviceId: String): String =
+            "api/plugins/com.altnautica.reconstruct/x/ws/live/${AgentClient.segment(deviceId)}"
+
+        /** The ticket scope for a WebSocket through the Reconstruct extension's passthrough. */
+        const val RECONSTRUCT_TICKET_SCOPE = "plugins.http:com.altnautica.reconstruct"
     }
 }

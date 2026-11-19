@@ -57,6 +57,21 @@ interface AutonomyFeedApi {
      * `thresholds.reserve_percent` and each pack's time to it. Null where no agent serves it.
      */
     suspend fun battery(): AgentResult<BatteryHealth>? = null
+
+    /**
+     * The compute node this drone's capture forwarder streams to: `compute_node_id` of the
+     * Capture extension's `GET /api/plugins/com.altnautica.capture/x/capture/readiness`.
+     * Null when none is resolved or no agent serves it.
+     */
+    suspend fun computeNodeId(): String? = null
+
+    /**
+     * Binary frames of [deviceId]'s world stream on this node's Reconstruct extension
+     * (`/api/plugins/com.altnautica.reconstruct/x/ws/live/<device_id>`, needs a
+     * `plugins.http:com.altnautica.reconstruct` ticket) until it closes. Null where no agent
+     * serves it.
+     */
+    fun worldStream(deviceId: String): Flow<ByteArray>? = null
 }
 
 /**
