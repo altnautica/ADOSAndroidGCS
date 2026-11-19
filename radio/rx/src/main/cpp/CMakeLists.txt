@@ -2,7 +2,8 @@
 #
 # Phone-radio WFB library: libsodium + the vendored WFB receive and transmit
 # cores, wrapped by the JNI bridges in wfb_receiver_jni.cpp and
-# wfb_transmitter_jni.cpp.
+# wfb_transmitter_jni.cpp; and the over-the-air bind: key generation
+# (bind_keys.cpp) and the bind tunnel's lwIP endpoint (bind_tunnel.cpp).
 
 cmake_minimum_required(VERSION 3.22.1)
 project(ados_wfbrx C CXX)
@@ -82,9 +83,12 @@ target_compile_definitions(wfbrx_core
         ZFEX_INLINE_ADDMUL_SIMD)
 target_link_libraries(wfbrx_core PUBLIC sodium log)
 
+# ------------------------------------------------------------------ bind tunnel (lwIP + wfb_tun framing)
+include(${CMAKE_CURRENT_SOURCE_DIR}/bindtun.cmake)
+
 # ------------------------------------------------------------------ JNI library
-add_library(ados_wfbrx SHARED wfb_receiver_jni.cpp wfb_transmitter_jni.cpp)
-target_link_libraries(ados_wfbrx PRIVATE wfbrx_core sodium android log)
+add_library(ados_wfbrx SHARED wfb_receiver_jni.cpp wfb_transmitter_jni.cpp bind_keys.cpp bind_tunnel.cpp)
+target_link_libraries(ados_wfbrx PRIVATE wfbrx_core bindtun_core sodium android log)
 target_link_options(ados_wfbrx PRIVATE
     -Wl,--gc-sections
     -Wl,--exclude-libs,ALL
