@@ -36,7 +36,11 @@ bool tcp_open(uint32_t ip, uint16_t port);
 // Queues bytes on the connection; the count accepted (fewer while the send buffer is full).
 size_t tcp_send(const uint8_t *data, size_t len);
 
-// Takes every byte received since the last call.
+// Received bytes the endpoint holds at most: the TCP window (lwipopts.h
+// TCP_WND). The window reopens only as tcp_take hands bytes on.
+constexpr size_t kReceiveCap = 8 * 1400;
+
+// Takes every byte received since the last call and reopens the window by that much.
 std::vector<uint8_t> tcp_take();
 
 TcpState tcp_state();

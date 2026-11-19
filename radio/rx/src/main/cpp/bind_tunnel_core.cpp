@@ -17,6 +17,10 @@ extern "C" {
 }
 
 namespace ados::bindtun {
+
+static_assert(kReceiveCap == TCP_WND, "the receive cap is the advertised window");
+static_assert(kReceiveCap <= 0xffff, "tcp_recved takes a 16-bit length");
+
 namespace {
 
 struct Endpoint {
@@ -58,18 +62,23 @@ err_t on_connected(void *, struct tcp_pcb *, err_t err) {
     return ERR_OK;
 }
 
-err_t on_recv(void *, struct tcp_pcb *pcb, struct pbuf *p, err_t err) {
+err_t on_recv(void *, struct tcp_pcb *, struct pbuf *p, err_t err) {
     if (p == nullptr) {
         // The peer closed its side.
         g.state = TcpState::Closed;
         return ERR_OK;
     }
-    if (err == ERR_OK) {
-        const size_t at = g.received.size();
-        g.received.resize(at + p->tot_len);
-        pbuf_copy_partial(p, g.received.data() + at, p->tot_len, 0);
-        tcp_recved(pcb, p->tot_len);
+    if (err != ERR_OK) {
+        pbuf_free(p);
+        return ERR_OK;
     }
+    // The window is credited back only as tcp_take hands data on, so a peer
+    // that keeps the window can never pass the cap. One that ignores it is
+    // refused: lwIP holds the segment and offers it again later.
+    if (g.received.size() + p->tot_len > kReceiveCap) return ERR_MEM;
+    const size_t at = g.received.size();
+    g.received.resize(at + p->tot_len);
+    pbuf_copy_partial(p, g.received.data() + at, p->tot_len, 0);
     pbuf_free(p);
     return ERR_OK;
 }
@@ -190,6 +199,8 @@ size_t tcp_send(const uint8_t *data, size_t len) {
 std::vector<uint8_t> tcp_take() {
     std::vector<uint8_t> out;
     out.swap(g.received);
+    // Reopen the window by what was taken, now that it left the buffer.
+    if (g.pcb != nullptr && !out.empty()) tcp_recved(g.pcb, static_cast<u16_t>(out.size()));
     return out;
 }
 

@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <!-- Debug builds only: the fleet bench starts a phone bind over adb. -->
+        <!-- Debug builds only: the fleet bench starts a phone bind over adb.
+             DUMP is a signature|privileged|development permission the shell
+             user holds, so `adb shell am broadcast` reaches these receivers
+             and other apps on the phone cannot. -->
         <receiver
             android:name="com.altnautica.gcs.radio.rx.bench.BenchBindReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.altnautica.gcs.bench.BIND_DRONE" />
             </intent-filter>
@@ -12,7 +16,8 @@
         <!-- Debug builds only: the fleet bench drives the phone's uplink over adb. -->
         <receiver
             android:name="com.altnautica.gcs.radio.rx.bench.BenchLinkReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.altnautica.gcs.bench.PARAM_READ" />
                 <action android:name="com.altnautica.gcs.bench.PARAM_SET" />
@@ -25,7 +30,8 @@
         <!-- Debug builds only: the fleet bench takes and gives back the uplink over adb. -->
         <receiver
             android:name="com.altnautica.gcs.radio.rx.bench.BenchUplinkReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.altnautica.gcs.bench.UPLINK_TAKE" />
                 <action android:name="com.altnautica.gcs.bench.UPLINK_GIVE_BACK" />

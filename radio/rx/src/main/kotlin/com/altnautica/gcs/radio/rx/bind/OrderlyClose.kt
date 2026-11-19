@@ -1,6 +1,8 @@
 package com.altnautica.gcs.radio.rx.bind
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * Ends the bind connection in order, as wfb-ng's bind client does when it
@@ -12,6 +14,9 @@ import kotlinx.coroutines.delay
  *
  * Clean means the FIN was acknowledged. Once it is, the drone's own FIN gets
  * a short grace so the phone acknowledges it too.
+ *
+ * The close runs even when the bind was cancelled (it sits in a `finally`):
+ * it ignores cancellation and is bounded by its own budget instead.
  */
 class OrderlyClose(
     private val budgetMs: Long = BUDGET_MS,
@@ -21,7 +26,11 @@ class OrderlyClose(
     private val nowMs: () -> Long,
 ) {
     /** True when the FIN went out and was acknowledged within the budget. */
-    suspend fun run(finish: () -> Boolean, progress: () -> CloseProgress): Boolean {
+    suspend fun run(finish: () -> Boolean, progress: () -> CloseProgress): Boolean = withContext(NonCancellable) {
+        awaitClose(finish, progress)
+    }
+
+    private suspend fun awaitClose(finish: () -> Boolean, progress: () -> CloseProgress): Boolean {
         if (!finish()) return false
         val deadline = nowMs() + budgetMs
         var ackedAt: Long? = null

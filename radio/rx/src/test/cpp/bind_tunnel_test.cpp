@@ -337,6 +337,52 @@ void test_no_connection_has_nothing_to_finish() {
     stack_close();
 }
 
+// A peer that keeps sending while nothing is taken: the window closes at the
+// cap, what it sends past the window never reaches the buffer, and taking
+// the bytes reopens the window.
+void test_a_peer_cannot_grow_the_receive_buffer_past_the_cap() {
+    CHECK(stack_open(kPhone));
+    CHECK(tcp_open(kDrone, 5555));
+    auto out = sent_packets();
+    CHECK(out.size() == 1);
+    if (out.size() != 1) return;
+    const uint8_t *t = &out[0][(out[0][0] & 0xf) * 4];
+    const uint16_t phone_port = static_cast<uint16_t>(t[0] << 8 | t[1]);
+    const uint32_t isn = get32(t + 4);
+    const Bytes synack = frame(segment(5555, phone_port, 7000, isn + 1, 0x12, ""));
+    stack_input(synack.data(), synack.size());
+    CHECK(tcp_state() == TcpState::Connected);
+    sent_packets();
+
+    const std::string chunk(1400, 'x');
+    uint32_t seq = 7001;
+    for (int i = 0; i < 3 * static_cast<int>(kReceiveCap / chunk.size()); i++) {
+        const Bytes d = frame(segment(5555, phone_port, seq, isn + 1, 0x18, chunk));
+        stack_input(d.data(), d.size());
+        seq += static_cast<uint32_t>(chunk.size());
+    }
+    // The phone's last word before anything is taken advertises a closed window.
+    out = sent_packets();
+    CHECK(!out.empty());
+    if (!out.empty()) {
+        const Bytes &a = out.back();
+        const size_t ihl = (a[0] & 0xf) * 4u;
+        CHECK((a[ihl + 14] << 8 | a[ihl + 15]) == 0);
+    }
+    const auto got = tcp_take();
+    CHECK(got.size() == kReceiveCap);
+    // Taking the bytes reopens the window in full.
+    out = sent_packets();
+    CHECK(!out.empty());
+    if (!out.empty()) {
+        const Bytes &a = out.back();
+        const size_t ihl = (a[0] & 0xf) * 4u;
+        CHECK(static_cast<size_t>(a[ihl + 14] << 8 | a[ihl + 15]) == kReceiveCap);
+    }
+    CHECK(tcp_take().empty());
+    stack_close();
+}
+
 }  // namespace
 
 int main() {
@@ -349,6 +395,7 @@ int main() {
     test_tcp_exchange_over_the_framing();
     test_the_phone_closes_first_and_waits_for_the_ack();
     test_no_connection_has_nothing_to_finish();
+    test_a_peer_cannot_grow_the_receive_buffer_past_the_cap();
     if (failures == 0) std::printf("bind tunnel tests passed\n");
     return failures == 0 ? 0 : 1;
 }

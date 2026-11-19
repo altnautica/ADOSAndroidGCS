@@ -7,6 +7,10 @@ import com.altnautica.gcs.radio.rx.WfbTransmitter
 import com.altnautica.gcs.radio.rx.usb.FrameRecord
 import com.altnautica.gcs.radio.rx.usb.FrameRecordReader
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -78,15 +82,26 @@ class BindClient(
             onStage(stage, heard)
         }
         BindTunnel().use { tunnel ->
-            val pump = launch {
-                while (isActive) {
-                    while (true) tunnel.input(inbound.poll() ?: break)
-                    for (d in tunnel.poll()) tx.send(d)
-                    if (!heard && framesDecoded.get() > 0) {
-                        heard = true
-                        onStage(stage, true)
+            // Detached from the bind's cancellation: the orderly close below
+            // needs the pump to carry its FIN and the drone's ACK after a cancel.
+            // A pump failure still ends the bind, and is rethrown once it has.
+            val bind = this
+            var pumpError: Throwable? = null
+            val pump = launch(NonCancellable) {
+                try {
+                    while (isActive) {
+                        while (true) tunnel.input(inbound.poll() ?: break)
+                        for (d in tunnel.poll()) tx.send(d)
+                        if (!heard && framesDecoded.get() > 0) {
+                            heard = true
+                            onStage(stage, true)
+                        }
+                        delay(PUMP_MS)
                     }
-                    delay(PUMP_MS)
+                } catch (e: Throwable) {
+                    if (e is CancellationException) throw e
+                    pumpError = e
+                    bind.cancel(CancellationException("bind pump failed").apply { initCause(e) })
                 }
             }
             try {
@@ -110,7 +125,8 @@ class BindClient(
                     else -> BindOutcome.Failed("The drone stopped answering during ${(result as? ExchangeResult.NoAnswer)?.step ?: "the bind"}")
                 }
             } finally {
-                pump.cancel()
+                withContext(NonCancellable) { pump.cancelAndJoin() }
+                pumpError?.let { throw it }
             }
         }
     }

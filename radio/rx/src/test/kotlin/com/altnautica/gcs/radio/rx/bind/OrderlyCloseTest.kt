@@ -1,6 +1,10 @@
 package com.altnautica.gcs.radio.rx.bind
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
@@ -60,5 +64,40 @@ class OrderlyCloseTest {
     fun `no connection to finish is unclean at once`() = runTest {
         assertFalse(closer().run({ false }, { CloseProgress.NotClosing }))
         assertEquals(0L, currentTime)
+    }
+
+    @Test
+    fun `a cancelled bind still sends its FIN and waits for the acknowledgement`() = runTest {
+        val s = Script(this, listOf(0L to CloseProgress.FinSent, 1_200L to CloseProgress.FinAcked, 1_500L to CloseProgress.Complete))
+        var clean: Boolean? = null
+        val bind = launch {
+            try {
+                awaitCancellation()
+            } finally {
+                clean = closer().run(s::finish, s::progress)
+            }
+        }
+        runCurrent()
+        bind.cancelAndJoin()
+        assertTrue(s.finished)
+        assertEquals(true, clean)
+        assertTrue("returned before the close completed", currentTime >= 1_500L)
+    }
+
+    @Test
+    fun `a cancelled close is still bounded by its own budget`() = runTest {
+        val s = Script(this, listOf(0L to CloseProgress.FinSent))
+        var clean: Boolean? = null
+        val bind = launch {
+            try {
+                awaitCancellation()
+            } finally {
+                clean = closer().run(s::finish, s::progress)
+            }
+        }
+        runCurrent()
+        bind.cancelAndJoin()
+        assertEquals(false, clean)
+        assertEquals(OrderlyClose.BUDGET_MS, currentTime)
     }
 }

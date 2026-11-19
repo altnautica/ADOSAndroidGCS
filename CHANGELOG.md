@@ -64,6 +64,11 @@ app's `versionName`.
   ground station" from that station's last answer after it stopped
   answering, so a link to the drone went to the dead station first. The
   relayed reach now lasts only while the station answers.
+- **Bind hardening.** Cancelling a bind still closes the connection in order
+  (FIN sent and acknowledged, bounded by the close budget); the bind tunnel
+  holds at most one TCP window of received bytes and reopens the window only
+  as they are taken; the debug bench receivers need the adb shell's DUMP
+  permission.
 - **lwIP licence** in the in-app licences.
 
 ## [0.7.0] - 2026-11-17
