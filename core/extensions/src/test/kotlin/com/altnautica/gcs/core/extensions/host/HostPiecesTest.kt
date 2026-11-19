@@ -72,13 +72,21 @@ class HostPiecesTest {
 
     @Test
     fun frameShellPinsPolicyBeforeTheBundle() {
-        val html = FrameShell.build("const s = '</script><img>';")
+        val html = FrameShell.build("const s = '</script><img>';", "node.surface", "capture")
         val head = html.indexOf(FrameShell.CSP_META)
         val module = html.indexOf("<script type=\"module\">")
         assertTrue(head in 0 until module)
         assertTrue(html.contains("connect-src 'none'"))
         assertFalse(html.substring(module).contains("'</script>"))
         assertTrue(html.contains("<\\/script>"))
+    }
+
+    @Test
+    fun frameShellNamesTheMountBeforeTheBundle() {
+        val html = FrameShell.build("", "agent.page", "a b&c\"<")
+        val mount = html.indexOf("location.hash=\"#slot=agent.page&panel=a%20b%26c%22%3C\";")
+        assertTrue(mount >= 0)
+        assertTrue(mount < html.indexOf("<script type=\"module\">"))
     }
 
     @Test

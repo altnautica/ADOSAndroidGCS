@@ -75,9 +75,17 @@ observer.observe(document, { childList: true, subtree: true });
 
     private val SCRIPT_CLOSE = Regex("</(script)", RegexOption.IGNORE_CASE)
 
-    /** Wrap an ESM bundle in the frame document; `</script` inside the bundle is escaped. */
-    fun build(bundleJs: String): String {
+    /**
+     * Wrap an ESM bundle in the frame document; `</script` inside the bundle is escaped.
+     *
+     * The frame is a `srcdoc` document, so its URL cannot carry a fragment from outside.
+     * A first script navigates it to `#slot=<slot>&panel=<panelId>` before the bundle runs,
+     * which is where the plugin SDK reads the mount identity, as in the desktop host. It sets
+     * `location.hash`: `history.replaceState` is refused in a sandboxed `srcdoc` frame.
+     */
+    fun build(bundleJs: String, slot: String, panelId: String): String {
         val safe = SCRIPT_CLOSE.replace(bundleJs) { "<\\/" + it.groupValues[1] }
+        val fragment = "#slot=${encodeUriComponent(slot)}&panel=${encodeUriComponent(panelId)}"
         return buildString {
             append("<!doctype html>")
             append("<html lang=\"en\">")
@@ -86,11 +94,26 @@ observer.observe(document, { childList: true, subtree: true });
             append("<meta charset=\"utf-8\">")
             append("<meta name=\"color-scheme\" content=\"dark light\">")
             append("<style>html,body{margin:0;padding:0;height:100%;background:transparent;overflow:hidden}</style>")
+            // The fragment is percent-encoded, so it holds no quote, backslash or `<`.
+            append("<script>location.hash=\"").append(fragment).append("\";</script>")
             append("</head>")
             append("<body>")
             append("<script type=\"module\">\n").append(safe).append("\n</script>")
             append("</body>")
             append("</html>")
+        }
+    }
+
+    /** JavaScript's `encodeURIComponent`: everything but `A-Z a-z 0-9 - _ . ! ~ * ' ( )` as UTF-8 `%XX`. */
+    internal fun encodeUriComponent(s: String): String = buildString {
+        for (b in s.toByteArray(Charsets.UTF_8)) {
+            val c = b.toInt() and 0xff
+            val ch = c.toChar()
+            if (ch in 'A'..'Z' || ch in 'a'..'z' || ch in '0'..'9' || ch in "-_.!~*'()") {
+                append(ch)
+            } else {
+                append('%').append("0123456789ABCDEF"[c shr 4]).append("0123456789ABCDEF"[c and 0xf])
+            }
         }
     }
 }

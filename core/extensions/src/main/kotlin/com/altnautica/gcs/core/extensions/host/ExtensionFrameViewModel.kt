@@ -11,6 +11,7 @@ import com.altnautica.gcs.core.extensions.data.ExtensionRepository
 import com.altnautica.gcs.core.extensions.data.ExtensionsState
 import com.altnautica.gcs.core.extensions.manifest.ExtensionDetail
 import com.altnautica.gcs.core.extensions.manifest.GcsIsolation
+import com.altnautica.gcs.core.extensions.manifest.SlotContribution
 import com.altnautica.gcs.core.model.DeviceId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,7 +56,9 @@ class ExtensionFrameViewModel @Inject constructor(
     private var started = false
     @Volatile private var granted: Set<String> = emptySet()
 
-    fun start(node: DeviceId, pluginId: String) {
+    /** Starts the frame for [mount], the contribution it renders (slot and panel id reach the bundle). */
+    fun start(node: DeviceId, mount: SlotMount) {
+        val pluginId = mount.pluginId
         if (started) return
         started = true
         session = ExtensionFrameSession(
@@ -77,7 +80,7 @@ class ExtensionFrameViewModel @Inject constructor(
             val detail = repository.extensions(node)
                 .mapNotNull { (it as? ExtensionsState.Loaded)?.extensions?.firstOrNull { e -> e.pluginId == pluginId } }
                 .first()
-            _state.value = load(node, detail)
+            _state.value = load(node, detail, mount.contribution)
         }
         viewModelScope.launch {
             repository.config(node, pluginId)
@@ -87,12 +90,14 @@ class ExtensionFrameViewModel @Inject constructor(
         }
     }
 
-    private suspend fun load(node: DeviceId, detail: ExtensionDetail): FrameState {
+    private suspend fun load(node: DeviceId, detail: ExtensionDetail, contribution: SlotContribution): FrameState {
         if (detail.isolation == GcsIsolation.Inline) return FrameState.InlineOnly
         val entry = detail.entrypoint ?: return FrameState.NoBundle
         val api = repository.api(node) ?: return FrameState.Failed(ExtensionFailure.FeatureAbsent)
         return when (val r = api.gcsAsset(detail.pluginId, entry.removePrefix("gcs/"))) {
-            is ApiResult.Ok -> FrameState.Ready(FrameShell.build(r.value.decodeToString()))
+            is ApiResult.Ok -> FrameState.Ready(
+                FrameShell.build(r.value.decodeToString(), contribution.slot, contribution.panelId),
+            )
             is ApiResult.Err -> FrameState.Failed(r.failure)
         }
     }

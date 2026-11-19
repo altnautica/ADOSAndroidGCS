@@ -135,8 +135,7 @@ fun ExtensionSlotHost(
                 if (m.inline) continue
                 ExtensionFrame(
                     node = node,
-                    pluginId = m.pluginId,
-                    mountKey = m.key,
+                    mount = m,
                     modifier = Modifier.fillMaxSize(),
                     hostEvent = hostEvent,
                     quiet = true,
@@ -148,8 +147,7 @@ fun ExtensionSlotHost(
             for (m in mounts) {
                 ExtensionFrame(
                     node = node,
-                    pluginId = m.pluginId,
-                    mountKey = m.key,
+                    mount = m,
                     modifier = Modifier.fillMaxWidth().height(PANEL_HEIGHT),
                 )
             }

@@ -30,8 +30,7 @@ fun ExtensionNodePage(node: DeviceId, page: SlotMount, modifier: Modifier = Modi
     val vm: ExtensionSlotViewModel = hiltViewModel(key = "extension-page:${node.value}:${page.key}")
     ExtensionFrame(
         node = node,
-        pluginId = page.pluginId,
-        mountKey = page.key,
+        mount = page,
         modifier = modifier.fillMaxSize(),
     )
     ExtensionPromptHost(vm)

@@ -31,6 +31,7 @@ import com.altnautica.gcs.core.extensions.R
 import com.altnautica.gcs.core.extensions.host.ExtensionFrameSession
 import com.altnautica.gcs.core.extensions.host.ExtensionFrameViewModel
 import com.altnautica.gcs.core.extensions.host.FrameState
+import com.altnautica.gcs.core.extensions.host.SlotMount
 import com.altnautica.gcs.core.extensions.theme.ExtensionTheme
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.serialization.json.JsonElement
@@ -46,6 +47,7 @@ internal const val RELAY_ORIGIN = "https://extension.invalid"
  * One extension frame: a WebView running the relay page, which hosts the extension's
  * bundle in a sandboxed iframe and forwards bridge envelopes to the app.
  *
+ * @param mount the contribution rendered; its slot and panel id reach the bundle.
  * @param hostEvent latest one-way host event (`video.overlay.props` for overlays).
  * @param quiet render nothing instead of a status card while loading or failing
  * (overlays and widgets must never cover the video with chrome).
@@ -53,14 +55,13 @@ internal const val RELAY_ORIGIN = "https://extension.invalid"
 @Composable
 fun ExtensionFrame(
     node: DeviceId,
-    pluginId: String,
-    mountKey: String,
+    mount: SlotMount,
     modifier: Modifier = Modifier,
     hostEvent: Pair<String, JsonElement>? = null,
     quiet: Boolean = false,
 ) {
-    val vm: ExtensionFrameViewModel = hiltViewModel(key = "extension-frame:${node.value}:$pluginId:$mountKey")
-    LaunchedEffect(vm, node, pluginId) { vm.start(node, pluginId) }
+    val vm: ExtensionFrameViewModel = hiltViewModel(key = "extension-frame:${node.value}:${mount.key}")
+    LaunchedEffect(vm, node, mount) { vm.start(node, mount) }
     val state by vm.state.collectAsStateWithLifecycle()
     val roles = LocalAdosColors.current
     val themeVars = remember(roles) { ExtensionTheme.cssVariables(roles) }
