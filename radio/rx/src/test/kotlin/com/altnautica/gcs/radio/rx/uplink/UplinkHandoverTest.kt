@@ -52,6 +52,9 @@ class UplinkHandoverTest {
         var holdFails: RuntimeException? = null
         var quiet = true
 
+        /** The transmitters drop again the moment they opened (the radio run died). */
+        var dropsAsItOpens = false
+
         /** Times the transmitters opened. */
         val opened = AtomicInteger()
 
@@ -61,6 +64,7 @@ class UplinkHandoverTest {
             if (holdOk) {
                 holding.value = true
                 opened.incrementAndGet()
+                if (dropsAsItOpens) holding.value = false
             }
             return holdOk
         }
@@ -255,6 +259,14 @@ class UplinkHandoverTest {
     fun losingTheRadioWhileTransmittingYields() = runBlocking {
         handover.take()
         radio.holding.value = false
+        awaitTrue { handover.state.value.phase == HandoverPhase.Yielded }
+        assertEquals(HandoverNote.RadioStopped, handover.state.value.note)
+    }
+
+    @Test
+    fun transmittersThatDropAsTheyOpenAreNotLeftReportedAsTransmitting() = runBlocking {
+        radio.dropsAsItOpens = true
+        assertEquals(HandoverPhase.Transmitting, handover.take().phase)
         awaitTrue { handover.state.value.phase == HandoverPhase.Yielded }
         assertEquals(HandoverNote.RadioStopped, handover.state.value.note)
     }

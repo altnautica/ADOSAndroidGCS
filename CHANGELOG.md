@@ -9,6 +9,10 @@ app's `versionName`.
   while the phone's transmitters are still opening is answered only after
   they opened and closed again; one before they start opening cancels the
   take. The phone never transmits after answering a take-back ok.
+- **Uplink status after a dropped radio.** Transmitters that open and drop
+  again before the handover looks (during a take, or two quick changes)
+  no longer leave the state reading "transmitting": the radio's holding
+  is re-checked against the state after every change of either.
 
 - **Simulator clock badge.** While the pilot frame's `clock.source` is `sim`, the top bar shows "SIM ×N" (or "SIM ×max"), so a run at another speed never reads as real time.
 

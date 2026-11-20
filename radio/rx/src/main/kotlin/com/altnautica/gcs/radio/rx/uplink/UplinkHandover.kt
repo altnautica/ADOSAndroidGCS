@@ -14,6 +14,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -101,7 +103,18 @@ class UplinkHandover internal constructor(
 
     init {
         scope.launch { radio.groundBeacons.collect(::onBeacon) }
-        scope.launch { radio.holding.collect(::onHolding) }
+        // Level-triggered: after each check, a fresh subscription waits for the
+        // radio's holding or the state to differ from what was checked. A
+        // long-lived collector of `holding` misses transmitters that open and
+        // drop before it runs (StateFlow conflates true -> false, and a take
+        // ignores both while busy), leaving the state transmitting with the
+        // radio silent.
+        scope.launch {
+            while (true) {
+                val checked = ops.withLock { reconcileHolding() }
+                combine(radio.holding, _state, ::Pair).first { it != checked }
+            }
+        }
     }
 
     /** Takes the uplink from the box; a refusal is the result's [HandoverState.note]. */
@@ -307,9 +320,14 @@ class UplinkHandover internal constructor(
         }
     }
 
-    private fun onHolding(holding: Boolean) {
+    /**
+     * Brings the state in line with the radio's holding now, between takes
+     * and give-backs; the holding and state it checked.
+     */
+    private fun reconcileHolding(): Pair<Boolean, HandoverState> {
+        val holding = radio.holding.value
         val current = _state.value
-        if (current.busy) return
+        if (current.busy) return holding to current
         when {
             holding && (current.phase == HandoverPhase.ReceiveOnly || current.phase == HandoverPhase.Yielded) -> {
                 // A run that holds the uplink from its start: the fleet bound here, or the bench relay.
@@ -324,6 +342,7 @@ class UplinkHandover internal constructor(
                 }
             }
         }
+        return holding to _state.value
     }
 
     /** A move that ends a take, give-back or yield: the listener closes with it. */
