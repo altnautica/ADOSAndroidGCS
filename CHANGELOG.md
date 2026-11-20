@@ -5,6 +5,12 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Ground station re-pairing.** The ground station's Radio tab shows
+  "Ground station is re-pairing: its drone is on the air with a different
+  key." while the box's auto-pair re-arm (`link.pair_rearm`) runs because its
+  drone is mis-keyed. The cockpit spec carries the shared `alert.gs_repairing`
+  string.
+
 - **Take-back during a take.** A take-back call from the box that arrives
   while the phone's transmitters are still opening is answered only after
   they opened and closed again; one before they start opening cancels the

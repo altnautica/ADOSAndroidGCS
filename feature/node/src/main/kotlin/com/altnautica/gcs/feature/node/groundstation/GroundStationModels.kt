@@ -83,6 +83,12 @@ data class RadioLink(
     val uplinkReported: Boolean = false,
     /** The uplink handover; null while the radio service is not reporting it. */
     val uplink: StationUplink? = null,
+    /**
+     * The station is re-pairing because its drone is on the air with a different key: the agent's
+     * auto-pair re-arm (`link.pair_rearm`) is running with cause `mis_keyed`, the cockpit spec's
+     * `gs_repairing` alert.
+     */
+    val repairing: Boolean = false,
 ) {
     companion object {
         fun parse(status: JsonObject, wfb: JsonObject?): RadioLink {
@@ -107,6 +113,7 @@ data class RadioLink(
                 role = status.obj("role")?.str("current"),
                 uplinkReported = status.containsKey("uplink"),
                 uplink = StationUplink.parse(status.obj("uplink")),
+                repairing = link.obj("pair_rearm")?.let { it.bool("active") == true && it.str("cause") == "mis_keyed" } == true,
             )
         }
 

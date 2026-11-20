@@ -236,6 +236,7 @@
     <string name="gs_radio_link">Link</string>
     <string name="gs_radio_state">State</string>
     <string name="gs_radio_diagnosis">Diagnosis</string>
+    <string name="gs_radio_repairing">Ground station is re-pairing: its drone is on the air with a different key.</string>
     <string name="gs_radio_noise">Noise</string>
     <string name="gs_radio_fec">FEC recovered / lost</string>
     <string name="gs_radio_mcs">MCS</string>

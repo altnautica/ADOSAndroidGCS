@@ -64,6 +64,16 @@ class GroundStationModelsTest {
     }
 
     @Test
+    fun radioReadsAStationRePairingAMisKeyedDrone() {
+        fun repairing(rearm: String) = RadioLink.parse(obj("""{"link":{"link_diag":"mis_keyed","pair_rearm":$rearm}}"""), null).repairing
+        assertTrue(repairing("""{"cause":"mis_keyed","active":true,"at":700,"episodes":1}"""))
+        assertEquals(false, repairing("""{"cause":"mis_keyed","active":false,"at":700,"episodes":1}"""))
+        assertEquals(false, repairing("""{"cause":"unproven","active":true}"""))
+        assertEquals(false, repairing("null"))
+        assertEquals(false, RadioLink.parse(obj("""{"link":{}}"""), null).repairing)
+    }
+
+    @Test
     fun theUplinkReadsStandbyWithItsHolderNullWhileUnreportedAndAbsentOnOlderAgents() {
         val standby = RadioLink.parse(
             obj(

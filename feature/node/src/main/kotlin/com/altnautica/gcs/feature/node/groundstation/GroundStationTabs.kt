@@ -105,6 +105,7 @@ private fun <T> LoadView(load: Load<T>, onRetry: () -> Unit, content: @Composabl
 
 @Composable
 private fun RadioView(r: RadioLink, busy: Boolean, onTxPower: (Int) -> Unit, onTakeBack: () -> Unit) {
+    if (r.repairing) StatusChip(StatusLevel.Warning, stringResource(R.string.gs_radio_repairing))
     if (r.uplinkReported) StationUplinkCard(r.uplink, busy, onTakeBack)
     NodeCard(stringResource(R.string.gs_radio_link)) {
         KeyValueRow(stringResource(R.string.gs_radio_state), linkStateLabel(r.state))
