@@ -5,6 +5,13 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Fleet slot waiting for landing.** The drone Overview shows "New fleet slot
+  N applies after landing." while the drone's `radioFleetApply` reads
+  `deferred_armed`, and the failure while its radio restart onto it fails.
+  The phone's slot reconciler takes the drone's 200 (`radio_restart:
+  "pending"`) as the acknowledgement and stops re-offering a slot the drone
+  refuses with 422 (`slotsRefused`) until the registry issues another.
+
 - **Ground station re-pairing.** The ground station's Radio tab shows
   "Ground station is re-pairing: its drone is on the air with a different
   key." while the box's auto-pair re-arm (`link.pair_rearm`) runs because its

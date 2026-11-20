@@ -51,7 +51,26 @@ data class StatusFull(
     val profile: String? = null,
     val npuTops: Double? = null,
     val perceptionTier: String? = null,
+    /** A fleet slot delivered to this drone and the radio restart it is owed; absent when none was written. */
+    val radioFleetApply: RadioFleetApply? = null,
 )
+
+/**
+ * `radioFleetApply` of `/api/status/full`: `outcome` is `pending`, `deferred_armed` (the radio
+ * restarts onto [fleetSlot] once the vehicle is disarmed), `applied` or `restart_failed` (retried).
+ */
+@Serializable
+data class RadioFleetApply(
+    val outcome: String? = null,
+    val fleetId: Int? = null,
+    val fleetSlot: Int? = null,
+) {
+    /** The slot waiting for the vehicle to land, or null. */
+    val waitingSlot: Int? get() = fleetSlot.takeIf { outcome == "deferred_armed" }
+
+    /** The slot the radio failed to restart onto, or null. */
+    val failedSlot: Int? get() = fleetSlot.takeIf { outcome == "restart_failed" }
+}
 
 /** The `video` block of `/api/status/full`. `whepUrl` is null unless frames are flowing. */
 @Serializable

@@ -93,6 +93,40 @@ class SlotReconcilerTest {
     }
 
     @Test
+    fun `a slot the drone accepted with its radio restart still pending is acknowledged`() = runTest {
+        // The drone writes the slot and answers 200 `radio_restart: "pending"`:
+        // its radio moves onto the slot once the vehicle is disarmed, so the
+        // write is done and restating it every tick would change nothing.
+        val store = boundStore()
+        store.enrol("drone-aa01")
+        val lane = FakeLane { 200 }
+        val r = reconciler(store, lane)
+        r.tick(lane)
+        assertEquals(1, r.slotsConfirmed.value["drone-aa01"])
+        assertNull(r.slotsRefused.value["drone-aa01"])
+        lane.calls.clear()
+        r.tick(lane)
+        assertTrue(lane.calls.isEmpty())
+    }
+
+    @Test
+    fun `a slot the drone's radio would refuse is reported and not re-offered`() = runTest {
+        // 422: the drone refuses a fleet identity its radio cannot come up on.
+        // No retry changes that, so the slot is reported rather than restated
+        // every tick, and is never read as acknowledged.
+        val store = boundStore()
+        store.enrol("drone-aa01")
+        val lane = FakeLane { if (it.path == SlotReconciler.CONFIG_PATH) 422 else 200 }
+        val r = reconciler(store, lane)
+        r.tick(lane)
+        assertNull(r.slotsConfirmed.value["drone-aa01"])
+        assertEquals(1, r.slotsRefused.value["drone-aa01"])
+        lane.calls.clear()
+        r.tick(lane)
+        assertTrue(lane.calls.isEmpty())
+    }
+
+    @Test
     fun `every enrolled drone is told its own slot`() = runTest {
         val store = boundStore()
         store.enrol("drone-aa01")

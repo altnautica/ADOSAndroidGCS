@@ -139,6 +139,8 @@
     <string name="overview_heartbeat_age">Heartbeat age</string>
     <string name="overview_video">Video</string>
     <string name="overview_streams">Streams</string>
+    <string name="overview_fleet_slot_pending">New fleet slot %1$d applies after landing.</string>
+    <string name="overview_fleet_slot_failed">Radio restart onto fleet slot %1$d failed. Retrying.</string>
     <string name="overview_recording">Recording</string>
     <string name="overview_yes">Yes</string>
     <string name="overview_no">No</string>

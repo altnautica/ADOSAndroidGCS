@@ -27,7 +27,12 @@ enum class RelaySecretState {
  * agrees, as the ground station's slot reconciler does. The secret goes first
  * (the slot write carries a ticket the drone can only check once it holds the
  * secret); a drone that holds another secret answers 409 and is reported, not
- * re-offered. Acknowledgements live in memory: a restart restates once.
+ * re-offered. The drone answers an accepted slot with a 2xx (its radio moves
+ * onto it once the vehicle is disarmed, `radio_restart: "pending"`), so a 2xx
+ * is the acknowledgement whatever the body says; it answers a slot its radio
+ * would refuse with 422, which no retry can change, so that slot is reported
+ * and not re-offered until the registry issues another. Acknowledgements live
+ * in memory: a restart restates once.
  *
  * Runs while the phone is the fleet's ground and holds the uplink: the radio
  * session launches [run] in that run's scope.
@@ -50,6 +55,11 @@ class SlotReconciler internal constructor(
     /** Per device id, the slot the drone acknowledged. */
     val slotsConfirmed: StateFlow<Map<String, Int>> = _slotsConfirmed.asStateFlow()
 
+    private val _slotsRefused = MutableStateFlow<Map<String, Int>>(emptyMap())
+
+    /** Per device id, the slot the drone refused as one its radio cannot use (422). */
+    val slotsRefused: StateFlow<Map<String, Int>> = _slotsRefused.asStateFlow()
+
     /** Reconciles until cancelled; returns at once when no Request lane is bound. */
     suspend fun run() {
         val lane = lane ?: return
@@ -65,6 +75,7 @@ class SlotReconciler internal constructor(
         val present = slots.map { it.deviceId }.toSet()
         _secrets.update { it.filterKeys(present::contains) }
         _slotsConfirmed.update { it.filterKeys(present::contains) }
+        _slotsRefused.update { it.filterKeys(present::contains) }
 
         for (s in slots) {
             val secret = s.relaySecret ?: continue
@@ -79,12 +90,16 @@ class SlotReconciler internal constructor(
         }
         for (s in slots) {
             if (_slotsConfirmed.value[s.deviceId] == s.slot) continue
+            if (_slotsRefused.value[s.deviceId] == s.slot) continue
             // A drone holding another ground's secret refuses every ticket this phone can mint.
             if (_secrets.value[s.deviceId] == RelaySecretState.Conflict) continue
             val secret = s.relaySecret ?: continue
             val body = """{"key":"$SLOT_KEY","value":${s.slot}}""".encodeToByteArray()
             val status = lane.request(s.deviceId, "PUT", CONFIG_PATH, JSON, body, secret)
-            if (status in 200..299) _slotsConfirmed.update { it + (s.deviceId to s.slot) }
+            when (status) {
+                in 200..299 -> _slotsConfirmed.update { it + (s.deviceId to s.slot) }
+                UNPROCESSABLE -> _slotsRefused.update { it + (s.deviceId to s.slot) }
+            }
         }
     }
 
@@ -94,6 +109,9 @@ class SlotReconciler internal constructor(
         const val SECRET_PATH = "/api/relay/peer-secret"
         const val SLOT_KEY = "video.wfb.fleet_slot"
         private const val JSON = "application/json"
+
+        /** The drone's answer to a fleet identity its radio would refuse. */
+        private const val UNPROCESSABLE = 422
         private val SETTLED = setOf(RelaySecretState.Held, RelaySecretState.Conflict)
     }
 }

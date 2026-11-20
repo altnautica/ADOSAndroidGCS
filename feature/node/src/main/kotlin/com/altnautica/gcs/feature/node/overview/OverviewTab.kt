@@ -104,6 +104,9 @@ private fun AgentCard(poll: NodePoll, now: Long, stale: Boolean) {
             StatusChip(StatusLevel.Warning, stringResource(R.string.node_stale))
             return@NodeCard
         }
+        // A delivered fleet slot waits for the drone to land, or the radio failed to restart onto it.
+        status.radioFleetApply?.waitingSlot?.let { StatusChip(StatusLevel.Warning, stringResource(R.string.overview_fleet_slot_pending, it)) }
+        status.radioFleetApply?.failedSlot?.let { StatusChip(StatusLevel.Error, stringResource(R.string.overview_fleet_slot_failed, it)) }
         KeyValueRow(stringResource(R.string.overview_uptime), status.uptimeSeconds?.let { uptime(it.toLong()) })
         KeyValueRow(
             stringResource(R.string.overview_fc_link),
