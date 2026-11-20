@@ -5,6 +5,11 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Whole-frame detection threshold.** The node's Video & vision settings
+  list `vision.whole_frame_conf` beside `vision.confidence_threshold`, the
+  least confidence a detection keeps on the agent's whole-frame pass. Both
+  thresholds are now honoured by the agent's engine.
+
 - **Fleet slot waiting for landing.** The drone Overview shows "New fleet slot
   N applies after landing." while the drone's `radioFleetApply` reads
   `deferred_armed`, and the failure while its radio restart onto it fails.

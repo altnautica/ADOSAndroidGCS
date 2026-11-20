@@ -107,6 +107,7 @@ data class AgentSection(
                     "video.recording.enabled",
                     "vision.enabled",
                     "vision.confidence_threshold",
+                    "vision.whole_frame_conf",
                 ),
                 subtrees = listOf("video.camera", "video.recording", "video.usb_recovery", "vision"),
             ),
