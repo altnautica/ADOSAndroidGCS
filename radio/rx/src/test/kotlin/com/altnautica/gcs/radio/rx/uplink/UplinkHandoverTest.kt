@@ -5,6 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -51,10 +52,16 @@ class UplinkHandoverTest {
         var holdFails: RuntimeException? = null
         var quiet = true
 
+        /** Times the transmitters opened. */
+        val opened = AtomicInteger()
+
         override suspend fun hold(): Boolean {
             pass("hold")
             holdFails?.let { throw it }
-            if (holdOk) holding.value = true
+            if (holdOk) {
+                holding.value = true
+                opened.incrementAndGet()
+            }
             return holdOk
         }
 
@@ -364,6 +371,59 @@ class UplinkHandoverTest {
         awaitTrue { handover.state.value.phase == HandoverPhase.ReceiveOnly }
         assertEquals(HandoverNote.TxDidNotOpen("Field box"), handover.state.value.note)
         assertEquals(listOf("post:take", "post:give_back"), calls.toList())
+    }
+
+    @Test
+    fun aTakeBackWhileTheTransmittersOpenIsAnsweredOnlyOnceTheyClosed() = runBlocking {
+        val opening = gate("hold")
+        val taking = launch(Dispatchers.IO) { handover.take() }
+        awaitTrue { "hold" in calls }
+        val port = requireNotNull(handover.yieldListenerPort)
+        val answer = async(Dispatchers.IO) { yieldCall(port, NOW) }
+        awaitTrue { logs.contains("uplink yield received from=$BOX verdict=ok") }
+        delay(300)
+        assertFalse("answered while the transmitters were still opening", answer.isCompleted)
+        // The transmitters open after the take-back came in.
+        opening.complete(Unit)
+        assertEquals(200, answer.await())
+        assertFalse("transmitting at the ok answer", radio.holding.value)
+        val openedAtAnswer = radio.opened.get()
+        taking.join()
+        delay(300)
+        assertFalse(radio.holding.value)
+        assertEquals(openedAtAnswer, radio.opened.get())
+        assertEquals(HandoverState(HandoverPhase.Yielded, note = HandoverNote.TakenBack("Field box")), handover.state.value)
+        // The box resumes on the ok answer: no give-back.
+        assertEquals(listOf("post:take", "hold", "release"), calls.toList())
+        assertNull(handover.yieldListenerPort)
+    }
+
+    @Test
+    fun aTakeBackBeforeTheTransmittersOpenCancelsTheTake() = runBlocking {
+        val answered = gate("post:take")
+        val taking = async(Dispatchers.IO) { handover.take() }
+        awaitTrue { "post:take" in calls }
+        val port = requireNotNull(handover.yieldListenerPort)
+        assertEquals(200, yieldCall(port, NOW))
+        answered.complete(Unit)
+        assertEquals(HandoverNote.TakenBack("Field box"), taking.await().note)
+        assertEquals(0, radio.opened.get())
+        assertEquals(listOf("post:take"), calls.toList())
+    }
+
+    @Test
+    fun aTakeBackWhileTheTransmittersOpenIsRefusedWhenTheyDoNotGoQuiet() = runBlocking {
+        radio.quiet = false
+        val opening = gate("hold")
+        val taking = launch(Dispatchers.IO) { handover.take() }
+        awaitTrue { "hold" in calls }
+        val port = requireNotNull(handover.yieldListenerPort)
+        val answer = async(Dispatchers.IO) { yieldCall(port, NOW) }
+        awaitTrue { logs.contains("uplink yield received from=$BOX verdict=ok") }
+        opening.complete(Unit)
+        assertEquals(409, answer.await())
+        taking.join()
+        assertEquals(HandoverNote.TxNotQuiet("Field box"), handover.state.value.note)
     }
 
     /** One take-back call as the box makes it; the HTTP status the phone answered. */

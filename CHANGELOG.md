@@ -5,6 +5,11 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Take-back during a take.** A take-back call from the box that arrives
+  while the phone's transmitters are still opening is answered only after
+  they opened and closed again; one before they start opening cancels the
+  take. The phone never transmits after answering a take-back ok.
+
 - **Simulator clock badge.** While the pilot frame's `clock.source` is `sim`, the top bar shows "SIM ×N" (or "SIM ×max"), so a run at another speed never reads as real time.
 
 - **Steady take-off phases.** The lift-off phases parsed from the pilot
