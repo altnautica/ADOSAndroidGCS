@@ -138,6 +138,8 @@ data class FollowState(
     val heightLowered: Boolean = false,
     /** `canopy` (under the leaves) or `canopy_floor` (held at the lowest follow height); null when unreported. */
     val heightReason: String? = null,
+    /** The subject estimate flown on: `vision`, `beacon` (the operator's phone alone) or `predicted`; null on the follow's own. */
+    val subjectSource: String? = null,
 )
 
 /** A follow event from the navigation stream, stamped with the local receive time. */

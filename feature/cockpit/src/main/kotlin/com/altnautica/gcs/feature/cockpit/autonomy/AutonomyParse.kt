@@ -201,6 +201,7 @@ internal object AutonomyParse {
             heightSetpointM = o["height_setpoint_m"].f(),
             heightLowered = o["height_lowered"].bool() == true,
             heightReason = o["height_reason"].str()?.takeIf { it in HEIGHT_REASONS },
+            subjectSource = o["subject_source"].str()?.takeIf { it in SUBJECT_SOURCES },
         )
     }
 
@@ -263,6 +264,7 @@ internal object AutonomyParse {
 
     private val VANTAGE_STATES = setOf("enroute", "arrived", "no-vantage")
     private val HEIGHT_REASONS = setOf("canopy", "canopy_floor")
+    private val SUBJECT_SOURCES = setOf("vision", "beacon", "predicted")
 
     const val DEFAULT_TILE_CELLS = 64
 }

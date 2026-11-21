@@ -45,7 +45,8 @@ private const val LATENCY_WARN_MS = 250f
  * geometry, and the range cues with latency and re-acquire mode. No AGL: the bottom row
  * carries the one AGL on screen. While the follow height is lowered under leaves a line says
  * so ("Flying under leaves: 3.9 m", its reason under it in the full panel), and while a fresh
- * pilot frame reports [overhead] the full panel shows the overhead clearance ahead.
+ * pilot frame reports [overhead] the full panel shows the overhead clearance ahead. While the
+ * follow flies on the operator's phone position or a prediction, a line names that source.
  * Compact shows one line, medium three rows, expanded all five. A [stale] state shows
  * dashes at half opacity with the phase word STALE.
  */
@@ -59,6 +60,7 @@ internal fun FollowRangePanel(
 ) {
     val strings = LocalCockpitStrings.current
     val height = if (stale) null else FollowWords.heightLine(follow, strings)
+    val source = if (stale) null else FollowWords.sourceLine(follow, strings)
     val c = AdosTheme.colors
     val small = AdosTypography.numeric.small.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     val range = follow.rangeM?.takeIf { !stale }
@@ -84,6 +86,7 @@ internal fun FollowRangePanel(
                 )
                 // The reason reads in the full panel, a tap away.
                 height?.let { Text(it.first, style = small, color = c.hudWarn) }
+                source?.let { Text(it, style = small, color = c.hudCoast) }
                 return@Column
             }
             Row(verticalAlignment = Alignment.Bottom) {
@@ -96,6 +99,7 @@ internal fun FollowRangePanel(
             }
             // While the subject is sought: seconds left of the search budget, the vantage, what hides it.
             if (!stale) FollowWords.recoveryLine(follow, strings)?.let { Text(it, style = small, color = c.hudCoast) }
+            source?.let { Text(it, style = small, color = c.hudCoast) }
             height?.let { (text, reason) ->
                 Text(text, style = small, color = c.hudWarn)
                 reason?.let { Text(it, style = small, color = c.hudInk2) }

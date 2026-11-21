@@ -191,6 +191,12 @@ internal class DemoFollowFeed {
         put("target_speed_mps", 1.4)
         put("agl_m", aglM)
         put("agl_source", "rng")
+        // The agent's prediction carries the subject while the camera lost it.
+        put("subject_source", when (phase) {
+            "predicting" -> JsonPrimitive("predicted")
+            "acquiring", "following" -> JsonPrimitive("vision")
+            else -> JsonNull
+        })
         put("reacquire_mode", reacquireMode)
         put("reacquire_remaining_s", if (recovering) SEARCH_BUDGET_S - (step - 4) * STEP_MS / 1000.0 - inPhase else 0.0)
         put("search_budget_s", if (recovering) JsonPrimitive(SEARCH_BUDGET_S) else JsonNull)

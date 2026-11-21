@@ -52,6 +52,10 @@ internal object FollowWords {
         strings.format("pilot.overhead_ahead", mapOf("h" to HudGeometry.oneDecimal(it.flyUnderAglM), "d" to it.aheadM.roundToInt().toString()))
     }
 
+    /** `Following on phone position` or `Predicted` while the follow flies on that subject source; else null. */
+    fun sourceLine(f: FollowState, strings: SetupStringsSpec): String? =
+        f.subjectSource?.takeIf { it == "beacon" || it == "predicted" }?.let { strings.format("follow.subject_source.$it") }
+
     /** Whole seconds left, rounded up and never negative. */
     fun secondsLeft(s: Float): Int = ceil(s.coerceAtLeast(0f).toDouble()).toInt()
 
