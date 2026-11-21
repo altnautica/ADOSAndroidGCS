@@ -112,6 +112,7 @@ private fun beaconText(share: BeaconShare): String = when (share) {
             ShareBlock.Background -> R.string.follow_beacon_blocked_background
             ShareBlock.NoFix -> R.string.follow_beacon_blocked_no_fix
             ShareBlock.NotSent -> R.string.follow_beacon_blocked_not_sent
+            ShareBlock.NotConfirmed -> R.string.follow_beacon_blocked_not_confirmed
         },
     )
 }

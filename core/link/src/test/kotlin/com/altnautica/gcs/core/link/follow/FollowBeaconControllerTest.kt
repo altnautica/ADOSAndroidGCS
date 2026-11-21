@@ -6,6 +6,7 @@ import com.altnautica.gcs.core.link.mavlink.ElapsedClock
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.link.testing.ScriptedLink
 import com.altnautica.gcs.core.model.BlockReason
+import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.Reach
 import com.altnautica.gcs.core.model.Vehicle
 import io.mockk.every
@@ -40,23 +41,42 @@ class FollowBeaconControllerTest {
         }
     }
 
-    private class Rig(scope: TestScope) {
+    /** A router that publishes every fix the link sent, while [accepts]. */
+    private class FakeRouter(private val link: ScriptedLink) : RouterBeaconStatus {
+        var accepts = true
+        private var count = 0L
+        override suspend fun published(vehicle: DeviceId, reach: Reach): Long? {
+            if (accepts) count = link.sent.size.toLong()
+            return count
+        }
+    }
+
+    private class Rig(private val scope: TestScope) {
         val phone = FakePhone(scope)
         val link = ScriptedLink()
+        val router = FakeRouter(link)
         val reach = MutableStateFlow<Reach>(Reach.Lan)
         val follow = MutableStateFlow(true)
         val settings = FollowBeaconSettingsRepository(MemoryPreferences())
-        private val vehicle = mockk<Vehicle> { every { reach } returns this@Rig.reach }
-        val services = MutableStateFlow<VehicleServices?>(
-            mockk<VehicleServices> {
-                every { vehicle } returns this@Rig.vehicle
-                every { followBeacon } returns MavlinkFollowBeaconStreamer(
-                    scope.backgroundScope, link, ElapsedClock { scope.testScheduler.currentTime },
-                )
-            },
+        private val streamer = MavlinkFollowBeaconStreamer(
+            scope.backgroundScope, link, ElapsedClock { scope.testScheduler.currentTime },
         )
-        val controller = FollowBeaconController(scope.backgroundScope, phone, settings, services, follow)
+        val drone1 = services("drone-1")
+        val services = MutableStateFlow<VehicleServices?>(drone1)
+        val controller = FollowBeaconController(scope.backgroundScope, phone, settings, router, services, follow)
         val share: StateFlow<BeaconShare> get() = controller.share
+
+        /** Services of vehicle [id] on this rig's link and reach. */
+        fun services(id: String): VehicleServices {
+            val vehicle = mockk<Vehicle> {
+                every { this@mockk.id } returns DeviceId(id)
+                every { reach } returns this@Rig.reach
+            }
+            return mockk<VehicleServices> {
+                every { this@mockk.vehicle } returns vehicle
+                every { followBeacon } returns streamer
+            }
+        }
 
         init {
             // The phone reports a fresh fix every 200 ms.
@@ -70,8 +90,9 @@ class FollowBeaconControllerTest {
     }
 
     private fun TestScope.sharing(rig: Rig) {
+        runCurrent()
         rig.controller.setEnabled(true)
-        advanceTimeBy(1_000)
+        advanceTimeBy(2_500)
         runCurrent()
         assertEquals(BeaconShare.Sharing(3.6f), rig.share.value)
     }
@@ -104,14 +125,48 @@ class FollowBeaconControllerTest {
     }
 
     @Test
-    fun the_choice_persists() = runTest {
+    fun the_choice_persists_for_that_vehicle_only() = runTest {
         val rig = Rig(this)
+        runCurrent()
         rig.controller.setEnabled(true)
         runCurrent()
-        val again = FollowBeaconController(backgroundScope, rig.phone, rig.settings, rig.services, rig.follow)
-        advanceTimeBy(1_000)
+        val again = FollowBeaconController(backgroundScope, rig.phone, rig.settings, rig.router, rig.services, rig.follow)
+        advanceTimeBy(2_500)
         runCurrent()
         assertTrue(again.share.value is BeaconShare.Sharing)
+
+        // Another vehicle has not been agreed to: nothing goes to it.
+        rig.services.value = rig.services("drone-2")
+        runCurrent()
+        assertEquals(BeaconShare.Off, rig.share.value)
+        assertEquals(0, sentDuring(rig, 2_000))
+        rig.services.value = rig.drone1
+        assertTrue(sentDuring(rig, 1_000) > 0)
+    }
+
+    @Test
+    fun sharing_is_shown_only_while_the_vehicle_publishes_it() = runTest {
+        val rig = Rig(this)
+        sharing(rig)
+        rig.router.accepts = false
+        advanceTimeBy(4_500)
+        runCurrent()
+        assertEquals(BeaconShare.Blocked(ShareBlock.NotConfirmed), rig.share.value)
+        rig.router.accepts = true
+        advanceTimeBy(2_500)
+        runCurrent()
+        assertEquals(BeaconShare.Sharing(3.6f), rig.share.value)
+    }
+
+    @Test
+    fun a_flight_controller_on_the_phone_is_never_offered_it() = runTest {
+        val rig = Rig(this)
+        rig.reach.value = Reach.DirectFc
+        runCurrent()
+        assertTrue(!rig.controller.available.value)
+        rig.controller.setEnabled(true)
+        assertEquals(0, sentDuring(rig, 2_000))
+        assertEquals(BeaconShare.Off, rig.share.value)
     }
 
     @Test
@@ -120,7 +175,8 @@ class FollowBeaconControllerTest {
         sharing(rig)
         rig.reach.value = Reach.Blocked(BlockReason.Offline)
         runCurrent()
-        assertEquals(BeaconShare.Blocked(ShareBlock.NoVehicle), rig.share.value)
+        // No vehicle, so no consent to read: off, and the chip is not offered.
+        assertEquals(BeaconShare.Off, rig.share.value)
         assertEquals(0, sentDuring(rig, 1_000))
         assertTrue(!rig.controller.available.value)
 
@@ -128,7 +184,7 @@ class FollowBeaconControllerTest {
         assertTrue(sentDuring(rig, 1_000) > 0)
         rig.services.value = null
         runCurrent()
-        assertEquals(BeaconShare.Blocked(ShareBlock.NoVehicle), rig.share.value)
+        assertEquals(BeaconShare.Off, rig.share.value)
         assertEquals(0, sentDuring(rig, 1_000))
     }
 
@@ -154,7 +210,7 @@ class FollowBeaconControllerTest {
         assertEquals(0, sentDuring(rig, 5_000))
 
         rig.phone.foreground.value = true
-        assertTrue(sentDuring(rig, 1_000) > 0)
+        assertTrue(sentDuring(rig, 2_500) > 0)
         assertTrue(rig.share.value is BeaconShare.Sharing)
     }
 
@@ -173,6 +229,7 @@ class FollowBeaconControllerTest {
     fun a_missing_or_withdrawn_permission_stops_it() = runTest {
         val rig = Rig(this)
         rig.phone.granted = false
+        runCurrent()
         rig.controller.setEnabled(true)
         runCurrent()
         assertEquals(BeaconShare.Blocked(ShareBlock.NoPermission), rig.share.value)
@@ -196,6 +253,7 @@ class FollowBeaconControllerTest {
     fun a_location_stream_refused_for_permission_stops_it() = runTest {
         val rig = Rig(this)
         rig.phone.withdrawn = true
+        runCurrent()
         rig.controller.setEnabled(true)
         runCurrent()
         assertEquals(BeaconShare.Blocked(ShareBlock.NoPermission), rig.share.value)

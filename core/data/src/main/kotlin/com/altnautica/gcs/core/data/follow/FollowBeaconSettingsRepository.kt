@@ -11,44 +11,35 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
-/** The operator's follow beacon choices. */
-data class FollowBeaconSettings(
-    /** Share this phone's position with follow-me. Off until the operator turns it on. */
-    val sharePosition: Boolean = false,
-    /** How long sharing survives the app in the background, seconds. */
-    val backgroundGraceS: Int = DEFAULT_BACKGROUND_GRACE_S,
-) {
-    companion object {
-        const val DEFAULT_BACKGROUND_GRACE_S = 30
-        const val MIN_BACKGROUND_GRACE_S = 0
-        const val MAX_BACKGROUND_GRACE_S = 300
-    }
-}
-
 /** Follow beacon preferences in the app settings store. */
 @Singleton
 class FollowBeaconSettingsRepository @Inject constructor(
     private val dataStore: DataStore<Preferences>,
 ) {
-    val settings: Flow<FollowBeaconSettings> = dataStore.data.map { p ->
-        val d = FollowBeaconSettings()
-        FollowBeaconSettings(
-            sharePosition = p[SHARE] ?: d.sharePosition,
-            backgroundGraceS = (p[GRACE_S] ?: d.backgroundGraceS).coerceIn(
-                FollowBeaconSettings.MIN_BACKGROUND_GRACE_S,
-                FollowBeaconSettings.MAX_BACKGROUND_GRACE_S,
-            ),
-        )
-    }.distinctUntilChanged()
+    /**
+     * Whether the operator shares this phone's position with follow-me on [vehicleId]. Consent is
+     * per vehicle: off for every vehicle until the operator turns it on for that one.
+     */
+    fun sharePosition(vehicleId: String): Flow<Boolean> =
+        dataStore.data.map { it[shareKey(vehicleId)] ?: false }.distinctUntilChanged()
 
-    suspend fun setSharePosition(on: Boolean) = dataStore.edit { it[SHARE] = on }
+    suspend fun setSharePosition(vehicleId: String, on: Boolean) = dataStore.edit { it[shareKey(vehicleId)] = on }
+
+    /** How long sharing survives the app in the background, seconds. */
+    val backgroundGraceS: Flow<Int> = dataStore.data
+        .map { (it[GRACE_S] ?: DEFAULT_BACKGROUND_GRACE_S).coerceIn(MIN_BACKGROUND_GRACE_S, MAX_BACKGROUND_GRACE_S) }
+        .distinctUntilChanged()
 
     suspend fun setBackgroundGraceS(seconds: Int) = dataStore.edit {
-        it[GRACE_S] = seconds.coerceIn(FollowBeaconSettings.MIN_BACKGROUND_GRACE_S, FollowBeaconSettings.MAX_BACKGROUND_GRACE_S)
+        it[GRACE_S] = seconds.coerceIn(MIN_BACKGROUND_GRACE_S, MAX_BACKGROUND_GRACE_S)
     }
 
-    private companion object {
-        val SHARE = booleanPreferencesKey("follow.beacon.share")
-        val GRACE_S = intPreferencesKey("follow.beacon.backgroundGraceS")
+    companion object {
+        const val DEFAULT_BACKGROUND_GRACE_S = 30
+        const val MIN_BACKGROUND_GRACE_S = 0
+        const val MAX_BACKGROUND_GRACE_S = 300
+
+        private val GRACE_S = intPreferencesKey("follow.beacon.backgroundGraceS")
+        private fun shareKey(vehicleId: String) = booleanPreferencesKey("follow.beacon.share.$vehicleId")
     }
 }

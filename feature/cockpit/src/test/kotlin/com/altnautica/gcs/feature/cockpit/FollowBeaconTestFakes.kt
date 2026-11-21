@@ -6,6 +6,9 @@ import com.altnautica.gcs.core.data.follow.FollowBeaconSettingsRepository
 import com.altnautica.gcs.core.link.follow.BeaconFix
 import com.altnautica.gcs.core.link.follow.FollowBeaconControllerFactory
 import com.altnautica.gcs.core.link.follow.PhonePosition
+import com.altnautica.gcs.core.link.follow.RouterBeaconStatus
+import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.Reach
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +22,11 @@ private object NoPhonePosition : PhonePosition {
     override val foreground: StateFlow<Boolean> = MutableStateFlow(true)
 }
 
-/** The follow beacon of a test cockpit: sharing off, no location. */
+/** A router that cannot be asked. */
+private object NoRouter : RouterBeaconStatus {
+    override suspend fun published(vehicle: DeviceId, reach: Reach): Long? = null
+}
+
+/** The follow beacon of a test cockpit: sharing off, no location, no router to ask. */
 fun testBeaconFactory(dataStore: DataStore<Preferences>): FollowBeaconControllerFactory =
-    FollowBeaconControllerFactory(NoPhonePosition, FollowBeaconSettingsRepository(dataStore))
+    FollowBeaconControllerFactory(NoPhonePosition, FollowBeaconSettingsRepository(dataStore), NoRouter)

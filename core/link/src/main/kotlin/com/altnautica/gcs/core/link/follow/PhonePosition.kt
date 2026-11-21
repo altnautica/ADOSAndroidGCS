@@ -132,4 +132,7 @@ internal fun Location.toBeaconFix(): BeaconFix? {
 abstract class PhonePositionModule {
     @Binds
     abstract fun phonePosition(impl: AndroidPhonePosition): PhonePosition
+
+    @Binds
+    abstract fun routerBeaconStatus(impl: AgentRouterBeaconStatus): RouterBeaconStatus
 }

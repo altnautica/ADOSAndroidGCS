@@ -101,6 +101,9 @@ enum class ShareBlock {
 
     /** Fresh fixes, but the link does not take them (a receive-only or unauthorised link). */
     NotSent,
+
+    /** Sent, but the vehicle's router has published none of it lately (it drops them, or cannot be asked). */
+    NotConfirmed,
 }
 
 /** What the beacon is doing, for the cockpit chip. */

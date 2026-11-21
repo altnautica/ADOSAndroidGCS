@@ -122,7 +122,13 @@ data class TelemetrySnapshot(
     @SerialName("heartbeat_age_s") val heartbeatAgeS: Double? = null,
     /** The drone's live attention profile, `hero` or `thumbnail`; absent on an agent that predates profiles. */
     @SerialName("video_profile") val videoProfile: String? = null,
+    /** The router's follow beacon counts; absent on an agent without the beacon. */
+    @SerialName("follow_beacon") val followBeacon: FollowBeaconCounts? = null,
 )
+
+/** The router's `follow_beacon` status block: fixes it published to the plugin bus, never reset. */
+@Serializable
+data class FollowBeaconCounts(val published: Long? = null)
 
 /**
  * `POST /api/video/profile` body. Without [holder] a plain set of the base profile; with it,

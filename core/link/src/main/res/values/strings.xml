@@ -38,6 +38,7 @@
     <string name="follow_beacon_blocked_background">Position sharing paused in the background</string>
     <string name="follow_beacon_blocked_no_fix">Position sharing: waiting for a location fix</string>
     <string name="follow_beacon_blocked_not_sent">Position sharing: this link cannot send it</string>
+    <string name="follow_beacon_blocked_not_confirmed">Position sharing: the vehicle is not receiving it</string>
     <string name="follow_beacon_state_on">On</string>
     <string name="follow_beacon_state_off">Off</string>
 </resources>
