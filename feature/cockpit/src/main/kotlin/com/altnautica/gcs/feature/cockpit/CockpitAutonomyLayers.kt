@@ -178,6 +178,8 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
     // shown, so this chrome recomposes at most once a beat and only when a shown value changed.
     val (state, fresh) = rememberFollowOnBeat(a.feed.follow, a::nowMs)
     val designatedBatch by rememberOnBeat { designation?.let { a.feed.batches.value[it.cameraId] } }
+    // The overhead clearance ahead, only while the pilot frame is fresh.
+    val overhead by rememberOnBeat { freshPilot(a.feed.pilot.value, a.nowMs())?.overheadAhead }
     val lastReacquired by rememberOnBeat {
         if (designation == null) null else a.feed.events.value.lastOrNull { it is FollowEvent.Reacquired } as FollowEvent.Reacquired?
     }
@@ -230,7 +232,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
             } else if (followingMode && state != null && expanded) {
                 val panelWidth = if (width.isWide() && !short) 320.dp else Dp.Unspecified
                 FollowRangePanel(
-                    state, stale = !fresh, width = if (short) WidthClass.Compact else width,
+                    state, stale = !fresh, width = if (short) WidthClass.Compact else width, overhead = overhead,
                     modifier = Modifier
                         .clickable { expanded = false }
                         .let { m -> if (panelWidth != Dp.Unspecified) m.widthIn(min = panelWidth) else m },

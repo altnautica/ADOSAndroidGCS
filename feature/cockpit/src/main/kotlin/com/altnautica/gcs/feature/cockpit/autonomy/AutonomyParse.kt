@@ -198,6 +198,9 @@ internal object AutonomyParse {
             operatorResumeSeq = (o["operator_resume_seq"].int() ?: 0).coerceAtLeast(0),
             outpaced = o["outpaced"].bool() == true,
             speedLimitMps = o["speed_limit_mps"].f(),
+            heightSetpointM = o["height_setpoint_m"].f(),
+            heightLowered = o["height_lowered"].bool() == true,
+            heightReason = o["height_reason"].str()?.takeIf { it in HEIGHT_REASONS },
         )
     }
 
@@ -259,6 +262,7 @@ internal object AutonomyParse {
     const val LIVE_OCCUPANCY_TOPIC = "reconstruct.live.occupancy"
 
     private val VANTAGE_STATES = setOf("enroute", "arrived", "no-vantage")
+    private val HEIGHT_REASONS = setOf("canopy", "canopy_floor")
 
     const val DEFAULT_TILE_CELLS = 64
 }

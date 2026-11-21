@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.cockpit.autonomy
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,6 +84,18 @@ class AutonomyParseTest {
         assertEquals(3, f.operatorResumeSeq)
         assertTrue(f.outpaced)
         assertEquals(6f, f.speedLimitMps)
+    }
+
+    @Test
+    fun `the follow state carries the height lowered under leaves and why`() {
+        fun follow(data: String) = (AutonomyParse.navFrame("""{"kind":"follow","ts_ms":1,"data":{"phase":"following",$data}}""", 0) as NavFrame.Follow).follow
+        val under = follow(""""height_setpoint_m":3.87,"height_lowered":true,"height_reason":"canopy_floor"""")
+        assertEquals(3.87f, under.heightSetpointM)
+        assertTrue(under.heightLowered)
+        assertEquals("canopy_floor", under.heightReason)
+        val set = follow(""""height_setpoint_m":6,"height_reason":"fog"""")
+        assertFalse(set.heightLowered)
+        assertNull(set.heightReason)
     }
 
     @Test

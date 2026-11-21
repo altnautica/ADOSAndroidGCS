@@ -132,6 +132,12 @@ data class FollowState(
     /** The subject has been faster than [speedLimitMps] for a while. */
     val outpaced: Boolean = false,
     val speedLimitMps: Float? = null,
+    /** The follow height flown, m over the ground. */
+    val heightSetpointM: Float? = null,
+    /** The follow height flown is lower than the one set: under the leaves the pilot reports ahead. */
+    val heightLowered: Boolean = false,
+    /** `canopy` (under the leaves) or `canopy_floor` (held at the lowest follow height); null when unreported. */
+    val heightReason: String? = null,
 )
 
 /** A follow event from the navigation stream, stamped with the local receive time. */

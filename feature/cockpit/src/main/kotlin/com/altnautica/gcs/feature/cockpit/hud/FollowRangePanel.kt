@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
+import com.altnautica.gcs.core.model.OverheadAhead
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
 import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
@@ -42,12 +43,22 @@ private const val LATENCY_WARN_MS = 250f
 /**
  * Following-mode range panel (L2, read-only): range and phase, the ± 2σ interval bar,
  * geometry, and the range cues with latency and re-acquire mode. No AGL: the bottom row
- * carries the one AGL on screen.
+ * carries the one AGL on screen. While the follow height is lowered under leaves a line says
+ * so ("Flying under leaves: 3.9 m", its reason under it in the full panel), and while a fresh
+ * pilot frame reports [overhead] the full panel shows the overhead clearance ahead.
  * Compact shows one line, medium three rows, expanded all five. A [stale] state shows
  * dashes at half opacity with the phase word STALE.
  */
 @Composable
-internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthClass, modifier: Modifier = Modifier) {
+internal fun FollowRangePanel(
+    follow: FollowState,
+    stale: Boolean,
+    width: WidthClass,
+    modifier: Modifier = Modifier,
+    overhead: OverheadAhead? = null,
+) {
+    val strings = LocalCockpitStrings.current
+    val height = if (stale) null else FollowWords.heightLine(follow, strings)
     val c = AdosTheme.colors
     val small = AdosTypography.numeric.small.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
     val range = follow.rangeM?.takeIf { !stale }
@@ -71,6 +82,8 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
                     ),
                     style = small,
                 )
+                // The reason reads in the full panel, a tap away.
+                height?.let { Text(it.first, style = small, color = c.hudWarn) }
                 return@Column
             }
             Row(verticalAlignment = Alignment.Bottom) {
@@ -82,7 +95,12 @@ internal fun FollowRangePanel(follow: FollowState, stale: Boolean, width: WidthC
                 Text(phaseWord, style = small, color = phaseColor)
             }
             // While the subject is sought: seconds left of the search budget, the vantage, what hides it.
-            if (!stale) FollowWords.recoveryLine(follow, LocalCockpitStrings.current)?.let { Text(it, style = small, color = c.hudCoast) }
+            if (!stale) FollowWords.recoveryLine(follow, strings)?.let { Text(it, style = small, color = c.hudCoast) }
+            height?.let { (text, reason) ->
+                Text(text, style = small, color = c.hudWarn)
+                reason?.let { Text(it, style = small, color = c.hudInk2) }
+            }
+            FollowWords.overheadLine(overhead, strings)?.let { Text(it, style = small) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IntervalBar(range, sigma)
                 Spacer(Modifier.width(AdosSpacing.S2))

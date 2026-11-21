@@ -1,14 +1,18 @@
 package com.altnautica.gcs.feature.cockpit.hud
 
+import com.altnautica.gcs.core.model.OverheadAhead
 import com.altnautica.gcs.core.skills.spec.SetupStringsSpec
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowPhase
 import com.altnautica.gcs.feature.cockpit.autonomy.FollowState
+import com.altnautica.gcs.feature.cockpit.autonomy.HudGeometry
 import com.altnautica.gcs.feature.cockpit.autonomy.TargetState
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
- * The follow chrome's words from the spec strings: the what's-locked chip's phase word and the
- * range panel's recovery line. A recovering follow (predicting, moving to look, searching)
+ * The follow chrome's words from the spec strings: the what's-locked chip's phase word, the
+ * range panel's recovery line, and its leaf-clearance lines (the height lowered under leaves,
+ * the overhead clearance ahead). A recovering follow (predicting, moving to look, searching)
  * carries the whole seconds left of its search budget; holding for the operator reads
  * `Waiting for you`.
  */
@@ -34,6 +38,18 @@ internal object FollowWords {
             f.occluder?.let { strings.format("follow.occluder.${it.kind}") },
         )
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+    }
+
+    /** `Flying under leaves: 3.9 m` and why, while the follow height is lowered; else null. */
+    fun heightLine(f: FollowState, strings: SetupStringsSpec): Pair<String, String?>? {
+        val h = f.heightSetpointM?.takeIf { f.heightLowered } ?: return null
+        val text = strings.format("follow.height_lowered", mapOf("v" to HudGeometry.oneDecimal(h)))
+        return text to f.heightReason?.let { strings.format("follow.height_reason.$it") }
+    }
+
+    /** `Overhead clearance ahead: 3.9 m in 3 m` while the pilot reports one; else null. */
+    fun overheadLine(o: OverheadAhead?, strings: SetupStringsSpec): String? = o?.let {
+        strings.format("pilot.overhead_ahead", mapOf("h" to HudGeometry.oneDecimal(it.flyUnderAglM), "d" to it.aheadM.roundToInt().toString()))
     }
 
     /** Whole seconds left, rounded up and never negative. */

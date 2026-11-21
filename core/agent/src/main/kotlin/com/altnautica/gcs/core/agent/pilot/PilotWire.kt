@@ -16,6 +16,7 @@ import com.altnautica.gcs.core.model.MissionStallKind
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.MissionStatus
 import com.altnautica.gcs.core.model.MissionTarget
+import com.altnautica.gcs.core.model.OverheadAhead
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotBanner
 import com.altnautica.gcs.core.model.PilotInput
@@ -196,6 +197,14 @@ object PilotWire {
             },
             positionUnverified = (data["position_unverified"] as? JsonObject)?.let { u ->
                 PositionUnverified(u.str("reason") ?: return@let null, u.str("detail"), u.float("flow_mps"), u.float("estimate_mps"))
+            },
+            // Null heights while nothing overhead lies ahead: no report.
+            overheadAhead = (data["overhead_ahead"] as? JsonObject)?.let { o ->
+                OverheadAhead(
+                    o.long("lease_id") ?: return@let null,
+                    o.float("fly_under_agl_m") ?: return@let null,
+                    o.float("ahead_m") ?: return@let null,
+                )
             },
             missionStall = (data["mission_stall"] as? JsonObject)?.let(::missionStall),
             // Absent on a pilot without the confined profile: open.

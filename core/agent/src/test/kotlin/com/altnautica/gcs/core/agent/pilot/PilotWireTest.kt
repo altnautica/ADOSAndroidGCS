@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.model.MissionStall
 import com.altnautica.gcs.core.model.MissionStallKind
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.MissionTarget
+import com.altnautica.gcs.core.model.OverheadAhead
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotInput
 import com.altnautica.gcs.core.model.PilotOwner
@@ -201,6 +202,18 @@ class PilotWireTest {
     }
 
     @Test
+    fun `the overhead ahead parses the fly-under height and distance, and is null while nothing lies ahead`() {
+        assertNull(checkNotNull(PilotWire.parseState(data, 0L)).overheadAhead)
+        val ahead = JsonObject(
+            mapOf("lease_id" to JsonPrimitive(7), "fly_under_agl_m" to JsonPrimitive(3.87), "ahead_m" to JsonPrimitive(2.5)),
+        )
+        val s = checkNotNull(PilotWire.parseState(JsonObject(data + ("overhead_ahead" to ahead)), 0L))
+        assertEquals(OverheadAhead(7L, 3.87f, 2.5f), s.overheadAhead)
+        val clear = JsonObject(ahead + ("fly_under_agl_m" to JsonNull) + ("ahead_m" to JsonNull))
+        assertNull(checkNotNull(PilotWire.parseState(JsonObject(data + ("overhead_ahead" to clear)), 0L)).overheadAhead)
+    }
+
+    @Test
     fun `pilot frame envelope wraps the golden state`() {
         val text = """{"kind":"pilot","ts_ms":1793960000000,"data":$fixture}"""
         val f = PilotWire.parseFrame(text, receivedAtMs = 7L) as PilotFrame.State
@@ -356,7 +369,8 @@ class PilotWireTest {
         assertEquals(RcReceiver.Absent, a.rcReceiver)
         assertTrue(a.noRc)
         assertEquals(12f, a.linkLossS)
-        val bare = checkNotNull(PilotWire.parseState(data, 0L))
+        // The golden frame carries the link-loss window now; a pilot without the declaration omits both.
+        val bare = checkNotNull(PilotWire.parseState(JsonObject(data - "rc_receiver" - "link_loss_s"), 0L))
         assertEquals(RcReceiver.Present, bare.rcReceiver)
         assertFalse(bare.noRc)
         assertNull(bare.linkLossS)

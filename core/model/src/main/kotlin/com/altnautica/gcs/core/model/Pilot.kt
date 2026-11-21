@@ -284,6 +284,8 @@ data class PilotState(
     val speedCap: SpeedCap? = null,
     /** The pilot does not trust the horizontal position (an older agent sends none), or null. */
     val positionUnverified: PositionUnverified? = null,
+    /** Leaves or a ceiling overhead along the lease goal's way (`overhead_ahead`), or null while nothing lies ahead. */
+    val overheadAhead: OverheadAhead? = null,
     /** No progress on the mission or the return: present while the vehicle holds for the operator. */
     val missionStall: MissionStall? = null,
     /** The place class the operator chose; a pilot that does not report one flies the open profile. */
@@ -366,6 +368,13 @@ data class SimClock(val speed: Double?) {
  * [flowMps] / [estimateMps] the measured flow speed and the estimate's speed when sent.
  */
 data class PositionUnverified(val reason: String, val detail: String?, val flowMps: Float?, val estimateMps: Float?)
+
+/**
+ * Leaves or a ceiling the pilot sees overhead along the way of lease [leaseId]'s goal: the
+ * airframe passes under it up to [flyUnderAglM] m over the ground, [aheadM] m (horizontal)
+ * along the way.
+ */
+data class OverheadAhead(val leaseId: Long, val flyUnderAglM: Float, val aheadM: Float)
 
 /**
  * One stick frame for the onboard pilot. Axes are in [-1, 1] after the surface's mode
