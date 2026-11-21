@@ -164,7 +164,7 @@ class PerceptionFeed @Inject constructor(
     }
 
     companion object {
-        const val SUPPORTED_VERSION = 2.0
+        const val SUPPORTED_VERSION = 4.0
         const val DEFAULT_FRAME_WIDTH = 640.0
         const val DEFAULT_FRAME_HEIGHT = 480.0
         const val STALE_MS = 2_000L

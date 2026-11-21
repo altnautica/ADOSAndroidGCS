@@ -142,7 +142,7 @@ internal class LiveFlight(private val vehicle: FakeVehicle, val agent: LiveAgent
         every(66, 49) { t, _ -> agent.nav.tryEmit("""{"kind":"obstacles","ts_ms":$t,"data":${stamped(obstacles, t)}}""") }
         every(100, 61) { t, n ->
             agent.batches.tryEmit(
-                """{"v":2,"model_id":"det","camera_id":"main","frame_id":$n,"ts_ms":$t,"frame_width":1280,"frame_height":720,
+                """{"v":4,"model_id":"det","camera_id":"main","frame_id":$n,"ts_ms":$t,"frame_width":1280,"frame_height":720,
                    "detections":[{"bbox":{"x":${400 + n % 20},"y":300,"width":80,"height":160},"class_label":"person","confidence":0.82,"track_id":3}]}""",
             )
         }
