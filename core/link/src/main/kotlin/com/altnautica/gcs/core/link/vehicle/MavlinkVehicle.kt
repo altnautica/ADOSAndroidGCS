@@ -3,6 +3,8 @@ package com.altnautica.gcs.core.link.vehicle
 import com.altnautica.gcs.core.link.calibration.CalibrationService
 import com.altnautica.gcs.core.link.calibration.MavlinkCalibrationService
 import com.altnautica.gcs.core.link.command.CommandService
+import com.altnautica.gcs.core.link.follow.FollowBeaconStreamer
+import com.altnautica.gcs.core.link.follow.MavlinkFollowBeaconStreamer
 import com.altnautica.gcs.core.link.log.LogService
 import com.altnautica.gcs.core.link.log.MavlinkLogService
 import com.altnautica.gcs.core.link.manual.ManualControlStreamer
@@ -83,6 +85,7 @@ class MavlinkVehicle(
     override val calibration: CalibrationService = MavlinkCalibrationService(scope, link, commands, params)
     override val logs: LogService = MavlinkLogService(link)
     override val manualControl: ManualControlStreamer = MavlinkManualControlStreamer(scope, link)
+    override val followBeacon: FollowBeaconStreamer = MavlinkFollowBeaconStreamer(scope, link, clock)
 
     init {
         if (activity != null) {
@@ -122,6 +125,7 @@ class MavlinkVehicle(
 
     internal suspend fun shutdown() {
         manualControl.stop()
+        followBeacon.stop()
         link.detach()
         scope.cancel()
     }

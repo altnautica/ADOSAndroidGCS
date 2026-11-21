@@ -177,6 +177,7 @@ class CockpitViewModelTest {
             controls = ControlsRepository(dataStore, testSpec, flowOf(emptyList())),
             missionMirror = missionMirror,
             stopControls = com.altnautica.gcs.core.skills.cockpit.StopControls(FakeNotificationControls()),
+            followBeacon = testBeaconFactory(dataStore),
         )
         // The screen-only flows run while collected; keep them hot like a visible cockpit.
         listOf(

@@ -189,6 +189,7 @@ internal class PlannerHarness {
         override val calibration = mockk<com.altnautica.gcs.core.link.calibration.CalibrationService>()
         override val logs = mockk<com.altnautica.gcs.core.link.log.LogService>()
         override val manualControl = mockk<com.altnautica.gcs.core.link.manual.ManualControlStreamer>()
+        override val followBeacon = mockk<com.altnautica.gcs.core.link.follow.FollowBeaconStreamer>()
     }
 
     private val provider = object : VehicleServicesProvider {

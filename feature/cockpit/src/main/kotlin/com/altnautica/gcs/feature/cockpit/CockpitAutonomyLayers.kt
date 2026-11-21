@@ -220,6 +220,7 @@ internal fun FollowChrome(vm: CockpitViewModel, width: WidthClass, topInset: Dp,
                 if (followingMode && state != null && !expanded) {
                     FollowRangePanel(state, stale = !fresh, width = WidthClass.Compact, modifier = Modifier.clickable { expanded = true })
                 }
+                com.altnautica.gcs.feature.cockpit.hud.BeaconShareChip(vm.beacon)
             }
             if (prompt != null && state != null) {
                 FollowAwaitPrompt(

@@ -13,7 +13,9 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="33" />
 
-    <!-- Location: the map "my location" marker and reading the joined Wi-Fi SSID only. -->
+    <!-- Location: the map "my location" marker, reading the joined Wi-Fi SSID, and the follow-me
+         position share, which sends this phone's position to the vehicle only while the operator has it on. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Foreground link service and its notification -->

@@ -125,6 +125,7 @@ internal fun TestScope.testCockpitVm(
         controls = ControlsRepository(dataStore, testSpec, flowOf(emptyList())),
         missionMirror = com.altnautica.gcs.core.link.mission.MissionMirrorSource { MutableStateFlow(null) },
         stopControls = stopControls,
+        followBeacon = testBeaconFactory(dataStore),
     )
     listOf(
         vm.status, vm.chip, vm.band, vm.flightValues, vm.minimap, vm.statusItems, vm.preflight, vm.alerts,

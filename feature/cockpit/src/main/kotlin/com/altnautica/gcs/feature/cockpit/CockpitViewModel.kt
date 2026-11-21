@@ -172,6 +172,7 @@ class CockpitViewModel @AssistedInject constructor(
     private val controls: ControlsRepository,
     missionMirror: MissionMirrorSource,
     stopControls: com.altnautica.gcs.core.skills.cockpit.StopControls,
+    followBeacon: com.altnautica.gcs.core.link.follow.FollowBeaconControllerFactory,
     @com.altnautica.gcs.feature.cockpit.di.CockpitWork work: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
     phoneRadio: java.util.Optional<com.altnautica.gcs.core.model.PhoneRadioUplink> = java.util.Optional.empty(),
 ) : ViewModel() {
@@ -593,6 +594,8 @@ class CockpitViewModel @AssistedInject constructor(
         viewModelScope, clock, vehicleNodeId, telemetry, nodeFlows.vehicleServices, video, session.allSkills, tick500,
         extensions, perception, localApis, settingsRepo, _events, ::activate, pilot.state, work,
     )
+    /** "Share my position for follow-me": the follow beacon toggle and its status chip. */
+    internal val beacon = followBeacon.create(viewModelScope, nodeFlows.vehicleServices, autonomy.followInstalled)
 
     /**
      * The follow waiting prompt's actions: follow-me config writes, return home and land through

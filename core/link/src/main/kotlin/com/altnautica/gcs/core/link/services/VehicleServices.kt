@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.link.services
 
 import com.altnautica.gcs.core.link.calibration.CalibrationService
+import com.altnautica.gcs.core.link.follow.FollowBeaconStreamer
 import com.altnautica.gcs.core.link.log.LogService
 import com.altnautica.gcs.core.link.manual.ManualControlStreamer
 import com.altnautica.gcs.core.link.mission.MissionService
@@ -22,6 +23,9 @@ interface VehicleServices {
     val calibration: CalibrationService
     val logs: LogService
     val manualControl: ManualControlStreamer
+
+    /** The operator's position as the follow beacon, while the cockpit shares it. */
+    val followBeacon: FollowBeaconStreamer
 }
 
 /**

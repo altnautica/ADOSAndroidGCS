@@ -21,6 +21,7 @@ dependencies {
     implementation(projects.core.data)
     implementation(projects.core.agent)
     implementation(projects.core.link)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)

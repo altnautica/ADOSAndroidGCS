@@ -29,4 +29,15 @@
     <string name="link_mission_result_denied">The flight controller refused the mission</string>
     <string name="link_mission_result_cancelled">The transfer was cancelled</string>
     <string name="link_mission_result_unknown">The flight controller rejected the mission</string>
+
+    <string name="follow_beacon_share">Share my position for follow-me</string>
+    <string name="follow_beacon_sharing">Sharing position (±%1$d m)</string>
+    <string name="follow_beacon_blocked_no_vehicle">Position sharing: no vehicle connected</string>
+    <string name="follow_beacon_blocked_no_follow">Position sharing: follow-me is not installed</string>
+    <string name="follow_beacon_blocked_no_permission">Position sharing needs precise location</string>
+    <string name="follow_beacon_blocked_background">Position sharing paused in the background</string>
+    <string name="follow_beacon_blocked_no_fix">Position sharing: waiting for a location fix</string>
+    <string name="follow_beacon_blocked_not_sent">Position sharing: this link cannot send it</string>
+    <string name="follow_beacon_state_on">On</string>
+    <string name="follow_beacon_state_off">Off</string>
 </resources>
