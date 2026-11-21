@@ -12,13 +12,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** The pilot banner announcing a skipped waypoint. */
-private const val WP_SKIPPED_BANNER = "pilot.banner.mission_wp_skipped"
+/** The skip banners and the voice line each speaks once it newly arrives (the shared `SKIP_VOICE`). */
+private val SKIP_VOICE = mapOf(
+    "pilot.banner.mission_wp_skipped" to "voice.waypoint_skipped",
+    "pilot.banner.mission_wp_inside_obstacle" to "voice.waypoint_unreachable",
+    "pilot.banner.mission_wp_no_path" to "voice.waypoint_unreachable",
+)
 
 /**
  * Speaks the pilot's changes while voice prompts are on: who flies (ADOS or the FC), the
  * mission's state, the start of a low-battery return countdown, a stalled mission or return,
- * and a skipped waypoint.
+ * a detour round a blocked leg (again when it moves to another item), a return routed round
+ * what blocked it, and a skipped or unreachable waypoint.
  */
 internal fun CoroutineScope.launchVoicePrompts(
     pilot: StateFlow<PilotState?>,
@@ -30,6 +35,8 @@ internal fun CoroutineScope.launchVoicePrompts(
     var lastMission: MissionState? = null
     var lastRth = false
     var lastStall: MissionStallKind? = null
+    var lastDetourSeq: Int? = null
+    var lastRouted = false
     var lastSkipped: PilotBanner? = null
     pilot.collect { p ->
         if (p == null || !settings.value.voicePrompts) return@collect
@@ -65,8 +72,14 @@ internal fun CoroutineScope.launchVoicePrompts(
             }
         }
         lastStall = stall
-        val skipped = p.banner?.takeIf { it.textKey == WP_SKIPPED_BANNER }
-        if (skipped != null && skipped != lastSkipped) announcer.speak(s.format("voice.waypoint_skipped"))
+        val detourSeq = p.missionDetour?.seq
+        if (detourSeq != null && detourSeq != lastDetourSeq) announcer.speak(s.format("voice.mission_detour"))
+        lastDetourSeq = detourSeq
+        val routed = p.returnRoute != null
+        if (routed && !lastRouted) announcer.speak(s.format("voice.return_routed"))
+        lastRouted = routed
+        val skipped = p.banner?.takeIf { it.textKey in SKIP_VOICE }
+        if (skipped != null && skipped != lastSkipped) announcer.speak(s.format(SKIP_VOICE.getValue(skipped.textKey)))
         lastSkipped = skipped
     }
 }

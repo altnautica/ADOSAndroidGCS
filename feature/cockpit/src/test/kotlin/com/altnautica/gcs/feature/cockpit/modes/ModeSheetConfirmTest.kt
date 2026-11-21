@@ -1,5 +1,6 @@
 package com.altnautica.gcs.feature.cockpit.modes
 
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithTag
@@ -102,6 +103,13 @@ class ModeSheetConfirmTest {
         assertEquals(1, sent.size)
         hold(TAG_AVOID_HOLD, spec.avoidance.confirmOff.ms + 200L)
         assertEquals(listOf("avoid:bypass", "avoid:off"), sent)
+    }
+
+    @Test
+    fun `the avoidance section says what the shown mode does`() {
+        show(ui.copy(avoid = AvoidMode.Bypass))
+        compose.onNodeWithTag(TAG_AVOID_EXPLAIN).performScrollTo().assertTextEquals(spec.avoidance.explain.getValue("bypass"))
+        assertEquals("Route round obstacles", spec.avoidance.explain["bypass"])
     }
 
     @Test

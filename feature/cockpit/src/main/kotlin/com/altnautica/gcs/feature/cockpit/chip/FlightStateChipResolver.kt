@@ -11,9 +11,11 @@ import com.altnautica.gcs.core.skills.spec.ClearanceTextSpec
 import com.altnautica.gcs.core.skills.spec.FcModeClassSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateMatchSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateSpec
+import com.altnautica.gcs.core.skills.spec.RouteRoundTextSpec
 import com.altnautica.gcs.core.skills.spec.SpecColor
 import com.altnautica.gcs.core.skills.spec.TokensSpec
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** A button the chip offers beside its text. */
 enum class ChipButton { SetUpAircraft, Resume, TakeControl, Abort }
@@ -190,13 +192,14 @@ class FlightStateChipResolver(
         return strings[key] ?: step.wire
     }
 
-    /** The secondary line in the spec's order (failsafe, clearance, input age, position uncertainty, speed cap, command limit, paused mission, hold reason, avoidance, control mode, speeds). */
+    /** The secondary line in the spec's order (failsafe, clearance, input age, position uncertainty, speed cap, command limit, route round, paused mission, hold reason, avoidance, control mode, speeds). */
     private fun secondary(p: PilotState, ctx: ChipContext, stale: Boolean): List<ChipText> = spec.secondary.order.mapNotNull { part ->
         when (part) {
             "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
             "pose_uncertainty" -> spec.secondary.poseUncertainty?.let { u ->
                 p.poseUncertaintyM?.let { chipText(text.text(u.textKey, mapOf("m" to oneDecimal(it))), u.color) }
             }
+            "route_round" -> spec.secondary.routeRound?.let { routeRound(p, it) }
             // The reason's own spec line (`pilot.speed_cap.confined_near`); the spec's default line for a reason it does not name.
             "speed_cap" -> p.speedCap?.let { cap ->
                 spec.secondary.speedCap?.let { chipText(confined.speedCapLine(cap) ?: it.text.replace("{v}", ConfinedText.speedCapText(cap.vHMps.toDouble())), it.color) }
@@ -236,6 +239,17 @@ class FlightStateChipResolver(
         val m = p.minClearanceM ?: return null
         if (m >= c.nearFactor * margin) return null
         return chipText(text.text(c.textKey, mapOf("m" to oneDecimal(m))), if (m <= margin) c.insideMarginColor else c.nearColor)
+    }
+
+    /**
+     * The detour round a blocked mission leg (the waypoint it resumes at), else the return the
+     * pilot routes home (the planned way and the straight line, whole metres); none otherwise.
+     */
+    private fun routeRound(p: PilotState, r: RouteRoundTextSpec): ChipText? {
+        p.missionDetour?.let { return chipText(text.text(r.detourKey, mapOf("wp" to it.seq)), r.color) }
+        val route = p.returnRoute ?: return null
+        val args = mapOf("remaining_m" to route.remainingM.roundToInt(), "straight_m" to route.straightM.roundToInt())
+        return chipText(text.text(r.returnKey, args), r.color)
     }
 
     /** Label of a hold reason, keyed by its exact wire string; an unlisted reason reads with spaces. */

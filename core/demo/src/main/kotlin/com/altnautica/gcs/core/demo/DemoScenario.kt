@@ -38,6 +38,9 @@ enum class DemoScenario(
     /** The mission complete (6 of 6). */
     MissionComplete(R.string.demo_scenario_mission_complete),
 
+    /** The leg to waypoint 4 is blocked: the pilot routes round it in GUIDED, then resumes the mission there. */
+    MissionDetour(R.string.demo_scenario_mission_detour),
+
     /** The flight controller entered RTL on its own (a failsafe); the pin holds it there. */
     FcFailsafeRtl(R.string.demo_scenario_fc_failsafe_rtl),
 
@@ -73,6 +76,9 @@ enum class DemoScenario(
 
     /** The low-battery countdown ran out: the flight controller flies SmartRTL home and the pilot announces it. */
     LowBatteryRth(R.string.demo_scenario_low_battery_rth),
+
+    /** The flight controller's return was blocked: the pilot routes home round the obstacle (37.6 m against 24.2 m straight). */
+    ReturnRouted(R.string.demo_scenario_return_routed),
 
     /** No GNSS fix: the demo flight controller loses its fix and position comes from the EKF origin only. */
     NoGnss(R.string.demo_scenario_no_gnss),

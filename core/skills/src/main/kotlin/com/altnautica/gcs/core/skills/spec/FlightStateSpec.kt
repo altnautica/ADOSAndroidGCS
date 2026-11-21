@@ -71,6 +71,8 @@ data class FlightStateSecondarySpec(
     @SerialName("speed_cap") val speedCap: SecondaryTextSpec? = null,
     /** The position's uncertainty (`pose_uncertainty_m`), any owner. */
     @SerialName("pose_uncertainty") val poseUncertainty: KeyedColorTextSpec? = null,
+    /** A detour round a blocked mission leg, else a return the pilot routes home, any owner. */
+    @SerialName("route_round") val routeRound: RouteRoundTextSpec? = null,
     @SerialName("mission_paused_line") val missionPausedLine: MatchedTextSpec? = null,
     /** `{profile_limit}` of a rule: the horizontal limit the sticks fly at. */
     @SerialName("profile_limit") val profileLimit: KeyedTextSpec? = null,
@@ -154,7 +156,17 @@ data class ModeSheetControlModeSpec(
 data class ModeSheetAvoidanceSpec(
     val values: List<String>,
     val labels: List<String>,
+    /** What each mode does, by its wire value (`brake`: stop and hold; `bypass`: route round). */
+    val explain: Map<String, String> = emptyMap(),
     @SerialName("confirm_off") val confirmOff: SpecConfirm,
+)
+
+/** The route-round part: [detourKey] while a mission detour flies (`{wp}`), else [returnKey] while a routed return does. */
+@Serializable
+data class RouteRoundTextSpec(
+    @SerialName("detour_key") val detourKey: String,
+    @SerialName("return_key") val returnKey: String,
+    val color: String,
 )
 
 @Serializable

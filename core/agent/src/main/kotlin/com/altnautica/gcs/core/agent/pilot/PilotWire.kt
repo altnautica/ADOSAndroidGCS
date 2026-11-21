@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.model.LaunchSequence
 import com.altnautica.gcs.core.model.LaunchStep
 import com.altnautica.gcs.core.model.Liftoff
 import com.altnautica.gcs.core.model.LiftoffPhase
+import com.altnautica.gcs.core.model.MissionDetour
 import com.altnautica.gcs.core.model.MissionGap
 import com.altnautica.gcs.core.model.MissionStall
 import com.altnautica.gcs.core.model.MissionStallKind
@@ -32,6 +33,7 @@ import com.altnautica.gcs.core.model.RcReceiver
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import com.altnautica.gcs.core.model.ProfileLimits
+import com.altnautica.gcs.core.model.ReturnRoute
 import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
@@ -218,6 +220,12 @@ object PilotWire {
                 )
             },
             missionStall = (data["mission_stall"] as? JsonObject)?.let(::missionStall),
+            missionDetour = (data["mission_detour"] as? JsonObject)?.let { d ->
+                MissionDetour(d.long("seq")?.toInt() ?: return@let null, floats(d["target_ned"], 3) ?: return@let null, d.long("since_ms"))
+            },
+            returnRoute = (data["return_route"] as? JsonObject)?.let { r ->
+                ReturnRoute(r.float("remaining_m") ?: return@let null, r.float("straight_m") ?: return@let null, r.long("since_ms"))
+            },
             // Absent on a pilot without the confined profile: open.
             placeClass = PlaceClass.of(data.str("place_class")) ?: PlaceClass.Open,
             routeCheck = (data["route_check"] as? JsonObject)?.let(::routeCheck),

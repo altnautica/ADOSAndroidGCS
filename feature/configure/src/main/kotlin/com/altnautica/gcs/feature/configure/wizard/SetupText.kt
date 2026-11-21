@@ -14,6 +14,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -50,11 +51,23 @@ fun SetupText.value(v: JsonElement, args: Map<String, String> = emptyMap()): Str
     return v.displayText()
 }
 
-/** A JSON value as display text: strings bare, numbers trimmed to at most two decimals. */
+/**
+ * A JSON value as display text: strings bare, numbers trimmed to at most two decimals, a list
+ * comma-separated, a parameter row (`{name, value}`, e.g. a result's `applied`) as `NAME = value`,
+ * other objects as `key value` pairs.
+ */
 fun JsonElement.displayText(): String = when (this) {
     JsonNull -> "–"
     is JsonPrimitive -> if (isString) content else content.toDoubleOrNull()?.let(::trimNumber) ?: content
-    else -> toString()
+    is JsonArray -> joinToString(", ") { it.displayText() }
+    is JsonObject -> {
+        val name = (this["name"] as? JsonPrimitive)?.takeIf { it.isString }?.content
+        if (size == 2 && name != null && "value" in this) {
+            "$name = ${getValue("value").displayText()}"
+        } else {
+            entries.joinToString(" · ") { (k, v) -> "$k ${v.displayText()}" }
+        }
+    }
 }
 
 private fun trimNumber(v: Double): String =

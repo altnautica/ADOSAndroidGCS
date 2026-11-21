@@ -52,9 +52,16 @@ class SkippedWaypointsTest {
     @Test
     fun `a gap is placed on its mirrored item with the planner's numbering`() {
         val gaps = listOf(MissionGap(2, "stall_timeout", 1L), MissionGap(4, "stall_operator", 2L), MissionGap(9, "stall_timeout", 3L))
-        assertEquals(listOf(SkippedWaypoint(2, "2", GeoPoint(12.002, 77.002))), PlanIdentity.skippedOf(mirror, gaps))
+        assertEquals(listOf(SkippedWaypoint(2, "2", GeoPoint(12.002, 77.002), "stall_timeout")), PlanIdentity.skippedOf(mirror, gaps))
         val px4 = mirror.copy(homeSlot = false)
         assertEquals("without a home slot seq 2 is the third item", "3", PlanIdentity.skippedOf(px4, gaps).single().label)
+    }
+
+    @Test
+    fun `a waypoint skipped again carries its latest reason`() {
+        val gaps = listOf(MissionGap(2, "stall_timeout", 1L), MissionGap(2, "unreachable_inside_obstacle", 2L))
+        assertEquals("unreachable_inside_obstacle", PlanIdentity.skippedOf(mirror, gaps).single().reason)
+        assertEquals(null, PlanIdentity.skippedOf(mirror, listOf(MissionGap(2, "", 1L))).single().reason)
     }
 
     @Test

@@ -1,11 +1,13 @@
 package com.altnautica.gcs.feature.cockpit
 
 import com.altnautica.gcs.core.data.cockpit.CockpitSettings
+import com.altnautica.gcs.core.model.MissionDetour
 import com.altnautica.gcs.core.model.MissionStall
 import com.altnautica.gcs.core.model.MissionStallKind
 import com.altnautica.gcs.core.model.PilotBanner
 import com.altnautica.gcs.core.model.PilotOwner
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.ReturnRoute
 import com.altnautica.gcs.feature.cockpit.alerts.AlertAnnouncer
 import com.altnautica.gcs.feature.cockpit.alerts.TtsManager
 import io.mockk.every
@@ -47,6 +49,30 @@ class StallVoicePromptsTest {
             spoken,
         )
         assertEquals(listOf("Mission stalled. Holding.", "Waypoint skipped", "Return blocked. Holding."), spoken)
+    }
+
+    @Test
+    fun `a detour, a routed return and an unreachable waypoint each speak their spec line once`() = runTest(UnconfinedTestDispatcher()) {
+        val spoken = mutableListOf<String>()
+        val tts = mockk<TtsManager>(relaxed = true) { every { speak(capture(spoken), any()) } just runs }
+        val base = pilotState(PilotOwner.Pilot)
+        val pilot = MutableStateFlow<PilotState?>(base)
+        backgroundScope.launchVoicePrompts(pilot, MutableStateFlow(CockpitSettings()), { strings }, AlertAnnouncer(testSpec, tts, mockk(relaxed = true)))
+
+        val detour = MissionDetour(3, listOf(18f, 0f, -5f), 0L)
+        pilot.value = base.copy(missionDetour = detour)
+        pilot.value = base.copy(missionDetour = detour, receivedAtMs = 100L)
+        pilot.value = base.copy(missionDetour = detour.copy(seq = 4))
+        val unreachable = PilotBanner("pilot.banner.mission_wp_inside_obstacle", mapOf("wp" to "5"), 10L)
+        pilot.value = base.copy(banner = unreachable)
+        pilot.value = base.copy(banner = unreachable, receivedAtMs = 200L)
+        pilot.value = base.copy(returnRoute = ReturnRoute(37.6f, 24.2f, 0L))
+        pilot.value = base.copy(returnRoute = ReturnRoute(30f, 20f, 0L))
+
+        assertEquals(
+            listOf("Leg blocked. Routing round.", "Leg blocked. Routing round.", "Waypoint unreachable. Skipped.", "Return blocked. Routing home."),
+            spoken,
+        )
     }
 
     @Test

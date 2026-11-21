@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.altnautica.gcs.core.designsystem.component.AdosButton
@@ -36,8 +37,12 @@ import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.PilotActionResult
 import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.skills.hud.ConfinedText
+import com.altnautica.gcs.core.skills.hud.MissionGapText
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.refusalText
+
+/** Test tag prefix of a coverage-gap row (`plan-gap:<seq>`). */
+const val PLAN_GAP_TAG = "plan-gap"
 
 // ── Transfer and start ─────────────────────────────────────
 
@@ -79,6 +84,17 @@ internal fun TransferBar(state: PlannerUiState, actions: PlannerActions) {
                 variant = AdosButtonVariant.Secondary,
                 icon = Icons.Outlined.CloudDownload,
             )
+        }
+        // One row per coverage gap the pilot left this flight, with why it skipped the waypoint.
+        state.specText?.takeIf { state.skipped.isNotEmpty() }?.let(::MissionGapText)?.let { gaps ->
+            state.skipped.forEach { wp ->
+                Text(
+                    gaps.line(wp.label, wp.reason),
+                    Modifier.testTag("$PLAN_GAP_TAG:${wp.seq}"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.statusWarning,
+                )
+            }
         }
         PlanIssueList(issues)
         if (state.missionInFlight) {

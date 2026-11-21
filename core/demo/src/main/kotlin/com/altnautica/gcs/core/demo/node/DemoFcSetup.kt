@@ -423,10 +423,14 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
         /** The control mode each `ados_intro` choice sets (the demo vehicle has an RC receiver). */
         val INTRO_MODES = mapOf("use_ados" to "ados", "use_ados_no_rc" to "ados", "keep_fc" to "elrs")
 
-        /** The ArduCopter failsafe profile the `ados_profile` step writes on apply. */
+        /**
+         * The ArduCopter profile the `ados_profile` step writes on apply: failsafes, then the
+         * flight controller's proximity-stop backstop inside a 2 m pilot margin, path planning off.
+         */
         val COPTER_PROFILE = listOf(
             "MAV_GCS_SYSID" to 1.0, "FS_GCS_ENABLE" to 1.0, "FS_GCS_TIMEOUT" to 3.0, "GUID_TIMEOUT" to 1.0,
             "RC_OVERRIDE_TIME" to 1.0, "BATT_FS_LOW_ACT" to 2.0, "BATT_FS_CRT_ACT" to 1.0,
+            "AVOID_ENABLE" to 2.0, "AVOID_MARGIN" to 1.3, "AVOID_BEHAVE" to 1.0, "PRX1_TYPE" to 2.0, "OA_TYPE" to 0.0,
         )
 
         /** The engine's ArduCopter step lists. */

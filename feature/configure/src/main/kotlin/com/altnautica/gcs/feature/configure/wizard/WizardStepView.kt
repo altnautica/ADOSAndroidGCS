@@ -118,6 +118,7 @@ fun WizardStepView(
         step.image?.let { key ->
             SetupImage(key, text.format(step.titleKey, args), colors.fgPrimary, Modifier.widthIn(max = 360.dp))
         }
+        step.paramRows().takeIf { it.isNotEmpty() }?.let { ParamTable(step.step, it) }
         if (step.live.isNotEmpty()) {
             LiveTable(step.live.entries.associate { (k, v) -> text.label(k, LIVE_PREFIX, args) to text.value(v, args) })
         }

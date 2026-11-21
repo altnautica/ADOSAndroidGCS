@@ -35,15 +35,16 @@ object PlanIdentity {
 
     /**
      * The skipped waypoints [gaps] names (wire `seq`), placed on the mirrored items with a
-     * position. [SkippedWaypoint.label] follows the planner's item numbering (1 = first item
-     * after ArduPilot's home slot).
+     * position, each with its latest skip's reason. [SkippedWaypoint.label] follows the
+     * planner's item numbering (1 = first item after ArduPilot's home slot).
      */
     fun skippedOf(mirror: MissionMirror, gaps: List<MissionGap>): List<SkippedWaypoint> {
         val bySeq = mirror.items.filter { it.missionType == 0 }.associateBy { it.seq }
+        val reasons = gaps.associate { it.seq to it.reason }
         return gaps.map { it.seq }.distinct().mapNotNull { seq ->
             val item = bySeq[seq]?.takeIf { it.x != 0 || it.y != 0 } ?: return@mapNotNull null
             val number = if (mirror.homeSlot) seq else seq + 1
-            SkippedWaypoint(seq, number.toString(), GeoPoint(item.x / 1e7, item.y / 1e7))
+            SkippedWaypoint(seq, number.toString(), GeoPoint(item.x / 1e7, item.y / 1e7), reasons[seq]?.takeIf { it.isNotEmpty() })
         }
     }
 
@@ -77,5 +78,8 @@ data class DroneMissionUi(
     val differs: Boolean,
 )
 
-/** A waypoint the vehicle skipped (a coverage gap): its wire [seq], the planner's item [label], and where it is. */
-data class SkippedWaypoint(val seq: Int, val label: String, val position: GeoPoint)
+/**
+ * A waypoint the vehicle skipped (a coverage gap): its wire [seq], the planner's item [label],
+ * where it is, and why ([reason], the pilot's gap code such as `unreachable_no_path`; null when unsent).
+ */
+data class SkippedWaypoint(val seq: Int, val label: String, val position: GeoPoint, val reason: String? = null)

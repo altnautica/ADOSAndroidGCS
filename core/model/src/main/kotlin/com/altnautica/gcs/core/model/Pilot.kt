@@ -292,6 +292,10 @@ data class PilotState(
     val sensing: Sensing? = null,
     /** No progress on the mission or the return: present while the vehicle holds for the operator. */
     val missionStall: MissionStall? = null,
+    /** A detour round a blocked mission leg in flight (`mission_detour`), or null. */
+    val missionDetour: MissionDetour? = null,
+    /** A return home the pilot routes round what blocked the flight controller's own (`return_route`), or null. */
+    val returnRoute: ReturnRoute? = null,
     /** The place class the operator chose; a pilot that does not report one flies the open profile. */
     val placeClass: PlaceClass = PlaceClass.Open,
     /** The confined profile's route check of the loaded mission; null in the open profile or with no mission. */

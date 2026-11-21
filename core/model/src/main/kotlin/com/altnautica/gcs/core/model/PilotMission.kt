@@ -34,8 +34,26 @@ data class MissionStatus(
 /** The active mission item: its [seq], MAV_CMD [cmd], local-NED position [ned] (m) and acceptance radius. */
 data class MissionTarget(val seq: Int, val cmd: Int?, val ned: List<Float>?, val radiusM: Float?)
 
-/** A skipped waypoint: [reason] is `stall_timeout` (the countdown ran out) or `stall_operator`; [atMs] epoch ms. */
+/**
+ * A skipped waypoint: [reason] is `stall_timeout` (the countdown ran out), `stall_operator`, or,
+ * skipped at once as proven unreachable, `unreachable_inside_obstacle` (the waypoint lies inside
+ * a seen obstacle) or `unreachable_no_path` (no route to it within 200 m); [atMs] epoch ms.
+ */
 data class MissionGap(val seq: Int, val reason: String, val atMs: Long?)
+
+/**
+ * A detour round a blocked mission leg (`mission_detour`): the flight controller flies GUIDED
+ * while the pilot routes to [targetNed] (local NED, m), the leg's next free point, then resumes
+ * the mission at item [seq]. [sinceMs] epoch ms.
+ */
+data class MissionDetour(val seq: Int, val targetNed: List<Float>, val sinceMs: Long?)
+
+/**
+ * A return home the pilot routes itself (`return_route`): the flight controller's own return
+ * was blocked, so the pilot flies [remainingM] (m, the planned way still to fly) against
+ * [straightM] (m, the straight line home). [sinceMs] epoch ms.
+ */
+data class ReturnRoute(val remainingM: Float, val straightM: Float, val sinceMs: Long?)
 
 /** What stalled: a mission leg or the return home. */
 enum class MissionStallKind(val wire: String) {

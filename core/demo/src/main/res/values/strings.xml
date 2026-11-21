@@ -7,6 +7,7 @@
     <string name="demo_scenario_mission_active">Mission: flying</string>
     <string name="demo_scenario_mission_paused">Mission: paused</string>
     <string name="demo_scenario_mission_complete">Mission: complete</string>
+    <string name="demo_scenario_mission_detour">Mission: routing round a blocked leg</string>
     <string name="demo_scenario_fc_failsafe_rtl">Flight controller failsafe: RTL</string>
     <string name="demo_scenario_setup_aborted">Setup flight aborted</string>
     <string name="demo_scenario_confined_route_feasible">Confined: route clear</string>
@@ -19,6 +20,7 @@
     <string name="demo_scenario_low_battery_countdown_land">Low battery: landing countdown</string>
     <string name="demo_scenario_low_battery_land">Low battery: landing</string>
     <string name="demo_scenario_low_battery_rth">Low battery: SmartRTL home</string>
+    <string name="demo_scenario_return_routed">Return blocked: routing home</string>
     <string name="demo_scenario_no_gnss">No GNSS</string>
     <string name="demo_scenario_status_texts">Flight controller warnings</string>
     <string name="demo_scenario_follow">Follow skill flying</string>

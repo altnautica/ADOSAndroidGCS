@@ -175,6 +175,10 @@ private fun AvoidanceSection(ui: ModeSheetUi, spec: ModeSheetSpec, actions: Mode
             actions.onAvoid(mode)
         }
     }
+    // What the shown mode does (`brake` stops and holds, `bypass` routes round, `off` avoids nothing).
+    shown?.let { spec.avoidance.explain[it] }?.let {
+        Text(it, Modifier.testTag(TAG_AVOID_EXPLAIN), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.fgSecondary)
+    }
     if (pendingOff) {
         Text(specText("flow.mode.avoid_off_warning"), style = MaterialTheme.typography.bodySmall, color = AdosTheme.colors.statusWarning)
         ConfirmedChange(specText("flow.mode.avoid_off_hold"), spec.avoidance.confirmOff.ms, TAG_AVOID_HOLD, danger = true) {
@@ -313,6 +317,7 @@ const val TAG_CONTROL = "mode_sheet_control"
 const val TAG_CONTROL_HOLD = "mode_sheet_control_hold"
 const val TAG_AVOID = "mode_sheet_avoid"
 const val TAG_AVOID_HOLD = "mode_sheet_avoid_hold"
+const val TAG_AVOID_EXPLAIN = "mode_sheet_avoid_explain"
 const val TAG_TAKE_CONTROL = "mode_sheet_take_control"
 const val TAG_HAND_TO_FC = "mode_sheet_hand_to_fc"
 const val TAG_FC_MODES = "mode_sheet_fc_modes"

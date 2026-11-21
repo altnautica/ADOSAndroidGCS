@@ -14,6 +14,7 @@ import com.altnautica.gcs.core.agent.fcsetup.SetupConfirm
 import com.altnautica.gcs.core.agent.fcsetup.SetupStep
 import com.altnautica.gcs.core.agent.fcsetup.SetupStepState
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.Assert.assertEquals
@@ -48,6 +49,11 @@ class WizardStepViewTest {
         "setup.action.use_ados" to "Use ADOS Pilot",
         "setup.action.use_ados_no_rc" to "Use ADOS Pilot with no RC",
         "setup.action.keep_fc" to "Keep the flight controller",
+        "setup.ados_profile.title" to "ADOS safety profile",
+        "setup.ados_profile.params" to "Values to write",
+        "setup.ados_profile.param.AVOID_ENABLE" to "Backstop: proximity stop (2)",
+        "setup.ados_profile.param.OA_TYPE" to "Flight controller path planning off (0)",
+        "setup.result.applied" to "Written",
     )
     private val text = SetupText { key, args -> strings[key]?.let { s -> args.entries.fold(s) { t, (k, v) -> t.replace("{$k}", v) } } ?: key }
 
@@ -151,6 +157,30 @@ class WizardStepViewTest {
         compose.onNodeWithText("0.12").assertExists()
         compose.onNodeWithText("tested").assertExists()
         compose.onNodeWithText("4").assertExists()
+    }
+
+    @Test
+    fun plannedParamsListWithWhatEachIsForAndAppliedRowsReadAsAssignments() {
+        val rows = listOf("AVOID_ENABLE" to 2, "AVOID_MARGIN" to 1.3, "OA_TYPE" to 0).map { (n, v) ->
+            JsonObject(mapOf("name" to JsonPrimitive(n), "value" to JsonPrimitive(v)))
+        }
+        val step = SetupStep(
+            wizard = "ground",
+            step = "ados_profile",
+            titleKey = "setup.ados_profile.title",
+            args = JsonObject(mapOf("params" to JsonArray(rows))),
+            state = SetupStepState.Done,
+            result = JsonObject(mapOf("applied" to JsonArray(rows.take(2)))),
+        )
+        assertEquals(listOf("AVOID_ENABLE", "AVOID_MARGIN", "OA_TYPE"), step.paramRows().map { it.name })
+        show(step)
+        compose.onNodeWithTag(SETUP_PARAMS_TAG).assertExists()
+        compose.onNodeWithText("Values to write").assertExists()
+        compose.onNodeWithText("Backstop: proximity stop (2)").assertExists()
+        compose.onNodeWithText("Flight controller path planning off (0)").assertExists()
+        compose.onNodeWithText("1.3").assertExists()
+        compose.onNodeWithText("Written").assertExists()
+        compose.onNodeWithText("AVOID_ENABLE = 2, AVOID_MARGIN = 1.3").assertExists()
     }
 
     private fun intro(rcPresent: Boolean?, noRcOffered: Boolean = true) = SetupStep(

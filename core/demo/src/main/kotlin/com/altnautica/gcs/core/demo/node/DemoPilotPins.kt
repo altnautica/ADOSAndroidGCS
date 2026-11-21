@@ -167,6 +167,32 @@ internal class DemoPilotPins(
                 // The pilot flies a surface's point only in ADOS control; otherwise the surface uses the FC.
                 putJsonArray("surface_ops") { if (controlMode == "ados") add(GOTO) }
             }
+            // The leg to waypoint 4 is blocked: the pilot routes round it in GUIDED, then resumes the mission there.
+            DemoScenario.MissionDetour -> {
+                flying(GOTO, GUIDED)
+                put("avoid", "bypass")
+                put("avoid_state", "detour")
+                mission("paused", MISSION_SEQ, MISSION_TOTAL)
+                putJsonArray("goal_ned") { DETOUR_TARGET_NED.forEach { add(it) } }
+                putJsonObject("mission_detour") {
+                    put("seq", MISSION_SEQ)
+                    putJsonArray("target_ned") { DETOUR_TARGET_NED.forEach { add(it) } }
+                    put("since_ms", JsonNull)
+                }
+                banner("pilot.banner.mission_detour", "wp" to "$MISSION_SEQ")
+            }
+            // The flight controller's return was blocked: the pilot flies its planner home round the obstacle.
+            DemoScenario.ReturnRouted -> {
+                flying(GOTO, GUIDED)
+                put("avoid", "bypass")
+                putJsonArray("goal_ned") { add(0.0); add(0.0); add(-PIN_HEIGHT_M) }
+                putJsonObject("return_route") {
+                    put("remaining_m", RETURN_REMAINING_M)
+                    put("straight_m", RETURN_STRAIGHT_M)
+                    put("since_ms", JsonNull)
+                }
+                banner("pilot.banner.return_routed")
+            }
             else -> Unit
         }
     }
@@ -364,6 +390,11 @@ internal class DemoPilotPins(
         private const val LOW_BATTERY_RETURN_S = 95
         private const val MISSION_SEQ = 4
         private const val MISSION_TOTAL = 6
+
+        /** Where the demo detour goes (the blocked leg's next free point, local NED) and the routed return's way home and straight line, m. */
+        private val DETOUR_TARGET_NED = listOf(18.25, 0.0, -PIN_HEIGHT_M)
+        private const val RETURN_REMAINING_M = 37.6
+        private const val RETURN_STRAIGHT_M = 24.2
 
         /** The demo airframe's confined margin (prop-tip radius 0.377 m + 0.1 m) and the clearance it needs with σ 0.02 m. */
         private const val MARGIN_M = 0.477
