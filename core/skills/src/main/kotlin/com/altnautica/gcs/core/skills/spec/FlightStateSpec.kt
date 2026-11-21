@@ -69,6 +69,8 @@ data class FlightStateSecondarySpec(
     @SerialName("control_mode") val controlMode: Map<String, String>,
     @SerialName("fc_failsafe") val fcFailsafe: SecondaryTextSpec? = null,
     @SerialName("speed_cap") val speedCap: SecondaryTextSpec? = null,
+    /** The position's uncertainty (`pose_uncertainty_m`), any owner. */
+    @SerialName("pose_uncertainty") val poseUncertainty: KeyedColorTextSpec? = null,
     @SerialName("mission_paused_line") val missionPausedLine: MatchedTextSpec? = null,
     /** `{profile_limit}` of a rule: the horizontal limit the sticks fly at. */
     @SerialName("profile_limit") val profileLimit: KeyedTextSpec? = null,
@@ -95,6 +97,10 @@ data class ClearanceTextSpec(
 /** The stick input age while the sticks fly, shown over [overMs]. */
 @Serializable
 data class InputAgeTextSpec(@SerialName("text_key") val textKey: String, @SerialName("over_ms") val overMs: Long, val color: String)
+
+/** A part whose text is the `setup-strings` entry [textKey], in [color]. */
+@Serializable
+data class KeyedColorTextSpec(@SerialName("text_key") val textKey: String, val color: String)
 
 /** A part shown only while [owner] owns. */
 @Serializable

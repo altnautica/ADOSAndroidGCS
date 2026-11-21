@@ -190,10 +190,13 @@ class FlightStateChipResolver(
         return strings[key] ?: step.wire
     }
 
-    /** The secondary line in the spec's order (failsafe, clearance, input age, speed cap, command limit, paused mission, hold reason, avoidance, control mode, speeds). */
+    /** The secondary line in the spec's order (failsafe, clearance, input age, position uncertainty, speed cap, command limit, paused mission, hold reason, avoidance, control mode, speeds). */
     private fun secondary(p: PilotState, ctx: ChipContext, stale: Boolean): List<ChipText> = spec.secondary.order.mapNotNull { part ->
         when (part) {
             "fc_failsafe" -> spec.secondary.fcFailsafe?.takeIf { p.fcFailsafe }?.let { chipText(it.text, it.color) }
+            "pose_uncertainty" -> spec.secondary.poseUncertainty?.let { u ->
+                p.poseUncertaintyM?.let { chipText(text.text(u.textKey, mapOf("m" to oneDecimal(it))), u.color) }
+            }
             // The reason's own spec line (`pilot.speed_cap.confined_near`); the spec's default line for a reason it does not name.
             "speed_cap" -> p.speedCap?.let { cap ->
                 spec.secondary.speedCap?.let { chipText(confined.speedCapLine(cap) ?: it.text.replace("{v}", ConfinedText.speedCapText(cap.vHMps.toDouble())), it.color) }

@@ -200,6 +200,7 @@ object PilotWire {
             positionUnverified = (data["position_unverified"] as? JsonObject)?.let { u ->
                 PositionUnverified(u.str("reason") ?: return@let null, u.str("detail"), u.float("flow_mps"), u.float("estimate_mps"))
             },
+            poseUncertaintyM = data.float("pose_uncertainty_m"),
             // Null heights while nothing overhead lies ahead: no report.
             overheadAhead = (data["overhead_ahead"] as? JsonObject)?.let { o ->
                 OverheadAhead(

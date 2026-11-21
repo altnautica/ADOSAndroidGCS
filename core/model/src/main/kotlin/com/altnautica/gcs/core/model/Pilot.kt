@@ -280,10 +280,12 @@ data class PilotState(
     val lowBatteryAction: String? = null,
     /** The charge a low-battery return home needs, published airborne; null on the ground. */
     val batteryReserve: BatteryReserve? = null,
-    /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`, `confined-near`), or null. */
+    /** The horizontal speed cap the pilot applies to every setpoint it flies (`gnss-denied`, `confined-near`, `position-uncertain`), or null. */
     val speedCap: SpeedCap? = null,
     /** The pilot does not trust the horizontal position (an older agent sends none), or null. */
     val positionUnverified: PositionUnverified? = null,
+    /** The position's one-sigma uncertainty (m) while it is over a metre yet within the pilot's limit: flown on, slowed (`pose_uncertainty_m`), or null. */
+    val poseUncertaintyM: Float? = null,
     /** Leaves or a ceiling overhead along the lease goal's way (`overhead_ahead`), or null while nothing lies ahead. */
     val overheadAhead: OverheadAhead? = null,
     /** What the pilot sees obstacles with and the speed that stops inside its seen-clear range (`sensing`), or null (an older agent). */
