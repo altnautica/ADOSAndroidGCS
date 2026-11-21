@@ -11,6 +11,8 @@ import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.model.RcReceiver
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
+import com.altnautica.gcs.core.model.Sensing
+import com.altnautica.gcs.core.model.SensingTier
 import com.altnautica.gcs.core.model.SpeedCap
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
@@ -124,6 +126,11 @@ class DemoPilotTest {
         fly(500)
         assertEquals("armed", action("place_class:open").str("err"))
         assertEquals("confined", state().str("place_class"))
+    }
+
+    @Test
+    fun `the live frame reports the 3D lidar sensing tier and its speed limit`() {
+        assertEquals(Sensing(SensingTier.Lidar3d, 11.6f, 4.2f), PilotWire.parseState(state(), 0L)!!.sensing)
     }
 
     @Test

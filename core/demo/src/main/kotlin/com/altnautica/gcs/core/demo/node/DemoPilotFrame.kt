@@ -100,6 +100,12 @@ internal fun liveFrame(p: PilotLive, fc: FcLive, t: Long): JsonObject {
         put("place_class", p.placeClass)
         // Present only with the no-RC declaration, as the pilot sends it.
         if (p.rcReceiver == "absent") put("rc_receiver", "absent")
+        // The 3D lidar's voxel map and the speed that stops inside its seen-clear range.
+        putJsonObject("sensing") {
+            put("tier", "lidar3d")
+            put("clear_range_m", 11.6)
+            put("speed_limit_mps", 4.2)
+        }
         putJsonObject("mission") {
             put("state", "none")
             put("seq", 0)

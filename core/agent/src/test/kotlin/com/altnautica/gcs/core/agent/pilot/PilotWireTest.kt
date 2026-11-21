@@ -24,6 +24,8 @@ import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
 import com.altnautica.gcs.core.model.ProfileLimits
+import com.altnautica.gcs.core.model.Sensing
+import com.altnautica.gcs.core.model.SensingTier
 import com.altnautica.gcs.core.model.SpeedCap
 import com.altnautica.gcs.core.model.StickCommand
 import kotlinx.serialization.json.Json
@@ -211,6 +213,18 @@ class PilotWireTest {
         assertEquals(OverheadAhead(7L, 3.87f, 2.5f), s.overheadAhead)
         val clear = JsonObject(ahead + ("fly_under_agl_m" to JsonNull) + ("ahead_m" to JsonNull))
         assertNull(checkNotNull(PilotWire.parseState(JsonObject(data + ("overhead_ahead" to clear)), 0L)).overheadAhead)
+    }
+
+    @Test
+    fun `the sensing tier and its speed limit parse, and an absent or unknown tier reads as none`() {
+        assertNull(checkNotNull(PilotWire.parseState(data, 0L)).sensing)
+        val sensing = JsonObject(
+            mapOf("tier" to JsonPrimitive("lidar3d"), "clear_range_m" to JsonPrimitive(11.6), "speed_limit_mps" to JsonPrimitive(4.2)),
+        )
+        val s = checkNotNull(PilotWire.parseState(JsonObject(data + ("sensing" to sensing)), 0L))
+        assertEquals(Sensing(SensingTier.Lidar3d, 11.6f, 4.2f), s.sensing)
+        val radar = JsonObject(sensing + ("tier" to JsonPrimitive("radar")))
+        assertNull(checkNotNull(PilotWire.parseState(JsonObject(data + ("sensing" to radar)), 0L)).sensing)
     }
 
     @Test

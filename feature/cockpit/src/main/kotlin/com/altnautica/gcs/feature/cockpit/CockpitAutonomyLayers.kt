@@ -124,7 +124,10 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
     }
 }
 
-/** The nav-source chip for the safety band (item 6), and the "Confined" and "No RC" chips beside it while those postures fly. */
+/**
+ * The nav-source chip for the safety band (item 6), and the "Confined" and "No RC" chips beside
+ * it while those postures fly; above the compact width, the sensing tier with its speed limit.
+ */
 @Composable
 internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
     val chip by vm.autonomy.navChip.collectAsStateWithLifecycle()
@@ -134,6 +137,7 @@ internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
         ConfinedChipSlot(vm)
         NoRcChipSlot(vm)
         SimClockChipSlot(vm)
+        if (width != WidthClass.Compact) SensingChipSlot(vm)
     }
 }
 

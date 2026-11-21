@@ -35,6 +35,8 @@ import com.altnautica.gcs.core.model.ProfileLimits
 import com.altnautica.gcs.core.model.RouteCheck
 import com.altnautica.gcs.core.model.RouteCheckState
 import com.altnautica.gcs.core.model.RoutePinch
+import com.altnautica.gcs.core.model.Sensing
+import com.altnautica.gcs.core.model.SensingTier
 import com.altnautica.gcs.core.model.SimClock
 import com.altnautica.gcs.core.model.SpeedCap
 import com.altnautica.gcs.core.model.StickCommand
@@ -204,6 +206,14 @@ object PilotWire {
                     o.long("lease_id") ?: return@let null,
                     o.float("fly_under_agl_m") ?: return@let null,
                     o.float("ahead_m") ?: return@let null,
+                )
+            },
+            // An older agent sends none; a tier this build does not know reads as none.
+            sensing = (data["sensing"] as? JsonObject)?.let { s ->
+                Sensing(
+                    SensingTier.of(s.str("tier")) ?: return@let null,
+                    s.float("clear_range_m") ?: return@let null,
+                    s.float("speed_limit_mps") ?: return@let null,
                 )
             },
             missionStall = (data["mission_stall"] as? JsonObject)?.let(::missionStall),
