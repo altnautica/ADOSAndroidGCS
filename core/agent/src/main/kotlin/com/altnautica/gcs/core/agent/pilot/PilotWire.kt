@@ -17,6 +17,8 @@ import com.altnautica.gcs.core.model.MissionStallKind
 import com.altnautica.gcs.core.model.MissionState
 import com.altnautica.gcs.core.model.MissionStatus
 import com.altnautica.gcs.core.model.MissionTarget
+import com.altnautica.gcs.core.model.MoverKind
+import com.altnautica.gcs.core.model.MoverSource
 import com.altnautica.gcs.core.model.OverheadAhead
 import com.altnautica.gcs.core.model.PilotAction
 import com.altnautica.gcs.core.model.PilotBanner
@@ -42,6 +44,7 @@ import com.altnautica.gcs.core.model.SensingTier
 import com.altnautica.gcs.core.model.SimClock
 import com.altnautica.gcs.core.model.SpeedCap
 import com.altnautica.gcs.core.model.StickCommand
+import com.altnautica.gcs.core.model.TrackedMover
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -219,6 +222,8 @@ object PilotWire {
                     s.float("speed_limit_mps") ?: return@let null,
                 )
             },
+            // An older agent sends none, and the pilot omits it while it tracks none.
+            movers = (data["movers"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::mover) },
             missionStall = (data["mission_stall"] as? JsonObject)?.let(::missionStall),
             missionDetour = (data["mission_detour"] as? JsonObject)?.let { d ->
                 MissionDetour(d.long("seq")?.toInt() ?: return@let null, floats(d["target_ned"], 3) ?: return@let null, d.long("since_ms"))
@@ -271,6 +276,23 @@ object PilotWire {
     /** The numeric entries of a mission-item seq array; anything else is skipped. */
     private fun seqs(e: JsonElement?): List<Int> =
         (e as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> !p.isString }?.longOrNull?.toInt() }
+
+    /** One `movers` entry; one with no id, position or velocity is skipped. */
+    private fun mover(o: JsonObject): TrackedMover? {
+        val ne = floats(o["ne"], 2) ?: return null
+        val vel = floats(o["vel_ne"], 2) ?: return null
+        return TrackedMover(
+            id = o.long("id") ?: return null,
+            kind = MoverKind.of(o.str("kind")),
+            source = MoverSource.of(o.str("source")),
+            northM = ne[0],
+            eastM = ne[1],
+            velNorthMps = vel[0],
+            velEastMps = vel[1],
+            sigmaM = o.float("sigma_m") ?: 0f,
+            ageMs = o.long("age_ms") ?: 0L,
+        )
+    }
 
     private fun missionStall(o: JsonObject): MissionStall? {
         val kind = MissionStallKind.of(o.str("kind")) ?: return null

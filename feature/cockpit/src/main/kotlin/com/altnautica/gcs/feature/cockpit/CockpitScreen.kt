@@ -75,6 +75,7 @@ import com.altnautica.gcs.feature.cockpit.video.VideoPlaceholder
 import com.altnautica.gcs.feature.cockpit.chrome.FlightZones
 import com.altnautica.gcs.feature.cockpit.chrome.clamp
 import com.altnautica.gcs.feature.cockpit.chrome.splitDivider
+import com.altnautica.gcs.feature.cockpit.hud.MoversLine
 import com.altnautica.gcs.core.skills.tips.TipsEngine
 import com.altnautica.gcs.feature.cockpit.tips.LocalTipAnchors
 import com.altnautica.gcs.feature.cockpit.tips.TipAnchorRegistry
@@ -528,11 +529,13 @@ private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Un
         AutonomyLocalMinimap(vm, modifier, onClick)
         return
     }
+    val movers by rememberMapMovers(vm)
+    val overlays = remember(route, movers.marks) { if (movers.marks.isEmpty()) route else route.copy(movers = movers.marks) }
     Box(modifier) {
         // A long-press anywhere on a cockpit map picks a point: the launch go-to on the ground, fly-here in the air.
         AdosMinimap(
             state.vehicle, state.home, state.trail, Modifier.fillMaxSize(),
-            overlays = route, zoom = MINIMAP_ZOOM, onClick = onClick, onLongPress = vm::pickMapPoint,
+            overlays = overlays, zoom = MINIMAP_ZOOM, onClick = onClick, onLongPress = vm::pickMapPoint,
         )
         extNode?.let { node ->
             val center = state.vehicle?.position
@@ -543,6 +546,7 @@ private fun Minimap(vm: CockpitViewModel, modifier: Modifier, onClick: (() -> Un
                 hostProps = mapOf("center" to center?.let { mapOf("lat" to it.latDeg, "lon" to it.lonDeg) }, "zoom" to MINIMAP_ZOOM),
             )
         }
+        MoversLine(movers.line, Modifier.align(Alignment.TopEnd))
     }
 }
 

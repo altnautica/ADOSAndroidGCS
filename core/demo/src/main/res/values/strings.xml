@@ -21,6 +21,7 @@
     <string name="demo_scenario_low_battery_land">Low battery: landing</string>
     <string name="demo_scenario_low_battery_rth">Low battery: SmartRTL home</string>
     <string name="demo_scenario_return_routed">Return blocked: routing home</string>
+    <string name="demo_scenario_people_near">People nearby: keeping distance</string>
     <string name="demo_scenario_no_gnss">No GNSS</string>
     <string name="demo_scenario_status_texts">Flight controller warnings</string>
     <string name="demo_scenario_follow">Follow skill flying</string>

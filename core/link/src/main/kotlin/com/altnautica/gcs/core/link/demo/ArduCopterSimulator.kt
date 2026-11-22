@@ -67,6 +67,7 @@ class ArduCopterSimulator(
                 sim.send(telemetry.attitude())
                 if (tick % 2 == 0L) {
                     sim.send(telemetry.globalPosition())
+                    sim.send(telemetry.localPosition())
                     sim.send(telemetry.vfrHud())
                 }
                 if (tick % 5 == 0L) {

@@ -22,6 +22,9 @@ class MapStyleTest {
         fenceExclusion = 0xFFEF4444.toInt(),
         survey = 0xFF3A82FF.toInt(),
         draft = 0xFFB4B4B4.toInt(),
+        moverPerson = 0xFFF59E0B.toInt(),
+        moverVehicle = 0xFFA78BFA.toInt(),
+        moverUnknown = 0xFF909090.toInt(),
     )
 
     @Test
@@ -119,5 +122,40 @@ class MapStyleTest {
 
         assertEquals(65, ring.size)
         assertEquals(ring.first(), ring.last())
+    }
+
+    @Test
+    fun `a mover draws a marker by kind, a ring at its sigma and an arrow, faded while stale`() {
+        val at = GeoPoint(10.0, 20.0)
+        val tip = GeoMath.destination(at, 90.0, 2.8)
+        val overlays = MapOverlays(
+            movers = listOf(
+                MapMover("3", at, MapMoverKind.Person, tip, sigmaM = 0.5, stale = false),
+                MapMover("4", GeoPoint(10.001, 20.0), MapMoverKind.Vehicle, null, sigmaM = 0.0, stale = true),
+            ),
+        )
+        val ids = MapIconIds()
+        val points = Json.parseToJsonElement(MapGeoJson.points(null, null, overlays, ids)).jsonObject.getValue("features").jsonArray
+        assertEquals(2, points.size)
+        assertTrue(ids.requested.keys.containsAll(listOf("mover:Person:false", "mover:Vehicle:true")))
+        // Drawn above the vehicle (order 6), so a person a few metres off is never hidden under it.
+        assertTrue(points.all { it.jsonObject.getValue("properties").jsonObject.getValue("order").jsonPrimitive.content.toInt() > 6 })
+
+        // Only the person has a ring: a zero sigma draws none.
+        val rings = Json.parseToJsonElement(MapGeoJson.areas(overlays, palette)).jsonObject.getValue("features").jsonArray
+        assertEquals(1, rings.size)
+        assertEquals("rgba(245,158,11,1.0)", rings.single().jsonObject.getValue("properties").jsonObject.getValue("color").jsonPrimitive.content)
+
+        // The moving person's shaft and its two-barb head; the still vehicle has no arrow.
+        val lines = Json.parseToJsonElement(MapGeoJson.lines(emptyList(), overlays, palette)).jsonObject.getValue("features").jsonArray
+        assertEquals(2, lines.size)
+        val shaft = lines[0].jsonObject.getValue("geometry").jsonObject.getValue("coordinates").jsonArray
+        assertEquals(2, shaft.size)
+        assertEquals(3, lines[1].jsonObject.getValue("geometry").jsonObject.getValue("coordinates").jsonArray.size)
+
+        // A stale mover's ring and arrow use its colour at 40 % alpha.
+        val stale = MapOverlays(movers = listOf(MapMover("5", at, MapMoverKind.Person, tip, sigmaM = 0.5, stale = true)))
+        val staleRing = Json.parseToJsonElement(MapGeoJson.areas(stale, palette)).jsonObject.getValue("features").jsonArray.single()
+        assertEquals("rgba(245,158,11,0.4)", staleRing.jsonObject.getValue("properties").jsonObject.getValue("color").jsonPrimitive.content)
     }
 }

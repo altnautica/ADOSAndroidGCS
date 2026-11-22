@@ -29,6 +29,10 @@ data class MapPalette(
     val fenceExclusion: Int,
     val survey: Int,
     val draft: Int,
+    /** Tracked movers by kind: a person, a vehicle, something seen moving without a class. */
+    val moverPerson: Int,
+    val moverVehicle: Int,
+    val moverUnknown: Int,
 )
 
 /** MapLibre style documents for the basemaps, plus the overlay sources and layers. */
@@ -192,6 +196,15 @@ internal object MapGeoJson {
         overlays.circles.forEach { circle ->
             addFeature(polygonGeometry(GeoMath.circleRing(circle.center, circle.radiusM)), areaProps(circle.kind, palette))
         }
+        overlays.movers.filter { it.sigmaM > 0.0 }.forEach { m ->
+            addFeature(
+                polygonGeometry(GeoMath.circleRing(m.position, m.sigmaM, MOVER_RING_SEGMENTS)),
+                buildJsonObject {
+                    put("color", cssColor(moverColor(m, palette)))
+                    put("fillOpacity", if (m.stale) 0.05 else 0.12)
+                },
+            )
+        }
     }
 
     fun lines(trail: List<GeoPoint>, overlays: MapOverlays, palette: MapPalette): String = featureCollection {
@@ -213,6 +226,34 @@ internal object MapGeoJson {
                 },
             )
         }
+        overlays.movers.forEach { m -> m.arrowTip?.let { tip -> moverArrow(m, tip, palette) } }
+    }
+
+    /** The mover's velocity arrow: the shaft from its position to [tip] and two barbs at the tip. */
+    private fun Collection.moverArrow(m: MapMover, tip: GeoPoint, palette: MapPalette) {
+        val props = buildJsonObject {
+            put("color", cssColor(moverColor(m, palette)))
+            put("width", 2)
+            put("dashed", false)
+        }
+        val back = GeoMath.bearingDeg(tip, m.position)
+        val barb = GeoMath.distanceM(m.position, tip) * MOVER_BARB_SHARE
+        val left = GeoMath.destination(tip, back - MOVER_BARB_DEG, barb)
+        val right = GeoMath.destination(tip, back + MOVER_BARB_DEG, barb)
+        addFeature(lineGeometry(listOf(m.position, tip)), props)
+        addFeature(lineGeometry(listOf(left, tip, right)), props)
+    }
+
+    /** The mover's colour by kind, at 40 % alpha while it is stale. */
+    private fun moverColor(m: MapMover, palette: MapPalette): Int {
+        val argb = when (m.kind) {
+            MapMoverKind.Person -> palette.moverPerson
+            MapMoverKind.Vehicle -> palette.moverVehicle
+            MapMoverKind.Unknown -> palette.moverUnknown
+        }
+        if (!m.stale) return argb
+        val a = ((argb ushr 24) and 0xFF) * MOVER_STALE_ALPHA_PCT / 100
+        return (a shl 24) or (argb and 0x00FFFFFF)
     }
 
     fun points(vehicle: MapVehicle?, home: GeoPoint?, overlays: MapOverlays, iconIds: MapIconIds): String = featureCollection {
@@ -229,6 +270,10 @@ internal object MapGeoJson {
         if (vehicle != null) {
             val icon = iconIds.vehicle(vehicle)
             addFeature(pointGeometry(vehicle.position), pointProps(icon, vehicle.headingDeg ?: 0f, 6))
+        }
+        // Above the vehicle: a person a few metres off stays visible at any zoom.
+        overlays.movers.forEach { m ->
+            addFeature(pointGeometry(m.position), pointProps(iconIds.mover(m), 0f, 7))
         }
     }
 
@@ -248,6 +293,13 @@ internal object MapGeoJson {
         put("rotation", rotation)
         put("order", order)
     }
+
+    private const val MOVER_RING_SEGMENTS = 32
+
+    /** The arrowhead's barbs: this share of the shaft long, this many degrees off it. */
+    private const val MOVER_BARB_SHARE = 0.3
+    private const val MOVER_BARB_DEG = 28.0
+    private const val MOVER_STALE_ALPHA_PCT = 40
 
     private class Collection {
         val features = mutableListOf<JsonObject>()

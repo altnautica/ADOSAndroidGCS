@@ -30,6 +30,10 @@ internal sealed interface IconSpec {
     data class Vehicle(val heading: Boolean, val stale: Boolean) : IconSpec {
         override val id = "vehicle:$heading:$stale"
     }
+
+    data class Mover(val kind: MapMoverKind, val stale: Boolean) : IconSpec {
+        override val id = "mover:${kind.name}:$stale"
+    }
 }
 
 /** Collects the icons a GeoJSON update references so the map can register missing images. */
@@ -46,6 +50,8 @@ internal class MapIconIds {
     fun rally(selected: Boolean) = request(IconSpec.Rally(selected))
 
     fun vehicle(v: MapVehicle) = request(IconSpec.Vehicle(heading = v.headingDeg != null, stale = v.stale))
+
+    fun mover(m: MapMover) = request(IconSpec.Mover(m.kind, m.stale))
 
     init {
         request(IconSpec.Home)
@@ -72,6 +78,9 @@ internal data class IconPalette(
     val rally: Int,
     val vehicle: Int,
     val vehicleStale: Int,
+    val moverPerson: Int,
+    val moverVehicle: Int,
+    val moverUnknown: Int,
     val ink: Int,
     val outline: Int,
 )
@@ -90,6 +99,7 @@ internal class MapIconFactory(private val density: Float, private val palette: I
         IconSpec.Home -> badge(palette.home, "H", 28f, selected = false)
         IconSpec.Handle -> handle()
         is IconSpec.Vehicle -> vehicle(spec)
+        is IconSpec.Mover -> mover(spec)
     }
 
     private fun waypointColor(kind: WaypointKind) = when (kind) {
@@ -179,5 +189,56 @@ internal class MapIconFactory(private val density: Float, private val palette: I
             canvas.drawCircle(c, c, px(9f), outline)
         }
         return bitmap
+    }
+
+    /** A person a dot, a vehicle a square, an unknown mover a triangle; 40 % opaque while stale. */
+    private fun mover(spec: IconSpec.Mover): Bitmap {
+        val size = px(18f).toInt().coerceAtLeast(1)
+        val bitmap = createBitmap(size, size)
+        val canvas = Canvas(bitmap)
+        val alpha = if (spec.stale) STALE_ALPHA else 255
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = when (spec.kind) {
+                MapMoverKind.Person -> palette.moverPerson
+                MapMoverKind.Vehicle -> palette.moverVehicle
+                MapMoverKind.Unknown -> palette.moverUnknown
+            }
+            this.alpha = alpha
+        }
+        val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = px(2f)
+            strokeJoin = Paint.Join.ROUND
+            color = palette.outline
+            this.alpha = alpha
+        }
+        val c = size / 2f
+        val r = px(6f)
+        when (spec.kind) {
+            MapMoverKind.Person -> {
+                canvas.drawCircle(c, c, r, fill)
+                canvas.drawCircle(c, c, r, outline)
+            }
+            MapMoverKind.Vehicle -> {
+                canvas.drawRect(c - r, c - r, c + r, c + r, fill)
+                canvas.drawRect(c - r, c - r, c + r, c + r, outline)
+            }
+            MapMoverKind.Unknown -> {
+                val path = Path().apply {
+                    moveTo(c, c - r * 1.2f)
+                    lineTo(c + r, c + r * 0.8f)
+                    lineTo(c - r, c + r * 0.8f)
+                    close()
+                }
+                canvas.drawPath(path, fill)
+                canvas.drawPath(path, outline)
+            }
+        }
+        return bitmap
+    }
+
+    private companion object {
+        /** Paint alpha of a stale mover's marker, 40 %. */
+        const val STALE_ALPHA = 102
     }
 }

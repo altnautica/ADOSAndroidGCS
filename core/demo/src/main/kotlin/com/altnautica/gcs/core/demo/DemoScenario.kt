@@ -80,6 +80,9 @@ enum class DemoScenario(
     /** The flight controller's return was blocked: the pilot routes home round the obstacle (37.6 m against 24.2 m straight). */
     ReturnRouted(R.string.demo_scenario_return_routed),
 
+    /** People and a cart cross the room: the pilot tracks them on the map and keeps its distance from the people. */
+    PeopleNear(R.string.demo_scenario_people_near),
+
     /** No GNSS fix: the demo flight controller loses its fix and position comes from the EKF origin only. */
     NoGnss(R.string.demo_scenario_no_gnss),
 

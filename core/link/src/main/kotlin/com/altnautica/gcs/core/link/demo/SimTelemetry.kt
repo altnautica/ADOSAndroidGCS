@@ -14,6 +14,7 @@ import com.altnautica.gcs.core.mavlink.messages.GlobalPositionInt
 import com.altnautica.gcs.core.mavlink.messages.GpsRawInt
 import com.altnautica.gcs.core.mavlink.messages.Heartbeat
 import com.altnautica.gcs.core.mavlink.messages.HomePosition
+import com.altnautica.gcs.core.mavlink.messages.LocalPositionNed
 import com.altnautica.gcs.core.mavlink.messages.MissionCurrent
 import com.altnautica.gcs.core.mavlink.messages.RcChannels
 import com.altnautica.gcs.core.mavlink.messages.SysStatus
@@ -59,6 +60,17 @@ internal class SimTelemetry(
         vy = (sim.ve * 100).toInt(),
         vz = (sim.vd * 100).toInt(),
         hdg = (headingDeg * 100).toInt(),
+    )
+
+    /** The EKF's local NED position and velocity, from its origin at home. */
+    fun localPosition() = LocalPositionNed(
+        timeBootMs = sim.bootMs,
+        x = sim.north.toFloat(),
+        y = sim.east.toFloat(),
+        z = (-sim.alt).toFloat(),
+        vx = sim.vn.toFloat(),
+        vy = sim.ve.toFloat(),
+        vz = sim.vd.toFloat(),
     )
 
     fun vfrHud() = VfrHud(

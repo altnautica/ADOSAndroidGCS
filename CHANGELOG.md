@@ -5,6 +5,15 @@ app's `versionName`.
 
 ## [Unreleased]
 
+- **Tracked movers on the maps.** The pilot's `movers` (people, vehicles and
+  things its sensors see move) draw on the cockpit's local minimap and its
+  map: a marker shaped and coloured by kind (a person a dot, a vehicle a
+  square, an unknown mover a triangle), an arrow over two seconds of travel,
+  a ring at the position's one-sigma uncertainty, all faded once a mover has
+  not been measured for over a second. The `person` command limit shows as
+  "Keeping distance from people" with the other limits, and the demo's
+  "People nearby: keeping distance" pin shows both.
+
 - **Whole-frame detection threshold.** The node's Video & vision settings
   list `vision.whole_frame_conf` beside `vision.confidence_threshold`, the
   least confidence a detection keeps on the agent's whole-frame pass. Both

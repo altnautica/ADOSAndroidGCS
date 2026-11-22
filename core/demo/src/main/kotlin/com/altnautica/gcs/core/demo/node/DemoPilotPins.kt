@@ -193,6 +193,14 @@ internal class DemoPilotPins(
                 }
                 banner("pilot.banner.return_routed")
             }
+            // People and a cart cross the room: the pilot tracks them and keeps its distance from the people.
+            DemoScenario.PeopleNear -> {
+                flying(GOTO, GUIDED)
+                put("avoid", "bypass")
+                putJsonArray("goal_ned") { add(6.0); add(4.0); add(-PIN_HEIGHT_M) }
+                putJsonObject("command") { putJsonArray("limits") { add("person") } }
+                putJsonArray("movers") { peopleNear(sinceMs).forEach { add(it) } }
+            }
             else -> Unit
         }
     }
@@ -358,6 +366,29 @@ internal class DemoPilotPins(
         put("until_ms", JsonNull)
     }
 
+    /** The movers the people-near pin tracks [sinceMs] after it was pinned (local NED, m). */
+    private fun peopleNear(sinceMs: Long): List<JsonObject> {
+        // A person walks east 30 m north of home at 1 m/s, wrapping every 8 m; a cart drives north 35 m off.
+        val walkedM = (sinceMs % WALK_WRAP_MS) / 1000.0
+        return listOf(
+            mover(1, "person", "vision", 30.0, -4.0 + walkedM, 0.0, 1.0, 0.3, 80),
+            // Close by and not measured for 1.6 s: a prediction, drawn faded with a wider ring.
+            mover(2, "person", "vision", -2.5, 3.5, -0.6, 0.0, 0.9, 1_600),
+            mover(3, "vehicle", "vision", -28.0, -20.0, 0.8, 0.0, 0.4, 120),
+            mover(4, "unknown", "scan", 12.0, 22.0, 0.0, 0.0, 0.2, 0),
+        )
+    }
+
+    private fun mover(id: Int, kind: String, source: String, n: Double, e: Double, vn: Double, ve: Double, sigmaM: Double, ageMs: Long) = buildJsonObject {
+        put("id", id)
+        put("kind", kind)
+        put("source", source)
+        putJsonArray("ne") { add(round1(n)); add(round1(e)) }
+        putJsonArray("vel_ne") { add(vn); add(ve) }
+        put("sigma_m", sigmaM)
+        put("age_ms", ageMs)
+    }
+
     companion object {
         /** True while [scenario] holds a flight-controller failsafe: the pilot refuses `pause`. */
         fun failsafe(scenario: DemoScenario?): Boolean =
@@ -395,6 +426,7 @@ internal class DemoPilotPins(
         private val DETOUR_TARGET_NED = listOf(18.25, 0.0, -PIN_HEIGHT_M)
         private const val RETURN_REMAINING_M = 37.6
         private const val RETURN_STRAIGHT_M = 24.2
+        private const val WALK_WRAP_MS = 8_000L
 
         /** The demo airframe's confined margin (prop-tip radius 0.377 m + 0.1 m) and the clearance it needs with σ 0.02 m. */
         private const val MARGIN_M = 0.477

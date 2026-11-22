@@ -21,6 +21,9 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosColors
 import com.altnautica.gcs.core.model.Attitude
+import com.altnautica.gcs.core.model.MoverKind
+import com.altnautica.gcs.core.model.MoverSource
+import com.altnautica.gcs.core.model.TrackedMover
 import com.altnautica.gcs.feature.cockpit.autonomy.OccupancyLayer
 import com.altnautica.gcs.feature.cockpit.autonomy.PoseFrame
 import com.altnautica.gcs.feature.cockpit.autonomy.PoseHealth
@@ -97,7 +100,12 @@ class LocalMinimapRedrawTest {
         val painter = MinimapPainter(measurer, AdosColors.BrandDark, AdosTypography.numeric.small, "ORIGIN")
         val tiles = HashMap<Pair<Int, Int>, ImageBitmap>()
         for (ix in -1..0) for (iy in -1..0) tiles[ix to iy] = ImageBitmap(64, 64)
-        val map = inputs(5).copy(trail = trail(TRAIL), occupancy = OccupancyLayer(0.1f, 64, tiles, lastOkMs = 1_000L))
+        val movers = listOf(
+            TrackedMover(1, MoverKind.Person, MoverSource.Vision, 3f, 1f, 0f, 1.4f, 0.6f, 100),
+            TrackedMover(2, MoverKind.Vehicle, MoverSource.Vision, -4f, 2f, 1f, 0f, 0.3f, 1_500),
+            TrackedMover(3, MoverKind.Unknown, MoverSource.Scan, 1f, -3f, 0f, 0f, 0.2f, 0),
+        )
+        val map = inputs(5).copy(trail = trail(TRAIL), occupancy = OccupancyLayer(0.1f, 64, tiles, lastOkMs = 1_000L), movers = movers)
         val canvas = Canvas(ImageBitmap(400, 400))
         val scope = CanvasDrawScope()
         fun drawOnce() = scope.draw(density, LayoutDirection.Ltr, canvas, Size(400f, 400f)) {

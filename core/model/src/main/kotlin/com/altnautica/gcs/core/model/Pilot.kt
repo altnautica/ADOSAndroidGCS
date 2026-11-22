@@ -290,6 +290,8 @@ data class PilotState(
     val overheadAhead: OverheadAhead? = null,
     /** What the pilot sees obstacles with and the speed that stops inside its seen-clear range (`sensing`), or null (an older agent). */
     val sensing: Sensing? = null,
+    /** The moving obstacles the pilot tracks (people, vehicles, things seen moving), each predicted to the frame's time (`movers`); empty while none. */
+    val movers: List<TrackedMover> = emptyList(),
     /** No progress on the mission or the return: present while the vehicle holds for the operator. */
     val missionStall: MissionStall? = null,
     /** A detour round a blocked mission leg in flight (`mission_detour`), or null. */

@@ -39,6 +39,24 @@ data class MapRallyPoint(val id: String, val position: GeoPoint, val selected: B
 @Immutable
 data class MapHandle(val id: String, val position: GeoPoint)
 
+/** What a tracked mover is; selects its marker shape and colour. */
+enum class MapMoverKind { Person, Vehicle, Unknown }
+
+/**
+ * A moving obstacle the vehicle tracks: a marker at [position], an arrow to [arrowTip] (where
+ * it will be a couple of seconds on; null while it is all but still) and a ring of [sigmaM]
+ * metres, its position's uncertainty; [stale] fades all three.
+ */
+@Immutable
+data class MapMover(
+    val id: String,
+    val position: GeoPoint,
+    val kind: MapMoverKind,
+    val arrowTip: GeoPoint?,
+    val sigmaM: Double,
+    val stale: Boolean,
+)
+
 /** Vehicle marker. [headingDeg] null draws a heading-less dot; [stale] dims it. */
 @Immutable
 data class MapVehicle(val position: GeoPoint, val headingDeg: Float?, val stale: Boolean = false)
@@ -52,6 +70,7 @@ data class MapOverlays(
     val circles: List<MapCircle> = emptyList(),
     val rally: List<MapRallyPoint> = emptyList(),
     val handles: List<MapHandle> = emptyList(),
+    val movers: List<MapMover> = emptyList(),
 ) {
     companion object {
         val Empty = MapOverlays()

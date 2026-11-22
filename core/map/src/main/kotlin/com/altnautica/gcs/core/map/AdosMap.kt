@@ -28,6 +28,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
+import com.altnautica.gcs.core.designsystem.tokens.AdosCockpitColors
 import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import org.maplibre.android.MapLibre
@@ -205,6 +206,9 @@ private fun AdosColorRoles.mapPalette() = MapPalette(
     fenceExclusion = statusError.toArgb(),
     survey = accentPrimaryHover.toArgb(),
     draft = fgSecondary.toArgb(),
+    moverPerson = AdosCockpitColors.StateAvoiding.toArgb(),
+    moverVehicle = AdosCockpitColors.StateBlocked.toArgb(),
+    moverUnknown = AdosCockpitColors.StateStale.toArgb(),
 )
 
 private fun AdosColorRoles.iconPalette() = IconPalette(
@@ -220,6 +224,9 @@ private fun AdosColorRoles.iconPalette() = IconPalette(
     rally = statusWarning.toArgb(),
     vehicle = hudPrimary.toArgb(),
     vehicleStale = hudMuted.toArgb(),
+    moverPerson = AdosCockpitColors.StateAvoiding.toArgb(),
+    moverVehicle = AdosCockpitColors.StateBlocked.toArgb(),
+    moverUnknown = AdosCockpitColors.StateStale.toArgb(),
     ink = hudInk.toArgb(),
     outline = bgCanvas.toArgb(),
 )

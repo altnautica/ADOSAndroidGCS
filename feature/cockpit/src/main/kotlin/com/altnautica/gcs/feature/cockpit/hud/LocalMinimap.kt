@@ -64,9 +64,8 @@ import com.altnautica.gcs.core.designsystem.theme.AdosTheme
 import com.altnautica.gcs.core.designsystem.theme.AdosTypography
 import com.altnautica.gcs.core.designsystem.tokens.AdosSpacing
 import com.altnautica.gcs.core.model.Attitude
-import com.altnautica.gcs.core.model.AvoidState
 import com.altnautica.gcs.core.model.LocalPosition
-import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.TrackedMover
 import com.altnautica.gcs.feature.cockpit.flow.specText
 import com.altnautica.gcs.core.designsystem.tokens.AdosColorRoles
 import com.altnautica.gcs.core.designsystem.tokens.AdosCockpitColors
@@ -101,6 +100,8 @@ internal data class LocalMapInputs(
     val nowMs: Long,
     /** The pilot's planned path and goal, from a fresh pilot frame; null hides it. */
     val plan: LocalPlan?,
+    /** The moving obstacles the pilot tracks, from a fresh pilot frame; empty draws none. */
+    val movers: List<TrackedMover> = emptyList(),
 ) {
     /** The SLAM pose while fresh; null falls back to the flight controller's local position. */
     val freshPose: PoseFrame? get() = pose?.takeIf { nowMs - it.receivedAtMs <= LocalFrame.POSE_STALE_MS }
@@ -119,37 +120,10 @@ internal data class LocalMapInputs(
 }
 
 /**
- * The pilot's plan in map NED metres (north, east): the path from the drone to the goal and
- * the goal, while a go-to or a skill flies. A port of the shared web `localPlan`.
- */
-internal data class LocalPlan(
-    val points: List<Pair<Float, Float>>,
-    val goal: Pair<Float, Float>?,
-    /** The pilot reports the way blocked: drawn in `tokens.json` `state.blocked`. */
-    val blocked: Boolean,
-) {
-    companion object {
-        /** The plan [pilot] reports, or null when it reports none; pass null for a stale frame. */
-        fun of(pilot: PilotState?): LocalPlan? {
-            if (pilot == null) return null
-            val goal = pilot.goalNed?.takeIf { it.size >= 2 }?.let { it[0] to it[1] }
-            if (pilot.planNed.isEmpty() && goal == null) return null
-            return LocalPlan(pilot.planNed, goal, pilot.avoidState == AvoidState.Blocked)
-        }
-    }
-}
-
-/** A [LocalPlan] in screen pixels. */
-internal data class ScreenPlan(val points: List<Offset>, val goal: Offset?, val blocked: Boolean)
-
-/** Projects [plan] through [pt] (north, east metres to a screen point). */
-internal fun screenPlan(plan: LocalPlan, pt: (Float, Float) -> Offset): ScreenPlan =
-    ScreenPlan(plan.points.map { (n, e) -> pt(n, e) }, plan.goal?.let { (n, e) -> pt(n, e) }, plan.blocked)
-
-/**
  * Minimap local frame (north up, east right, metres): grid, live occupancy tiles, the
  * SLAM trail (dashed while degraded, broken across lost), scan returns, the origin, the
  * pilot's planned path and goal (dashed, `state.goto`, `state.blocked` while blocked), the
+ * moving obstacles the pilot tracks ([MinimapMovers]), the
  * followed target (dashed while it is sought, with its search ellipse, predicted path and
  * vantage point; hidden while follow-me waits for the operator) and the drone. The header
  * carries `LOCAL · N/E m`, `FC POS` when the
@@ -313,6 +287,7 @@ internal class MinimapPainter(
     private var planDash: PathEffect? = null
     private var dashDensity = 0f
     private var origin: TextLayoutResult? = null
+    private val movers = MoverPainter()
 
     // The frame of the current draw.
     private var droneN = 0f
@@ -397,6 +372,11 @@ internal class MinimapPainter(
         val label = origin ?: measurer.measure(originLabel, labelStyle).also { origin = it }
         drawText(label, topLeft = Offset(o.x + arm, o.y + 2))
         inputs.plan?.let { plan(it) }
+        val tracked = inputs.movers
+        for (i in tracked.indices) {
+            val m = tracked[i]
+            with(movers) { mover(m, pt(m.northM, m.eastM), pxPerM) }
+        }
         inputs.follow?.let { target(it) }
         drone(pt(droneN, droneE), yaw)
     }

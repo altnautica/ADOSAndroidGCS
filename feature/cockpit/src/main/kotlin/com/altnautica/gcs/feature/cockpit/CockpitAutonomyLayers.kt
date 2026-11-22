@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,9 @@ import com.altnautica.gcs.feature.cockpit.hud.LocalMapInputs
 import com.altnautica.gcs.feature.cockpit.hud.LocalPlan
 import com.altnautica.gcs.feature.cockpit.hud.LocalMinimap
 import com.altnautica.gcs.feature.cockpit.hud.LockChip
+import com.altnautica.gcs.feature.cockpit.hud.MinimapMovers
+import com.altnautica.gcs.feature.cockpit.hud.MoversLine
+import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.hud.ProximityRadar
 import com.altnautica.gcs.feature.cockpit.hud.RailUi
 import com.altnautica.gcs.feature.cockpit.hud.TargetDesignator
@@ -329,13 +333,20 @@ internal fun AutonomyLocalMinimap(vm: CockpitViewModel, modifier: Modifier, onCl
             onTap = onClick,
             onLongPress = vm::pickLocalPoint,
         )
+        // Changes only when the count or the nearest person's tenth of a metre does.
+        val strings = LocalCockpitStrings.current
+        val movers by remember(sample, strings) {
+            derivedStateOf { MinimapMovers.line(sample.inputs, strings::format) }
+        }
+        MoversLine(movers, Modifier.align(Alignment.TopEnd))
     }
 }
 
 /**
  * The local minimap's inputs as of its last beat: the SLAM pose, trail, scan, occupancy,
- * follow lock and the pilot's planned path and goal, with the drone's own local position and
- * attitude, read together on every [MINIMAP_BEATS]th beat. Frames arriving between samples
+ * follow lock, the pilot's planned path and goal and the movers it tracks, with the drone's
+ * own local position and attitude, read together on every [MINIMAP_BEATS]th beat. Frames
+ * arriving between samples
  * change nothing the map draws; a sample replaces the last only when something in it
  * changed, or every 500 ms so ages (and a pilot frame going stale) advance.
  */
@@ -351,14 +362,17 @@ internal class LocalMinimapSample(private val a: CockpitAutonomy, private val te
         if (n % AGE_BEATS == 0L || next.copy(nowMs = inputs.nowMs) != inputs) inputs = next
     }
 
-    /** What the local minimap shows now: the follow lock and the pilot's plan only while fresh. */
+    /** What the local minimap shows now: the follow lock, the pilot's plan and its movers only while fresh. */
     private fun read(): LocalMapInputs {
         val now = a.nowMs()
         val f = a.feed
         val fresh = f.follow.value?.takeIf { now - it.atMs <= TargetState.FOLLOW_STALE_MS }?.value
-        val plan = LocalPlan.of(freshPilot(f.pilot.value, now))
+        val pilot = freshPilot(f.pilot.value, now)
         val t = telemetry()
-        return LocalMapInputs(f.pose.value, t?.localPosition?.value, t?.attitude?.value, f.trail.value, f.scan.value, f.occupancy.value, fresh, now, plan)
+        return LocalMapInputs(
+            f.pose.value, t?.localPosition?.value, t?.attitude?.value, f.trail.value, f.scan.value, f.occupancy.value, fresh, now,
+            LocalPlan.of(pilot), pilot?.movers.orEmpty(),
+        )
     }
 }
 
