@@ -161,6 +161,14 @@ internal class DemoPilotPins(
                     put("skill_id", FOLLOW_SKILL_ID)
                     put("label", FOLLOW_LABEL)
                 }
+                // Follow-Me sends an intent; the pilot reports the viewpoint it picked.
+                put("goal_kind", "follow_intent")
+                putJsonObject("view") {
+                    put("bearing_deg", 15.0)
+                    put("radius_m", 8.0)
+                    put("height_m", 4.5)
+                    put("visibility", 0.92)
+                }
             }
             DemoScenario.FlyHere -> {
                 if (gotoAccepted) flying(GOTO, GUIDED) else flying(PILOT, GUIDED)

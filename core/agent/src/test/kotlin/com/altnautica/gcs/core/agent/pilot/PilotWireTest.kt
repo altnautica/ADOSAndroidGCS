@@ -4,6 +4,8 @@ import com.altnautica.gcs.core.model.AvoidMode
 import com.altnautica.gcs.core.model.AvoidState
 import com.altnautica.gcs.core.model.BatteryReserve
 import com.altnautica.gcs.core.model.ControlMode
+import com.altnautica.gcs.core.model.FollowView
+import com.altnautica.gcs.core.model.GoalKind
 import com.altnautica.gcs.core.model.InputSession
 import com.altnautica.gcs.core.model.MissionGap
 import com.altnautica.gcs.core.model.MissionStall
@@ -225,6 +227,32 @@ class PilotWireTest {
         assertEquals(Sensing(SensingTier.Lidar3d, 11.6f, 4.2f), s.sensing)
         val radar = JsonObject(sensing + ("tier" to JsonPrimitive("radar")))
         assertNull(checkNotNull(PilotWire.parseState(JsonObject(data + ("sensing" to radar)), 0L)).sensing)
+    }
+
+    @Test
+    fun `the goal kind and the view picked parse, and an absent or unknown kind reads as none`() {
+        val none = checkNotNull(PilotWire.parseState(data, 0L))
+        assertNull(none.goalKind)
+        assertNull(none.view)
+        val view = JsonObject(
+            mapOf(
+                "bearing_deg" to JsonPrimitive(15.0),
+                "radius_m" to JsonPrimitive(8.0),
+                "height_m" to JsonPrimitive(4.5),
+                "visibility" to JsonPrimitive(0.75),
+            ),
+        )
+        val s = checkNotNull(
+            PilotWire.parseState(JsonObject(data + ("goal_kind" to JsonPrimitive("follow_intent")) + ("view" to view)), 0L),
+        )
+        assertEquals(GoalKind.FollowIntent, s.goalKind)
+        assertEquals(FollowView(15f, 8f, 4.5f, 0.75f), s.view)
+        for (kind in GoalKind.entries) {
+            assertEquals(kind, PilotWire.parseState(JsonObject(data + ("goal_kind" to JsonPrimitive(kind.wire))), 0L)?.goalKind)
+        }
+        assertNull(PilotWire.parseState(JsonObject(data + ("goal_kind" to JsonPrimitive("wander"))), 0L)?.goalKind)
+        val partial = JsonObject(view - "visibility")
+        assertNull(PilotWire.parseState(JsonObject(data + ("view" to partial)), 0L)?.view)
     }
 
     @Test

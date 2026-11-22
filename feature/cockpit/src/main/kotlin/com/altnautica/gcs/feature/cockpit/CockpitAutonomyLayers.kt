@@ -130,7 +130,8 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
 
 /**
  * The nav-source chip for the safety band (item 6), and the "Confined" and "No RC" chips beside
- * it while those postures fly; above the compact width, the sensing tier with its speed limit.
+ * it while those postures fly; above the compact width, the sensing tier with its speed limit
+ * and the goal the flying skill sent.
  */
 @Composable
 internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
@@ -141,7 +142,10 @@ internal fun NavChipSlot(vm: CockpitViewModel, width: WidthClass) {
         ConfinedChipSlot(vm)
         NoRcChipSlot(vm)
         SimClockChipSlot(vm)
-        if (width != WidthClass.Compact) SensingChipSlot(vm)
+        if (width != WidthClass.Compact) {
+            SensingChipSlot(vm)
+            GoalKindChipSlot(vm)
+        }
     }
 }
 

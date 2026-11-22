@@ -4,6 +4,8 @@ import com.altnautica.gcs.core.model.AvoidMode
 import com.altnautica.gcs.core.model.AvoidState
 import com.altnautica.gcs.core.model.BatteryReserve
 import com.altnautica.gcs.core.model.ControlMode
+import com.altnautica.gcs.core.model.FollowView
+import com.altnautica.gcs.core.model.GoalKind
 import com.altnautica.gcs.core.model.HandoverGate
 import com.altnautica.gcs.core.model.InputSession
 import com.altnautica.gcs.core.model.LaunchSequence
@@ -220,6 +222,16 @@ object PilotWire {
                     SensingTier.of(s.str("tier")) ?: return@let null,
                     s.float("clear_range_m") ?: return@let null,
                     s.float("speed_limit_mps") ?: return@let null,
+                )
+            },
+            // Sent while a skill's goal flies; a kind this build does not know reads as none.
+            goalKind = GoalKind.of(data.str("goal_kind")),
+            view = (data["view"] as? JsonObject)?.let { v ->
+                FollowView(
+                    v.float("bearing_deg") ?: return@let null,
+                    v.float("radius_m") ?: return@let null,
+                    v.float("height_m") ?: return@let null,
+                    v.float("visibility") ?: return@let null,
                 )
             },
             // An older agent sends none, and the pilot omits it while it tracks none.

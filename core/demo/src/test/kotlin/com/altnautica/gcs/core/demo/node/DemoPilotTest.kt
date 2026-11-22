@@ -7,6 +7,8 @@ import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.ARM_DISARM
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.GUIDED
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.SET_MODE
 import com.altnautica.gcs.core.demo.node.FakeDemoFc.Companion.TAKEOFF
+import com.altnautica.gcs.core.model.FollowView
+import com.altnautica.gcs.core.model.GoalKind
 import com.altnautica.gcs.core.model.PlaceClass
 import com.altnautica.gcs.core.model.RcReceiver
 import com.altnautica.gcs.core.model.RouteCheckState
@@ -695,6 +697,10 @@ class DemoPilotTest {
         val following = pilot.view()
         assertTrue(following.followRunning)
         assertEquals("skill", state().str("owner"))
+        // Follow-Me flies an intent on the viewpoint the demo pilot picked.
+        val parsed = PilotWire.parseState(state(), 0L)!!
+        assertEquals(GoalKind.FollowIntent, parsed.goalKind)
+        assertEquals(FollowView(15f, 8f, 4.5f, 0.92f), parsed.view)
         assertTrue(arItems(layers.ar(t, following)).map { it.str("t") }.containsAll(followKinds))
         val tracked = feed.detections(4_100L, 0, true)["detections"]!!.jsonArray.map { it.jsonObject }
         assertTrue(tracked.any { it.str("lock_state") == "locked" })

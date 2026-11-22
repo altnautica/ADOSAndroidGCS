@@ -290,6 +290,10 @@ data class PilotState(
     val overheadAhead: OverheadAhead? = null,
     /** What the pilot sees obstacles with and the speed that stops inside its seen-clear range (`sensing`), or null (an older agent). */
     val sensing: Sensing? = null,
+    /** The kind of goal the flying skill sent (`goal_kind`), or null while none (or an older agent). */
+    val goalKind: GoalKind? = null,
+    /** The viewpoint the view planner picked for a follow intent (`view`), or null. */
+    val view: FollowView? = null,
     /** The moving obstacles the pilot tracks (people, vehicles, things seen moving), each predicted to the frame's time (`movers`); empty while none. */
     val movers: List<TrackedMover> = emptyList(),
     /** No progress on the mission or the return: present while the vehicle holds for the operator. */
