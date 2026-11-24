@@ -205,6 +205,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, radioAttaches: Flow<Unit>, viewModel: App
                     NodeDetailRoute(
                         nodeId = DeviceId(key.id),
                         initialConfirmUnpair = key.confirmUnpair,
+                        initialSettings = key.settings,
                         onBack = { BackStackOps.pop(backStack) },
                         onFly = { fly(backStack, viewModel, it) },
                         onOpenSetup = { BackStackOps.push(backStack, SetupKey(it.value)) },
@@ -230,7 +231,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, radioAttaches: Flow<Unit>, viewModel: App
                                 ReadinessFix.ApplyProfile ->
                                     AircraftSetupKey(id.value, BatteryFailsafeFix.WIZARD, BatteryFailsafeFix.STEP, run = true)
                                 is ReadinessFix.SetupStep -> AircraftSetupKey(id.value, GROUND_WIZARD, fix.step)
-                                is ReadinessFix.Settings -> NodeKey(id.value)
+                                is ReadinessFix.Settings -> NodeKey(id.value, settings = fix.section)
                                 is ReadinessFix.Parameters -> ParamsKey(id.value, fix.names)
                             }
                             BackStackOps.push(backStack, to)

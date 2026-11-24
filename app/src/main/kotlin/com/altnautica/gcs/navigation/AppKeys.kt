@@ -30,9 +30,12 @@ data class AircraftSetupKey(val id: String, val wizard: String? = null, val step
 @Serializable
 data class ParamsKey(val id: String, val names: List<String> = emptyList()) : NavKey
 
-/** The Vehicle surface: node detail; [confirmUnpair] opens it with the unpair confirm showing. */
+/**
+ * The Vehicle surface: node detail; [confirmUnpair] opens it with the unpair confirm showing;
+ * [settings] opens its Agent tab at that settings section (a readiness fix's `section`).
+ */
 @Serializable
-data class NodeKey(val id: String, val confirmUnpair: Boolean = false) : NavKey
+data class NodeKey(val id: String, val confirmUnpair: Boolean = false, val settings: String? = null) : NavKey
 
 @Serializable
 data object LogsKey : NavKey

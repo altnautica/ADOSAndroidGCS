@@ -28,6 +28,24 @@
     <string name="alerts_action_collapse">Collapse</string>
     <string name="alerts_action_expand">Expand</string>
     <string name="alerts_apply_snapshot">A snapshot is saved first; you can restore it from Aircraft setup › Setup report.</string>
+    <string name="alerts_action_cancel">Cancel</string>
+    <string name="alerts_apply_reading">Reading the recommended values…</string>
+    <plurals name="alerts_apply_changes">
+        <item quantity="one">%d value changes</item>
+        <item quantity="other">%d values change</item>
+    </plurals>
+    <string name="alerts_apply_nothing">Every value is already set</string>
+    <plurals name="alerts_apply_already_set">
+        <item quantity="one">%d already set</item>
+        <item quantity="other">%d already set</item>
+    </plurals>
+    <string name="alerts_apply_reboots">The flight controller will restart</string>
+    <string name="alerts_apply_hold">Hold to apply</string>
+    <string name="alerts_apply_writing">Writing values…</string>
+    <string name="alerts_apply_done">Recommended values written</string>
+    <string name="alerts_apply_failed">The values were not written.</string>
+    <string name="alerts_apply_refused">The vehicle refused to write the values.</string>
+    <string name="alerts_apply_unreachable">The vehicle did not answer. Check the link and try again.</string>
     <string name="alerts_chip_blocking">What blocks take-off</string>
     <string name="alerts_chip_no_blocking">Nothing blocks take-off</string>
     <string name="alerts_chip_warnings">Warnings (%d)</string>

@@ -19,6 +19,7 @@ import com.altnautica.gcs.core.skills.hud.AlertGroups
 import com.altnautica.gcs.feature.cockpit.flow.LocalCockpitStrings
 import com.altnautica.gcs.feature.cockpit.testSpec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -73,20 +74,52 @@ class StatusAlertListTest {
 
     @Test
     fun `a row shows its parameter rows, its fix and Hide, each a 48 dp target`() {
-        var fixed: ReadinessFix? = null
+        var applyFor: String? = null
         var snoozed: Pair<String, Boolean>? = null
         val list = StatusModel.list(items(), groups, emptySet())
-        show(list, StatusListActions(onFix = { fixed = it }, onSnooze = { k, on -> snoozed = k to on }))
+        show(list, StatusListActions(onApplyRead = { applyFor = it }, onSnooze = { k, on -> snoozed = k to on }))
         // Six rows show, the rest behind Show all.
         compose.onNodeWithText("PARAM_6", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("PARAM_7", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithText("Show all 9").performScrollTo().performClick()
         compose.onNodeWithText("MAV_GCS_SYSID", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("not reported", useUnmergedTree = true).assertExists()
+        // Apply recommended values starts the inline review for this row, keyed by its snooze key.
         compose.onNodeWithTag("status-fix-pilot:fc_profile").performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
-        assertEquals(ReadinessFix.ApplyProfile, fixed)
+        assertEquals("pilot:fc_profile|FC parameters differ", applyFor)
         compose.onNodeWithText("Collapse").performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
         assertEquals("pilot:fc_profile|FC parameters differ" to true, snoozed)
+    }
+
+    @Test
+    fun `the apply review lists the changes, the folded rows, the restart, a hold and Cancel`() {
+        val list = StatusModel.list(items(), groups, emptySet())
+        val review = com.altnautica.gcs.feature.cockpit.alerts.ProfileReview(
+            actionId = "apply",
+            changes = listOf(com.altnautica.gcs.feature.cockpit.alerts.ProfileRow("PRX1_TYPE", "2", 0.0)),
+            same = listOf(com.altnautica.gcs.feature.cockpit.alerts.ProfileRow("FS_GCS_ENABLE", "1", 1.0)),
+            reboots = true,
+        )
+        var cancelled = false
+        show(
+            list,
+            StatusListActions(onApplyCancel = { cancelled = true }),
+            apply = com.altnautica.gcs.feature.cockpit.alerts.ApplyState(
+                "pilot:fc_profile|FC parameters differ",
+                com.altnautica.gcs.feature.cockpit.alerts.ApplyPhase.Review(review),
+            ),
+        )
+        compose.onNodeWithText("1 value changes", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("PRX1_TYPE", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("FS_GCS_ENABLE", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("alert-apply-same-toggle").performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
+        compose.onNodeWithText("FS_GCS_ENABLE", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("alert-apply-reboots", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("alert-apply-hold", useUnmergedTree = true).performScrollTo().assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithTag("alert-apply-cancel").performScrollTo().assertHeightIsAtLeast(48.dp).performClick()
+        assertTrue(cancelled)
+        // The wanted table gives way to the review, and the button to the hold.
+        compose.onNodeWithTag("status-fix-pilot:fc_profile").assertDoesNotExist()
     }
 
     @Test
@@ -100,12 +133,17 @@ class StatusAlertListTest {
         assertEquals(true, all)
     }
 
-    private fun show(list: StatusListUi, actions: StatusListActions, blockingOnly: Boolean = false) {
+    private fun show(
+        list: StatusListUi,
+        actions: StatusListActions,
+        blockingOnly: Boolean = false,
+        apply: com.altnautica.gcs.feature.cockpit.alerts.ApplyState = com.altnautica.gcs.feature.cockpit.alerts.ApplyState(),
+    ) {
         val chrome = Chrome.from(testSpec.tokens.chrome)
         compose.setContent {
             AdosTheme {
                 CompositionLocalProvider(LocalCockpitStrings provides testSpec.setupStrings, LocalChrome provides chrome) {
-                    StatusList(list, onClose = {}, blockingOnly = blockingOnly, actions = actions)
+                    StatusList(list, onClose = {}, blockingOnly = blockingOnly, actions = actions, apply = apply)
                 }
             }
         }

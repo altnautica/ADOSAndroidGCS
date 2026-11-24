@@ -20,7 +20,7 @@ import com.altnautica.gcs.feature.configure.FakeParamService
 import com.altnautica.gcs.feature.configure.FakeVehicle
 import com.altnautica.gcs.feature.configure.common.ConfigureTarget
 import com.altnautica.gcs.feature.configure.common.ConfigureTargetSource
-import com.altnautica.gcs.feature.configure.wizard.SetupBackendSource
+import com.altnautica.gcs.core.link.node.SetupBackendSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation

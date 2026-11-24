@@ -121,12 +121,14 @@ private fun serverProblem(status: Int, err: String?): SetupProblem = when {
     else -> SetupProblem(local = SetupLocalProblem.Unreachable)
 }
 
-/** The spec text of [problem]'s engine key, or null when it has none (the caller words the local reason). */
-fun SetupText.problemText(problem: SetupProblem): String? =
-    problem.key?.let { key -> format(key, emptyMap()).takeIf { it != key } }
-
-/** The engine's code behind [this], filling the placeholder of [localText]'s string. */
-val SetupProblem.engineCode: String? get() = key?.removePrefix(ERR_PREFIX)
+/**
+ * The spec text of [problem]'s engine code: `setup.err.<code>`, else `setup.blocker.<code>`;
+ * null when the spec has neither (the caller words the local reason, never the raw code).
+ */
+fun SetupText.problemText(problem: SetupProblem): String? {
+    val code = problem.key?.removePrefix(ERR_PREFIX) ?: return null
+    return listOf(setupErrKey(code), "setup.blocker.$code").firstNotNullOfOrNull { key -> format(key, emptyMap()).takeIf { it != key } }
+}
 
 /** The string that words [this] when the spec has no text for its key. */
 @StringRes
@@ -135,13 +137,13 @@ fun SetupProblem.localText(): Int = when (local) {
     SetupLocalProblem.Unsupported -> R.string.cfg_setup_err_unsupported
     SetupLocalProblem.Armed -> R.string.cfg_setup_err_armed
     SetupLocalProblem.EngineDown -> R.string.cfg_setup_err_engine_down
-    SetupLocalProblem.Refused -> if (engineCode != null) R.string.cfg_setup_err_refused_code else R.string.cfg_setup_err_refused
+    SetupLocalProblem.Refused -> R.string.cfg_setup_err_refused
     SetupLocalProblem.Unreachable, null -> R.string.cfg_setup_err_unreachable
 }
 
 /** A setup failure in operator words: the engine's spec text, else the local reason (unreachable by default). */
 @Composable
 fun SetupProblemText(problem: SetupProblem, modifier: Modifier = Modifier) {
-    val text = LocalSetupText.current.problemText(problem) ?: stringResource(problem.localText(), problem.engineCode.orEmpty())
+    val text = LocalSetupText.current.problemText(problem) ?: stringResource(problem.localText())
     Text(text, modifier, color = AdosTheme.colors.statusError)
 }

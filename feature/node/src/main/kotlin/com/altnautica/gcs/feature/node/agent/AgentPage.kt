@@ -82,11 +82,11 @@ import kotlinx.serialization.json.JsonPrimitive
  * the section).
  */
 @Composable
-fun AgentTab(nodeId: String, modifier: Modifier = Modifier) {
+fun AgentTab(nodeId: String, modifier: Modifier = Modifier, initialSection: String? = null) {
     val vm = hiltViewModel<AgentPageViewModel, AgentPageViewModel.Factory>(key = "agent-$nodeId") { it.create(nodeId) }
     val state by vm.state.collectAsStateWithLifecycle()
     val write by vm.writeState.collectAsStateWithLifecycle()
-    var sectionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var sectionId by rememberSaveable { mutableStateOf(initialSection) }
     var treeOpen by rememberSaveable { mutableStateOf(false) }
     var pageKey by rememberSaveable { mutableStateOf<String?>(null) }
     val section = AgentSection.ALL.firstOrNull { it.id == sectionId }

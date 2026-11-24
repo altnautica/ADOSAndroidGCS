@@ -28,4 +28,16 @@ class FcTextsTest {
         assertTrue(t.warnings.value.single().relayed)
         assertEquals(3, t.warnings.value.single().severity)
     }
+
+    @Test
+    fun `every distinct PreArm reason is held once, the newest pre-arm alert stays the last heard`() {
+        val t = FcTexts()
+        t.onStatusText(4, "PreArm: Compass not calibrated", 1_000, relayed = false)
+        t.onStatusText(4, "PreArm: Throttle too high", 2_000, relayed = false)
+        t.onStatusText(4, "PreArm: Compass not calibrated", 3_000, relayed = true)
+        assertEquals(listOf("Throttle too high", "Compass not calibrated"), t.prearmLines.value.map { it.text })
+        // A reason older than the hold drops out when another arrives.
+        t.onStatusText(4, "PreArm: Battery below minimum", 2_500 + AlertEngine.PREARM_HOLD_MS, relayed = false)
+        assertEquals(listOf("Compass not calibrated", "Battery below minimum"), t.prearmLines.value.map { it.text })
+    }
 }

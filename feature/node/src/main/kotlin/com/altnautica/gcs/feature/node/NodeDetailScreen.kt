@@ -58,6 +58,7 @@ import com.altnautica.gcs.core.link.node.canFly
 import com.altnautica.gcs.core.designsystem.component.node.LivenessChip
 import com.altnautica.gcs.core.designsystem.component.node.ReachBadge
 import com.altnautica.gcs.core.designsystem.component.node.profileLabel
+import com.altnautica.gcs.feature.node.agent.AgentSection
 import com.altnautica.gcs.feature.node.agent.AgentTab
 import com.altnautica.gcs.feature.node.groundstation.GroundStationTab
 import com.altnautica.gcs.feature.node.logs.NodeLogsTab
@@ -83,6 +84,8 @@ fun NodeDetailRoute(
     modifier: Modifier = Modifier,
     /** Open with the unpair confirmation already showing (the Home menu's Unpair row). */
     initialConfirmUnpair: Boolean = false,
+    /** Open at a settings section (a readiness fix's `section`): the Agent tab at its matching section. */
+    initialSettings: String? = null,
 ) {
     val vm = hiltViewModel<NodeDetailViewModel, NodeDetailViewModel.Factory>(key = "node-${nodeId.value}") { it.create(nodeId.value) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -104,6 +107,7 @@ fun NodeDetailRoute(
         onRetryForget = vm::retryForget,
         modifier = modifier,
         initialConfirmUnpair = initialConfirmUnpair,
+        initialSettings = initialSettings,
     )
 }
 
@@ -124,11 +128,14 @@ fun NodeDetailScreen(
     onRetryForget: () -> Unit,
     modifier: Modifier = Modifier,
     initialConfirmUnpair: Boolean = false,
+    /** Open at a settings section (a readiness fix's `section`): the Agent tab at its matching section. */
+    initialSettings: String? = null,
 ) {
     val ready = state as? NodeDetailState.Ready
     val paired = ready != null && ready.node.reaches.singleOrNull() != Reach.Blocked(BlockReason.NotPaired)
     val items = if (ready != null && paired) rememberTabItems(ready.node, ready.tabs) else emptyList()
-    var selectedKey by rememberSaveable(nodeId.value) { mutableStateOf(NodeTab.Overview.name) }
+    // Opened at a settings section (an alert's Open settings): the Agent tab, where the settings are.
+    var selectedKey by rememberSaveable(nodeId.value) { mutableStateOf(if (initialSettings != null) NodeTab.Agent.name else NodeTab.Overview.name) }
     // A tab that disappears (an extension unloads, the profile changes) resets the selection with it.
     LaunchedEffect(items.map { it.key }) {
         if (items.isNotEmpty() && items.none { it.key == selectedKey }) selectedKey = items.first().key
@@ -205,6 +212,7 @@ fun NodeDetailScreen(
                             selected = items.getOrNull(selectedIndex),
                             onOpenNode = onOpenNode,
                             onPairDrone = { selectedKey = NodeTab.CarriedDrones.name },
+                            agentSection = initialSettings?.let(AgentSection::forSettings),
                         )
                     }
                 }
@@ -277,6 +285,8 @@ private fun TabContent(
     selected: TabItem?,
     onOpenNode: (DeviceId) -> Unit,
     onPairDrone: () -> Unit,
+    /** The Agent tab's first section, when the screen opened at a settings section. */
+    agentSection: String? = null,
 ) {
     Box(Modifier.fillMaxSize()) {
         when (selected) {
@@ -306,7 +316,7 @@ private fun TabContent(
                 NodeTab.CarriedDrones, NodeTab.Radio, NodeTab.Network, NodeTab.Gnss, NodeTab.Lora, NodeTab.Mesh ->
                     GroundStationTab(node.id.value, tab, onOpenNode)
                 NodeTab.Logs -> NodeLogsTab(node.id.value)
-                NodeTab.Agent -> AgentTab(node.id.value)
+                NodeTab.Agent -> AgentTab(node.id.value, initialSection = agentSection)
             }
         }
     }

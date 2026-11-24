@@ -81,12 +81,20 @@ data class StatusListUi(val sections: List<StatusSection>, val hidden: List<Stat
 }
 
 /**
- * What the pill shows: the worst severity, the count and whether a new item is unacknowledged.
- * [waiting] holds while neither a pilot frame nor a heartbeat has arrived and nothing is
- * active: the pill then reads the neutral no-link text, never all systems OK.
+ * What the pill shows: the worst severity, the count (of which [blocking] are critical) and
+ * whether a new item is unacknowledged. [waiting] holds while neither a pilot frame nor a
+ * heartbeat has arrived and nothing is active: the pill then reads the neutral no-link text,
+ * never all systems OK.
  */
 @Immutable
-data class StatusPillUi(val severity: StatusSeverity, val count: Int, val flashing: Boolean, val top: StatusItem?, val waiting: Boolean = false)
+data class StatusPillUi(
+    val severity: StatusSeverity,
+    val count: Int,
+    val flashing: Boolean,
+    val top: StatusItem?,
+    val waiting: Boolean = false,
+    val blocking: Int = 0,
+)
 
 object StatusModel {
     /**
@@ -104,6 +112,8 @@ object StatusModel {
      * shared rule's pilot texts, dropped while the pilot state is stale; one heard on the vehicle
      * link stays. The pilot's readiness, the storage use, [facts] (pilot, agent, controller and
      * pre-flight rules), a fresh pilot's [failsafe] and its setup abort [setupAbort] feed the rest.
+     * While the pre-arm alert is up, [prearmLines] (every distinct recent PreArm reason) each
+     * get their own row; without them the alert's own newest reason does.
      */
     fun items(
         alerts: List<CockpitAlert>,
@@ -113,13 +123,14 @@ object StatusModel {
         pill: StatusPill,
         failsafe: PillFailsafe = PillFailsafe.None,
         setupAbort: String? = null,
+        prearmLines: List<String> = emptyList(),
     ): List<StatusItem> {
         val bySpecId = HashMap<String, CockpitAlert>()
         val inputs = ArrayList<PillAlertInput>()
         var prearm: List<String>? = null
         for (a in alerts) {
             when (a.id) {
-                AlertId.PREARM -> prearm = listOfNotNull(a.detail)
+                AlertId.PREARM -> prearm = prearmLines.ifEmpty { listOfNotNull(a.detail) }
                 AlertId.STATUS_TEXT -> Unit
                 else -> {
                     val id = specAlertId(a.id)
@@ -195,6 +206,7 @@ object StatusModel {
         flashing = items.any { it.key !in acknowledged },
         top = items.firstOrNull(),
         waiting = waiting && items.isEmpty(),
+        blocking = items.count { it.severity == StatusSeverity.Critical },
     )
 
     /** The shared alert id (`link_lost`, `batt_low`, ...) of a cockpit alert; Android's own alerts keep theirs. */

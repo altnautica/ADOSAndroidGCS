@@ -78,14 +78,24 @@ class StatusPillCasesTest {
                 val level = AlertLevel.valueOf(a["level"].str()!!.replaceFirstChar(Char::uppercase))
                 alerts += CockpitAlert(cockpitId(a["id"].str()!!), level, "alert.${a["id"].str()}", null, 0)
             }
-            // The view model holds the newest PreArm reason as the pre-arm alert.
-            (i["prearm"] as? JsonArray)?.lastOrNull()?.str()?.let {
-                alerts += CockpitAlert(AlertId.PREARM, AlertLevel.Advisory, "alert.prearm", AlertEngine.prearmBody(it), 0)
+            // The view model holds the newest PreArm reason as the pre-arm alert, and every
+            // distinct recent reason for the pill.
+            val prearmLines = (i["prearm"] as? JsonArray).orEmpty().mapNotNull { it.str()?.let(AlertEngine::prearmBody) }
+            prearmLines.lastOrNull()?.let {
+                alerts += CockpitAlert(AlertId.PREARM, AlertLevel.Advisory, "alert.prearm", it, 0)
             }
             // The cases' FC texts are the ones the pilot relays.
             val texts = i["fc_status"].array().map { ReceivedText(it["text"].str()!!, 0, it["severity"].long()!!.toInt(), relayed = true) }
             val readiness = i["readiness"].array().map {
-                ReadinessItem(it["id"].str()!!, it["ok"].bool()!!, if (it["severity"].str() == "block") ReadinessSeverity.Block else ReadinessSeverity.Warn, it["msg"].str().orEmpty())
+                ReadinessItem(
+                    it["id"].str()!!,
+                    it["ok"].bool()!!,
+                    if (it["severity"].str() == "block") ReadinessSeverity.Block else ReadinessSeverity.Warn,
+                    it["msg"].str().orEmpty(),
+                    it["params"].array().map { p ->
+                        com.altnautica.gcs.core.model.ParamDiff(p["name"].str()!!, (p["have"] as? JsonPrimitive)?.doubleOrNull, p["want"].str()!!)
+                    },
+                )
             }
             val facts = PillFacts(
                 pilotRule = true,
@@ -104,7 +114,7 @@ class StatusPillCasesTest {
             )
             val failsafe = PillFailsafe(i["fc_failsafe"].bool() ?: false, i["failsafe_cause"].str(), i["low_battery_action"].str())
             val storage = (i["storage_pct"] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.doubleOrNull
-            val items = StatusModel.items(alerts, PreflightResult(emptyList(), readiness, storage), texts, facts, rules, failsafe, i["setup_abort"].str())
+            val items = StatusModel.items(alerts, PreflightResult(emptyList(), readiness, storage), texts, facts, rules, failsafe, i["setup_abort"].str(), prearmLines)
             val pill = StatusModel.pill(items, emptySet())
 
             assertEquals(name, e["severity"].str(), pill.severity.name.lowercase())
@@ -128,10 +138,19 @@ class StatusPillCasesTest {
             when {
                 top.alert != null -> input["alerts"].array().first { cockpitId(it["id"].str()!!) == top.alert!!.id }["title"].str()!!
                 top.check != null -> strings.getValue(top.specKey!!).replace("{item}", input["preflight_failing"].array().single()["label"].str()!!)
-                else -> top.text!!
+                else -> top.pill?.title ?: top.text!!
             }
         }
-        else -> strings.getValue("cockpit.status.many").replace("{n}", items.size.toString())
+        else -> {
+            val blocking = items.count { it.severity == StatusSeverity.Critical }
+            val warnings = items.size - blocking
+            when {
+                blocking == 0 -> strings.getValue("cockpit.status.many").replace("{n}", items.size.toString())
+                warnings == 0 -> strings.getValue("cockpit.status.blocking").replace("{n}", blocking.toString())
+                warnings == 1 -> strings.getValue("cockpit.status.blocking_one_warning").replace("{n}", blocking.toString())
+                else -> strings.getValue("cockpit.status.blocking_warnings").replace("{n}", blocking.toString()).replace("{m}", warnings.toString())
+            }
+        }
     }
 
     private companion object {

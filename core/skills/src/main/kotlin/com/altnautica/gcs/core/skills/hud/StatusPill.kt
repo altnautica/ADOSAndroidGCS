@@ -91,6 +91,16 @@ data class PillAlert(
     val fix: ReadinessFix? = null,
 ) {
     val key: String get() = "$id|$text"
+
+    /**
+     * The row's one-line title: with a parameter table, the plain words before the colon
+     * ("FC parameters differ"), since the table carries the rest; otherwise the whole text.
+     */
+    val title: String get() {
+        if (params.isEmpty()) return text
+        val at = text.indexOf(": ")
+        return if (at > 0) text.substring(0, at) else text
+    }
 }
 
 data class PillSummary(
@@ -199,8 +209,11 @@ class StatusPill(
                 text.text("alert.nav_source_degraded", mapOf("source" to text.text(navKey))),
             )
         }
-        if (!prearm.isNullOrEmpty()) {
-            val t = prearm.last().replace(PREARM, "")
+        // Every distinct PreArm/Arm line the FC repeats: each names its own cause.
+        val prearmSeen = HashSet<String>()
+        for (line in prearm.orEmpty()) {
+            val t = line.replace(PREARM, "")
+            if (t.isEmpty() || !prearmSeen.add(t)) continue
             out += PillAlert("fc:$t", PillSource.FcPrearm, PillSeverity.Warning, t)
         }
         // The FC repeats a warning while its condition lasts: one alert per text, at its worst
@@ -252,18 +265,27 @@ class StatusPill(
         mapOf("action" to text.linkLossActionText(l.action), "in_s" to kotlin.math.ceil(l.inS.toDouble()).toInt()),
     )
 
-    /** The pill's face for the active [alerts] and the acknowledged ids. */
+    /**
+     * The pill's face for the active [alerts] and the acknowledged ids. One alert reads its
+     * title; more read the count, the blocking ones first ("2 blocking · 5 warnings") so a
+     * warning count never hides a blocker.
+     */
     fun summary(alerts: List<PillAlert>, acked: Set<String>): PillSummary {
         val count = alerts.size
+        val blocking = alerts.count { it.severity == PillSeverity.Critical }
+        val warnings = count - blocking
         val severity = when {
             count == 0 -> PillSeverity.Ok
-            alerts.any { it.severity == PillSeverity.Critical } -> PillSeverity.Critical
+            blocking > 0 -> PillSeverity.Critical
             else -> PillSeverity.Warning
         }
-        val face = when (count) {
-            0 -> text.text("cockpit.status.ok")
-            1 -> alerts[0].text.ifEmpty { text.text("cockpit.status.one") }
-            else -> text.text("cockpit.status.many", mapOf("n" to count))
+        val face = when {
+            count == 0 -> text.text("cockpit.status.ok")
+            count == 1 -> alerts[0].title.ifEmpty { text.text("cockpit.status.one") }
+            blocking == 0 -> text.text("cockpit.status.many", mapOf("n" to count))
+            warnings == 0 -> text.text("cockpit.status.blocking", mapOf("n" to blocking))
+            warnings == 1 -> text.text("cockpit.status.blocking_one_warning", mapOf("n" to blocking))
+            else -> text.text("cockpit.status.blocking_warnings", mapOf("n" to blocking, "m" to warnings))
         }
         return PillSummary(severity, face, count, alerts.any { it.id !in acked }, alerts)
     }

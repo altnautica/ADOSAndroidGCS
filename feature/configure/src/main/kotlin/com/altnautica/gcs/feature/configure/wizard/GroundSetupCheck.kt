@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.configure.wizard
 
 import com.altnautica.gcs.core.agent.http.AgentResult
+import com.altnautica.gcs.core.link.node.SetupBackendSource
 import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -12,7 +13,7 @@ import javax.inject.Singleton
  * the `ground` wizard. Returns that flight controller's uid, or null.
  */
 @Singleton
-class GroundSetupCheck @Inject constructor(private val backends: AgentSetupBackendSource) {
+class GroundSetupCheck @Inject constructor(private val backends: SetupBackendSource) {
     suspend fun uidNeedingSetup(id: DeviceId): String? = withTimeoutOrNull(CHECK_TIMEOUT_MS) {
         val backend = backends.current(id) ?: return@withTimeoutOrNull null
         val overview = (backend.overview() as? AgentResult.Ok)?.value ?: return@withTimeoutOrNull null

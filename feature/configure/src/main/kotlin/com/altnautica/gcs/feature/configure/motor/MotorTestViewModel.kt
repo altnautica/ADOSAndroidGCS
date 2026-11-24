@@ -56,8 +56,8 @@ class MotorTestViewModel internal constructor(
     vehicles: VehicleProvider,
     private val now: () -> Long,
     ticks: Flow<Unit>,
-    backends: com.altnautica.gcs.feature.configure.wizard.SetupBackendSource =
-        com.altnautica.gcs.feature.configure.wizard.SetupBackendSource { flowOf(null) },
+    backends: com.altnautica.gcs.core.link.node.SetupBackendSource =
+        com.altnautica.gcs.core.link.node.SetupBackendSource { flowOf(null) },
     /** Setup strings for the agent motor test step. */
     val text: com.altnautica.gcs.feature.configure.wizard.SetupText =
         com.altnautica.gcs.feature.configure.wizard.SetupText { key, _ -> key },
@@ -65,7 +65,7 @@ class MotorTestViewModel internal constructor(
     @AssistedInject constructor(
         @Assisted nodeId: String,
         vehicles: VehicleProvider,
-        backends: com.altnautica.gcs.feature.configure.wizard.SetupBackendSource,
+        backends: com.altnautica.gcs.core.link.node.SetupBackendSource,
         text: com.altnautica.gcs.feature.configure.wizard.SetupText,
     ) : this(DeviceId(nodeId), vehicles, SystemClock::elapsedRealtime, secondTicks(), backends, text)
 

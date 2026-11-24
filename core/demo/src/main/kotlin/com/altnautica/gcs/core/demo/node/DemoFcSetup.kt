@@ -52,6 +52,9 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
 
     /** True while [running] is a single step run from the list rather than a whole wizard. */
     private var singleStep = false
+
+    /** The demo FC's current values of the profile parameters: off the profile where the demo readiness says so. */
+    private val fcValues = COPTER_PROFILE.toMap().toMutableMap().apply { putAll(FC_OFF_PROFILE) }
     private val events = MutableSharedFlow<FcSetupEvent>(extraBufferCapacity = 64)
 
     init {
@@ -134,6 +137,8 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
     override suspend fun runStep(wizard: String, step: String): AgentResult<StepReply> = synchronized(this) {
         val s = wizardOf(wizard)?.steps?.firstOrNull { it.id == step }
             ?: return AgentResult.Err(AgentError.Server(404, "setup.blocker.unknown_step"))
+        // As the engine: one run at a time, a step left waiting included.
+        if (running != null) return AgentResult.Err(AgentError.Server(409, "wizard_running", "wizard_running"))
         s.reset()
         singleStep = true
         begin(s)
@@ -165,6 +170,7 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
                 "outputs" -> outputs(s, action)
                 "autotune" -> autotune(s, action)
                 "ados_profile" -> if (action == APPLY) {
+                    fcValues.putAll(COPTER_PROFILE)
                     s.done(mapOf("applied" to profileRows(), "absent" to JsonArray(emptyList())))
                     finished(s)
                 }
@@ -206,9 +212,11 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
                 askTest(s)
             }
             "autotune" -> s.waitUser(primary("start"), danger("abort"))
-            // Lists the failsafe profile; nothing is written until the operator applies it.
+            // Lists the failsafe profile against the FC's values; nothing is written until the
+            // operator applies it, and a changed reboot parameter restarts the FC.
             "ados_profile" -> {
                 s.args["params"] = profileRows()
+                s.args["reboots"] = JsonPrimitive(COPTER_PROFILE.any { (name, value) -> name in REBOOT_PARAMS && fcValues[name] != value })
                 s.waitUser(primary(APPLY))
             }
             // The pilot choice as the engine offers it; the demo vehicle has an RC receiver.
@@ -221,9 +229,11 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
         }
     }
 
-    /** The copter failsafe profile as `{name, value}` rows, as the vehicle's pilot lists it. */
+    /** The copter failsafe profile as `{name, value, have}` rows, as the vehicle's pilot lists it. */
     private fun profileRows() = JsonArray(
-        COPTER_PROFILE.map { (name, value) -> JsonObject(mapOf("name" to JsonPrimitive(name), "value" to JsonPrimitive(value))) },
+        COPTER_PROFILE.map { (name, value) ->
+            JsonObject(mapOf("name" to JsonPrimitive(name), "value" to JsonPrimitive(value), "have" to JsonPrimitive(fcValues[name])))
+        },
     )
 
     /** Accel: start, then one "Next pose" per pose as the flight controller asks for it. */
@@ -451,6 +461,12 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
             "RC_OVERRIDE_TIME" to 1.0, "BATT_FS_LOW_ACT" to 2.0, "BATT_FS_CRT_ACT" to 1.0,
             "AVOID_ENABLE" to 2.0, "AVOID_MARGIN" to 1.3, "AVOID_BEHAVE" to 1.0, "PRX1_TYPE" to 2.0, "OA_TYPE" to 0.0,
         )
+
+        /** Where the demo FC starts off the profile (`DemoPilotWire.FC_PROFILE_DIFFERS`). */
+        val FC_OFF_PROFILE = mapOf("MAV_GCS_SYSID" to 255.0, "FS_GCS_ENABLE" to 0.0, "PRX1_TYPE" to 0.0)
+
+        /** Profile parameters the FC reads only at boot: changing one restarts it. */
+        private val REBOOT_PARAMS = setOf("PRX1_TYPE")
 
         /** The engine's ArduCopter step lists. */
         val GROUND_STEPS = listOf(

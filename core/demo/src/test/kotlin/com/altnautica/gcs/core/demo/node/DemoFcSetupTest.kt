@@ -146,4 +146,24 @@ class DemoFcSetupTest {
         assertEquals(SetupStepState.Done, done.state)
         assertEquals(DemoFcSetup.COPTER_PROFILE.size, done.result!!["applied"]!!.jsonArray.size)
     }
+
+    @Test
+    fun adosProfileRowsCarryTheFcValuesAndTheRestart() = runTest {
+        val setup = DemoFcSetup(this)
+        setup.runStep("ground", "ados_profile")
+        val listed = setup.step("ground", "ados_profile")
+        val have = listed.args["params"]!!.jsonArray.associate { r -> r.jsonObject["name"]!!.jsonPrimitive.content to r.jsonObject["have"]!!.jsonPrimitive.double }
+        assertEquals(255.0, have["MAV_GCS_SYSID"])
+        assertEquals(2.0, have["BATT_FS_LOW_ACT"])
+        assertEquals(JsonPrimitive(true), listed.args["reboots"])
+        // The step left waiting refuses a second run, as the engine does.
+        val again = setup.runStep("ground", "ados_profile")
+        assertEquals("wizard_running", ((again as AgentResult.Err).error as com.altnautica.gcs.core.agent.http.AgentError.Server).errorCode)
+
+        setup.act("ground", "ados_profile", "apply")
+        setup.runStep("ground", "ados_profile")
+        val after = setup.step("ground", "ados_profile")
+        assertTrue(after.args["params"]!!.jsonArray.all { r -> r.jsonObject["have"] == r.jsonObject["value"] })
+        assertEquals(JsonPrimitive(false), after.args["reboots"])
+    }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedButton
@@ -32,6 +33,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,6 +46,9 @@ import com.altnautica.gcs.core.model.ParamDiff
 import com.altnautica.gcs.core.model.ReadinessFix
 import com.altnautica.gcs.core.skills.hud.AlertGroup
 import com.altnautica.gcs.feature.cockpit.R
+import com.altnautica.gcs.feature.cockpit.alerts.ApplyPhase
+import com.altnautica.gcs.feature.cockpit.alerts.ApplyProfileFix
+import com.altnautica.gcs.feature.cockpit.alerts.ApplyState
 import com.altnautica.gcs.feature.cockpit.flow.specText
 
 /** What the alert list's rows can do. */
@@ -57,6 +63,12 @@ class StatusListActions(
     val onModes: (() -> Unit)? = null,
     /** On a ground station: setup fixes run on the drone, so they read as a hint, not a button. */
     val groundStation: Boolean = false,
+    /** Apply recommended values inline: read the profile step for a row (its snooze key). */
+    val onApplyRead: (owner: String) -> Unit = {},
+    /** Write the reviewed values (after the hold). */
+    val onApplyWrite: () -> Unit = {},
+    /** Leave the review; the vehicle's ground wizard is aborted. */
+    val onApplyCancel: () -> Unit = {},
 )
 
 /**
@@ -76,6 +88,10 @@ fun StatusList(
     topInset: Dp = 0.dp,
     blockingOnly: Boolean = false,
     actions: StatusListActions = StatusListActions(),
+    /** The inline apply flow and the row that started it. */
+    apply: ApplyState = ApplyState(),
+    /** Where the panel would start (under the pill); it moves left as far as it must to stay on screen. */
+    anchorX: Dp = 0.dp,
 ) {
     val c = LocalChrome.current
     if (LocalNavigationEventDispatcherOwner.current != null) {
@@ -87,21 +103,26 @@ fun StatusList(
     }
     BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset).clickable(interactionSource = null, indication = null, onClick = onClose)) {
         val maxH = maxHeight * 0.7f
-        ChromePanel(modifier.widthIn(min = 300.dp, max = 460.dp).testTag("status-list")) {
+        val width = minOf(PANEL_MAX_WIDTH, maxWidth - PANEL_EDGE * 2)
+        val x = anchorX.coerceAtMost(maxWidth - width - PANEL_EDGE).coerceAtLeast(PANEL_EDGE)
+        ChromePanel(modifier.absoluteOffset(x = x).width(width).testTag("status-list")) {
             Column(
                 Modifier.heightIn(max = maxH).verticalScroll(rememberScrollState())
                     // Taps inside the panel stay inside it.
                     .clickable(interactionSource = null, indication = null) {}
                     .padding(c.pad),
             ) {
-                if (blockingOnly) BlockingSheet(list, actions) else FullList(list, actions)
+                if (blockingOnly) BlockingSheet(list, actions, apply) else FullList(list, actions, apply)
             }
         }
     }
 }
 
+private val PANEL_MAX_WIDTH = 460.dp
+private val PANEL_EDGE = 8.dp
+
 @Composable
-private fun BlockingSheet(list: StatusListUi, actions: StatusListActions) {
+private fun BlockingSheet(list: StatusListUi, actions: StatusListActions, apply: ApplyState) {
     val c = LocalChrome.current
     val blocking = list.blocking
     Text(
@@ -109,7 +130,7 @@ private fun BlockingSheet(list: StatusListUi, actions: StatusListActions) {
         style = c.chipText,
     )
     Spacer(Modifier.height(6.dp))
-    for (row in blocking) AlertRow(row, actions)
+    for (row in blocking) AlertRow(row, actions, apply)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         TextButton(onClick = actions.onShowAll, modifier = Modifier.heightIn(min = 48.dp).testTag("status-show-warnings")) {
             Text(stringResource(R.string.alerts_chip_warnings, list.warnings), style = c.labelText.copy(color = c.text))
@@ -123,7 +144,7 @@ private fun BlockingSheet(list: StatusListUi, actions: StatusListActions) {
 }
 
 @Composable
-private fun FullList(list: StatusListUi, actions: StatusListActions) {
+private fun FullList(list: StatusListUi, actions: StatusListActions, apply: ApplyState) {
     val c = LocalChrome.current
     var showHidden by remember { mutableStateOf(false) }
     // Sections holding a critical start open; the operator's toggles win after that.
@@ -165,19 +186,24 @@ private fun FullList(list: StatusListUi, actions: StatusListActions) {
                 Text(" · " + pluralStringResource(R.plurals.alerts_hidden_note, section.hidden, section.hidden), style = c.labelText)
             }
         }
-        if (expanded) for (row in section.rows) AlertRow(row, actions)
+        if (expanded) for (row in section.rows) AlertRow(row, actions, apply)
     }
     if (showHidden) {
-        for (item in list.hidden) AlertRow(StatusRow(item, item.severity, collapsed = false), actions, hidden = true)
+        for (item in list.hidden) AlertRow(StatusRow(item, item.severity, collapsed = false), actions, apply, hidden = true)
     }
 }
 
 /** One alert row; [hidden] marks a snoozed warning shown on request, which offers Show again. */
 @Composable
-private fun AlertRow(row: StatusRow, actions: StatusListActions, hidden: Boolean = false) {
+private fun AlertRow(row: StatusRow, actions: StatusListActions, apply: ApplyState, hidden: Boolean = false) {
     val c = LocalChrome.current
     val item = row.item
     val critical = row.severity == StatusSeverity.Critical
+    val fix = item.pill?.fix?.takeUnless { row.collapsed }
+    val groundHint = fix != null && actions.groundStation && (fix == ReadinessFix.ApplyProfile || fix is ReadinessFix.SetupStep)
+    // This row's inline apply, once started: it replaces the fix button and the wanted table.
+    val applying = (apply.phase.takeIf { apply.owner == item.snoozeKey && fix == ReadinessFix.ApplyProfile && !groundHint })
+        ?.takeUnless { it == ApplyPhase.Idle }
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp).testTag("status-row-${item.key}"), verticalAlignment = Alignment.Top) {
         Text(
             severityGlyph(c, row.severity),
@@ -186,16 +212,22 @@ private fun AlertRow(row: StatusRow, actions: StatusListActions, hidden: Boolean
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(statusItemTitle(item), style = c.topBarText, maxLines = 2)
+            val title = statusItemTitle(item)
+            // A short title (the words before the colon) still reads the whole message aloud.
+            val full = item.pill?.takeIf { it.params.isNotEmpty() }?.text?.takeIf { it != title }
+            Text(
+                title,
+                style = c.topBarText,
+                maxLines = 2,
+                modifier = Modifier.testTag("status-title-${item.key}").let { m -> full?.let { m.semantics { contentDescription = it } } ?: m },
+            )
             Text(specText("cockpit.status.source.${item.source.key}"), style = c.labelText)
             val params = item.pill?.params.orEmpty()
-            if (!row.collapsed && params.isNotEmpty()) ParamTable(params)
-            val fix = item.pill?.fix?.takeUnless { row.collapsed }
+            if (!row.collapsed && params.isNotEmpty() && applying == null) ParamTable(params)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                val hint = fix != null && actions.groundStation && (fix == ReadinessFix.ApplyProfile || fix is ReadinessFix.SetupStep)
-                if (fix != null && !hint) {
+                if (fix != null && !groundHint && applying == null) {
                     OutlinedButton(
-                        onClick = { actions.onFix(fix) },
+                        onClick = { if (fix == ReadinessFix.ApplyProfile) actions.onApplyRead(item.snoozeKey) else actions.onFix(fix) },
                         border = BorderStroke(1.dp, c.text.copy(alpha = 0.5f)),
                         modifier = Modifier.heightIn(min = 48.dp).testTag("status-fix-${item.key}"),
                     ) {
@@ -217,10 +249,16 @@ private fun AlertRow(row: StatusRow, actions: StatusListActions, hidden: Boolean
                     }
                 }
             }
-            if (fix != null && actions.groundStation && (fix == ReadinessFix.ApplyProfile || fix is ReadinessFix.SetupStep)) {
+            if (groundHint) {
                 Text(stringResource(R.string.alerts_ground_hint), style = c.labelText, modifier = Modifier.testTag("status-ground-hint"))
-            } else if (fix == ReadinessFix.ApplyProfile) {
-                Text(stringResource(R.string.alerts_apply_snapshot), style = c.labelText)
+            }
+            applying?.let { phase ->
+                ApplyPanel(
+                    phase,
+                    onWrite = actions.onApplyWrite,
+                    onCancel = actions.onApplyCancel,
+                    onOpenSetup = { actions.onFix(ReadinessFix.SetupStep(ApplyProfileFix.STEP)) },
+                )
             }
         }
     }

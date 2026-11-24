@@ -7,6 +7,8 @@ import com.altnautica.gcs.core.link.mavlink.ElapsedClock
 import com.altnautica.gcs.core.link.queue.QueuedCommandSink
 import com.altnautica.gcs.core.link.services.VehicleServicesProvider
 import com.altnautica.gcs.core.link.vehicle.VehicleRepository
+import com.altnautica.gcs.core.link.node.AgentSetupBackendSource
+import com.altnautica.gcs.core.link.node.SetupBackendSource
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.TransportProvider
 import com.altnautica.gcs.core.model.VehicleProvider
@@ -54,6 +56,9 @@ abstract class LinkModule {
 
     @Binds
     abstract fun vehicleServicesProvider(repository: VehicleRepository): VehicleServicesProvider
+
+    @Binds
+    abstract fun setupBackendSource(source: AgentSetupBackendSource): SetupBackendSource
 
     companion object {
         @Provides

@@ -67,7 +67,7 @@ class CockpitPillTest {
         val tick = MutableStateFlow(0L)
         val pill = CockpitPill(
             backgroundScope, clock, pilot, MutableStateFlow(PreflightResult(emptyList())), MutableStateFlow(emptyList<CockpitAlert>()),
-            MutableStateFlow<ReceivedText?>(null), MutableStateFlow(emptyList()), tick, specStatusPill(),
+            MutableStateFlow<ReceivedText?>(null), MutableStateFlow(emptyList()), MutableStateFlow(emptyList()), tick, specStatusPill(),
             heartbeatSeen = flowOf(true), navSource = flowOf<PillNavSource?>(null),
         ) { true }
         val facts = mutableListOf<PillFacts>()

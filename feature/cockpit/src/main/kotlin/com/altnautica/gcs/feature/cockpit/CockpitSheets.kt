@@ -106,6 +106,7 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
     if (top == CockpitSheet.Status) {
         val density = LocalDensity.current
         Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
+            val apply by vm.applyProfile.state.collectAsStateWithLifecycle()
             StatusList(
                 statusList,
                 onClose = { vm.setStatusList(false) },
@@ -117,10 +118,15 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
                         onShowAll = { vm.statusBlockingOnly.value = false },
                         onModes = { vm.setStatusList(false); vm.openModeSheet() },
                         groundStation = groundStation,
+                        onApplyRead = vm.applyProfile::read,
+                        onApplyWrite = vm.applyProfile::write,
+                        onApplyCancel = vm.applyProfile::cancel,
                     )
                 },
+                apply = apply,
                 topInset = sizes.edge + sizes.topBar,
-                modifier = Modifier.absoluteOffset(x = with(density) { status.pillX.toDp() }, y = 4.dp),
+                anchorX = with(density) { status.pillX.toDp() },
+                modifier = Modifier.absoluteOffset(y = 4.dp),
             )
         }
     }

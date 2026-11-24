@@ -13,10 +13,14 @@ import kotlinx.coroutines.flow.update
 class FcTexts {
     private val _critical = MutableStateFlow<ReceivedText?>(null)
     private val _prearm = MutableStateFlow<ReceivedText?>(null)
+    private val _prearmLines = MutableStateFlow<List<ReceivedText>>(emptyList())
     private val _warnings = MutableStateFlow<List<ReceivedText>>(emptyList())
 
     val critical: StateFlow<ReceivedText?> = _critical.asStateFlow()
     val prearm: StateFlow<ReceivedText?> = _prearm.asStateFlow()
+
+    /** Every distinct prearm reason heard within [AlertEngine.PREARM_HOLD_MS], oldest first: each names its own cause. */
+    val prearmLines: StateFlow<List<ReceivedText>> = _prearmLines.asStateFlow()
 
     /** Recent texts at WARNING or ERROR severity, newest last, for the status pill. */
     val warnings: StateFlow<List<ReceivedText>> = _warnings.asStateFlow()
@@ -33,6 +37,11 @@ class FcTexts {
             AlertEngine.isPrearm(text) -> {
                 val body = AlertEngine.prearmBody(text)
                 if (!relayed || replacesHeld(_prearm.value, body, atMs)) _prearm.value = ReceivedText(body, atMs)
+                _prearmLines.update { list ->
+                    val held = list.firstOrNull { it.text == body }
+                    if (held != null && atMs <= held.atMs) list
+                    else (list.filter { it.text != body && atMs - it.atMs < AlertEngine.PREARM_HOLD_MS } + ReceivedText(body, atMs)).sortedBy { it.atMs }
+                }
             }
             severity <= AlertEngine.MAV_SEVERITY_CRITICAL || AlertEngine.isFailsafeAnnouncement(severity, text) -> {
                 val held = _critical.value

@@ -19,7 +19,7 @@ import com.altnautica.gcs.core.model.FcVariant
 import com.altnautica.gcs.feature.configure.R
 import com.altnautica.gcs.feature.configure.common.fcVariant
 import com.altnautica.gcs.feature.configure.setup.SetupCatalog
-import com.altnautica.gcs.feature.configure.wizard.SetupBackendSource
+import com.altnautica.gcs.core.link.node.SetupBackendSource
 import com.altnautica.gcs.feature.configure.wizard.SetupProblem
 import com.altnautica.gcs.feature.configure.wizard.SetupSession
 import com.altnautica.gcs.feature.configure.wizard.SetupSnapshotState

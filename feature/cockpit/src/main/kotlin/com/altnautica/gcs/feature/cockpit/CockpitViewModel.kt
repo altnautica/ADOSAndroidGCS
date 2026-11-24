@@ -178,6 +178,12 @@ class CockpitViewModel @AssistedInject constructor(
     private val snoozeStore: com.altnautica.gcs.feature.cockpit.alerts.AlertSnoozeStore,
     @com.altnautica.gcs.feature.cockpit.di.CockpitWork work: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
     phoneRadio: java.util.Optional<com.altnautica.gcs.core.model.PhoneRadioUplink> = java.util.Optional.empty(),
+    /** The vehicle's setup engine, for an alert row's Apply recommended values. */
+    private val setupBackends: com.altnautica.gcs.core.link.node.SetupBackendSource =
+        com.altnautica.gcs.core.link.node.SetupBackendSource { kotlinx.coroutines.flow.flowOf(null) },
+    /** Outlives the view model: an open review is still aborted when the cockpit is cleared. */
+    @com.altnautica.gcs.core.link.di.LinkScope private val abortScope: kotlinx.coroutines.CoroutineScope =
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
 ) : ViewModel() {
 
     @AssistedFactory
@@ -681,7 +687,7 @@ class CockpitViewModel @AssistedInject constructor(
     val alerts: StateFlow<List<CockpitAlert>> = alertsCtl.alerts
 
     private val pill = CockpitPill(
-        viewModelScope, clock, pilot, preflight, alerts, criticalText, fcTexts.warnings, tick500, statusPill,
+        viewModelScope, clock, pilot, preflight, alerts, criticalText, fcTexts.warnings, fcTexts.prearmLines, tick500, statusPill,
         heartbeatSeen = telemetry.flatMapLatest { it?.heartbeat ?: flowOf(null) }.map { it != null },
         navSource = autonomy.navChip.map { it?.pillSource() },
     ) {
@@ -712,6 +718,23 @@ class CockpitViewModel @AssistedInject constructor(
         viewModelScope.launch(work) {
             combine(statusItems, pill.waiting) { items, waiting -> if (waiting) null else items.map { it.snoozeKey } }
                 .collect { keys -> if (keys != null) snoozeStore.prune(keys) }
+        }
+    }
+
+    /** "Apply recommended values" inline in an alert row, on the flown vehicle's setup engine. */
+    val applyProfile = com.altnautica.gcs.feature.cockpit.alerts.ApplyProfileFix(viewModelScope, spec.setupStrings, abortScope) {
+        vehicleNodeId.value?.let { setupBackends.current(it) }
+    }
+
+    init {
+        // The review holds the profile step open on the vehicle: the list closing, or the row's
+        // alert clearing, ends it.
+        viewModelScope.launch {
+            overlays.statusList.collect { open -> if (!open) applyProfile.leave() }
+        }
+        viewModelScope.launch {
+            combine(statusItems, applyProfile.state) { items, s -> s.owner != null && items.none { it.snoozeKey == s.owner } }
+                .collect { gone -> if (gone) applyProfile.leave() }
         }
     }
 
@@ -922,6 +945,7 @@ class CockpitViewModel @AssistedInject constructor(
         videoCtl.cancel()
         confirm.cancel()
         announcer.shutdown()
+        applyProfile.leave()
     }
 
     companion object {

@@ -37,6 +37,8 @@ internal class CockpitPill(
     alerts: StateFlow<List<CockpitAlert>>,
     criticalText: StateFlow<ReceivedText?>,
     warningTexts: StateFlow<List<ReceivedText>>,
+    /** Every distinct recent PreArm reason ([com.altnautica.gcs.feature.cockpit.alerts.FcTexts.prearmLines]). */
+    prearmLines: StateFlow<List<ReceivedText>>,
     tick500: StateFlow<Long>,
     pill: StatusPill,
     /** True once the vehicle link has carried a heartbeat. */
@@ -83,14 +85,15 @@ internal class CockpitPill(
     /** Alerts, pilot readiness, failing checks, storage, FC texts (from the link and the pilot's relay), the FC failsafe and a setup abort. */
     val items: StateFlow<List<StatusItem>> = combine(
         combine(alerts, preflight, facts) { a, pre, f -> Triple(a, pre, f) },
-        combine(criticalText, warningTexts) { c, w -> c to w },
+        combine(criticalText, warningTexts, prearmLines) { c, w, p -> Triple(c, w, p) },
         pilotFailsafe,
         tick500,
-    ) { (a, pre, f), (critical, warnings), (fs, abort), _ ->
+    ) { (a, pre, f), (critical, warnings, prearm), (fs, abort), _ ->
         val now = clock.nowMs()
         val fresh = f.pilotAgeMs == FRESH_AGE_MS
         val failsafe = if (fresh) fs else PillFailsafe.None
-        StatusModel.items(a, pre, heldTexts(critical, warnings, now), f, pill, failsafe, if (fresh) abort else null)
+        val lines = prearm.filter { now - it.atMs < AlertEngine.PREARM_HOLD_MS }.map { it.text }
+        StatusModel.items(a, pre, heldTexts(critical, warnings, now), f, pill, failsafe, if (fresh) abort else null, lines)
     }.distinctUntilChanged().stateIn(scope, SharingStarted.WhileSubscribed(UI_STOP_MS), emptyList())
 
     /** The FC texts the pill holds: the critical text while its alert lasts, and the recent warnings. */

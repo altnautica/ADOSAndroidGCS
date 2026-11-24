@@ -52,11 +52,11 @@ internal object DemoPilotWire {
         put("id", "fc_profile")
         put("ok", false)
         put("severity", "block")
-        put("msg", "FC parameters differ from the ADOS profile: MAV_GCS_SYSID 255 (want 1), FS_GCS_ENABLE 0 (want 5)")
+        put("msg", "FC parameters differ from the ADOS profile: MAV_GCS_SYSID 255 (want 1), FS_GCS_ENABLE 0 (want 1), PRX1_TYPE 0 (want 2)")
         putJsonArray("params") {
             add(param("MAV_GCS_SYSID", 255.0, "1"))
-            add(param("FS_GCS_ENABLE", 0.0, "5"))
-            add(param("FS_OPTIONS", null, "16"))
+            add(param("FS_GCS_ENABLE", 0.0, "1"))
+            add(param("PRX1_TYPE", 0.0, "2"))
         }
         putJsonObject("fix") { put("kind", "apply_profile") }
     }

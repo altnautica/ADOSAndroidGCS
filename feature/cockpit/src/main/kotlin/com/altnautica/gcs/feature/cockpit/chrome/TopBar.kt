@@ -263,7 +263,10 @@ fun StatusPill(ui: StatusPillUi, onOpen: () -> Unit, modifier: Modifier = Modifi
         ui.waiting -> specText("cockpit.link.never")
         ui.count == 0 -> specText("cockpit.status.ok")
         ui.count == 1 -> ui.top?.let { statusItemTitle(it) } ?: specText("cockpit.status.one")
-        else -> specText("cockpit.status.many", "n" to ui.count.toString())
+        ui.blocking == 0 -> specText("cockpit.status.many", "n" to ui.count.toString())
+        ui.blocking == ui.count -> specText("cockpit.status.blocking", "n" to ui.blocking.toString())
+        ui.count - ui.blocking == 1 -> specText("cockpit.status.blocking_one_warning", "n" to ui.blocking.toString())
+        else -> specText("cockpit.status.blocking_warnings", "n" to ui.blocking.toString(), "m" to (ui.count - ui.blocking).toString())
     }
     // Outlined, no fill: a hairline when all is well, the severity hue at half strength otherwise.
     // The dot carries the severity colour; the text is the chrome text when ok, else the
@@ -315,7 +318,7 @@ internal fun severityColor(s: StatusSeverity): Color {
     }
 }
 
-/** An item's one-line title. */
+/** An item's one-line title; a row with a parameter table reads the short words before its colon ([PillAlert.title]). */
 @Composable
 fun statusItemTitle(item: StatusItem): String {
     item.alert?.let { a ->
@@ -328,7 +331,7 @@ fun statusItemTitle(item: StatusItem): String {
     }
     item.specKey?.let { return specText(it) }
     item.check?.let { return preflightItemLabel(it, known = true) }
-    return item.text.orEmpty()
+    return item.pill?.title ?: item.text.orEmpty()
 }
 
 /**

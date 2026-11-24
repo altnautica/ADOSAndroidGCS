@@ -50,12 +50,22 @@ class SetupProblemTextTest {
     }
 
     @Test
-    fun unknownEngineCodeReadsAsARefusalNamingTheCode() {
+    fun unknownEngineCodeReadsAsARefusalWithoutTheCode() {
         val problem = AgentErrorParser.parse(422, """{"ok":false,"err":"unknown_action"}""").setupProblem()
         assertNull(text.problemText(problem))
         assertEquals(SetupLocalProblem.Refused, problem.local)
-        assertEquals(R.string.cfg_setup_err_refused_code, problem.localText())
-        assertEquals("unknown_action", problem.engineCode)
+        assertEquals(R.string.cfg_setup_err_refused, problem.localText())
+    }
+
+    @Test
+    fun codeWithOnlyABlockerTextReadsTheBlocker() {
+        val problem = problemFor("""{"ok":false,"err":"wizard_running"}""")
+        assertEquals(spec.setupStrings.strings.getValue("setup.err.wizard_running"), text.problemText(problem))
+        val blockerOnly = spec.setupStrings.strings.keys.first { k ->
+            k.startsWith("setup.blocker.") && "setup.err." + k.removePrefix("setup.blocker.") !in spec.setupStrings.strings
+        }
+        val code = blockerOnly.removePrefix("setup.blocker.")
+        assertEquals(spec.setupStrings.strings.getValue(blockerOnly), text.problemText(problemFor("""{"ok":false,"err":"$code"}""")))
     }
 
     @Test
@@ -66,11 +76,11 @@ class SetupProblemTextTest {
 
     @Test
     fun unavailableSetupEngineIsNotALinkFailure() {
-        for (body in listOf("""{"ok":false,"err":"setup_unavailable"}""", """{"detail":"ADOS pilot not reachable"}""")) {
-            val problem = AgentErrorParser.parse(503, body).setupProblem()
-            assertNull(body, text.problemText(problem))
-            assertEquals(body, R.string.cfg_setup_err_engine_down, problem.localText())
-        }
+        val coded = AgentErrorParser.parse(503, """{"ok":false,"err":"setup_unavailable"}""").setupProblem()
+        assertEquals(spec.setupStrings.strings.getValue("setup.blocker.setup_unavailable"), text.problemText(coded))
+        val bare = AgentErrorParser.parse(503, """{"detail":"ADOS pilot not reachable"}""").setupProblem()
+        assertNull(text.problemText(bare))
+        assertEquals(R.string.cfg_setup_err_engine_down, bare.localText())
     }
 
     @Test

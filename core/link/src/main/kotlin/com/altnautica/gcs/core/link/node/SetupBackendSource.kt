@@ -1,11 +1,10 @@
-package com.altnautica.gcs.feature.configure.wizard
+package com.altnautica.gcs.core.link.node
 
 import com.altnautica.gcs.core.agent.AgentClientFactory
 import com.altnautica.gcs.core.agent.fcsetup.AgentSetupBackend
 import com.altnautica.gcs.core.agent.fcsetup.SetupBackend
 import com.altnautica.gcs.core.agent.node.LocalNodeApis
 import com.altnautica.gcs.core.agent.ws.AgentSockets
-import com.altnautica.gcs.core.link.node.NodeRepository
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
@@ -27,6 +26,9 @@ import kotlinx.coroutines.flow.mapLatest
  */
 fun interface SetupBackendSource {
     fun observe(id: DeviceId): Flow<SetupBackend?>
+
+    /** The setup engine of [id] right now, or null when the vehicle has none. */
+    suspend fun current(id: DeviceId): SetupBackend? = observe(id).first()
 }
 
 /** The node's best reach goes through an agent (its own LAN edge or the carrying ground station). */
@@ -61,8 +63,7 @@ class AgentSetupBackendSource @Inject constructor(
             }
     }
 
-    /** The setup engine of [id] right now, or null when the vehicle has none. */
-    suspend fun current(id: DeviceId): SetupBackend? {
+    override suspend fun current(id: DeviceId): SetupBackend? {
         local(id)?.let { return it }
         val node = nodes.nodes.filterNotNull().first().firstOrNull { it.id == id } ?: return null
         if (!node.agentConnected()) return null

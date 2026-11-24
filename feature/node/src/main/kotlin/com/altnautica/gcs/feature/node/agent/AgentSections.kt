@@ -143,5 +143,15 @@ data class AgentSection(
                 subtrees = emptyList(),
             ),
         )
+
+        /** Cockpit settings section ids (a readiness fix's `section`) that live in another section here. */
+        private val SETTINGS_ALIASES = mapOf("vision" to "videoVision", "camera" to "videoVision", "capture" to "videoVision")
+
+        /**
+         * The section a cockpit settings section id ([ReadinessFix.Settings][com.altnautica.gcs.core.model.ReadinessFix.Settings]
+         * `section`) opens, or null when this page has none for it (the section list shows instead).
+         */
+        fun forSettings(section: String): String? =
+            (SETTINGS_ALIASES[section] ?: section).takeIf { id -> ALL.any { it.id == id } }
     }
 }
