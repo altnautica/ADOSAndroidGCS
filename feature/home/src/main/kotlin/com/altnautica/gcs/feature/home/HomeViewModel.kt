@@ -11,6 +11,7 @@ import com.altnautica.gcs.core.link.vehicle.VehicleRepository
 import com.altnautica.gcs.core.link.node.NodeVitals
 import com.altnautica.gcs.core.link.node.NodeVitalsRepository
 import com.altnautica.gcs.core.link.node.canFly
+import com.altnautica.gcs.core.model.BlockReason
 import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.FcVariant
 import com.altnautica.gcs.core.model.Liveness
@@ -51,6 +52,11 @@ data class FleetCard(
      * reading was last heard (`elapsedRealtime`). Kept vitals carry no arm state.
      */
     val keptHeardAtMs: Long? = null,
+    /**
+     * The node is seen on the network but this phone holds no key for it (it is paired to
+     * another GCS, or not claimed yet): nothing can reach its agent until it is paired here.
+     */
+    val needsPairing: Boolean = false,
 )
 
 data class HomeUiState(
@@ -153,6 +159,9 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch { lanNodes.retrySavedNodes() }
     }
 
+    /** Where to pair [id] from (`host:port` as discovery last saw it), or null to pick it on the Connect screen. */
+    fun pairingHost(id: DeviceId): String? = lanNodes.discoveredHost(id)
+
     /** Video stills for one vehicle; collected only while it is on screen. */
     fun thumbnails(id: DeviceId): Flow<ByteArray?> = vitalsRepository.thumbnails(id)
 
@@ -190,8 +199,11 @@ class HomeViewModel @Inject constructor(
                 hasAgentLink = agentReach,
                 directLinkClosed = vitalsNeedOpenLink(node) && !linkOpen,
                 keptHeardAtMs = keptHeardAtMs,
+                needsPairing = NOT_PAIRED in node.reaches && node.reaches.all { it is Reach.Blocked },
             )
         }
+
+        private val NOT_PAIRED = Reach.Blocked(BlockReason.NotPaired)
 
         /** No agent reports this node's vitals; they arrive only while its direct flight-controller link is open. */
         fun vitalsNeedOpenLink(node: NodeSummary): Boolean =

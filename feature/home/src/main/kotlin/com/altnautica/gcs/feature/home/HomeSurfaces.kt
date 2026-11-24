@@ -17,13 +17,20 @@ data class SurfaceCard(val surface: HomeSurface, val enabled: Boolean, @param:St
  * The surfaces offered for [card] (the selected vehicle, or null when none is listed), in
  * launch order. Fly, Setup and Parameters are hidden for nodes that never carry a
  * flight controller (Visor, Workstation); a disabled surface carries its reason. Home
- * always selects a listed vehicle, so no card means nothing is paired yet.
+ * always selects a listed vehicle, so no card means nothing is paired yet. A node seen
+ * on the network that this phone holds no key for opens none of them: each says it needs
+ * pairing here.
  */
 fun surfaces(card: FleetCard?): List<SurfaceCard> {
     val profile = card?.node?.profile
     val noFc = profile == NodeProfile.Visor || profile == NodeProfile.Workstation
-    val hasFc = card != null && (profile == NodeProfile.Drone || Reach.DirectFc in card.node.reaches)
-    val fcReason = if (card == null) R.string.home_reason_no_vehicles else R.string.home_reason_no_fc
+    val unpaired = card?.needsPairing == true
+    val hasFc = card != null && !unpaired && (profile == NodeProfile.Drone || Reach.DirectFc in card.node.reaches)
+    val fcReason = when {
+        card == null -> R.string.home_reason_no_vehicles
+        unpaired -> R.string.home_reason_not_paired
+        else -> R.string.home_reason_no_fc
+    }
     return buildList {
         if (!noFc) add(SurfaceCard(HomeSurface.Fly, card?.canFly == true, if (card?.canFly == true) null else flyReason(card)))
         add(SurfaceCard(HomeSurface.Plan, enabled = true, reason = null))
@@ -41,6 +48,7 @@ fun surfaces(card: FleetCard?): List<SurfaceCard> {
 private fun flyReason(card: FleetCard?): Int = when {
     card == null -> R.string.home_reason_no_vehicles
     card.node.liveness == Liveness.Offline -> R.string.home_reason_offline
+    card.needsPairing -> R.string.home_reason_not_paired
     card.node.profile == NodeProfile.GroundStation && card.node.carriedDroneId == null -> R.string.home_reason_no_carried
     card.node.profile == NodeProfile.Unknown && Reach.DirectFc !in card.node.reaches -> R.string.home_reason_no_fc
     else -> R.string.home_reason_no_link

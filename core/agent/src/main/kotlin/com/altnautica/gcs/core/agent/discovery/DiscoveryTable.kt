@@ -16,8 +16,12 @@ data class DiscoveredAgent(
     val port: Int,
     val lastSeenMs: Long,
 ) {
+    /** `host:port`, with an IPv6 host bracketed: the form a typed host takes. */
+    val hostPort: String
+        get() = "${if (host.contains(':')) "[$host]" else host}:$port"
+
     val baseUrl: String
-        get() = "http://${if (host.contains(':')) "[$host]" else host}:$port/"
+        get() = "http://$hostPort/"
 }
 
 /** Parses the agent's TXT record (`device_id, version, board, name, paired, profile, role?, code?`). */

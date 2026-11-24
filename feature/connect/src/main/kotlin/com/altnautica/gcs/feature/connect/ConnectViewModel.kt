@@ -192,7 +192,7 @@ class ConnectViewModel @Inject constructor(
     /** Pairs a discovered node, or asks for its key when it is paired elsewhere. */
     fun pairDiscovered(row: DiscoveredRow) {
         val agent = row.agent
-        val hostPort = hostPort(agent)
+        val hostPort = agent.hostPort
         if (row.haveKey) {
             _state.update { it.copy(connected = agent.deviceId?.let(::DeviceId)) }
             return
@@ -231,7 +231,7 @@ class ConnectViewModel @Inject constructor(
 
     private suspend fun resolveAndClaim() {
         when (val outcome = pairing.resolveCode(_state.value.code)) {
-            is PairingOutcome.Success -> doClaim(hostPort(outcome.value))
+            is PairingOutcome.Success -> doClaim(outcome.value.hostPort)
             is PairingOutcome.Failure -> {
                 // The code is not advertised on this network: a host from the deep link still lets the claim go ahead.
                 val host = _state.value.host
@@ -383,11 +383,6 @@ class ConnectViewModel @Inject constructor(
     }
 
     private fun fail(f: PairingFailure) = _state.update { it.copy(busy = false, error = f.toError()) }
-
-    private fun hostPort(agent: DiscoveredAgent): String {
-        val h = if (agent.host.contains(':')) "[${agent.host}]" else agent.host
-        return "$h:${agent.port}"
-    }
 
     companion object {
         private const val STOP_GRACE_MS = 5_000L

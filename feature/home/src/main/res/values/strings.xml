@@ -49,6 +49,8 @@
     <string name="home_reason_no_vehicles">No drones yet</string>
     <string name="home_reason_no_fc">No flight controller</string>
     <string name="home_reason_no_link">No usable link</string>
+    <string name="home_reason_not_paired">Not paired with this phone</string>
+    <string name="home_pair">Pair with this phone</string>
 
     <string name="home_hint_open">Open</string>
     <string name="home_hint_details">Details</string>

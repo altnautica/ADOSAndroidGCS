@@ -52,11 +52,14 @@ import kotlinx.coroutines.flow.Flow
  * With [setupOfferNodeId] set and that node selected, an inline banner offers aircraft
  * setup for it: Open calls [onOpenSetupOffer], Later calls [onSetupOfferLater].
  * [onUnpair] opens the node's Vehicle surface with its unpair confirmation already showing.
+ * [onPair] opens pairing for a selected node this phone holds no key for, at the address
+ * discovery sees it on (null: pick it on the Connect screen).
  */
 @Composable
 fun HomeRoute(
     onOpenSurface: (surface: HomeSurface, nodeId: DeviceId?) -> Unit,
     onUnpair: (nodeId: DeviceId) -> Unit,
+    onPair: (host: String?) -> Unit,
     onAddVehicle: () -> Unit,
     onOpenController: () -> Unit,
     onOpenQuickMenu: () -> Unit,
@@ -81,6 +84,7 @@ fun HomeRoute(
         setupOfferNodeId = setupOfferNodeId,
         onOpenSetupOffer = onOpenSetupOffer,
         onSetupOfferLater = onSetupOfferLater,
+        onPair = { id -> onPair(viewModel.pairingHost(id)) },
     )
 }
 
@@ -101,6 +105,7 @@ internal fun HomeScreen(
     setupOfferNodeId: DeviceId? = null,
     onOpenSetupOffer: () -> Unit = {},
     onSetupOfferLater: () -> Unit = {},
+    onPair: (DeviceId) -> Unit = {},
 ) {
     val selected = state.selected
     val selectedId = selected?.node?.id
@@ -137,7 +142,7 @@ internal fun HomeScreen(
     }
 
     val hero: @Composable (Modifier) -> Unit = { m ->
-        HeroContent(state, cards, onAddVehicle, onEnableDemo, onRetrySavedNodes, vehicleMenu, isLandscape(), m)
+        HeroContent(state, cards, onAddVehicle, onEnableDemo, onRetrySavedNodes, onPair, vehicleMenu, isLandscape(), m)
     }
     val hints = homeHints()
     val topStrip: @Composable () -> Unit = {
@@ -188,6 +193,7 @@ private fun HeroContent(
     onAddVehicle: () -> Unit,
     onEnableDemo: () -> Unit,
     onRetrySavedNodes: () -> Unit,
+    onPair: (DeviceId) -> Unit,
     vehicleMenu: AdosMenuState,
     landscape: Boolean,
     modifier: Modifier,
@@ -202,7 +208,12 @@ private fun HeroContent(
                 selected == null -> HeroEmpty(onAddVehicle, onEnableDemo, compact = landscape)
                 // A new vehicle's hero eases in: fade and a short rise, snapped under reduced motion.
                 else -> HeroSwap(selected, key = { it.node.id }) { card ->
-                    HeroInfo(card, surfaces(card).firstOrNull { it.surface == HomeSurface.Fly }, Modifier.adosMenuAnchor(vehicleMenu))
+                    HeroInfo(
+                        card,
+                        surfaces(card).firstOrNull { it.surface == HomeSurface.Fly },
+                        Modifier.adosMenuAnchor(vehicleMenu),
+                        onPair = if (card.needsPairing) ({ onPair(card.node.id) }) else null,
+                    )
                 }
             }
         }

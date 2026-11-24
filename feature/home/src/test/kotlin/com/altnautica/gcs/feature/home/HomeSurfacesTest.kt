@@ -91,6 +91,26 @@ class HomeSurfacesTest {
         assertTrue(cards.of(HomeSurface.Setup).enabled)
     }
 
+    /**
+     * A drone seen on the network that this phone holds no key for (paired to another
+     * GCS, or not claimed yet) cannot open any agent surface; every one says it needs
+     * pairing here, never "No usable link".
+     */
+    @Test
+    fun droneSeenOnTheNetworkButNotPairedHereAsksForPairing() {
+        val unpaired = card(NodeProfile.Drone, reaches = listOf(Reach.Blocked(BlockReason.NotPaired)))
+        assertTrue(unpaired.needsPairing)
+        val cards = surfaces(unpaired)
+        for (s in listOf(HomeSurface.Fly, HomeSurface.Setup, HomeSurface.Parameters)) {
+            assertFalse(cards.of(s).enabled)
+            assertEquals(R.string.home_reason_not_paired, cards.of(s).reason)
+        }
+        assertTrue(cards.of(HomeSurface.Vehicle).enabled)
+        // Paired here (a LAN key) or offline with a key: never offered pairing.
+        assertFalse(card(NodeProfile.Drone).needsPairing)
+        assertFalse(card(NodeProfile.Drone, reaches = listOf(Reach.Blocked(BlockReason.Offline)), liveness = Liveness.Offline).needsPairing)
+    }
+
     @Test
     fun noVehicleLeavesOnlyAppWideSurfaces() {
         val cards = surfaces(null)

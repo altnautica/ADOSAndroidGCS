@@ -126,9 +126,9 @@ private fun rememberThumbnail(id: DeviceId, thumbnails: (DeviceId) -> Flow<ByteA
 internal suspend fun <T : Any> nextThumbnail(current: T?, bytes: ByteArray?, decode: suspend (ByteArray) -> T?): T? =
     if (bytes == null) null else decode(bytes) ?: current
 
-/** Name, reaches, vitals and readiness of the selected vehicle. */
+/** Name, reaches, vitals and readiness of the selected vehicle; [onPair], when set, offers pairing it with this phone. */
 @Composable
-internal fun HeroInfo(card: FleetCard, fly: SurfaceCard?, modifier: Modifier = Modifier) {
+internal fun HeroInfo(card: FleetCard, fly: SurfaceCard?, modifier: Modifier = Modifier, onPair: (() -> Unit)? = null) {
     val colors = AdosTheme.colors
     val node = card.node
     Column(
@@ -165,6 +165,7 @@ internal fun HeroInfo(card: FleetCard, fly: SurfaceCard?, modifier: Modifier = M
             Text(stringResource(R.string.home_carries, it.value), style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary)
         }
         if (fly != null) Readiness(heroReadiness(fly, card.vitals, linkClosed = card.directLinkClosed, kept = card.keptHeardAtMs != null))
+        onPair?.let { AdosButton(stringResource(R.string.home_pair), onClick = it) }
     }
 }
 

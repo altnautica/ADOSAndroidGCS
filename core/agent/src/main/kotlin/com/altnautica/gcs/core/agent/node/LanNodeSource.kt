@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.agent.discovery.DiscoveredAgent
 import com.altnautica.gcs.core.agent.discovery.LanDiscovery
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.data.vault.NodeCredential
+import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
 import kotlinx.coroutines.CoroutineScope
@@ -79,6 +80,9 @@ class LanNodeSource @Inject constructor(
     ) { stored, discovered, polled, now ->
         LanNodeAssembler.assemble(stored, discovered, polled, now)
     }.distinctUntilChanged().shareIn(scope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), replay = 1)
+
+    /** `host:port` discovery last saw [id] at; null when it is not being seen. */
+    fun discoveredHost(id: DeviceId): String? = discovery.agents.value.firstOrNull { it.deviceId == id.value }?.hostPort
 
     /** Persist a paired node's newly discovered address so it is reachable after discovery stops. */
     private fun rememberAddresses(discovered: List<DiscoveredAgent>) {

@@ -158,6 +158,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, radioAttaches: Flow<Unit>, viewModel: App
                         onOpenController = { BackStackOps.push(backStack, ControllerKey) },
                         onOpenQuickMenu = { quickMenuOpen = true },
                         onUnpair = { BackStackOps.push(backStack, NodeKey(it.value, confirmUnpair = true)) },
+                        onPair = { host -> BackStackOps.push(backStack, ConnectKey(host = host)) },
                         setupOfferNodeId = setupOffer?.nodeId,
                         onOpenSetupOffer = viewModel::openSetup,
                         onSetupOfferLater = viewModel::later,

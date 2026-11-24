@@ -216,7 +216,9 @@ class StatusPill(
             )
         }
         // Every distinct PreArm/Arm line the FC repeats: each names its own cause.
-        val prearmSeen = HashSet<String>()
+        // A line a readiness item already says (`setup_needed` carries the
+        // calibration PreArm text) is that item's, so it is not listed twice.
+        val prearmSeen = out.filter { it.source == PillSource.PilotReadiness }.mapTo(HashSet()) { it.text.replace(PREARM, "") }
         for (line in prearm.orEmpty()) {
             val t = line.replace(PREARM, "")
             if (t.isEmpty() || !prearmSeen.add(t)) continue
