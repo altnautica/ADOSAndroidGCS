@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -103,12 +104,20 @@ fun WizardStepView(
             ProgressRing(step)
             Column(Modifier.weight(1f)) {
                 Text(text.format(step.titleKey, args), style = MaterialTheme.typography.titleLarge, color = colors.fgPrimary)
-                Text(stateLabel(step.state), style = MaterialTheme.typography.labelMedium, color = stateColor(step.state))
+                val cancelled = SetupOverview.isCancelled(step)
+                Text(
+                    if (cancelled) stringResource(R.string.cfg_setup_state_cancelled) else stateLabel(step.state),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (cancelled) colors.fgSecondary else stateColor(step.state),
+                    modifier = Modifier.testTag("setup-step-state"),
+                )
             }
         }
         // The picture first, at full width: what to do is shown before it is said.
         step.image?.let { key ->
-            SetupImage(key, text.format(step.titleKey, args), colors.fgPrimary, Modifier.fillMaxWidth().widthIn(max = 480.dp))
+            // At most half the screen's height, so on a landscape phone the inputs and the action stay in reach.
+            val maxWidth = (LocalConfiguration.current.screenHeightDp * IMAGE_HEIGHT_SHARE * IMAGE_ASPECT).dp.coerceAtMost(480.dp)
+            SetupImage(key, text.format(step.titleKey, args), colors.fgPrimary, Modifier.fillMaxWidth().widthIn(max = maxWidth))
         }
         step.bodyKey?.let { key ->
             val body = text.format(key, args)
@@ -127,9 +136,11 @@ fun WizardStepView(
             LiveTable(step.live.entries.associate { (k, v) -> text.label(k, LIVE_PREFIX, args) to text.value(v, args) })
         }
         step.blockers.forEach { key ->
+            // An operator cancel is not a fault: it reads neutral.
+            val tint = if (key == SetupOverview.CANCELLED_BLOCKER) colors.fgSecondary else colors.statusError
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-                Icon(Icons.Outlined.Block, contentDescription = null, tint = colors.statusError, modifier = Modifier.size(18.dp))
-                Text(text.format(key, args), color = colors.statusError, style = MaterialTheme.typography.bodyMedium)
+                Icon(Icons.Outlined.Block, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+                Text(text.format(key, args), color = tint, style = MaterialTheme.typography.bodyMedium)
             }
         }
         SetupInputFields(inputs)
@@ -175,6 +186,12 @@ private fun PropsOffBanner() {
 }
 
 private const val KEY_CHANGES = "setup.overview.changes"
+
+/** A step picture takes at most this share of the screen's height... */
+private const val IMAGE_HEIGHT_SHARE = 0.5f
+
+/** ...at the setup pictures' width-to-height ratio (320 × 200). */
+private const val IMAGE_ASPECT = 1.6f
 private const val KEY_PROPS_OFF_BANNER = "setup.overview.props_off"
 
 @Composable
@@ -215,6 +232,7 @@ private fun ProgressRing(step: SetupStep) {
     Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
         when {
             step.state == SetupStepState.Done -> Icon(Icons.Outlined.CheckCircle, null, tint = colors.statusSuccess, modifier = Modifier.size(40.dp))
+            SetupOverview.isCancelled(step) -> Icon(Icons.Outlined.Block, null, tint = colors.fgSecondary, modifier = Modifier.size(40.dp))
             step.state == SetupStepState.Failed -> Icon(Icons.Outlined.ErrorOutline, null, tint = colors.statusError, modifier = Modifier.size(40.dp))
             step.progress != null -> {
                 CircularProgressIndicator(progress = { step.progress!!.coerceIn(0f, 1f) }, modifier = Modifier.size(44.dp), color = colors.accentPrimary)
@@ -251,7 +269,7 @@ fun ResultCard(result: JsonObject, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(AdosSpacing.S1),
     ) {
         Text(stringResource(R.string.cfg_setup_results), style = MaterialTheme.typography.titleSmall, color = colors.fgPrimary)
-        result.forEach { (key, value) ->
+        SetupOverview.resultRows(result).forEach { (key, value) ->
             Row(Modifier.fillMaxWidth()) {
                 Text(text.label(key, RESULT_PREFIX), Modifier.weight(1f), color = colors.fgSecondary, style = MaterialTheme.typography.bodyMedium)
                 Text(value.displayText(), color = colors.fgPrimary, style = MaterialTheme.typography.bodyMedium)

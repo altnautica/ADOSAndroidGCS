@@ -23,7 +23,9 @@ import com.altnautica.gcs.feature.cockpit.R
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -194,6 +196,11 @@ internal fun VisionSidePanel(vm: CockpitViewModel, cameraId: String, modifier: M
                             checked = sw.checked,
                             enabled = sw.enabled,
                             onCheckedChange = { layers.toggle(id) },
+                            // A layer the view forces on reads on, not as a greyed-out off switch.
+                            colors = SwitchDefaults.colors(
+                                disabledCheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = FORCED_TRACK_ALPHA),
+                                disabledCheckedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
                             modifier = Modifier.testTag("vision-switch-$id"),
                         )
                     }
@@ -288,4 +295,7 @@ internal fun layerSwitch(id: String, flags: LayerFlags, forced: Set<String>): La
 private const val STATUS_POLL_MS = 5_000L
 private const val DETECTION_KIND = "detection"
 private const val MAX_ROWS = 12
+
+/** The track of a switch the view holds on: the on colour, dimmed because it cannot be turned off here. */
+private const val FORCED_TRACK_ALPHA = 0.55f
 private val DEPTH_RANGES = listOf(null, 2f, 5f)

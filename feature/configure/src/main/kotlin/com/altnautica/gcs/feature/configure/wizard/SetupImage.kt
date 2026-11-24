@@ -27,6 +27,9 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.Dispatchers
@@ -285,7 +288,18 @@ object SvgReader {
  * the width. Draws nothing when the image is absent.
  */
 @Composable
-fun SetupImage(key: String, description: String, current: Color, modifier: Modifier = Modifier) {
+fun SetupImage(
+    key: String,
+    description: String,
+    current: Color,
+    modifier: Modifier = Modifier,
+    /**
+     * The smallest a centred label (a motor number in its circle) draws on screen, however small
+     * the image is scaled. Legends and titles keep their drawn size, so they never collide.
+     */
+    minText: TextUnit = 10.sp,
+) {
+    val minTextPx = with(LocalDensity.current) { minText.toPx() }
     val context = LocalContext.current
     val image = produceState<SvgImage?>(null, key, current) {
         value = withContext(Dispatchers.IO) {
@@ -303,11 +317,12 @@ fun SetupImage(key: String, description: String, current: Color, modifier: Modif
             .fillMaxWidth()
             .aspectRatio(image.width / image.height)
             .semantics { contentDescription = description },
-    ) { drawSvg(image) }
+    ) { drawSvg(image, minTextPx) }
 }
 
-private fun DrawScope.drawSvg(image: SvgImage) {
+private fun DrawScope.drawSvg(image: SvgImage, minTextPx: Float) {
     val s = minOf(size.width / image.width, size.height / image.height)
+    if (s <= 0f) return
     scale(s, s, pivot = Offset.Zero) {
         translate(-image.minX, -image.minY) {
             image.shapes.forEach { shape ->
@@ -321,7 +336,10 @@ private fun DrawScope.drawSvg(image: SvgImage) {
                 image.texts.forEach { t ->
                     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         color = t.color.toArgb()
-                        textSize = t.size
+                        // In viewBox units: a label centred on its point (a motor number) never
+                        // below minTextPx once scaled to the screen; corner legends keep their size.
+                        val centred = t.middleBaseline && t.anchor == Paint.Align.CENTER
+                        textSize = if (centred) maxOf(t.size, minTextPx / s) else t.size
                         textAlign = t.anchor
                         typeface = if (t.bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
                     }

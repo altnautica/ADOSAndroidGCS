@@ -8,6 +8,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -18,6 +24,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -152,8 +160,8 @@ private fun WizardPane(
             } else {
                 Text(stringResource(R.string.cfg_setup_wizard_done), color = AdosTheme.colors.statusSuccess)
             }
-            wizard?.steps?.forEach { s ->
-                s.result?.takeIf { it.isNotEmpty() }?.let {
+            wizard?.let(SetupOverview::filedSteps)?.forEach { s ->
+                SetupOverview.resultRows(s.result).takeIf { it.isNotEmpty() }?.let {
                     Text(text.format(s.titleKey, s.args.textArgs()), style = MaterialTheme.typography.titleSmall, color = AdosTheme.colors.fgPrimary)
                     ResultCard(it)
                 }
@@ -180,8 +188,9 @@ private fun WizardPane(
                     variant = AdosButtonVariant.Secondary,
                     modifier = Modifier.testTag("setup-back-overview"),
                 )
-                if (wizard?.state == SetupWizardState.Running || step.state == SetupStepState.Running) {
-                    AdosButton(LocalSetupText.current.format(KEY_ACTION_ABORT, emptyMap()), onClick = actions.onAbort, variant = AdosButtonVariant.Danger)
+                val live = state.setup.overview?.running?.wizard == focus.wizard
+                if (live || wizard?.state == SetupWizardState.Running || step.state == SetupStepState.Running) {
+                    AbortControl(focus.wizard, actions.onAbort)
                 }
             }
         }
@@ -203,8 +212,24 @@ class SetupActions(
 @Composable
 private fun WizardList(state: WizardUiState, actions: SetupActions, onRevert: (String) -> Unit) {
     val overview = state.setup.overview ?: return
-    val vehicle = listOfNotNull(overview.firmware, overview.firmwareVersion, overview.vehicleClass).joinToString(" · ")
-    if (vehicle.isNotEmpty()) Text(vehicle, style = MaterialTheme.typography.bodyMedium, color = AdosTheme.colors.fgSecondary)
+    val vehicle = listOfNotNull(
+        listOfNotNull(SetupOverview.firmwareLabel(overview.firmware), overview.firmwareVersion).joinToString(" ").ifEmpty { null },
+        overview.vehicleClass,
+    ).joinToString(" · ")
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+        if (vehicle.isNotEmpty()) Text(vehicle, style = MaterialTheme.typography.bodyMedium, color = AdosTheme.colors.fgSecondary)
+        overview.uid?.let { uid ->
+            var open by rememberSaveable { mutableStateOf(false) }
+            TextButton(onClick = { open = !open }, modifier = Modifier.heightIn(min = 48.dp).testTag("setup-details")) {
+                Text(stringResource(R.string.cfg_setup_details) + if (open) " ▾" else " ▸")
+            }
+            if (open) {
+                SelectionContainer {
+                    Text(uid, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace, color = AdosTheme.colors.fgPrimary)
+                }
+            }
+        }
+    }
     listOf(FcSetupApi.WIZARD_GROUND, FcSetupApi.WIZARD_AIR).forEach { id ->
         state.setup.wizard(id)?.let { WizardOverview(state, it, actions) }
     }
@@ -226,12 +251,17 @@ private fun WizardOverview(state: WizardUiState, wizard: SetupWizard, actions: S
     val overview = state.setup.overview ?: return
     val id = wizard.id
     SectionHeader(wizardTitle(id))
+    val running = SetupOverview.runningStep(overview, wizard)
     val failed = failedSteps(wizard)
     Text(
-        if (failed > 0) pluralStringResource(R.plurals.cfg_setup_wizard_steps_failed, failed, failed) else wizardStateLabel(wizard.state),
+        when {
+            failed > 0 -> pluralStringResource(R.plurals.cfg_setup_wizard_steps_failed, failed, failed)
+            running != null -> wizardStateLabel(SetupWizardState.Running)
+            else -> wizardStateLabel(wizard.state)
+        },
         color = when {
             failed > 0 -> colors.statusWarning
-            wizardSucceeded(wizard) -> colors.statusSuccess
+            wizardSucceeded(wizard) && running == null -> colors.statusSuccess
             else -> colors.fgSecondary
         },
     )
@@ -240,7 +270,7 @@ private fun WizardOverview(state: WizardUiState, wizard: SetupWizard, actions: S
         Text(text.format("setup.overview.progress", mapOf("done" to done.toString(), "total" to total.toString())), color = colors.fgPrimary)
         LinearProgressIndicator(progress = { done.toFloat() / total }, modifier = Modifier.fillMaxWidth().testTag("setup-progress-$id"))
     }
-    if (wizard.state == SetupWizardState.Interrupted) {
+    if (wizard.state == SetupWizardState.Interrupted && running == null) {
         Text(
             text.format("setup.overview.interrupted", emptyMap()),
             color = colors.fgPrimary,
@@ -251,51 +281,93 @@ private fun WizardOverview(state: WizardUiState, wizard: SetupWizard, actions: S
     if (wizard.blockers.isNotEmpty()) {
         Text(text.format("setup.overview.blocked", emptyMap()), color = colors.statusError, style = MaterialTheme.typography.titleSmall)
         wizard.blockers.forEach { Text(text.format(it, emptyMap()), color = colors.statusError) }
-    } else {
-        val primary = SetupOverview.primary(wizard.state)
-        Row(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-            AdosButton(
-                text.format(primary.labelKey, emptyMap()),
-                onClick = {
-                    when (primary) {
-                        PrimaryKind.Resume -> actions.onResume(id)
-                        PrimaryKind.Continue -> actions.onOpen(id, null)
-                        PrimaryKind.Start, PrimaryKind.RunAgain -> actions.onStart(id)
-                    }
-                },
-                enabled = wizard.available && !state.setup.actionsBlocked,
-                modifier = Modifier.testTag("setup-primary-$id"),
-            )
-            if (wizard.completed) {
+    }
+    // A run in progress always has its way in, whatever blocks a new one.
+    if (wizard.blockers.isEmpty() || running != null) {
+        val primary = SetupOverview.primary(wizard.state, running != null)
+        val enabled = wizard.available && !state.setup.actionsBlocked
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+            if (primary == PrimaryKind.RunAgain) {
+                // Run again starts over and clears the records: it asks for a hold.
+                HoldToConfirmButton(
+                    label = stringResource(R.string.cfg_setup_hold_to, text.format(primary.labelKey, emptyMap())),
+                    holdMs = SETUP_HOLD_MS,
+                    onConfirmed = { actions.onStart(id) },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("setup-primary-$id"),
+                )
+            } else {
+                AdosButton(
+                    text.format(primary.labelKey, emptyMap()),
+                    onClick = {
+                        when (primary) {
+                            PrimaryKind.Resume -> actions.onResume(id)
+                            PrimaryKind.Continue -> actions.onOpen(id, running)
+                            PrimaryKind.Start, PrimaryKind.RunAgain -> actions.onStart(id)
+                        }
+                    },
+                    enabled = enabled,
+                    modifier = Modifier.testTag("setup-primary-$id"),
+                )
+            }
+            if (wizard.completed && running == null) {
                 AdosButton(stringResource(R.string.cfg_setup_view_results), onClick = { actions.onOpen(id, null) }, variant = AdosButtonVariant.Secondary)
             }
         }
     }
-    val running = overview.running?.takeIf { it.wizard == id }?.step
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-        SetupOverview.cards(wizard).forEach { card ->
-            val target = SetupOverview.target(card)
-            SetupCardTile(
-                card,
-                enabled = wizard.available && !state.setup.actionsBlocked && (overview.running == null || running == target.step),
-                onClick = {
-                    if (running == target.step || wizard.state == SetupWizardState.Running) actions.onOpen(id, target.step) else actions.onRunStep(id, target.step)
-                },
-            )
+    // Equal columns of at least 160 dp, so the cards line up on a phone and a tablet.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val gap = AdosSpacing.S2
+        val columns = ((maxWidth + gap) / (CARD_MIN + gap)).toInt().coerceIn(1, MAX_CARD_COLUMNS)
+        val cardWidth = (maxWidth - gap * (columns - 1)) / columns
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap)) {
+            SetupOverview.cards(wizard, state.flags).forEach { card ->
+                val target = SetupOverview.target(card, state.flags)
+                SetupCardTile(
+                    card,
+                    enabled = wizard.available && !state.setup.actionsBlocked && (overview.running == null || running == target.step),
+                    onClick = {
+                        if (running == target.step || wizard.state == SetupWizardState.Running) actions.onOpen(id, target.step) else actions.onRunStep(id, target.step)
+                    },
+                    modifier = Modifier.width(cardWidth),
+                )
+            }
         }
     }
 }
 
+/**
+ * Abort for the open run. Aborting Aircraft setup asks for a hold; Flight tuning's stays one
+ * tap, because in the air it lands the aircraft.
+ */
+@Composable
+private fun AbortControl(wizard: String, onAbort: () -> Unit) {
+    val label = LocalSetupText.current.format(KEY_ACTION_ABORT, emptyMap())
+    if (wizard == FcSetupApi.WIZARD_AIR) {
+        AdosButton(label, onClick = onAbort, variant = AdosButtonVariant.Danger, modifier = Modifier.testTag("setup-abort"))
+    } else {
+        HoldToConfirmButton(
+            label = stringResource(R.string.cfg_setup_hold_to, label),
+            holdMs = SETUP_HOLD_MS,
+            onConfirmed = onAbort,
+            danger = true,
+            modifier = Modifier.testTag("setup-abort"),
+        )
+    }
+}
+
+private val CARD_MIN = 160.dp
+private const val MAX_CARD_COLUMNS = 4
+
 /** One component card: title, the summary of its current values, and its state badge. */
 @Composable
-private fun SetupCardTile(card: SetupCard, enabled: Boolean, onClick: () -> Unit) {
+private fun SetupCardTile(card: SetupCard, enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val text = LocalSetupText.current
     val colors = AdosTheme.colors
     val attention = card.state == CardState.Attention
     val shape = RoundedCornerShape(AdosRadius.Lg)
     Column(
-        Modifier
-            .widthIn(min = 150.dp, max = 220.dp)
+        modifier
             .heightIn(min = 96.dp)
             .clip(shape)
             .border(if (attention) 2.dp else 1.dp, if (attention) colors.statusError else colors.borderDefault, shape)
@@ -307,7 +379,13 @@ private fun SetupCardTile(card: SetupCard, enabled: Boolean, onClick: () -> Unit
     ) {
         Text(text.format(card.titleKey, emptyMap()), style = MaterialTheme.typography.titleSmall, color = colors.fgPrimary)
         SetupOverview.summary(card, text).takeIf { it.isNotEmpty() }?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = colors.fgSecondary, maxLines = 2)
+            Text(
+                it,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (card.flag != null) colors.statusError else colors.fgSecondary,
+                maxLines = 3,
+                modifier = Modifier.testTag("setup-card-${card.id}-summary"),
+            )
         }
         Text(
             text.format("setup.card.state.${card.state.key}", emptyMap()),
@@ -316,7 +394,7 @@ private fun SetupCardTile(card: SetupCard, enabled: Boolean, onClick: () -> Unit
                 CardState.Done, CardState.NotNeeded -> colors.statusSuccess
                 CardState.Attention -> colors.statusError
                 CardState.InProgress -> colors.statusWarning
-                CardState.NotSet, CardState.Optional -> colors.fgSecondary
+                CardState.NotSet, CardState.Optional, CardState.AfterSetup -> colors.fgSecondary
             },
         )
     }
@@ -329,7 +407,7 @@ private fun Snapshots(state: WizardUiState, onRevert: (String) -> Unit) {
     SectionHeader(stringResource(R.string.cfg_setup_snapshots))
     snapshots.forEach { snap ->
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(snap.ts ?: snap.file, Modifier.weight(1f), color = AdosTheme.colors.fgPrimary)
+            Text(SetupOverview.snapshotTime(snap.ts ?: snap.file) ?: snap.ts ?: snap.file, Modifier.weight(1f), color = AdosTheme.colors.fgPrimary)
             HoldToConfirmButton(
                 label = LocalSetupText.current.format(KEY_ACTION_REVERT, emptyMap()),
                 holdMs = SETUP_HOLD_MS,

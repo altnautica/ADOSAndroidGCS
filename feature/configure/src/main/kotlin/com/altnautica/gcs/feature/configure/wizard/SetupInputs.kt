@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.configure.wizard
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +30,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import com.altnautica.gcs.core.agent.fcsetup.SetupStep
@@ -97,7 +99,13 @@ const val INPUTS_KEY = "inputs"
 class SetupInputState(val inputs: List<SetupInput>) {
     /** Number inputs are kept as typed text until they parse. */
     val values = mutableStateMapOf<String, String>().apply {
-        inputs.forEach { put(it.name, it.initial?.let { v -> (v as? JsonPrimitive)?.contentOrNull } ?: "") }
+        inputs.forEach { put(it.name, it.initial?.let { v -> (v as? JsonPrimitive)?.contentOrNull?.let(::wholeNumber) } ?: "") }
+    }
+
+    /** A whole number as the operator types it ("5", not "5.0"); anything else as sent. */
+    private fun wholeNumber(raw: String): String {
+        val d = raw.toDoubleOrNull() ?: return raw
+        return if (raw.contains('.') && d == Math.rint(d) && kotlin.math.abs(d) < 1e15) d.toLong().toString() else raw
     }
 
     fun valid(input: SetupInput): Boolean {
@@ -198,7 +206,8 @@ private fun rangeText(input: SetupInput): String? {
 /**
  * An enum input with a picture per option (the frame layouts): a grid of tiles, each the
  * option's setup image over its label; the selected tile carries the primary outline. Options
- * without a picture still show, by label. Each tile is at least 96 dp.
+ * without a picture still show, by label. Tiles share the width in columns of 150 to 240 dp,
+ * at least two to a row, so the motor numbers stay readable on a phone and a tablet alike.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -207,29 +216,39 @@ private fun PicturePicker(input: SetupInput, value: String, label: String, onPic
     val colors = AdosTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = colors.fgSecondary)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
-            input.options.forEach { option ->
-                val raw = option.jsonPrimitive.content
-                val selected = raw == value
-                val name = text.format("${input.labelKey}.$raw", emptyMap())
-                val shape = RoundedCornerShape(AdosRadius.Md)
-                Column(
-                    Modifier
-                        .width(PICTURE_TILE)
-                        .heightIn(min = PICTURE_TILE)
-                        .clip(shape)
-                        .border(if (selected) 2.dp else 1.dp, if (selected) colors.accentPrimary else colors.borderDefault, shape)
-                        .selectable(selected = selected, role = Role.RadioButton) { onPick(raw) }
-                        .padding(AdosSpacing.S2)
-                        .testTag("setup-picture-${input.name}-$raw"),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    input.images[raw]?.let { key -> SetupImage(key, name, colors.fgPrimary, Modifier.size(PICTURE_TILE - 24.dp)) }
-                    Text(name, style = MaterialTheme.typography.labelMedium, color = if (selected) colors.accentPrimary else colors.fgPrimary, maxLines = 2)
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val gap = AdosSpacing.S2
+            val columns = ((maxWidth + gap) / (PICTURE_TILE_MIN + gap)).toInt().coerceIn(2, MAX_PICTURE_COLUMNS)
+            // A tile is at most 45 % of the screen's height, so on a landscape phone a row and the fields below it stay in view.
+            val tallest = (LocalConfiguration.current.screenHeightDp * PICTURE_HEIGHT_SHARE).dp
+            val tile = ((maxWidth - gap * (columns - 1)) / columns).coerceAtMost(PICTURE_TILE_MAX).coerceAtMost(tallest)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap)) {
+                input.options.forEach { option ->
+                    val raw = option.jsonPrimitive.content
+                    val selected = raw == value
+                    val name = text.format("${input.labelKey}.$raw", emptyMap())
+                    val shape = RoundedCornerShape(AdosRadius.Md)
+                    Column(
+                        Modifier
+                            .width(tile)
+                            .heightIn(min = 48.dp)
+                            .clip(shape)
+                            .border(if (selected) 2.dp else 1.dp, if (selected) colors.accentPrimary else colors.borderDefault, shape)
+                            .selectable(selected = selected, role = Role.RadioButton) { onPick(raw) }
+                            .padding(AdosSpacing.S2)
+                            .testTag("setup-picture-${input.name}-$raw"),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        input.images[raw]?.let { key -> SetupImage(key, name, colors.fgPrimary, Modifier.fillMaxWidth()) }
+                        Text(name, style = MaterialTheme.typography.labelLarge, color = if (selected) colors.accentPrimary else colors.fgPrimary, maxLines = 2)
+                    }
                 }
             }
         }
     }
 }
 
-private val PICTURE_TILE = 112.dp
+private val PICTURE_TILE_MIN = 150.dp
+private val PICTURE_TILE_MAX = 240.dp
+private const val MAX_PICTURE_COLUMNS = 6
+private const val PICTURE_HEIGHT_SHARE = 0.45f

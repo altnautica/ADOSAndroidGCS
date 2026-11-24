@@ -169,6 +169,10 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
                 "accel" -> accel(s, action)
                 "outputs" -> outputs(s, action)
                 "autotune" -> autotune(s, action)
+                "frame" -> if (action == APPLY) {
+                    s.done(args.orEmpty().filterKeys { it in FRAME_INPUTS })
+                    finished(s)
+                }
                 "ados_profile" -> if (action == APPLY) {
                     fcValues.putAll(COPTER_PROFILE)
                     s.done(mapOf("applied" to profileRows(), "absent" to JsonArray(emptyList())))
@@ -203,6 +207,11 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
     private fun begin(s: StepRun) {
         running = SetupRunning(s.wizard, s.id)
         when (s.id) {
+            // The engine's copter frame inputs: a picture picker per class and arm layout, and the propulsion numbers.
+            "frame" -> {
+                s.args["inputs"] = frameInputs()
+                s.waitUser(primary(APPLY), secondary("skip"))
+            }
             "accel" -> {
                 s.image = "accel_level"
                 s.waitUser(primary("start"), secondary("skip"))
@@ -228,6 +237,39 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
             else -> s.waitUser(primary("start"), secondary("skip"))
         }
     }
+
+    /** The frame step's inputs as the engine sends them for an ArduCopter quad X. */
+    private fun frameInputs() = JsonObject(
+        mapOf(
+            "frame_class" to enumInput(1, listOf(1, 2, 3), "setup.input.frame_class", CLASS_IMAGES),
+            "frame_type" to enumInput(1, listOf(0, 1, 3), "setup.input.frame_type", TYPE_IMAGES),
+            "prop_in" to numberInput(5.0, 2.0, 40.0, 0.5, "in", "setup.input.prop_in"),
+            "motor_kv" to numberInput(2300.0, 50.0, 5000.0, 10.0, "rpm/V", "setup.input.motor_kv"),
+            "cells" to numberInput(4.0, 1.0, 14.0, 1.0, "S", "setup.input.cells"),
+        ),
+    )
+
+    private fun enumInput(value: Int, options: List<Int>, label: String, images: Map<Int, String>) = JsonObject(
+        mapOf(
+            "kind" to JsonPrimitive("enum"),
+            "value" to JsonPrimitive(value),
+            "options" to JsonArray(options.map { JsonPrimitive(it) }),
+            "label_key" to JsonPrimitive(label),
+            "images" to JsonObject(images.map { (k, v) -> k.toString() to JsonPrimitive(v) }.toMap()),
+        ),
+    )
+
+    private fun numberInput(value: Double, min: Double, max: Double, step: Double, unit: String, label: String) = JsonObject(
+        mapOf(
+            "kind" to JsonPrimitive("number"),
+            "value" to JsonPrimitive(value),
+            "min" to JsonPrimitive(min),
+            "max" to JsonPrimitive(max),
+            "step" to JsonPrimitive(step),
+            "unit" to JsonPrimitive(unit),
+            "label_key" to JsonPrimitive(label),
+        ),
+    )
 
     /** The copter failsafe profile as `{name, value, have}` rows, as the vehicle's pilot lists it. */
     private fun profileRows() = JsonArray(
@@ -484,6 +526,15 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
         /** Quad-X in test order: motor number, spin direction, test sequence. */
         private val QUAD_X = listOf(Motor(1, false, 1), Motor(4, true, 2), Motor(2, false, 3), Motor(3, true, 4))
         const val MOTOR_IMAGE = "motor_order_quad_x"
+
+        /** The frame step's input names, kept as its result on Apply. */
+        private val FRAME_INPUTS = setOf("frame_class", "frame_type", "prop_in", "motor_kv", "cells")
+
+        /** Frame class (quad, hexa, octa) as its X layout picture, as the engine sends it. */
+        private val CLASS_IMAGES = mapOf(1 to "motor_order_quad_x", 2 to "motor_order_hexa_x", 3 to "motor_order_octa_x")
+
+        /** Frame type (plus, X, H) as the quad drawn in that layout. */
+        private val TYPE_IMAGES = mapOf(0 to "motor_order_quad_plus", 1 to "motor_order_quad_x", 3 to "motor_order_quad_h")
 
         const val Q_POSITION = "setup.question.motor_position"
         const val Q_DIRECTION = "setup.question.motor_direction"

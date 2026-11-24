@@ -7,6 +7,7 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.skills.hud.ConfinedText
 import com.altnautica.gcs.core.skills.hud.SpecText
+import com.altnautica.gcs.core.skills.hud.shortTitle
 import com.altnautica.gcs.core.skills.spec.ClearanceTextSpec
 import com.altnautica.gcs.core.skills.spec.FcModeClassSpec
 import com.altnautica.gcs.core.skills.spec.FlightStateMatchSpec
@@ -137,7 +138,7 @@ class FlightStateChipResolver(
 
     private fun values(p: PilotState, ctx: ChipContext): Map<String, String> = mapOf(
         "step" to launchStep(p)?.let(::stepLabel).orEmpty(),
-        "first_block_msg" to p.firstBlock?.msg.orEmpty(),
+        "first_block_msg" to p.firstBlock?.let { shortTitle(it.msg, it.params.isNotEmpty()) }.orEmpty(),
         "profile" to profileLabel((p.profile ?: PilotProfile.Normal).wire),
         "profile_limit" to profileLimit(p),
         "skill_label" to (p.skill?.label ?: DEFAULT_SKILL_LABEL).replaceFirstChar { it.uppercaseChar() },

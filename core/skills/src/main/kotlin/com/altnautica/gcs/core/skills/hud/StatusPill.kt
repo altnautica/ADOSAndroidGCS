@@ -96,11 +96,17 @@ data class PillAlert(
      * The row's one-line title: with a parameter table, the plain words before the colon
      * ("FC parameters differ"), since the table carries the rest; otherwise the whole text.
      */
-    val title: String get() {
-        if (params.isEmpty()) return text
-        val at = text.indexOf(": ")
-        return if (at > 0) text.substring(0, at) else text
-    }
+    val title: String get() = shortTitle(text, params.isNotEmpty())
+}
+
+/**
+ * A readiness or alert message's one-line title (`shortTitle`): with parameter rows behind
+ * it, the plain words before the first ": " ("FC parameters differ"); otherwise the text.
+ */
+fun shortTitle(text: String, hasParams: Boolean): String {
+    if (!hasParams) return text
+    val at = text.indexOf(": ")
+    return if (at > 0) text.substring(0, at) else text
 }
 
 data class PillSummary(

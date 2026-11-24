@@ -184,6 +184,8 @@ class CockpitViewModel @AssistedInject constructor(
     /** Outlives the view model: an open review is still aborted when the cockpit is cleared. */
     @com.altnautica.gcs.core.link.di.LinkScope private val abortScope: kotlinx.coroutines.CoroutineScope =
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
+    /** Shares the pilot's readiness with Aircraft setup, which flags the cards it names. */
+    readinessStore: com.altnautica.gcs.core.link.node.PilotReadinessStore = com.altnautica.gcs.core.link.node.PilotReadinessStore(),
 ) : ViewModel() {
 
     @AssistedFactory
@@ -321,6 +323,14 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** The onboard pilot's state, or null for a vehicle without one. */
     val pilotState: StateFlow<PilotState?> = pilot.state
+
+    init {
+        viewModelScope.launch {
+            combine(vehicleNodeId, pilot.state) { id, p -> id to p }.collect { (id, p) ->
+                if (id != null && p != null) readinessStore.publish(id, p.readiness)
+            }
+        }
+    }
 
     /**
      * The pilot's state while its frame is fresh, else null; re-checked on the 2 Hz tick, so

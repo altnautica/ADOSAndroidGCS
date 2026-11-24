@@ -49,18 +49,24 @@ data class SetupSnapshotState(
  * One live connection to a vehicle's setup engine: loads the overview, follows the
  * step stream (reconnecting after a drop) and sends step actions. Runs in [scope].
  */
-class SetupSession(private val backend: SetupBackend, private val scope: CoroutineScope) {
+class SetupSession(
+    private val backend: SetupBackend,
+    private val scope: CoroutineScope,
+    private val nowMs: () -> Long = System::currentTimeMillis,
+) {
     private val _state = MutableStateFlow(SetupSnapshotState())
     val state: StateFlow<SetupSnapshotState> = _state.asStateFlow()
 
     private val jobs = mutableListOf<Job>()
+    private var reading = false
+    private var lastRead = Long.MIN_VALUE / 2
 
     fun open() {
         jobs += scope.launch { refresh() }
         jobs += scope.launch {
             while (true) {
                 try {
-                    backend.stream().collect(::apply)
+                    backend.stream().collect { apply(it); rereadIfIncomplete() }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -82,7 +88,29 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
     }
 
     /** Loads the overview; true once the steps shown are live again. */
-    suspend fun refresh(): Boolean = when (val r = backend.overview()) {
+    suspend fun refresh(): Boolean {
+        reading = true
+        lastRead = nowMs()
+        try {
+            return read()
+        } finally {
+            reading = false
+        }
+    }
+
+    /**
+     * A stream frame never carries the uid or firmware: while the overview lacks either (read
+     * while the agent was restarting), a frame re-reads the whole status, at most every 2 s.
+     */
+    private fun rereadIfIncomplete() {
+        val o = _state.value.overview
+        if (o != null && o.uid != null && o.firmware != null) return
+        if (reading || nowMs() - lastRead < FRAME_REREAD_MS) return
+        reading = true
+        scope.launch { refresh() }
+    }
+
+    private suspend fun read(): Boolean = when (val r = backend.overview()) {
         is AgentResult.Ok -> {
             _state.update { it.copy(overview = r.value, steps = emptyMap(), problem = null, stale = false) }
             true
@@ -146,5 +174,6 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
 
     private companion object {
         const val RECONNECT_MS = 2_000L
+        const val FRAME_REREAD_MS = 2_000L
     }
 }

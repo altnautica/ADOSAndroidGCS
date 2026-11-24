@@ -168,6 +168,8 @@
     <string name="cfg_setup_state_done">Done</string>
     <string name="cfg_setup_state_failed">Failed</string>
     <string name="cfg_setup_state_skipped">Skipped</string>
+    <string name="cfg_setup_state_cancelled">Cancelled</string>
+    <string name="cfg_setup_details">Details</string>
     <string name="cfg_setup_view_results">Results</string>
     <string name="cfg_setup_wizard_interrupted">Interrupted</string>
     <string name="cfg_setup_results">Results</string>

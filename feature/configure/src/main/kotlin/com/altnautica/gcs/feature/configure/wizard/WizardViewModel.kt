@@ -7,7 +7,10 @@ import com.altnautica.gcs.core.agent.fcsetup.SetupStepState
 import com.altnautica.gcs.core.agent.fcsetup.SetupWizard
 import com.altnautica.gcs.core.agent.fcsetup.SetupWizardState
 import com.altnautica.gcs.core.link.node.SetupBackendSource
+import com.altnautica.gcs.core.link.node.PilotReadinessStore
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.ReadinessItem
+import kotlinx.coroutines.flow.Flow
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -34,6 +37,8 @@ data class WizardUiState(
     val agent: Boolean? = null,
     val setup: SetupSnapshotState = SetupSnapshotState(),
     val focus: WizardFocus? = null,
+    /** The setup steps the flight controller's readiness flags, with the reason line ([SetupOverview.readinessFlags]). */
+    val flags: Map<String, String> = emptyMap(),
 ) {
     val wizard: SetupWizard? get() = focus?.let { setup.wizard(it.wizard) }
 
@@ -49,8 +54,9 @@ data class WizardUiState(
         return w.steps.firstOrNull { it.state != SetupStepState.Done && it.state != SetupStepState.Skipped }
     }
 
-    /** The wizard ran through: show its results and the snapshot revert. */
-    val showResults: Boolean get() = focus?.step == null && wizard?.state == SetupWizardState.Done
+    /** The wizard ran through and no run of it is in progress: show its results and the snapshot revert. */
+    val showResults: Boolean get() =
+        focus?.step == null && wizard?.state == SetupWizardState.Done && setup.overview?.running?.wizard != focus?.wizard
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -63,6 +69,8 @@ class WizardViewModel internal constructor(
     val text: SetupText,
     /** Run the [initial] step once its first overview loads; the step's own actions still wait for the operator. */
     runInitialStep: Boolean = false,
+    /** The onboard pilot's readiness for this vehicle, as the cockpit last saw it. */
+    readiness: Flow<List<ReadinessItem>> = flowOf(emptyList()),
 ) : ViewModel() {
     @AssistedInject constructor(
         @Assisted nodeId: String,
@@ -71,7 +79,8 @@ class WizardViewModel internal constructor(
         @Assisted run: Boolean,
         backends: SetupBackendSource,
         text: SetupText,
-    ) : this(DeviceId(nodeId), wizard?.let { WizardFocus(it, step) }, backends, text, run)
+        readinessStore: PilotReadinessStore,
+    ) : this(DeviceId(nodeId), wizard?.let { WizardFocus(it, step) }, backends, text, run, readinessStore.observe(DeviceId(nodeId)))
 
     @AssistedFactory
     interface Factory {
@@ -108,8 +117,14 @@ class WizardViewModel internal constructor(
         sessions.flatMapLatest { r -> r?.session?.state ?: flowOf(null) },
         focus,
         sessions,
-    ) { snapshot, f, resolved ->
-        WizardUiState(agent = resolved?.let { it.session != null }, setup = snapshot ?: SetupSnapshotState(), focus = f)
+        readiness,
+    ) { snapshot, f, resolved, items ->
+        WizardUiState(
+            agent = resolved?.let { it.session != null },
+            setup = snapshot ?: SetupSnapshotState(),
+            focus = f,
+            flags = SetupOverview.readinessFlags(items),
+        )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, WizardUiState())
 
     fun open(wizard: String, step: String? = null) = focus.update { WizardFocus(wizard, step) }
