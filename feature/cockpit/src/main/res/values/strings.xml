@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Alert list -->
+    <plurals name="alerts_blocking">
+        <item quantity="one">%d blocking</item>
+        <item quantity="other">%d blocking</item>
+    </plurals>
+    <plurals name="alerts_warnings">
+        <item quantity="one">%d warning</item>
+        <item quantity="other">%d warnings</item>
+    </plurals>
+    <string name="alerts_show_hidden">Show hidden (%d)</string>
+    <string name="alerts_hide_hidden">Hide hidden (%d)</string>
+    <string name="alerts_all_clear">All clear: nothing needs attention</string>
+    <plurals name="alerts_hidden_note">
+        <item quantity="one">%d hidden</item>
+        <item quantity="other">%d hidden</item>
+    </plurals>
+    <string name="alerts_param_not_reported">not reported</string>
+    <string name="alerts_param_show_all">Show all %d</string>
+    <string name="alerts_param_show_fewer">Show fewer</string>
+    <string name="alerts_action_apply">Apply recommended values</string>
+    <string name="alerts_action_open_setup">Open setup</string>
+    <string name="alerts_action_open_settings">Open settings</string>
+    <string name="alerts_action_open_parameters">Open parameters</string>
+    <string name="alerts_action_hide">Hide</string>
+    <string name="alerts_action_unhide">Show again</string>
+    <string name="alerts_action_collapse">Collapse</string>
+    <string name="alerts_action_expand">Expand</string>
+    <string name="alerts_apply_snapshot">A snapshot is saved first; you can restore it from Aircraft setup › Setup report.</string>
+    <string name="alerts_chip_blocking">What blocks take-off</string>
+    <string name="alerts_chip_no_blocking">Nothing blocks take-off</string>
+    <string name="alerts_chip_warnings">Warnings (%d)</string>
+    <string name="alerts_ground_hint">Fix from the drone\'s Aircraft setup (Mission Control or the drone\'s cockpit)</string>
+    <string name="vision_engine_after_agent_restart">Vision starts after the agent restarts (about 10 s).</string>
+    <string name="vision_engine_restart_agent">Restart agent</string>
+    <string name="alerts_chip_mode">Flight modes</string>
+
+    <!-- Vision -->
+    <string name="vision_close">Close Vision</string>
+    <string name="vision_engine_title">Vision engine</string>
+    <string name="vision_engine_running">Running</string>
+    <string name="vision_engine_starting">Starting vision…</string>
+    <string name="vision_engine_off">Vision is off</string>
+    <string name="vision_engine_off_hint">Turn it on to see depth, surfaces and detections.</string>
+    <string name="vision_engine_unreachable">Vision is not responding</string>
+    <string name="vision_engine_turn_on">Turn on vision</string>
+    <string name="vision_engine_restart">Restart vision</string>
+    <string name="vision_engine_armed">Disarm to change vision</string>
+    <string name="vision_engine_start_timeout">Vision did not start. Check Settings › Vision.</string>
+    <string name="vision_engine_failed">Could not change vision: %s</string>
+    <string name="vision_layer_receiving">Receiving</string>
+    <string name="vision_layer_no_data">No data</string>
+    <string name="vision_layer_engine_off">Engine off</string>
+    <string name="vision_detections_empty">No detections. Point the camera at people or vehicles.</string>
+    <string name="vision_badge_engine_off">Vision engine is off</string>
+    <string name="vision_badge_no_data">No data from %s for 2 s</string>
+    <string name="vision_badge_turn_off">Turn off</string>
+    <string name="vision_badge_close_view">Close Vision view</string>
+    <string name="vision_badge_set_up">Set up</string>
+</resources>

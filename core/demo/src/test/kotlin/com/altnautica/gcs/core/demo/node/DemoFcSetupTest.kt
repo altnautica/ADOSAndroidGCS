@@ -45,6 +45,23 @@ class DemoFcSetupTest {
     }
 
     @Test
+    fun theAirWizardStartsInterruptedAndResumesAtItsFirstUnfinishedStep() = runTest {
+        val setup = DemoFcSetup(this)
+        val before = (setup.overview() as AgentResult.Ok).value.wizard("air")!!
+        assertEquals(SetupWizardState.Interrupted, before.state)
+        assertEquals(SetupStepState.Done, before.steps.first().state)
+        // Resume only continues an interrupted run: the ground wizard is done.
+        assertTrue(setup.resume("ground") is AgentResult.Err)
+        val resumed = (setup.resume("air") as AgentResult.Ok).value.wizard!!
+        assertEquals(SetupWizardState.Running, resumed.state)
+        assertEquals(SetupStepState.Done, setup.step("air", "preflight").state)
+        assertEquals(SetupStepState.WaitingUser, setup.step("air", "first_hover").state)
+        assertEquals("air" to "first_hover", (setup.overview() as AgentResult.Ok).value.running!!.let { it.wizard to it.step })
+        // A second resume is refused: the run is live again.
+        assertTrue(setup.resume("air") is AgentResult.Err)
+    }
+
+    @Test
     fun accelWalksSixPosesToDone() = runTest {
         val setup = DemoFcSetup(this)
         setup.runStep("ground", "accel")

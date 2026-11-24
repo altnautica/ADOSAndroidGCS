@@ -1,6 +1,17 @@
 package com.altnautica.gcs.feature.configure.wizard
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import com.altnautica.gcs.core.designsystem.tokens.AdosRadius
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -43,6 +54,8 @@ data class SetupInput(
     val min: Double? = null,
     val max: Double? = null,
     val unit: String? = null,
+    /** A picture per enum option (`images`, option value to setup-image key); empty without pictures. */
+    val images: Map<String, String> = emptyMap(),
 ) {
     companion object {
         /** The inputs a step declares, in wire order. */
@@ -65,6 +78,9 @@ data class SetupInput(
                     min = o.num("min"),
                     max = o.num("max"),
                     unit = o.str("unit"),
+                    images = (o["images"] as? JsonObject).orEmpty().mapNotNull { (k, v) ->
+                        (v as? JsonPrimitive)?.takeIf { it.isString }?.content?.let { k to it }
+                    }.toMap(),
                 )
             }
         }
@@ -133,13 +149,17 @@ fun SetupInputFields(state: SetupInputState, modifier: Modifier = Modifier) {
                 SetupInputKind.Number -> OutlinedTextField(
                     value = value,
                     onValueChange = { state.values[input.name] = it.trim() },
-                    label = { Text(label) },
+                    label = { Text(text.format(input.labelKey, emptyMap())) },
+                    suffix = input.unit?.let { u -> { Text(u) } },
+                    supportingText = rangeText(input)?.let { r -> { Text(r) } },
                     isError = value.isNotEmpty() && !state.valid(input),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth().testTag("setup-input-${input.name}"),
                 )
-                SetupInputKind.Enum -> Column {
+                SetupInputKind.Enum -> if (input.images.isNotEmpty()) {
+                    PicturePicker(input, value, label) { state.values[input.name] = it }
+                } else Column {
                     Text(label, style = MaterialTheme.typography.labelMedium, color = colors.fgSecondary)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
                         input.options.forEach { option ->
@@ -163,3 +183,53 @@ fun SetupInputFields(state: SetupInputState, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** "{min} to {max} {unit}" under a number field, when the input gives both bounds. */
+@Composable
+private fun rangeText(input: SetupInput): String? {
+    val min = input.min ?: return null
+    val max = input.max ?: return null
+    return LocalSetupText.current.format(
+        "setup.overview.range",
+        mapOf("min" to JsonPrimitive(min).displayText(), "max" to JsonPrimitive(max).displayText(), "unit" to input.unit.orEmpty()),
+    ).trim()
+}
+
+/**
+ * An enum input with a picture per option (the frame layouts): a grid of tiles, each the
+ * option's setup image over its label; the selected tile carries the primary outline. Options
+ * without a picture still show, by label. Each tile is at least 96 dp.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PicturePicker(input: SetupInput, value: String, label: String, onPick: (String) -> Unit) {
+    val text = LocalSetupText.current
+    val colors = AdosTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = colors.fgSecondary)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
+            input.options.forEach { option ->
+                val raw = option.jsonPrimitive.content
+                val selected = raw == value
+                val name = text.format("${input.labelKey}.$raw", emptyMap())
+                val shape = RoundedCornerShape(AdosRadius.Md)
+                Column(
+                    Modifier
+                        .width(PICTURE_TILE)
+                        .heightIn(min = PICTURE_TILE)
+                        .clip(shape)
+                        .border(if (selected) 2.dp else 1.dp, if (selected) colors.accentPrimary else colors.borderDefault, shape)
+                        .selectable(selected = selected, role = Role.RadioButton) { onPick(raw) }
+                        .padding(AdosSpacing.S2)
+                        .testTag("setup-picture-${input.name}-$raw"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    input.images[raw]?.let { key -> SetupImage(key, name, colors.fgPrimary, Modifier.size(PICTURE_TILE - 24.dp)) }
+                    Text(name, style = MaterialTheme.typography.labelMedium, color = if (selected) colors.accentPrimary else colors.fgPrimary, maxLines = 2)
+                }
+            }
+        }
+    }
+}
+
+private val PICTURE_TILE = 112.dp

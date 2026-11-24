@@ -23,6 +23,7 @@ enum class CockpitSpecFile(val fileName: String) {
     SetupStrings("setup-strings.json"),
     Tips("tips.json"),
     SensorHealth("sensor-health.json"),
+    AlertGroups("alert-groups.json"),
 }
 
 /** Reads the raw text of one spec file. */
@@ -58,6 +59,7 @@ object CockpitSpecParser {
     fun hotspots(text: String): ControllerHotspotsSpec = decode(ControllerHotspotsSpec.serializer(), text) { it.v }
     fun setupStrings(text: String): SetupStringsSpec = decode(SetupStringsSpec.serializer(), text) { it.v }
     fun tips(text: String): TipsSpec = decode(TipsSpec.serializer(), text) { it.v }
+    fun alertGroups(text: String): AlertGroupsSpec = decode(AlertGroupsSpec.serializer(), text) { it.v }
 
     /** Parses [file]'s [text] into its model. */
     fun parse(file: CockpitSpecFile, text: String): Any = when (file) {
@@ -72,6 +74,7 @@ object CockpitSpecParser {
         CockpitSpecFile.Ds4Hotspots, CockpitSpecFile.GenericHotspots -> hotspots(text)
         CockpitSpecFile.SetupStrings -> setupStrings(text)
         CockpitSpecFile.Tips -> tips(text)
+        CockpitSpecFile.AlertGroups -> alertGroups(text)
         // Read by no Android surface yet: checked as well-formed JSON only.
         CockpitSpecFile.SensorHealth -> json.parseToJsonElement(text)
     }

@@ -62,8 +62,10 @@ fun secondaryLine(parts: List<ChipText>): AnnotatedString = buildAnnotatedString
 /**
  * The flight-state chip: an outline in its state colour with a leading dot, the owner and
  * mode in the chrome text, the secondary part inline after " · " in the dim text with warning
- * parts in their state colour (it truncates before the primary does), and the rule's button. Tapping the chip opens the
- * Mode sheet; the chip dims while the pilot state is stale.
+ * parts in their state colour (it truncates before the primary does), and the rule's button.
+ * Tapping the chip ([onOpen]) opens the sheet of what blocks take-off while a readiness item
+ * blocks it (its rows with their parameter tables and fixes), otherwise the Mode sheet; the
+ * chip dims while the pilot state is stale.
  */
 @Composable
 fun FlightStateChip(

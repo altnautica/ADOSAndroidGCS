@@ -36,7 +36,7 @@ class StatusListItemTest {
         val chrome = Chrome.from(testSpec.tokens.chrome)
         compose.setContent {
             AdosTheme {
-                CompositionLocalProvider(LocalCockpitStrings provides strings, LocalChrome provides chrome) { StatusList(items, onClose = {}) }
+                CompositionLocalProvider(LocalCockpitStrings provides strings, LocalChrome provides chrome) { StatusList(otherSection(items), onClose = {}) }
             }
         }
         assertEquals(mapOf("critical" to "✕", "warning" to "⚠", "info" to "ℹ"), testSpec.tokens.chrome.severityIcon)

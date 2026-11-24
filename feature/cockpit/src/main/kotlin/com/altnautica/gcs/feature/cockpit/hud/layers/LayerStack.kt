@@ -1,6 +1,7 @@
 package com.altnautica.gcs.feature.cockpit.hud.layers
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -8,6 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.graphics.graphicsLayer
@@ -121,6 +123,8 @@ data class LayerPresentation(
  * demand leases for [cameraId]; below it the loop stops and the leases drop.
  *
  * [frameW]×[frameH] is the video frame the canvas letterboxes (0 takes the AR frame size).
+ * With [badges], a layer that is on but has no data shows as a button (its quick actions:
+ * the reason, Turn off, Set up) instead of a canvas chip.
  */
 @Composable
 fun LayerStack(
@@ -131,6 +135,7 @@ fun LayerStack(
     modifier: Modifier = Modifier,
     targets: CanvasTargets? = null,
     presentation: LayerPresentation = LayerPresentation(),
+    badges: LayerBadgeActions? = null,
 ) {
     SideEffect { LayerStackDebug.compositions.incrementAndGet() }
     val context = LocalContext.current
@@ -145,6 +150,8 @@ fun LayerStack(
     val tick = remember { mutableIntStateOf(0) }
     val currentTargets by rememberUpdatedState(targets)
     val currentPresentation by rememberUpdatedState(presentation)
+    val currentBadges by rememberUpdatedState(badges)
+    val hidden = remember { mutableStateOf(emptyList<String>()) }
     val store = controller.store
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val beat = rememberRedrawBeat()
@@ -155,6 +162,7 @@ fun LayerStack(
                 var bucket = -1
                 var version = -1
                 var lastTickBeat = Long.MIN_VALUE
+                var badgeFlags: LayerFlags? = null
                 beat.ticks.collect { n ->
                     // A layout class may cap the rate below the beat; beats inside the cap are skipped whole.
                     val capBeats = currentPresentation.fpsCap?.takeIf { it > 0 }?.let { beatsPerRedraw(it) } ?: 1L
@@ -165,6 +173,13 @@ fun LayerStack(
                     val animating = store.animating(now) || targetsMoving
                     val b = freshnessBucket(store, t, now)
                     val v = store.version
+                    val f = flags.value
+                    // The badge buttons follow the hidden layers: recomputed only when a freshness or the flags change.
+                    if (currentBadges != null && (b != bucket || f !== badgeFlags)) {
+                        badgeFlags = f
+                        val h = hiddenLayers(controller, cameraId, f, t, now)
+                        if (h != hidden.value) hidden.value = h
+                    }
                     if (animating || b != bucket || v != version) {
                         bucket = b
                         version = v
@@ -193,20 +208,25 @@ fun LayerStack(
             }
         }
     }
-    Spacer(
-        modifier
-            .fillMaxSize()
-            // Its own render node: a layer redraw re-records only this canvas, not the screen around it.
-            .graphicsLayer()
-            .drawWithCache {
-                onDrawBehind {
-                    tick.intValue // a draw-only read: new frames, interpolation and staleness redraw without recomposing
-                    val t0 = System.nanoTime()
-                    with(canvas) { draw(controller, cameraId, frameW, frameH, flags.value, depth.value, currentPresentation, currentTargets) }
-                    LayerStackDebug.recordDraw(System.nanoTime() - t0)
-                }
-            },
-    )
+    canvas.interactiveBadges = badges != null
+    canvas.badgeRows = if (badges != null) hidden.value.size else 0
+    Box(modifier.fillMaxSize()) {
+        Spacer(
+            Modifier
+                .fillMaxSize()
+                // Its own render node: a layer redraw re-records only this canvas, not the screen around it.
+                .graphicsLayer()
+                .drawWithCache {
+                    onDrawBehind {
+                        tick.intValue // a draw-only read: new frames, interpolation and staleness redraw without recomposing
+                        val t0 = System.nanoTime()
+                        with(canvas) { draw(controller, cameraId, frameW, frameH, flags.value, depth.value, currentPresentation, currentTargets) }
+                        LayerStackDebug.recordDraw(System.nanoTime() - t0)
+                    }
+                },
+        )
+        if (badges != null && hidden.value.isNotEmpty()) LayerBadges(hidden.value, controller, presentation.chipInset, badges)
+    }
 }
 
 /** Beats between two redraws at most [fps] times a second (at least one). */
@@ -225,6 +245,12 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
     private var view = Rect.Zero
     private var chipX = 0f
     private var chipY = 0f
+
+    /** True while the unavailable-layer badges are buttons over the canvas ([LayerBadges]): the canvas leaves them out. */
+    var interactiveBadges = false
+
+    /** How many badge rows the buttons take, so the canvas's own chips stack above them. */
+    var badgeRows = 0
 
     /** The letterboxed frame inside the canvas; rebuilt only when a size changes. */
     private fun layout(fw: Float, fh: Float, w: Float, h: Float) {
@@ -267,7 +293,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
         val view = view
         val inset = presentation.chipInset
         chipX = max(view.left, inset.calculateLeftPadding(layoutDirection).toPx()) + CHIP_INSET_DP * density
-        chipY = min(view.bottom, size.height - inset.calculateBottomPadding().toPx()) - (CHIP_INSET_DP + CHIP_STEP_DP) * density
+        chipY = min(view.bottom, size.height - inset.calculateBottomPadding().toPx()) - (CHIP_INSET_DP + CHIP_STEP_DP * (1 + badgeRows)) * density
         painter.etaInLabels = !presentation.distanceOnly
         painter.topClearPx = inset.calculateTopPadding().toPx()
         if (presentation.reducedRate) chip(labels.reducedRate)
@@ -280,7 +306,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
                     val fr = freshness(store.depth, now)
                     val frame = store.depth.cur
                     if (fr == Freshness.Hidden) {
-                        chip(labels.depthUnavailable)
+                        if (!interactiveBadges) chip(labels.depthUnavailable)
                         continue
                     }
                     val grid = frame?.cameras?.get(cameraId) ?: continue
@@ -292,7 +318,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
                 LayerSpec.SURFACES -> {
                     val fr = freshness(store.surfaces, now, SURFACES_HIDE_MS)
                     if (fr == Freshness.Hidden) {
-                        chip(labels.surfacesUnavailable)
+                        if (!interactiveBadges) chip(labels.surfacesUnavailable)
                         continue
                     }
                     val frame = store.surfaces.cur?.takeIf { it.cameraId == cameraId } ?: continue
@@ -302,7 +328,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
                     val fr = freshness(store.obstacles, now)
                     val frame = store.obstacles.cur ?: continue
                     if (fr == Freshness.Hidden) {
-                        chip(labels.obstaclesUnavailable)
+                        if (!interactiveBadges) chip(labels.obstaclesUnavailable)
                         continue
                     }
                     frame.cameras[cameraId]?.let { g -> with(painter) { drawGrid(g, view, MID_MAX_M, CellStyle.Measured, alpha(fr)) } }
@@ -312,7 +338,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
                     val t = targets ?: continue
                     val fr = targetsFreshness(t, now)
                     if (fr == Freshness.Hidden) {
-                        chip(labels.targetsUnavailable)
+                        if (!interactiveBadges) chip(labels.targetsUnavailable)
                         continue
                     }
                     with(t) { draw(alpha(fr)) }
@@ -322,7 +348,7 @@ internal class LayerCanvas(private val painter: LayerPainter, private val labels
                     val frame = store.ar.cur ?: continue
                     val fr = freshness(store.ar, now)
                     if (fr == Freshness.Hidden || frame.reason != null || arCam?.reason != null) {
-                        chip(labels.arUnavailable)
+                        if (!interactiveBadges) chip(labels.arUnavailable)
                         continue
                     }
                     val route = ArRules.routeStyle(frame.mission, controller.previewAllowed())

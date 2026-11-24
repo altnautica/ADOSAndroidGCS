@@ -29,6 +29,13 @@ class FcSetupApi(private val client: AgentClient) {
     suspend fun start(wizard: String): AgentResult<WizardReply> =
         client.sendJson("POST", "$ROOT/${AgentClient.segment(wizard)}/start", EMPTY, WizardReply.serializer())
 
+    /**
+     * `POST /api/v1/fc-setup/{wizard}/resume`: continue an interrupted wizard at its first step
+     * not done or skipped. Refused (`ok: false`, `err`) unless the wizard is interrupted.
+     */
+    suspend fun resume(wizard: String): AgentResult<WizardReply> =
+        client.sendJson("POST", "$ROOT/${AgentClient.segment(wizard)}/resume", EMPTY, WizardReply.serializer())
+
     /** `POST /api/v1/fc-setup/{wizard}/steps/{step}/actions/{action}` with optional `{args}`. */
     suspend fun action(
         wizard: String,

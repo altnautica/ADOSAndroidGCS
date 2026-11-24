@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -59,7 +61,7 @@ import kotlinx.coroutines.withContext
  * selected parameter on the right (a sheet in portrait). L1/R1 jump between groups.
  */
 @Composable
-fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
+fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit, names: List<String> = emptyList()) {
     val node = hiltViewModel<SetupSurfaceViewModel, SetupSurfaceViewModel.Factory>(
         key = "params-surface-${nodeId.value}",
         creationCallback = { it.create(nodeId.value) },
@@ -69,6 +71,8 @@ fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
         creationCallback = { it.create(nodeId.value) },
     )
     val nodeState by node.state.collectAsStateWithLifecycle()
+    // Opened from an alert: only its parameters, until the operator clears the filter.
+    androidx.compose.runtime.LaunchedEffect(names) { if (names.isNotEmpty()) viewModel.setFilter { it.copy(names = names.toSet()) } }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pending by viewModel.pendingWrite.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
@@ -141,6 +145,13 @@ fun ParametersSurfaceRoute(nodeId: DeviceId, onBack: () -> Unit) {
         Column(Modifier.fillMaxSize().padding(padding)) {
             if (rebootPending && content != null) {
                 RebootBanner(armed = content.armed, linkFresh = content.linkFresh, onReboot = viewModel::reboot)
+            }
+            (state as? ParametersUiState.Content)?.filter?.names?.takeIf { it.isNotEmpty() }?.let { shown ->
+                androidx.compose.material3.AssistChip(
+                    onClick = { viewModel.setFilter { it.copy(names = emptySet()) } },
+                    label = { Text(stringResource(R.string.cfg_param_filtered, shown.size)) },
+                    modifier = Modifier.padding(horizontal = 16.dp).heightIn(min = 48.dp),
+                )
             }
             ConsoleTwoPane(
                 showDetailInPortrait = false,

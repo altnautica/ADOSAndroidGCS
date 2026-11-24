@@ -22,7 +22,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** The production pill path: cockpit alerts and facts through the flight screen's status pill. */
-fun specStatusPill(): StatusPill = StatusModel.statusPill(SpecText(testSpec.setupStrings), testSpec.layout)
+fun specStatusPill(): StatusPill = StatusModel.statusPill(SpecText(testSpec.setupStrings), testSpec.layout, testSpec.alertGroups)
 
 class StatusModelTest {
     private val none = PreflightResult(emptyList())

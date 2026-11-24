@@ -39,6 +39,29 @@ interface VisionEngine {
 
     /** `PUT /api/vision/detector`; true when accepted. */
     suspend fun setDetector(node: DeviceId, modelId: String): Boolean
+
+    /** The stored `vision.enabled`; null while unknown. */
+    suspend fun enabled(node: DeviceId): Boolean? = null
+
+    /** Write `vision.enabled` true, then restart the vision unit. */
+    suspend fun turnOn(node: DeviceId): VisionChange = VisionChange.Failed(null)
+
+    /** Restart the vision unit. */
+    suspend fun restart(node: DeviceId): VisionChange = VisionChange.Failed(null)
+
+    /** Restart the agent, which starts vision when `vision.enabled` is on: the fallback for an agent that refuses a vision restart. */
+    suspend fun restartAgent(node: DeviceId): VisionChange = VisionChange.Failed(null)
+}
+
+/** How a vision start or restart went. */
+sealed interface VisionChange {
+    data object Ok : VisionChange
+
+    /** The agent does not restart the vision unit through its API. */
+    data object Refused : VisionChange
+
+    /** It failed; [message] is the agent's words when it gave any. */
+    data class Failed(val message: String?) : VisionChange
 }
 
 /** Depth layer options: cell style and the range cut-off (null draws no depth cells). */
@@ -71,6 +94,9 @@ class LayerController(
         private set
 
     private val base = MutableStateFlow(spec.defaults())
+
+    /** The operator's own flags, before the open view forces any layer on ("Keep on in other views"). */
+    val baseFlags: StateFlow<LayerFlags> = base.asStateFlow()
     private val _view = MutableStateFlow(LayerSpec.VIEW_PILOT)
     val view: StateFlow<String> = _view.asStateFlow()
 

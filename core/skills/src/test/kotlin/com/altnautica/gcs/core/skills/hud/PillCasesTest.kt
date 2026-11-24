@@ -4,7 +4,11 @@ import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import com.altnautica.gcs.core.skills.adosPilot
 import com.altnautica.gcs.core.skills.testSpec
+import com.altnautica.gcs.core.model.ParamDiff
+import com.altnautica.gcs.core.model.ReadinessFix
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
@@ -16,11 +20,29 @@ import org.junit.Test
 
 /** The Kotlin status pill reads every shared pill case as the web module does. */
 class PillCasesTest {
+    private val groups = AlertGroups(testSpec.alertGroups)
     private val pill = StatusPill(
         SpecText(testSpec.setupStrings),
         testSpec.layout.statusPill!!.storageWarnPct!!,
         testSpec.layout.statusPill!!.storageCritPct!!,
+        groups,
     )
+
+    private fun params(e: JsonElement?): List<ParamDiff> = (e as? JsonArray).orEmpty().map {
+        val o = it.jsonObject
+        ParamDiff(o["name"].str()!!, (o["have"] as? JsonPrimitive)?.doubleOrNull, o["want"].str()!!)
+    }
+
+    private fun fix(e: JsonElement?): ReadinessFix? {
+        val o = e as? JsonObject ?: return null
+        return when (o["kind"].str()) {
+            "apply_profile" -> ReadinessFix.ApplyProfile
+            "setup_step" -> ReadinessFix.SetupStep(o["step"].str()!!)
+            "settings" -> ReadinessFix.Settings(o["section"].str()!!)
+            "parameters" -> ReadinessFix.Parameters(o["names"].strings())
+            else -> error("unknown fix ${o["kind"]}")
+        }
+    }
 
     @Test
     fun `every pill case reads as the shared pill`() {
@@ -37,6 +59,8 @@ class PillCasesTest {
                     o["ok"].bool()!!,
                     if (o["severity"].str() == "block") ReadinessSeverity.Block else ReadinessSeverity.Warn,
                     o["msg"].str().orEmpty(),
+                    params(o["params"]),
+                    fix(o["fix"]),
                 )
             }
             val prearm = (i["prearm"] as? JsonArray)?.strings()
@@ -76,6 +100,17 @@ class PillCasesTest {
             assertEquals(c.name, e["text"].str(), s.text)
             assertEquals(c.name, e["count"].long()!!.toInt(), s.count)
             assertEquals(c.name, e["ids"].strings(), s.alerts.map { it.id })
+            assertEquals(c.name, e["groups"].strings(), groups.sections(s.alerts, emptySet()).map { it.group.wire })
+            (e["detail"] as? JsonArray)?.let { detail ->
+                assertEquals(
+                    c.name,
+                    detail.map {
+                        val o = it.jsonObject
+                        listOf(o["id"].str(), o["group"].str(), o["key"].str(), params(o["params"]), fix(o["fix"]))
+                    },
+                    s.alerts.map { listOf(it.id, it.group.wire, it.key, it.params, it.fix) },
+                )
+            }
         }
     }
 
@@ -156,7 +191,7 @@ class PillCasesTest {
 
     @Test
     fun `without a critical percent the storage item only warns`() {
-        val phone = StatusPill(SpecText(testSpec.setupStrings), testSpec.layout.statusPill!!.storageWarnPct!!, storageCritPct = null)
+        val phone = StatusPill(SpecText(testSpec.setupStrings), testSpec.layout.statusPill!!.storageWarnPct!!, storageCritPct = null, AlertGroups(testSpec.alertGroups))
         assertEquals(PillSeverity.Warning, phone.alerts(emptyList(), emptyList(), null, 99.0).single().severity)
     }
 

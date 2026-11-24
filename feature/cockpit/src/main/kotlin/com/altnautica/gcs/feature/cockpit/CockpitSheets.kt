@@ -74,7 +74,9 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
     val modeSheet by vm.modeSheet.collectAsStateWithLifecycle()
     val launch by vm.launch.collectAsStateWithLifecycle()
     val tourStep by vm.tourStep.collectAsStateWithLifecycle()
-    val statusItems by vm.statusItems.collectAsStateWithLifecycle()
+    val statusList by vm.statusList.collectAsStateWithLifecycle()
+    val blockingOnly by vm.statusBlockingOnly.collectAsStateWithLifecycle()
+    val groundStation = vm.node.collectAsStateWithLifecycle().value?.profile == com.altnautica.gcs.core.model.NodeProfile.GroundStation
     val wide = width == WidthClass.Expanded || width == WidthClass.Tv
     val sizes = remember(width) { flightSizes(width) }
 
@@ -105,8 +107,18 @@ internal fun Overlays(vm: CockpitViewModel, width: WidthClass, status: StatusLis
         val density = LocalDensity.current
         Box(Modifier.fillMaxSize().zIndex(Z.SHEETS)) {
             StatusList(
-                statusItems,
+                statusList,
                 onClose = { vm.setStatusList(false) },
+                blockingOnly = blockingOnly,
+                actions = remember(vm, groundStation) {
+                    com.altnautica.gcs.feature.cockpit.chrome.StatusListActions(
+                        onFix = vm::openFix,
+                        onSnooze = vm::snoozeAlert,
+                        onShowAll = { vm.statusBlockingOnly.value = false },
+                        onModes = { vm.setStatusList(false); vm.openModeSheet() },
+                        groundStation = groundStation,
+                    )
+                },
                 topInset = sizes.edge + sizes.topBar,
                 modifier = Modifier.absoluteOffset(x = with(density) { status.pillX.toDp() }, y = 4.dp),
             )

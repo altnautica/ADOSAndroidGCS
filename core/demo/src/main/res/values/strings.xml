@@ -2,6 +2,7 @@
 <resources>
     <!-- Demo flight states the demo drone's pilot can be pinned to (Settings › Connections). -->
     <string name="demo_scenario_readiness_blocked">Not ready: no position</string>
+    <string name="demo_scenario_fc_params_differ">Not ready: FC parameters differ</string>
     <string name="demo_scenario_battery_failsafe_off">Battery failsafe off</string>
     <string name="demo_scenario_battery_failsafe_confined_rtl">Battery failsafe RTL without GNSS</string>
     <string name="demo_scenario_mission_active">Mission: flying</string>

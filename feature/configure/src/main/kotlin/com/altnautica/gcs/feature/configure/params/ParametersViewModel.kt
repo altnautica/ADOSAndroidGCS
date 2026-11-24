@@ -140,6 +140,7 @@ class ParametersViewModel internal constructor(
     }
 
     private fun ParamRow.matches(f: ParamFilter): Boolean {
+        if (f.names.isNotEmpty()) return name in f.names
         if (f.modifiedOnly && !modified) return false
         if (!f.showAdvanced && meta?.advanced == true && f.query.isBlank()) return false
         if (f.query.isBlank()) return true

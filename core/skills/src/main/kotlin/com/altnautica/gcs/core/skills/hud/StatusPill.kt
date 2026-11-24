@@ -1,6 +1,8 @@
 package com.altnautica.gcs.core.skills.hud
 
 import com.altnautica.gcs.core.model.PilotState
+import com.altnautica.gcs.core.model.ParamDiff
+import com.altnautica.gcs.core.model.ReadinessFix
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 
@@ -75,7 +77,21 @@ enum class PillSource(val wire: String) {
 
 enum class PillSeverity(val wire: String) { Ok("ok"), Warning("warning"), Critical("critical") }
 
-data class PillAlert(val id: String, val source: PillSource, val severity: PillSeverity, val text: String)
+/**
+ * One active pill alert. [group] is its alert-list section; [params] and [fix] ride along from a
+ * readiness item. [key] is the snooze key, `id|text`, so the same id with new words shows again.
+ */
+data class PillAlert(
+    val id: String,
+    val source: PillSource,
+    val severity: PillSeverity,
+    val text: String,
+    val group: AlertGroup = AlertGroup.Other,
+    val params: List<ParamDiff> = emptyList(),
+    val fix: ReadinessFix? = null,
+) {
+    val key: String get() = "$id|$text"
+}
 
 data class PillSummary(
     val severity: PillSeverity,
@@ -95,6 +111,7 @@ class StatusPill(
     private val text: SpecText,
     private val storageWarnPct: Int,
     private val storageCritPct: Int?,
+    private val groups: AlertGroups,
     private val staleAfterMs: Long = PilotState.STALE_MS,
 ) {
 
@@ -164,7 +181,7 @@ class StatusPill(
             if (r.ok) continue
             // A blocking item refuses take-off: critical, as the pre-flight sheet fails it.
             val sev = if (r.severity == ReadinessSeverity.Block) PillSeverity.Critical else PillSeverity.Warning
-            out += PillAlert("pilot:${r.id}", PillSource.PilotReadiness, sev, r.msg.ifEmpty { r.id })
+            out += PillAlert("pilot:${r.id}", PillSource.PilotReadiness, sev, r.msg.ifEmpty { r.id }, params = r.params, fix = r.fix)
         }
         if (controllerLost && !pilotStale) {
             out += PillAlert("controller_lost", PillSource.Controller, PillSeverity.Warning, text.text("alert.controller_lost"))
@@ -209,7 +226,7 @@ class StatusPill(
                 text.text("cockpit.status.storage_used", mapOf("pct" to jsRound(storagePct))),
             )
         }
-        return out.sortedBy { if (it.severity == PillSeverity.Critical) 0 else 1 }
+        return out.sortedBy { if (it.severity == PillSeverity.Critical) 0 else 1 }.map { it.copy(group = groups.groupOf(it.id, it.source)) }
     }
 
     /** `Failsafe: <cause>`, the cause worded by `pilot.banner.cause.*`; an unknown cause reads as itself. */

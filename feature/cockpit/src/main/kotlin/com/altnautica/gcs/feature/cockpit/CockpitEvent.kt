@@ -39,6 +39,9 @@ sealed interface CockpitEvent {
 
     /** The Menu's Controls: the controller settings. */
     data object OpenControls : CockpitEvent
+
+    /** An alert row's fix: leave for Aircraft setup, the vehicle's settings or its parameters. */
+    data class OpenFix(val fix: com.altnautica.gcs.core.model.ReadinessFix) : CockpitEvent
 }
 
 /**

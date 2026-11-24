@@ -3,6 +3,8 @@ package com.altnautica.gcs.feature.cockpit.chrome
 import androidx.compose.runtime.Immutable
 import com.altnautica.gcs.core.model.AlertLevel
 import com.altnautica.gcs.core.model.CockpitAlert
+import com.altnautica.gcs.core.skills.hud.AlertGroup
+import com.altnautica.gcs.core.skills.hud.AlertGroups
 import com.altnautica.gcs.core.skills.hud.PillAlert
 import com.altnautica.gcs.core.skills.hud.PillAlertInput
 import com.altnautica.gcs.core.skills.hud.PillAlertLevel
@@ -12,6 +14,7 @@ import com.altnautica.gcs.core.skills.hud.PillSeverity
 import com.altnautica.gcs.core.skills.hud.PillSource
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.StatusPill
+import com.altnautica.gcs.core.skills.spec.AlertGroupsSpec
 import com.altnautica.gcs.core.skills.spec.LayoutSpec
 import com.altnautica.gcs.feature.cockpit.alerts.AlertId
 import com.altnautica.gcs.feature.cockpit.alerts.ReceivedText
@@ -50,7 +53,32 @@ data class StatusItem(
     val text: String? = null,
     val check: PreflightItem? = null,
     val specKey: String? = null,
-)
+    /** The shared pill's alert behind the item: its section, snooze key, parameter rows and fix. */
+    val pill: PillAlert? = null,
+) {
+    /** The snooze key (`id|text`); an item built outside the shared pill keys on itself. */
+    val snoozeKey: String get() = pill?.key ?: key
+}
+
+/** One row of the alert list: the item at its section's severity; [collapsed] marks a snoozed critical. */
+@Immutable
+data class StatusRow(val item: StatusItem, val severity: StatusSeverity, val collapsed: Boolean)
+
+/** One section of the alert list (`alert-groups.json`); [hidden] counts its snoozed warnings. */
+@Immutable
+data class StatusSection(val group: AlertGroup, val title: String, val rows: List<StatusRow>, val hidden: Int)
+
+/** The alert list: its [sections] and the snoozed warnings left out of them ([hidden]), shown on request. */
+@Immutable
+data class StatusListUi(val sections: List<StatusSection>, val hidden: List<StatusItem> = emptyList()) {
+    /** The blocking (critical) rows across every section, collapsed ones included. */
+    val blocking: List<StatusRow> get() = sections.flatMap { s -> s.rows.filter { it.severity == StatusSeverity.Critical } }
+    val warnings: Int get() = sections.sumOf { s -> s.rows.count { it.severity != StatusSeverity.Critical } }
+
+    companion object {
+        val Empty = StatusListUi(emptyList())
+    }
+}
 
 /**
  * What the pill shows: the worst severity, the count and whether a new item is unacknowledged.
@@ -65,8 +93,8 @@ object StatusModel {
      * The flight screen's pill: the shared rules, except that the storage item grades the
      * phone's own volume, not the vehicle's disk, so it warns and never turns critical.
      */
-    fun statusPill(text: SpecText, layout: LayoutSpec): StatusPill =
-        StatusPill(text, layout.statusPill!!.storageWarnPct!!, storageCritPct = null)
+    fun statusPill(text: SpecText, layout: LayoutSpec, groups: AlertGroupsSpec): StatusPill =
+        StatusPill(text, layout.statusPill!!.storageWarnPct!!, storageCritPct = null, AlertGroups(groups))
 
     /**
      * The active items, built by the shared status pill [pill] (`hud/status-pill.ts`): worst
@@ -127,10 +155,33 @@ object StatusModel {
     private fun item(p: PillAlert, alerts: Map<String, CockpitAlert>, checks: Map<String, PreflightItem>): StatusItem {
         val severity = if (p.severity == PillSeverity.Critical) StatusSeverity.Critical else StatusSeverity.Warning
         val alert = p.id.takeIf { it.startsWith(ALERT_PREFIX) }?.let { alerts[it.removePrefix(ALERT_PREFIX)] }
-        if (alert != null) return StatusItem(alertKey(p.id, alert), alertSource(alert.id, p.source), severity, alert = alert)
+        if (alert != null) return StatusItem(alertKey(p.id, alert), alertSource(alert.id, p.source), severity, alert = alert, pill = p)
         val check = p.id.takeIf { it.startsWith(PREFLIGHT_PREFIX) }?.let { checks[it.removePrefix(PREFLIGHT_PREFIX)] }
-        if (check != null) return StatusItem(p.id, StatusSource.Preflight, severity, check = check, specKey = PREFLIGHT_FAILING_KEY)
-        return StatusItem(p.id, statusSource(p.source), severity, text = p.text)
+        if (check != null) return StatusItem(p.id, StatusSource.Preflight, severity, check = check, specKey = PREFLIGHT_FAILING_KEY, pill = p)
+        return StatusItem(p.id, statusSource(p.source), severity, text = p.text, pill = p)
+    }
+
+    /** The items the pill counts: a snoozed warning drops out, a snoozed critical stays (it only folds). */
+    fun unsnoozed(items: List<StatusItem>, snoozed: Set<String>): List<StatusItem> =
+        items.filter { it.severity == StatusSeverity.Critical || it.snoozeKey !in snoozed }
+
+    /**
+     * The alert list for [items] (the shared `groupAlerts`), each row back on its item, and the
+     * snoozed warnings it leaves out.
+     */
+    fun list(items: List<StatusItem>, groups: AlertGroups, snoozed: Set<String>): StatusListUi {
+        val byId = items.mapNotNull { item -> item.pill?.let { it.id to item } }.toMap()
+        val sections = groups.sections(items.mapNotNull { it.pill }, snoozed).map { s ->
+            StatusSection(
+                s.group,
+                s.title,
+                s.alerts.mapNotNull { g ->
+                    byId[g.alert.id]?.let { StatusRow(it, if (g.alert.severity == PillSeverity.Critical) StatusSeverity.Critical else StatusSeverity.Warning, g.collapsed) }
+                },
+                s.hidden,
+            )
+        }
+        return StatusListUi(sections, items.filter { it.severity != StatusSeverity.Critical && it.snoozeKey in snoozed })
     }
 
     /** An FC state alert keys on its detail too, so CRITICAL turning EMERGENCY flashes an acknowledged pill. */

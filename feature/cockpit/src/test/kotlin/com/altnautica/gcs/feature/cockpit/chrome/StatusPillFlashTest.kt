@@ -72,7 +72,7 @@ class StatusPillFlashTest {
                 },
                 modifier = Modifier.align(Alignment.BottomStart),
             )
-            if (open) StatusList(items, onClose = { open = false })
+            if (open) StatusList(otherSection(items), onClose = { open = false })
         }
     }
 

@@ -80,7 +80,7 @@ internal fun FlightTopBar(
         overflow = overflow,
         overflowOrder = remember(vm) { TopBarItem.order(topBarZone?.overflow?.toMenuOrder.orEmpty()) },
         chipMaxFrac = topBarZone?.chip?.maxFrac ?: com.altnautica.gcs.feature.cockpit.chrome.DEFAULT_CHIP_MAX_FRAC,
-        chip = { Box(Modifier.tipAnchor("flight_state_chip")) { FlightStateChip(chip, onOpen = vm::openModeSheet, onButton = vm::onChipButton) } },
+        chip = { Box(Modifier.tipAnchor("flight_state_chip")) { FlightStateChip(chip, onOpen = vm::openChip, onButton = vm::onChipButton) } },
         pill = pill,
         battery = {
             BatteryGauge(

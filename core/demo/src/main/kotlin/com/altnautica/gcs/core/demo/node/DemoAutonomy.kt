@@ -200,6 +200,18 @@ internal class DemoAutonomy(fc: DemoFc, scenarios: DemoScenarioStore) : Autonomy
 
     override suspend fun visionStatus(): AgentResult<JsonObject> = AgentResult.Ok(layers.status())
 
+    /** The demo's stored `vision.enabled`: the engine card's Turn on vision flips it. */
+    @Volatile private var visionOn = true
+
+    override suspend fun visionEnabled(): AgentResult<Boolean> = AgentResult.Ok(visionOn)
+
+    override suspend fun setVisionEnabled(on: Boolean): AgentResult<JsonElement> {
+        visionOn = on
+        return AgentResult.Ok(buildJsonObject { put("ok", true) })
+    }
+
+    override suspend fun restartVision(): AgentResult<JsonElement> = AgentResult.Ok(buildJsonObject { put("status", "ok") })
+
     override suspend fun setDetector(modelId: String): AgentResult<JsonElement> {
         layers.activeModel = modelId
         return AgentResult.Ok(buildJsonObject { put("ok", true) })

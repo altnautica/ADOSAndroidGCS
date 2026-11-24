@@ -21,6 +21,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -102,6 +106,10 @@ fun WizardStepView(
                 Text(stateLabel(step.state), style = MaterialTheme.typography.labelMedium, color = stateColor(step.state))
             }
         }
+        // The picture first, at full width: what to do is shown before it is said.
+        step.image?.let { key ->
+            SetupImage(key, text.format(step.titleKey, args), colors.fgPrimary, Modifier.fillMaxWidth().widthIn(max = 480.dp))
+        }
         step.bodyKey?.let { key ->
             val body = text.format(key, args)
             if (step.step == ADOS_INTRO_STEP) {
@@ -115,10 +123,6 @@ fun WizardStepView(
                 Text(body, style = MaterialTheme.typography.bodyMedium, color = colors.fgSecondary)
             }
         }
-        step.image?.let { key ->
-            SetupImage(key, text.format(step.titleKey, args), colors.fgPrimary, Modifier.widthIn(max = 360.dp))
-        }
-        step.paramRows().takeIf { it.isNotEmpty() }?.let { ParamTable(step.step, it) }
         if (step.live.isNotEmpty()) {
             LiveTable(step.live.entries.associate { (k, v) -> text.label(k, LIVE_PREFIX, args) to text.value(v, args) })
         }
@@ -128,8 +132,8 @@ fun WizardStepView(
                 Text(text.format(key, args), color = colors.statusError, style = MaterialTheme.typography.bodyMedium)
             }
         }
-        step.result?.takeIf { it.isNotEmpty() }?.let { ResultCard(it) }
         SetupInputFields(inputs)
+        if (step.actions.any { it.confirm == SetupConfirm.HoldPropsOff }) PropsOffBanner()
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2), verticalArrangement = Arrangement.spacedBy(AdosSpacing.S2)) {
             val blocked = step.blockers.isNotEmpty()
             shownActions(step).forEach { action ->
@@ -141,8 +145,37 @@ fun WizardStepView(
                 )
             }
         }
+        // What the step writes, folded under the action: the parameter names are secondary.
+        step.paramRows().takeIf { it.isNotEmpty() }?.let { rows ->
+            var open by rememberSaveable(step.wizard, step.step) { mutableStateOf(false) }
+            AdosButton(
+                text.format(KEY_CHANGES, emptyMap()) + if (open) " ▾" else " ▸",
+                onClick = { open = !open },
+                variant = AdosButtonVariant.Secondary,
+                modifier = Modifier.testTag("setup-changes"),
+            )
+            if (open) ParamTable(step.step, rows)
+        }
+        step.result?.takeIf { it.isNotEmpty() }?.let { ResultCard(it) }
     }
 }
+
+/** The permanent warning above a motor test's hold: props off. */
+@Composable
+private fun PropsOffBanner() {
+    val colors = AdosTheme.colors
+    Row(
+        Modifier.fillMaxWidth().background(colors.statusWarning.copy(alpha = 0.15f), RoundedCornerShape(AdosRadius.Lg)).padding(AdosSpacing.S3),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(AdosSpacing.S2),
+    ) {
+        Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = colors.statusWarning)
+        Text(LocalSetupText.current.format(KEY_PROPS_OFF_BANNER, emptyMap()), color = colors.fgPrimary, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+private const val KEY_CHANGES = "setup.overview.changes"
+private const val KEY_PROPS_OFF_BANNER = "setup.overview.props_off"
 
 @Composable
 private fun ActionControl(action: SetupAction, label: String, enabled: Boolean, onFire: () -> Unit) {

@@ -28,7 +28,7 @@ data class AircraftSetupKey(val id: String, val wizard: String? = null, val step
 
 /** Flight-controller parameters for a vehicle. */
 @Serializable
-data class ParamsKey(val id: String) : NavKey
+data class ParamsKey(val id: String, val names: List<String> = emptyList()) : NavKey
 
 /** The Vehicle surface: node detail; [confirmUnpair] opens it with the unpair confirm showing. */
 @Serializable

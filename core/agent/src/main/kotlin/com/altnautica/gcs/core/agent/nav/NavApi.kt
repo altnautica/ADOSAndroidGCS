@@ -58,6 +58,21 @@ interface AutonomyFeedApi {
      */
     suspend fun battery(): AgentResult<BatteryHealth>? = null
 
+    /** The stored `vision.enabled` (`GET /api/config`); null where no agent serves it. */
+    suspend fun visionEnabled(): AgentResult<Boolean>? = null
+
+    /** `PUT /api/config {key: "vision.enabled", value: on}`; null where no agent serves it. */
+    suspend fun setVisionEnabled(on: Boolean): AgentResult<JsonElement>? = null
+
+    /**
+     * `POST /api/services/ados-vision/restart`. An agent that does not restart the unit through its
+     * API answers 200 with an "Unknown service" message. Null where no agent serves it.
+     */
+    suspend fun restartVision(): AgentResult<JsonElement>? = null
+
+    /** Restart the agent supervisor ([com.altnautica.gcs.core.agent.AgentClient.restartSupervisor]); null where no agent serves it. */
+    suspend fun restartAgent(): AgentResult<JsonElement>? = null
+
     /**
      * The compute node this drone's capture forwarder streams to: `compute_node_id` of the
      * Capture extension's `GET /api/plugins/com.altnautica.capture/x/capture/readiness`.

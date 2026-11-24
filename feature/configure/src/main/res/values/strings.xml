@@ -168,10 +168,8 @@
     <string name="cfg_setup_state_done">Done</string>
     <string name="cfg_setup_state_failed">Failed</string>
     <string name="cfg_setup_state_skipped">Skipped</string>
-    <string name="cfg_setup_start">Start</string>
-    <string name="cfg_setup_continue">Continue</string>
     <string name="cfg_setup_view_results">Results</string>
-    <string name="cfg_setup_run_step">Run again</string>
+    <string name="cfg_setup_wizard_interrupted">Interrupted</string>
     <string name="cfg_setup_results">Results</string>
     <string name="cfg_setup_snapshots">Parameter snapshots</string>
     <string name="cfg_setup_hold_to">Hold: %1$s</string>
@@ -187,4 +185,5 @@
     <string name="cfg_setup_err_refused_code">The vehicle refused this setup action (%1$s).</string>
     <string name="cfg_setup_agent_running">Running on the vehicle</string>
     <string name="cfg_setup_gyro_agent">Gyro calibration runs with accelerometer calibration on the vehicle</string>
+    <string name="cfg_param_filtered">Filtered: %1$d · Clear</string>
 </resources>

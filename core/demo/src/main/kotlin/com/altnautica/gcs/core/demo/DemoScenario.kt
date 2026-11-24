@@ -23,6 +23,13 @@ enum class DemoScenario(
     /** On the ground with the position readiness item failing (block): the chip reads NOT READY. */
     ReadinessBlocked(R.string.demo_scenario_readiness_blocked),
 
+    /**
+     * On the ground with FC parameters off the ADOS profile (blocking, with the parameter rows
+     * and the apply-profile fix), flow parameters that differ (a warning opening the parameter
+     * editor) and three FC messages: the grouped alert list and the chip's blocking sheet.
+     */
+    FcParamsDiffer(R.string.demo_scenario_fc_params_differ),
+
     /** On the ground with the battery failsafe doing nothing: blocks under ADOS control, warns otherwise; the checklist offers its fix. */
     BatteryFailsafeOff(R.string.demo_scenario_battery_failsafe_off),
 

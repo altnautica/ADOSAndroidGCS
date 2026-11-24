@@ -75,6 +75,8 @@ class CalibrationRoutingTest {
 
         override fun stream(): Flow<FcSetupEvent> = flow { awaitCancellation() }
 
+        override suspend fun resume(wizard: String): AgentResult<WizardReply> = AgentResult.Ok(WizardReply(wizard = null))
+
         override suspend fun start(wizard: String): AgentResult<WizardReply> {
             calls += "start $wizard"
             return AgentResult.Ok(WizardReply())

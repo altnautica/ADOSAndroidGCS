@@ -158,8 +158,36 @@ data class RouteCheck(
 
 enum class ReadinessSeverity { Block, Warn }
 
-/** One pilot readiness item; a [ReadinessSeverity.Block] that is not [ok] refuses arming in pilot control. */
-data class ReadinessItem(val id: String, val ok: Boolean, val severity: ReadinessSeverity, val msg: String)
+/** One parameter behind a readiness item: its FC value [have] (null when absent) and the [want] text. */
+data class ParamDiff(val name: String, val have: Double?, val want: String)
+
+/** What fixes a failing readiness item (wire `fix.kind`). */
+sealed interface ReadinessFix {
+    /** Run the setup engine's ADOS profile step (`apply_profile`). */
+    data object ApplyProfile : ReadinessFix
+
+    /** Open Aircraft setup at [step] (`setup_step`). */
+    data class SetupStep(val step: String) : ReadinessFix
+
+    /** Open the settings [section] (`settings`). */
+    data class Settings(val section: String) : ReadinessFix
+
+    /** Open the parameter editor at [names] (`parameters`). */
+    data class Parameters(val names: List<String>) : ReadinessFix
+}
+
+/**
+ * One pilot readiness item; a [ReadinessSeverity.Block] that is not [ok] refuses arming in pilot
+ * control. [params] are the parameter rows behind it, [fix] the fix the agent offers.
+ */
+data class ReadinessItem(
+    val id: String,
+    val ok: Boolean,
+    val severity: ReadinessSeverity,
+    val msg: String,
+    val params: List<ParamDiff> = emptyList(),
+    val fix: ReadinessFix? = null,
+)
 
 /** The skill holding the motion lease. */
 data class PilotSkillRef(val pluginId: String, val skillId: String, val label: String)

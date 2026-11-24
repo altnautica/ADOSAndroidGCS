@@ -126,6 +126,7 @@ internal fun TestScope.testCockpitVm(
         missionMirror = com.altnautica.gcs.core.link.mission.MissionMirrorSource { MutableStateFlow(null) },
         stopControls = stopControls,
         followBeacon = testBeaconFactory(dataStore),
+        snoozeStore = com.altnautica.gcs.feature.cockpit.alerts.AlertSnoozeStore(dataStore),
     )
     listOf(
         vm.status, vm.chip, vm.band, vm.flightValues, vm.minimap, vm.statusItems, vm.preflight, vm.alerts,

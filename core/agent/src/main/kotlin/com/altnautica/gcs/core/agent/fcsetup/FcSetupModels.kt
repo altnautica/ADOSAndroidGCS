@@ -67,6 +67,9 @@ enum class SetupWizardState {
     @SerialName("done") Done,
     @SerialName("failed") Failed,
     @SerialName("aborted") Aborted,
+
+    /** A run the agent lost when it restarted; step records survive and `resume` picks it up. */
+    @SerialName("interrupted") Interrupted,
 }
 
 @Serializable

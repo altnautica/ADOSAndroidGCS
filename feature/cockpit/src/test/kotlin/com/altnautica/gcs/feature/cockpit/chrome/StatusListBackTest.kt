@@ -38,7 +38,7 @@ class StatusListBackTest {
                         isBackEnabled = true,
                         onBackCompleted = { exits++ },
                     )
-                    if (open) StatusList(emptyList(), onClose = { open = false })
+                    if (open) StatusList(StatusListUi.Empty, onClose = { open = false })
                 }
             }
         }

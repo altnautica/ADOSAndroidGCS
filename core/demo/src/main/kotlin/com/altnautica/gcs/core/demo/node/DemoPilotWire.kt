@@ -5,7 +5,10 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 
 /** Wire names and small helpers the demo pilot's live state, pins and frame builders share. */
 internal object DemoPilotWire {
@@ -43,6 +46,39 @@ internal object DemoPilotWire {
     )
 
     val FC_PROFILE_OK = readiness("fc_profile", true, "block", "FC failsafe parameters match the ADOS profile")
+
+    /** The FC off the ADOS profile: blocks, with one row per parameter and the apply-profile fix. */
+    val FC_PROFILE_DIFFERS = buildJsonObject {
+        put("id", "fc_profile")
+        put("ok", false)
+        put("severity", "block")
+        put("msg", "FC parameters differ from the ADOS profile: MAV_GCS_SYSID 255 (want 1), FS_GCS_ENABLE 0 (want 5)")
+        putJsonArray("params") {
+            add(param("MAV_GCS_SYSID", 255.0, "1"))
+            add(param("FS_GCS_ENABLE", 0.0, "5"))
+            add(param("FS_OPTIONS", null, "16"))
+        }
+        putJsonObject("fix") { put("kind", "apply_profile") }
+    }
+
+    /** Flow parameters off the sensor rules: a warning that opens the parameter editor at them. */
+    val SENSOR_PARAMS_DIFFER = buildJsonObject {
+        put("id", "sensor_params")
+        put("ok", false)
+        put("severity", "warn")
+        put("msg", "Flow and rangefinder parameters differ")
+        putJsonArray("params") { add(param("FLOW_TYPE", 6.0, "5 or 7")) }
+        putJsonObject("fix") {
+            put("kind", "parameters")
+            putJsonArray("names") { add("FLOW_TYPE") }
+        }
+    }
+
+    private fun param(name: String, have: Double?, want: String) = buildJsonObject {
+        put("name", name)
+        put("have", have)
+        put("want", want)
+    }
 
     const val BATTERY_FAILSAFE_ID = "battery_failsafe"
     val BATTERY_FAILSAFE_OK = readiness(BATTERY_FAILSAFE_ID, true, "warn", "Battery failsafe set")

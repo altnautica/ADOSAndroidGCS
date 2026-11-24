@@ -64,7 +64,8 @@ import com.altnautica.gcs.feature.cockpit.skillbar.reasonTextOf
  * input while visible, and asks before leaving while the vehicle is armed.
  * [onSetUpAircraft] opens aircraft setup for the flown vehicle (the chip's and the Menu's
  * "Set up aircraft"); [onFixBatteryFailsafe] opens it running the failsafe profile step (the
- * checklist's battery failsafe fix); [onOpenControls] the controller settings (the Menu's Controls).
+ * checklist's battery failsafe fix); [onOpenFix] follows an alert row's fix (Aircraft setup, the
+ * vehicle's settings or its parameters); [onOpenControls] the controller settings (the Menu's Controls).
  */
 @Composable
 fun CockpitRoute(
@@ -73,6 +74,7 @@ fun CockpitRoute(
     onSetUpAircraft: (DeviceId) -> Unit,
     onOpenControls: () -> Unit,
     onFixBatteryFailsafe: (DeviceId) -> Unit,
+    onOpenFix: (DeviceId, com.altnautica.gcs.core.model.ReadinessFix) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val vm = hiltViewModel<CockpitViewModel, CockpitViewModel.Factory>(
@@ -159,6 +161,7 @@ fun CockpitRoute(
                 CockpitEvent.SetUpAircraft -> (vm.extensionNodeId.value ?: nodeId).let(onSetUpAircraft)
                 CockpitEvent.FixBatteryFailsafe -> (vm.extensionNodeId.value ?: nodeId).let(onFixBatteryFailsafe)
                 CockpitEvent.OpenControls -> onOpenControls()
+                is CockpitEvent.OpenFix -> onOpenFix(vm.extensionNodeId.value ?: nodeId, event.fix)
             }
         }
     }

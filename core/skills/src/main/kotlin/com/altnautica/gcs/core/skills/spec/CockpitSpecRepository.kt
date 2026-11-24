@@ -36,6 +36,7 @@ class CockpitSpecRepository @Inject constructor(private val source: CockpitSpecS
     }
     val setupStrings: SetupStringsSpec by lazy { CockpitSpecParser.setupStrings(source.read(CockpitSpecFile.SetupStrings)) }
     val tips: TipsSpec by lazy { CockpitSpecParser.tips(source.read(CockpitSpecFile.Tips)) }
+    val alertGroups: AlertGroupsSpec by lazy { CockpitSpecParser.alertGroups(source.read(CockpitSpecFile.AlertGroups)) }
 }
 
 @Module

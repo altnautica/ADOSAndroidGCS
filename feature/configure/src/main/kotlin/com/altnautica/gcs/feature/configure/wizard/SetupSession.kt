@@ -108,6 +108,9 @@ class SetupSession(private val backend: SetupBackend, private val scope: Corouti
 
     fun start(wizard: String) = send { backend.start(wizard).also { r -> r.getOrNull()?.wizard?.let { apply(FcSetupEvent.Wizard(0, it)) } } }
 
+    /** Continue an interrupted wizard where it stopped; its step records are kept. */
+    fun resume(wizard: String) = send { backend.resume(wizard).also { r -> r.getOrNull()?.wizard?.let { apply(FcSetupEvent.Wizard(0, it)) } } }
+
     /** Sent at once, even while another request is in flight or the state is stale: a stop never waits. */
     fun abort(wizard: String) {
         scope.launch {

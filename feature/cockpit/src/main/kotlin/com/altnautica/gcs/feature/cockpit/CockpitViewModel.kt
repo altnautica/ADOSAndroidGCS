@@ -48,6 +48,8 @@ import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
 import com.altnautica.gcs.core.skills.controls.ControlsRepository
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.freshPilot
+import com.altnautica.gcs.core.skills.hud.AlertGroups
+import com.altnautica.gcs.feature.cockpit.chrome.StatusListUi
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.PadSnapshot
 import com.altnautica.gcs.core.skills.input.controller.ControllerManager
@@ -173,6 +175,7 @@ class CockpitViewModel @AssistedInject constructor(
     missionMirror: MissionMirrorSource,
     stopControls: com.altnautica.gcs.core.skills.cockpit.StopControls,
     followBeacon: com.altnautica.gcs.core.link.follow.FollowBeaconControllerFactory,
+    private val snoozeStore: com.altnautica.gcs.feature.cockpit.alerts.AlertSnoozeStore,
     @com.altnautica.gcs.feature.cockpit.di.CockpitWork work: kotlin.coroutines.CoroutineContext = kotlin.coroutines.EmptyCoroutineContext,
     phoneRadio: java.util.Optional<com.altnautica.gcs.core.model.PhoneRadioUplink> = java.util.Optional.empty(),
 ) : ViewModel() {
@@ -194,7 +197,7 @@ class CockpitViewModel @AssistedInject constructor(
 
     /** Spec strings with the shared interpolation rules (refusals, link loss, AGL marks). */
     private val specText by lazy { SpecText(spec.setupStrings) }
-    private val statusPill by lazy { StatusModel.statusPill(specText, spec.layout) }
+    private val statusPill by lazy { StatusModel.statusPill(specText, spec.layout, spec.alertGroups) }
     internal val cockpitSpec: CockpitSpecRepository get() = spec
 
     // ---- Node and vehicle -------------------------------------------------------------
@@ -541,6 +544,18 @@ class CockpitViewModel @AssistedInject constructor(
 
     fun openModeSheet() = modeSheetCtl.setOpen(true)
 
+    /**
+     * A tap on the flight-state chip: while a readiness item blocks take-off, the sheet of what
+     * blocks it (with the Mode sheet one tap away); otherwise the Mode sheet.
+     */
+    fun openChip() {
+        val blocked = statusItems.value.any {
+            it.severity == com.altnautica.gcs.feature.cockpit.chrome.StatusSeverity.Critical &&
+                it.source == com.altnautica.gcs.feature.cockpit.chrome.StatusSource.PilotReadiness
+        }
+        if (blocked) openBlocking() else openModeSheet()
+    }
+
     fun closeModeSheet() = modeSheetCtl.setOpen(false)
 
     // ---- Launch and Fly Here ----------------------------------------------------------
@@ -677,6 +692,29 @@ class CockpitViewModel @AssistedInject constructor(
     /** The status pill's items: alerts, pilot readiness, failing checks, storage, FC texts and the FC failsafe. */
     val statusItems: StateFlow<List<StatusItem>> = pill.items
 
+    private val alertGroups by lazy { AlertGroups(spec.alertGroups) }
+
+    /** The alert keys hidden on this device (`alert_snooze`). */
+    val snoozedAlerts: StateFlow<Set<String>> = snoozeStore.snoozed.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** The items the pill counts: snoozed warnings drop out, snoozed criticals stay. */
+    val pillItems: StateFlow<List<StatusItem>> = combine(statusItems, snoozedAlerts, StatusModel::unsnoozed)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** The alert list's sections (`alert-groups.json`). */
+    val statusList: StateFlow<StatusListUi> = combine(statusItems, snoozedAlerts) { items, snoozed ->
+        StatusModel.list(items, alertGroups, snoozed)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), StatusListUi.Empty)
+
+    init {
+        // A snoozed key whose alert has cleared is dropped, so the alert shows again when it comes
+        // back; nothing is pruned before the first pilot frame or heartbeat lists the live alerts.
+        viewModelScope.launch(work) {
+            combine(statusItems, pill.waiting) { items, waiting -> if (waiting) null else items.map { it.snoozeKey } }
+                .collect { keys -> if (keys != null) snoozeStore.prune(keys) }
+        }
+    }
+
     /** True until a pilot frame or a heartbeat arrives: the pill reads no link, not all systems OK. */
     val statusWaiting: StateFlow<Boolean> = pill.waiting
 
@@ -778,8 +816,30 @@ class CockpitViewModel @AssistedInject constructor(
     /** The status pill's alert list; Back closes it like a sheet. */
     val statusListOpen: StateFlow<Boolean> = overlays.statusList.asStateFlow()
 
+    /** Open or close the full alert list. */
     fun setStatusList(open: Boolean) {
+        statusBlockingOnly.value = false
         overlays.statusList.value = open
+    }
+
+    /** True while the list shows only what blocks take-off (opened from the flight-state chip). */
+    val statusBlockingOnly = MutableStateFlow(false)
+
+    /** The flight-state chip's sheet: the blocking rows first, with a link to every warning. */
+    fun openBlocking() {
+        overlays.statusList.value = true
+        statusBlockingOnly.value = true
+    }
+
+    /** Hide (snooze) an alert row until its condition clears, or show it again. */
+    fun snoozeAlert(key: String, on: Boolean) {
+        viewModelScope.launch { snoozeStore.set(key, on) }
+    }
+
+    /** Follow an alert row's fix; the route leaves for the screen that makes it. */
+    fun openFix(fix: com.altnautica.gcs.core.model.ReadinessFix) {
+        setStatusList(false)
+        _events.tryEmit(CockpitEvent.OpenFix(fix))
     }
 
     fun setPreflight(open: Boolean) {

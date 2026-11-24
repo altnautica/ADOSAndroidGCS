@@ -28,7 +28,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import com.altnautica.gcs.feature.cockpit.hud.layers.ArRules
 import com.altnautica.gcs.feature.cockpit.hud.layers.LayerController
+import com.altnautica.gcs.feature.cockpit.hud.layers.VisionChange
 import com.altnautica.gcs.feature.cockpit.hud.layers.VisionEngine
+import com.altnautica.gcs.feature.cockpit.hud.layers.visionError
+import com.altnautica.gcs.feature.cockpit.hud.layers.visionRestart
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -89,6 +92,26 @@ internal class CockpitAutonomy(
             override suspend fun status(node: DeviceId) = (engineApi(node)?.visionStatus() as? AgentResult.Ok)?.value
 
             override suspend fun setDetector(node: DeviceId, modelId: String) = engineApi(node)?.setDetector(modelId) is AgentResult.Ok
+
+            override suspend fun enabled(node: DeviceId) = engineApi(node)?.visionEnabled()?.getOrNull()
+
+            override suspend fun turnOn(node: DeviceId): VisionChange {
+                val api = engineApi(node) ?: return VisionChange.Failed(null)
+                when (val w = api.setVisionEnabled(true)) {
+                    null -> return VisionChange.Failed(null)
+                    is AgentResult.Err -> return VisionChange.Failed(visionError(w.error))
+                    is AgentResult.Ok -> Unit
+                }
+                return restart(node)
+            }
+
+            override suspend fun restart(node: DeviceId): VisionChange = visionRestart(engineApi(node)?.restartVision())
+
+            override suspend fun restartAgent(node: DeviceId): VisionChange = when (val r = engineApi(node)?.restartAgent()) {
+                null -> VisionChange.Failed(null)
+                is AgentResult.Ok -> VisionChange.Ok
+                is AgentResult.Err -> VisionChange.Failed(visionError(r.error))
+            }
         },
         now = clock::nowMs,
         // Only a fresh pilot frame decides armed; an old one falls back to a fresh heartbeat,

@@ -44,6 +44,7 @@ class StatusPillCasesTest {
         SpecText(testSpec.setupStrings),
         testSpec.layout.statusPill!!.storageWarnPct!!,
         testSpec.layout.statusPill!!.storageCritPct!!,
+        com.altnautica.gcs.core.skills.hud.AlertGroups(testSpec.alertGroups),
     )
     private val strings = testSpec.setupStrings.strings
 

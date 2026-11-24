@@ -174,6 +174,9 @@ class WizardStepViewTest {
         )
         assertEquals(listOf("AVOID_ENABLE", "AVOID_MARGIN", "OA_TYPE"), step.paramRows().map { it.name })
         show(step)
+        // The rows sit folded under "What this changes".
+        compose.onNodeWithTag(SETUP_PARAMS_TAG).assertDoesNotExist()
+        compose.onNodeWithTag("setup-changes").performClick()
         compose.onNodeWithTag(SETUP_PARAMS_TAG).assertExists()
         compose.onNodeWithText("Values to write").assertExists()
         compose.onNodeWithText("Backstop: proximity stop (2)").assertExists()

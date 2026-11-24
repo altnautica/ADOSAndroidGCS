@@ -14,7 +14,13 @@ data class ParamRow(
     val group: String get() = meta?.group ?: ParamMetadataParser.groupFromName(name)
 }
 
-data class ParamFilter(val query: String = "", val modifiedOnly: Boolean = false, val showAdvanced: Boolean = false)
+/** The list filter; [names] non-empty keeps only those parameters (an alert's "Open parameters"). */
+data class ParamFilter(
+    val query: String = "",
+    val modifiedOnly: Boolean = false,
+    val showAdvanced: Boolean = false,
+    val names: Set<String> = emptySet(),
+)
 
 /**
  * A write waiting for the operator: armed vehicles need an explicit confirmation, and so does a

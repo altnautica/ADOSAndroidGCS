@@ -33,7 +33,9 @@ import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.PilotVehicleClass
 import com.altnautica.gcs.core.model.PositionUnverified
 import com.altnautica.gcs.core.model.PlaceClass
+import com.altnautica.gcs.core.model.ParamDiff
 import com.altnautica.gcs.core.model.RcReceiver
+import com.altnautica.gcs.core.model.ReadinessFix
 import com.altnautica.gcs.core.model.ReadinessItem
 import com.altnautica.gcs.core.model.ReadinessSeverity
 import com.altnautica.gcs.core.model.ProfileLimits
@@ -319,14 +321,30 @@ object PilotWire {
         )
     }
 
-    private fun readiness(o: JsonObject): ReadinessItem? {
+    /** One readiness item; null when its id or severity is missing. Malformed `params` rows and an unknown `fix` kind are dropped. */
+    fun readiness(o: JsonObject): ReadinessItem? {
         val id = o.str("id") ?: return null
         val severity = when (o.str("severity")) {
             "block" -> ReadinessSeverity.Block
             "warn" -> ReadinessSeverity.Warn
             else -> return null
         }
-        return ReadinessItem(id, o.bool("ok") == true, severity, o.str("msg").orEmpty())
+        val params = (o["params"] as? JsonArray).orEmpty().mapNotNull { e ->
+            val p = e as? JsonObject ?: return@mapNotNull null
+            val name = p.str("name") ?: return@mapNotNull null
+            val want = p.str("want") ?: p.double("want")?.let { w -> if (w == Math.floor(w) && !w.isInfinite()) w.toLong().toString() else w.toString() }
+            ParamDiff(name, p.double("have"), want.orEmpty())
+        }
+        return ReadinessItem(id, o.bool("ok") == true, severity, o.str("msg").orEmpty(), params, (o["fix"] as? JsonObject)?.let(::readinessFix))
+    }
+
+    private fun readinessFix(o: JsonObject): ReadinessFix? = when (o.str("kind")) {
+        "apply_profile" -> ReadinessFix.ApplyProfile
+        "setup_step" -> o.str("step")?.let(ReadinessFix::SetupStep)
+        "settings" -> o.str("section")?.let(ReadinessFix::Settings)
+        "parameters" -> (o["names"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content }
+            ?.takeIf { it.isNotEmpty() }?.let(ReadinessFix::Parameters)
+        else -> null
     }
 
     private fun mission(o: JsonObject): MissionStatus? {

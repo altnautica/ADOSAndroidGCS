@@ -43,7 +43,8 @@ data class WizardUiState(
         val w = wizard ?: return null
         val running = setup.overview?.running?.takeIf { it.wizard == f.wizard }?.step
         running?.let { id -> w.steps.firstOrNull { it.step == id }?.let { return it } }
-        if (w.state == SetupWizardState.NotStarted || w.state == SetupWizardState.Aborted) return null
+        // No live run: the overview offers Start, or Continue for a run the agent lost on a restart.
+        if (w.state == SetupWizardState.NotStarted || w.state == SetupWizardState.Aborted || w.state == SetupWizardState.Interrupted) return null
         return w.steps.firstOrNull { it.state != SetupStepState.Done && it.state != SetupStepState.Skipped }
     }
 
@@ -117,6 +118,12 @@ class WizardViewModel internal constructor(
     fun start(wizard: String) {
         focus.update { WizardFocus(wizard) }
         session?.start(wizard)
+    }
+
+    /** Continue an interrupted [wizard] at its first step not done or skipped. */
+    fun resume(wizard: String) {
+        focus.update { WizardFocus(wizard) }
+        session?.resume(wizard)
     }
 
     fun runStep(wizard: String, step: String) {

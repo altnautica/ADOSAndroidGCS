@@ -20,7 +20,7 @@ import com.altnautica.gcs.feature.cockpit.tips.tipAnchor
  */
 @Composable
 internal fun FlightStatusPill(vm: CockpitViewModel, status: StatusListState) {
-    val items by vm.statusItems.collectAsStateWithLifecycle()
+    val items by vm.pillItems.collectAsStateWithLifecycle()
     val waiting by vm.statusWaiting.collectAsStateWithLifecycle()
     var acknowledged by remember { mutableStateOf(emptySet<String>()) }
     StatusPill(

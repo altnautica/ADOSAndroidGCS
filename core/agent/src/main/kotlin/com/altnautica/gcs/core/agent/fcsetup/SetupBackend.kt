@@ -15,6 +15,7 @@ interface SetupBackend {
     suspend fun overview(): AgentResult<FcSetupOverview>
     fun stream(): Flow<FcSetupEvent>
     suspend fun start(wizard: String): AgentResult<WizardReply>
+    suspend fun resume(wizard: String): AgentResult<WizardReply>
     suspend fun action(wizard: String, step: String, action: String, args: JsonObject? = null): AgentResult<StepReply>
     suspend fun runStep(wizard: String, step: String): AgentResult<StepReply>
     suspend fun abort(wizard: String): AgentResult<WizardReply>
@@ -26,6 +27,7 @@ class AgentSetupBackend(private val client: AgentClient, private val sockets: Ag
     override suspend fun overview() = api.overview()
     override fun stream() = api.stream(sockets)
     override suspend fun start(wizard: String) = api.start(wizard)
+    override suspend fun resume(wizard: String) = api.resume(wizard)
     override suspend fun action(wizard: String, step: String, action: String, args: JsonObject?) =
         api.action(wizard, step, action, args)
     override suspend fun runStep(wizard: String, step: String) = api.runStep(wizard, step)

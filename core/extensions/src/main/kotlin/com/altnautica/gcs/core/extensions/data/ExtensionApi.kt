@@ -168,6 +168,20 @@ class AgentExtensionApi(private val client: AgentClient, private val sockets: Ag
 
     override suspend fun battery(): AgentResult<com.altnautica.gcs.core.agent.model.BatteryHealth> = client.battery()
 
+    override suspend fun visionEnabled(): AgentResult<Boolean> = when (val r = client.config()) {
+        is AgentResult.Ok -> AgentResult.Ok(
+            ((r.value["vision"] as? JsonObject)?.get("enabled") as? kotlinx.serialization.json.JsonPrimitive)?.content == "true",
+        )
+        is AgentResult.Err -> r
+    }
+
+    override suspend fun setVisionEnabled(on: Boolean): AgentResult<JsonElement> =
+        client.putConfig("vision.enabled", kotlinx.serialization.json.JsonPrimitive(on))
+
+    override suspend fun restartVision(): AgentResult<JsonElement> = client.restartService("ados-vision")
+
+    override suspend fun restartAgent(): AgentResult<JsonElement> = client.restartSupervisor()
+
     override suspend fun computeNodeId(): String? =
         ((client.requestJson("GET", PluginApi.CAPTURE_READINESS_PATH) as? AgentResult.Ok<*>)?.value as? JsonObject)
             ?.get("compute_node_id")

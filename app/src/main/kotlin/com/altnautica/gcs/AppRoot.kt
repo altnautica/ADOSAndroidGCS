@@ -36,6 +36,7 @@ import com.altnautica.gcs.core.designsystem.component.overlay.AdosDialog
 import com.altnautica.gcs.core.designsystem.theme.rememberReducedMotion
 import com.altnautica.gcs.core.map.offline.OfflineMapsScreen
 import com.altnautica.gcs.core.model.DeviceId
+import com.altnautica.gcs.core.model.ReadinessFix
 import com.altnautica.gcs.feature.cockpit.CockpitRoute
 import com.altnautica.gcs.feature.configure.params.ParametersSurfaceRoute
 import com.altnautica.gcs.feature.configure.setup.SetupSurfaceRoute
@@ -179,7 +180,7 @@ fun AppRoot(pairLinks: Flow<PairLink>, radioAttaches: Flow<Unit>, viewModel: App
                 entry<AircraftSetupKey> { key ->
                     AircraftSetupRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }, wizard = key.wizard, step = key.step, run = key.run)
                 }
-                entry<ParamsKey> { key -> ParametersSurfaceRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }) }
+                entry<ParamsKey> { key -> ParametersSurfaceRoute(nodeId = DeviceId(key.id), onBack = { BackStackOps.pop(backStack) }, names = key.names) }
                 entry<LogsKey> {
                     LogsRoute(
                         onBack = { BackStackOps.pop(backStack) },
@@ -223,6 +224,16 @@ fun AppRoot(pairLinks: Flow<PairLink>, radioAttaches: Flow<Unit>, viewModel: App
                         onOpenControls = { BackStackOps.push(backStack, ControllerKey) },
                         onFixBatteryFailsafe = { id ->
                             BackStackOps.push(backStack, AircraftSetupKey(id.value, BatteryFailsafeFix.WIZARD, BatteryFailsafeFix.STEP, run = true))
+                        },
+                        onOpenFix = { id, fix ->
+                            val to = when (fix) {
+                                ReadinessFix.ApplyProfile ->
+                                    AircraftSetupKey(id.value, BatteryFailsafeFix.WIZARD, BatteryFailsafeFix.STEP, run = true)
+                                is ReadinessFix.SetupStep -> AircraftSetupKey(id.value, GROUND_WIZARD, fix.step)
+                                is ReadinessFix.Settings -> NodeKey(id.value)
+                                is ReadinessFix.Parameters -> ParamsKey(id.value, fix.names)
+                            }
+                            BackStackOps.push(backStack, to)
                         },
                     )
                 }

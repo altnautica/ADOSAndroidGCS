@@ -115,6 +115,13 @@ internal fun VideoLayers(vm: CockpitViewModel, cameraId: String, modifier: Modif
             a.layers, cameraId, layer.frameW, layer.frameH, Modifier.fillMaxSize(),
             targets = layer,
             presentation = layoutClass.layerPresentation().copy(reducedRate = reducedRate, chipInset = chipInset),
+            badges = androidx.compose.runtime.remember(vm, a) {
+                com.altnautica.gcs.feature.cockpit.hud.layers.LayerBadgeActions(
+                    onCloseView = { vm.setView(CockpitView.Pilot) },
+                    onSetUp = { vm.openFix(com.altnautica.gcs.core.model.ReadinessFix.Settings(com.altnautica.gcs.feature.cockpit.hud.layers.VISION_SETTINGS)) },
+                    engineUp = { a.layers.nodeId?.let { a.layers.engine.status(it) != null } },
+                )
+            },
         )
         TargetSemantics(layer, a, onSelect = { item ->
             item.rect?.let { r ->

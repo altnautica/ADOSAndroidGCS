@@ -73,6 +73,24 @@ internal class DemoPilotPins(
                     add(BATTERY_FAILSAFE_OK)
                 }
             }
+            DemoScenario.FcParamsDiffer -> {
+                grounded(armed = false)
+                putJsonArray("readiness") {
+                    add(DemoPilotWire.FC_PROFILE_DIFFERS)
+                    add(readiness("position", true, "block", "Position estimate available"))
+                    add(DemoPilotWire.SENSOR_PARAMS_DIFFER)
+                    add(BATTERY_FAILSAFE_OK)
+                }
+                putJsonArray("statustext") {
+                    FC_PARAMS_TEXTS.forEachIndexed { i, text ->
+                        add(buildJsonObject {
+                            put("severity", SEVERITY_WARNING)
+                            put("text", text)
+                            put("age_ms", i * STATUS_TEXT_SPACING_MS)
+                        })
+                    }
+                }
+            }
             DemoScenario.BatteryFailsafeOff, DemoScenario.BatteryFailsafeConfinedRtl -> {
                 grounded(armed = false)
                 putJsonArray("readiness") {
@@ -475,5 +493,8 @@ internal class DemoPilotPins(
             "Terrain data missing",
             "Gyro inconsistent: the second inertial unit disagrees with the first by more than its limit; land and recalibrate before the next flight",
         )
+
+        /** The FC messages beside the parameter items: grouped under Flight controller messages. */
+        private val FC_PARAMS_TEXTS = listOf("EKF variance", "Compass interference", "Vibration compensation ON")
     }
 }

@@ -59,6 +59,10 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
         ground.state = SetupWizardState.Done
         ground.completedAt = GROUND_DONE_AT
         for (s in ground.steps) s.done(GROUND_RESULTS[s.id].orEmpty())
+        // The air wizard was under way when the agent restarted: its pre-flight check is kept,
+        // and the overview offers Continue setup, which resumes at the first hover.
+        air.state = SetupWizardState.Interrupted
+        air.steps.first().done(mapOf("checks" to JsonPrimitive(AIR_PREFLIGHT_CHECKS)))
     }
 
     private fun wizardOf(id: String) = when (id) {
@@ -108,6 +112,21 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
         w.completedAt = null
         singleStep = false
         begin(w.steps.first())
+        emitWizard(w)
+        AgentResult.Ok(WizardReply(wizard = view(w)))
+    }
+
+    override suspend fun resume(wizard: String): AgentResult<WizardReply> = synchronized(this) {
+        val w = wizardOf(wizard) ?: return AgentResult.Err(AgentError.Server(404, "setup.blocker.unknown_wizard"))
+        if (w.state != SetupWizardState.Interrupted) return AgentResult.Err(AgentError.Server(409, "not_interrupted", "not_interrupted"))
+        if (running != null) return AgentResult.Err(AgentError.Server(409, "setup.blocker.busy", "busy"))
+        val next = w.steps.firstOrNull { it.state != SetupStepState.Done && it.state != SetupStepState.Skipped }
+            ?: return AgentResult.Err(AgentError.Server(409, "not_interrupted", "not_interrupted"))
+        w.state = SetupWizardState.Running
+        singleStep = false
+        // Steps the run had not reached start afresh; finished ones keep their results.
+        w.steps.filter { it.state != SetupStepState.Done && it.state != SetupStepState.Skipped }.forEach { it.reset() }
+        begin(next)
         emitWizard(w)
         AgentResult.Ok(WizardReply(wizard = view(w)))
     }
@@ -439,6 +458,9 @@ class DemoFcSetup(private val scope: CoroutineScope) : SetupBackend {
             "initial_params", "notch_static", "ados_profile", "ados_intro",
         )
         val AIR_STEPS = listOf("preflight", "first_hover", "notch_air", "autotune", "verify")
+
+        /** The pre-flight checks the interrupted air wizard had passed. */
+        private const val AIR_PREFLIGHT_CHECKS = 6
 
         /** ArduPilot's ACCELCAL_VEHICLE_POS order, as image keys. */
         val POSES = listOf("level", "left", "right", "nose_down", "nose_up", "back")

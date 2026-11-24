@@ -58,6 +58,8 @@ class SetupSessionTest {
             awaitCancellation()
         }
 
+        override suspend fun resume(wizard: String): AgentResult<WizardReply> = AgentResult.Ok(WizardReply(wizard = null))
+
         override suspend fun start(wizard: String): AgentResult<WizardReply> {
             calls += "start"
             return AgentResult.Ok(WizardReply())
