@@ -50,7 +50,6 @@ import com.altnautica.gcs.core.skills.cockpit.CockpitSummaryRegistry
 import com.altnautica.gcs.core.skills.controls.ControlsRepository
 import com.altnautica.gcs.core.skills.hud.SpecText
 import com.altnautica.gcs.core.skills.hud.freshPilot
-import com.altnautica.gcs.core.skills.hud.AlertGroups
 import com.altnautica.gcs.feature.cockpit.chrome.StatusListUi
 import com.altnautica.gcs.core.skills.input.AdosInputRouter
 import com.altnautica.gcs.core.skills.input.PadSnapshot
@@ -125,8 +124,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -134,16 +131,12 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.mapLatest
 
 /** How long UI-only flows keep running after their last collector leaves. */
 internal const val UI_STOP_MS = 5_000L
 
 /** The view model's 2 Hz tick, in beats of the flight screen's [RedrawBeat]. */
 private const val TICK_BEATS = 500L / RedrawBeat.BEAT_MS
-
-/** The cockpit views Triangle (or `V`) cycles through. */
-enum class CockpitView(val id: String) { Pilot("pilot"), Map("map"), Split("split"), Vision("vision") }
 
 /**
  * Cockpit for one node. A ground station's cockpit flies its carried drone. The launch and
@@ -225,47 +218,23 @@ class CockpitViewModel @AssistedInject constructor(
     val status: StateFlow<CockpitStatus> = nodeFlows.status
 
     /** The flown FC's parameter documentation (titles, units, value labels); null while unknown or not bundled. */
-    val paramDocs: StateFlow<ParamDocBook?> = telemetry
-        .flatMapLatest { it?.heartbeat ?: flowOf(null) }
-        .map { hb -> hb?.let { it.autopilot to it.vehicleType } }
-        .distinctUntilChanged()
-        .mapLatest { k -> k?.let { docs.book(it.first, it.second) } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val paramDocs: StateFlow<ParamDocBook?> = paramDocBook(viewModelScope, telemetry, docs)
 
     /** The node whose extensions the cockpit mounts (the flown drone). */
     val extensionNodeId: StateFlow<DeviceId?> = vehicleNodeId
 
     // ---- Settings ---------------------------------------------------------------------
 
-    val settings: StateFlow<CockpitSettings> =
-        settingsRepo.settings.stateIn(viewModelScope, SharingStarted.Eagerly, CockpitSettings())
-
-    private val _maxBrightness = MutableStateFlow<Boolean?>(null)
-
-    /** Screen at full brightness; starts from the settings default. */
-    val maxBrightness: StateFlow<Boolean> = combine(_maxBrightness, settings) { override, s -> override ?: s.maxBrightnessDefault }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(UI_STOP_MS), false)
-
-    fun setMaxBrightness(on: Boolean) { _maxBrightness.value = on }
-
-    fun setAltitudeReference(ref: AltitudeReference) = viewModelScope.launch { settingsRepo.setAltitudeReference(ref) }
-
-    fun setDensity(density: CockpitDensity) = viewModelScope.launch { settingsRepo.setDensity(density) }
-
-    /** The split view's video share for the flown vehicle, stored per vehicle. */
-    val splitRatio: StateFlow<Float> = vehicleNodeId.flatMapLatest { id ->
-        id?.let { settingsRepo.splitRatio(it.value) } ?: flowOf(CockpitSettingsRepository.DEFAULT_SPLIT)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, CockpitSettingsRepository.DEFAULT_SPLIT)
-
-    fun setSplitRatio(ratio: Float) {
-        val id = vehicleNodeId.value ?: return
-        viewModelScope.launch { settingsRepo.setSplitRatio(id.value, ratio) }
-    }
-
-    fun setTelemetryPane(on: Boolean) = viewModelScope.launch { settingsRepo.setTelemetryPane(on) }
-
-    /** On-screen sticks enabled in Settings › Controls (default off). */
-    val onScreenSticksEnabled: StateFlow<Boolean> = controls.onScreenSticks.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val display = CockpitDisplaySettings(viewModelScope, settingsRepo, controls, vehicleNodeId)
+    val settings: StateFlow<CockpitSettings> = display.settings
+    val maxBrightness: StateFlow<Boolean> = display.maxBrightness
+    fun setMaxBrightness(on: Boolean) = display.setMaxBrightness(on)
+    fun setAltitudeReference(ref: AltitudeReference) = display.setAltitudeReference(ref)
+    fun setDensity(density: CockpitDensity) = display.setDensity(density)
+    val splitRatio: StateFlow<Float> = display.splitRatio
+    fun setSplitRatio(ratio: Float) = display.setSplitRatio(ratio)
+    fun setTelemetryPane(on: Boolean) = display.setTelemetryPane(on)
+    val onScreenSticksEnabled: StateFlow<Boolean> = display.onScreenSticksEnabled
 
     // ---- Clocks -----------------------------------------------------------------------
 
@@ -668,32 +637,12 @@ class CockpitViewModel @AssistedInject constructor(
 
     // ---- Views ------------------------------------------------------------------------
 
-    private val _view = MutableStateFlow(CockpitView.Pilot)
-    val view: StateFlow<CockpitView> = _view.asStateFlow()
+    private val views = CockpitViews(viewModelScope, vehicleNodeId, settingsRepo) { autonomy.layers.setView(it) }
+    val view: StateFlow<CockpitView> = views.view
 
-    /** Shows [v] and stores it for the flown vehicle, so its cockpit reopens on the same view. */
-    fun setView(v: CockpitView) {
-        showView(v)
-        val id = vehicleNodeId.value ?: return
-        viewModelScope.launch { settingsRepo.setView(id.value, v.id) }
-    }
+    fun setView(v: CockpitView) = views.set(v)
 
-    private fun showView(v: CockpitView) {
-        _view.value = v
-        autonomy.layers.setView(v.id)
-    }
-
-    init {
-        // Each vehicle reopens on the view it was last flown with.
-        viewModelScope.launch {
-            vehicleNodeId.filterNotNull().distinctUntilChanged().collect { id ->
-                val stored = settingsRepo.view(id.value).first()
-                CockpitView.entries.firstOrNull { it.id == stored }?.let(::showView)
-            }
-        }
-    }
-
-    fun nextView() = setView(CockpitView.entries[(_view.value.ordinal + 1) % CockpitView.entries.size])
+    fun nextView() = views.next()
 
     // ---- Band, alerts, strip ----------------------------------------------------------
 
@@ -721,45 +670,14 @@ class CockpitViewModel @AssistedInject constructor(
     /** The status pill's items: alerts, pilot readiness, failing checks, storage, FC texts and the FC failsafe. */
     val statusItems: StateFlow<List<StatusItem>> = pill.items
 
-    private val alertGroups by lazy { AlertGroups(spec.alertGroups) }
+    private val alertList = CockpitAlertList(
+        viewModelScope, work, spec, statusItems, pill.waiting, snoozeStore, overlays, _events, abortScope,
+    ) { vehicleNodeId.value?.let { setupBackends.current(it) } }
 
-    /** The alert keys hidden on this device (`alert_snooze`). */
-    val snoozedAlerts: StateFlow<Set<String>> = snoozeStore.snoozed.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
-
-    /** The items the pill counts: snoozed warnings drop out, snoozed criticals stay. */
-    val pillItems: StateFlow<List<StatusItem>> = combine(statusItems, snoozedAlerts, StatusModel::unsnoozed)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    /** The alert list's sections (`alert-groups.json`). */
-    val statusList: StateFlow<StatusListUi> = combine(statusItems, snoozedAlerts) { items, snoozed ->
-        StatusModel.list(items, alertGroups, snoozed)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(), StatusListUi.Empty)
-
-    init {
-        // A snoozed key whose alert has cleared is dropped, so the alert shows again when it comes
-        // back; nothing is pruned before the first pilot frame or heartbeat lists the live alerts.
-        viewModelScope.launch(work) {
-            combine(statusItems, pill.waiting) { items, waiting -> if (waiting) null else items.map { it.snoozeKey } }
-                .collect { keys -> if (keys != null) snoozeStore.prune(keys) }
-        }
-    }
-
-    /** "Apply recommended values" inline in an alert row, on the flown vehicle's setup engine. */
-    val applyProfile = com.altnautica.gcs.feature.cockpit.alerts.ApplyProfileFix(viewModelScope, spec.setupStrings, abortScope) {
-        vehicleNodeId.value?.let { setupBackends.current(it) }
-    }
-
-    init {
-        // The review holds the profile step open on the vehicle: the list closing, or the row's
-        // alert clearing, ends it.
-        viewModelScope.launch {
-            overlays.statusList.collect { open -> if (!open) applyProfile.leave() }
-        }
-        viewModelScope.launch {
-            combine(statusItems, applyProfile.state) { items, s -> s.owner != null && items.none { it.snoozeKey == s.owner } }
-                .collect { gone -> if (gone) applyProfile.leave() }
-        }
-    }
+    val snoozedAlerts: StateFlow<Set<String>> = alertList.snoozed
+    val pillItems: StateFlow<List<StatusItem>> = alertList.pillItems
+    val statusList: StateFlow<StatusListUi> = alertList.list
+    val applyProfile: com.altnautica.gcs.feature.cockpit.alerts.ApplyProfileFix = alertList.applyProfile
 
     /** True until a pilot frame or a heartbeat arrives: the pill reads no link, not all systems OK. */
     val statusWaiting: StateFlow<Boolean> = pill.waiting
@@ -849,44 +767,18 @@ class CockpitViewModel @AssistedInject constructor(
     val quickSettingsOpen: StateFlow<Boolean> = overlays.quickSettings.asStateFlow()
     val preflightOpen: StateFlow<Boolean> = overlays.preflight.asStateFlow()
 
-    fun setQuickSettings(open: Boolean) {
-        overlays.quickSettings.value = open
-    }
+    fun setQuickSettings(open: Boolean) { overlays.quickSettings.value = open }
 
     val cameraSettingsOpen: StateFlow<Boolean> = overlays.camera.asStateFlow()
 
-    fun setCameraSettings(open: Boolean) {
-        overlays.camera.value = open
-    }
+    fun setCameraSettings(open: Boolean) { overlays.camera.value = open }
 
-    /** The status pill's alert list; Back closes it like a sheet. */
-    val statusListOpen: StateFlow<Boolean> = overlays.statusList.asStateFlow()
-
-    /** Open or close the full alert list. */
-    fun setStatusList(open: Boolean) {
-        statusBlockingOnly.value = false
-        overlays.statusList.value = open
-    }
-
-    /** True while the list shows only what blocks take-off (opened from the flight-state chip). */
-    val statusBlockingOnly = MutableStateFlow(false)
-
-    /** The flight-state chip's sheet: the blocking rows first, with a link to every warning. */
-    fun openBlocking() {
-        overlays.statusList.value = true
-        statusBlockingOnly.value = true
-    }
-
-    /** Hide (snooze) an alert row until its condition clears, or show it again. */
-    fun snoozeAlert(key: String, on: Boolean) {
-        viewModelScope.launch { snoozeStore.set(key, on) }
-    }
-
-    /** Follow an alert row's fix; the route leaves for the screen that makes it. */
-    fun openFix(fix: com.altnautica.gcs.core.model.ReadinessFix) {
-        setStatusList(false)
-        _events.tryEmit(CockpitEvent.OpenFix(fix))
-    }
+    val statusListOpen: StateFlow<Boolean> = alertList.open
+    val statusBlockingOnly: MutableStateFlow<Boolean> = alertList.blockingOnly
+    fun setStatusList(open: Boolean) = alertList.setOpen(open)
+    fun openBlocking() = alertList.openBlocking()
+    fun snoozeAlert(key: String, on: Boolean) = alertList.snooze(key, on)
+    fun openFix(fix: com.altnautica.gcs.core.model.ReadinessFix) = alertList.openFix(fix)
 
     fun setPreflight(open: Boolean) {
         overlays.preflight.value = open
