@@ -24,7 +24,10 @@ private const val MAV_AUTOPILOT_ARDUPILOTMEGA = 3
 private const val MAV_AUTOPILOT_PX4 = 12
 
 /** Firmware family from the autopilot field of the vehicle's HEARTBEAT. */
-fun HeartbeatState.fcVariant(): FcVariant = when (autopilot) {
+fun HeartbeatState.fcVariant(): FcVariant = fcVariantOf(autopilot)
+
+/** Firmware family from a HEARTBEAT `autopilot` value (`MAV_AUTOPILOT`). */
+fun fcVariantOf(autopilot: Int): FcVariant = when (autopilot) {
     MAV_AUTOPILOT_ARDUPILOTMEGA -> FcVariant.MavlinkArdupilot
     MAV_AUTOPILOT_PX4 -> FcVariant.MavlinkPx4
     else -> FcVariant.Unknown

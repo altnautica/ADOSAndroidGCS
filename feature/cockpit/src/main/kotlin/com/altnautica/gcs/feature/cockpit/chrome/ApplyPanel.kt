@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -28,10 +30,11 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.altnautica.gcs.core.designsystem.component.HoldToConfirmButton
+import com.altnautica.gcs.core.model.ParamDocBook
 import com.altnautica.gcs.feature.cockpit.R
 import com.altnautica.gcs.feature.cockpit.alerts.ApplyFailure
 import com.altnautica.gcs.feature.cockpit.alerts.ApplyPhase
@@ -49,14 +52,20 @@ internal const val APPLY_HOLD_MS = 1_500
  * setup.
  */
 @Composable
-internal fun ApplyPanel(phase: ApplyPhase, onWrite: () -> Unit, onCancel: () -> Unit, onOpenSetup: () -> Unit) {
+internal fun ApplyPanel(
+    phase: ApplyPhase,
+    onWrite: () -> Unit,
+    onCancel: () -> Unit,
+    onOpenSetup: () -> Unit,
+    docs: ParamDocBook? = null,
+) {
     val c = LocalChrome.current
     Column(Modifier.fillMaxWidth().padding(top = 4.dp).testTag("alert-apply"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         when (phase) {
             ApplyPhase.Idle -> Unit
             ApplyPhase.Reading -> Busy(stringResource(R.string.alerts_apply_reading))
             is ApplyPhase.Review -> {
-                ProfileReviewTable(phase.review)
+                ProfileReviewTable(phase.review, docs)
                 Text(stringResource(R.string.alerts_apply_snapshot), style = c.labelText)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (phase.review.actionId != null) {
@@ -118,7 +127,7 @@ private fun Busy(text: String) {
 
 /** What the write changes: each changed row as current → new; the rows already set behind a toggle; the restart note. */
 @Composable
-private fun ProfileReviewTable(review: ProfileReview) {
+private fun ProfileReviewTable(review: ProfileReview, docs: ParamDocBook?) {
     val c = LocalChrome.current
     var showSame by remember { mutableStateOf(false) }
     val n = review.changes.size
@@ -126,16 +135,21 @@ private fun ProfileReviewTable(review: ProfileReview) {
         if (n > 0) pluralStringResource(R.plurals.alerts_apply_changes, n, n) else stringResource(R.string.alerts_apply_nothing),
         style = c.labelText.copy(color = c.text, fontWeight = FontWeight.SemiBold),
     )
-    Column(Modifier.testTag("alert-apply-changes")) { review.changes.forEach { ReviewRow(it, dim = false) } }
+    Column(Modifier.testTag("alert-apply-changes")) { review.changes.forEach { ReviewRow(it, docs, dim = false) } }
     if (review.same.isNotEmpty()) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { showSame = !showSame }.testTag("alert-apply-same-toggle"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (showSame) "▾" else "▸", style = c.labelText, modifier = Modifier.width(20.dp))
+            Icon(
+                Icons.Outlined.ExpandMore,
+                contentDescription = null,
+                tint = c.textDim,
+                modifier = Modifier.padding(end = 4.dp).size(20.dp).rotate(chevronAngle(showSame)),
+            )
             Text(pluralStringResource(R.plurals.alerts_apply_already_set, review.same.size, review.same.size), style = c.labelText)
         }
-        if (showSame) Column { review.same.forEach { ReviewRow(it, dim = true) } }
+        if (showSame) Column { review.same.forEach { ReviewRow(it, docs, dim = true) } }
     }
     if (review.reboots) {
         Text(
@@ -146,18 +160,9 @@ private fun ProfileReviewTable(review: ProfileReview) {
     }
 }
 
+/** A reviewed value, drawn like the alert card's parameter rows so the review and the list match. */
 @Composable
-private fun ReviewRow(p: ProfileRow, dim: Boolean) {
-    val c = LocalChrome.current
-    val strong = if (dim) c.textDim else c.text
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(p.name, style = c.labelText.copy(color = strong, fontFamily = FontFamily.Monospace), modifier = Modifier.weight(1.4f))
-        Text(
-            p.have?.let(ProfileReview::number) ?: stringResource(R.string.alerts_param_not_reported),
-            style = c.labelText,
-            modifier = Modifier.weight(1f),
-        )
-        Text("→", style = c.labelText, modifier = Modifier.padding(horizontal = 4.dp))
-        Text(p.value, style = c.labelText.copy(color = strong, fontWeight = FontWeight.SemiBold), modifier = Modifier.weight(1f))
-    }
+private fun ReviewRow(p: ProfileRow, docs: ParamDocBook?, dim: Boolean) {
+    val doc = remember(docs, p.name) { docs?.doc(p.name) }
+    ParamRow(p.name, p.have, p.value, doc, dim = dim)
 }

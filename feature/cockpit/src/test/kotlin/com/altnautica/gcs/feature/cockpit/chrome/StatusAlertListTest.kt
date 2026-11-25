@@ -78,10 +78,10 @@ class StatusAlertListTest {
         var snoozed: Pair<String, Boolean>? = null
         val list = StatusModel.list(items(), groups, emptySet())
         show(list, StatusListActions(onApplyRead = { applyFor = it }, onSnooze = { k, on -> snoozed = k to on }))
-        // Six rows show, the rest behind Show all.
-        compose.onNodeWithText("PARAM_6", useUnmergedTree = true).assertExists()
-        compose.onNodeWithText("PARAM_7", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithText("Show all 9").performScrollTo().performClick()
+        // Four rows show, the rest behind Show 5 more.
+        compose.onNodeWithText("PARAM_4", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("PARAM_5", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Show 5 more").performScrollTo().performClick()
         compose.onNodeWithText("MAV_GCS_SYSID", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("not reported", useUnmergedTree = true).assertExists()
         // Apply recommended values starts the inline review for this row, keyed by its snooze key.
@@ -129,7 +129,7 @@ class StatusAlertListTest {
         compose.onNodeWithText("What blocks take-off").assertExists()
         compose.onNodeWithText("FC parameters differ", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Flow parameters differ", useUnmergedTree = true).assertDoesNotExist()
-        compose.onNodeWithText("Warnings (2)").performScrollTo().performClick()
+        compose.onNodeWithText("See all warnings (2)").performScrollTo().performClick()
         assertEquals(true, all)
     }
 

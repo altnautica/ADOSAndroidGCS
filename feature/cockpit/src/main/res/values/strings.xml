@@ -17,9 +17,24 @@
         <item quantity="other">%d hidden</item>
     </plurals>
     <string name="alerts_param_not_reported">not reported</string>
-    <string name="alerts_param_show_all">Show all %d</string>
+    <string name="alerts_param_show_more">Show %d more</string>
+    <string name="alerts_param_col_setting">Setting</string>
+    <string name="alerts_param_col_values">Now → Recommended</string>
+    <string name="alerts_param_why_label">Why ADOS sets this</string>
+    <string name="alerts_param_restart">Restart needed</string>
+    <string name="alerts_params_summary_block">These flight controller settings differ from what ADOS needs. Take-off stays blocked until they match.</string>
+    <string name="alerts_params_summary_warn">These settings differ from what ADOS recommends. You can still fly.</string>
     <string name="alerts_param_show_fewer">Show fewer</string>
     <string name="alerts_action_apply">Apply recommended values</string>
+    <plurals name="alerts_action_apply_n">
+        <item quantity="one">Review and apply %d value</item>
+        <item quantity="other">Review and apply %d values</item>
+    </plurals>
+    <string name="alerts_action_apply_help">Shows every change first. Nothing is written until you hold Apply; a snapshot is saved so you can restore it.</string>
+    <string name="alerts_action_setup_help">Opens Aircraft setup at this step.</string>
+    <string name="alerts_action_settings_help">Opens the setting that controls this.</string>
+    <string name="alerts_action_parameters_help">Opens these parameters in the parameter list.</string>
+    <string name="alerts_action_hide_help">Hide keeps it out of the count until it clears.</string>
     <string name="alerts_action_open_setup">Open setup</string>
     <string name="alerts_action_open_settings">Open settings</string>
     <string name="alerts_action_open_parameters">Open parameters</string>
@@ -48,7 +63,8 @@
     <string name="alerts_apply_unreachable">The vehicle did not answer. Check the link and try again.</string>
     <string name="alerts_chip_blocking">What blocks take-off</string>
     <string name="alerts_chip_no_blocking">Nothing blocks take-off</string>
-    <string name="alerts_chip_warnings">Warnings (%d)</string>
+    <string name="alerts_blocking_subtitle">Clear these before you can arm</string>
+    <string name="alerts_chip_warnings_all">See all warnings (%d)</string>
     <string name="alerts_ground_hint">Fix from the drone\'s Aircraft setup (Mission Control or the drone\'s cockpit)</string>
     <string name="vision_engine_after_agent_restart">Vision starts after the agent restarts (about 10 s).</string>
     <string name="vision_engine_restart_agent">Restart agent</string>

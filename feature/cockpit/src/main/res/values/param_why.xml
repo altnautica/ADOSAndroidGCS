@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Why ADOS wants a flight-controller parameter's value, by parameter name -->
+    <string name="param_why_MAV_GCS_SYSID">ADOS talks to the flight controller as ground station 1. Failsafe heartbeats, RC overrides and manual control are only accepted from this ID.</string>
+    <string name="param_why_FS_GCS_ENABLE">If the link to ADOS is lost, the drone flies back along its flown path (SmartRTL), or lands if it cannot.</string>
+    <string name="param_why_FS_GCS_TIMEOUT">Seconds of lost link before that failsafe acts.</string>
+    <string name="param_why_FS_THR_ENABLE">Losing the RC transmitter also returns along the flown path, or lands.</string>
+    <string name="param_why_GUID_TIMEOUT">If guided commands from ADOS stop for this long, the flight controller stops the drone instead of carrying on with the last command.</string>
+    <string name="param_why_RC_OVERRIDE_TIME">Stick input sent by ADOS expires after this long, so a stalled app or link cannot keep holding the sticks.</string>
+    <string name="param_why_BATT_FS_LOW_ACT">On low battery the drone returns home.</string>
+    <string name="param_why_BATT_FS_CRT_ACT">On critical battery the drone lands where it is.</string>
+    <string name="param_why_OA_TYPE">The flight controller\'s own path planner stays off. ADOS plans around obstacles, and two planners would fight.</string>
+    <string name="param_why_AVOID_ENABLE">Turns on the flight controller\'s proximity stop as a backstop under the ADOS brake.</string>
+    <string name="param_why_AVOID_MARGIN">Where the backstop stops: inside the ADOS obstacle margin, so ADOS brakes first.</string>
+    <string name="param_why_AVOID_BEHAVE">The backstop stops in front of an obstacle instead of sliding along it.</string>
+    <string name="param_why_PRX1_TYPE">The flight controller reads obstacle distances from ADOS Navigation over MAVLink.</string>
+    <string name="param_why_SRTL_POINTS">Memory for the flown path, so a return can retrace it.</string>
+    <string name="param_why_SRTL_ACCURACY">How closely the return path is recorded. In a confined place it must be 0.2 m or less so the return stays clear of walls.</string>
+    <string name="param_why_ATC_INPUT_TC">Softens attitude changes so the fixed camera does not jerk, while braking stays within the ADOS stopping budget.</string>
+    <string name="param_why_GUID_OPTIONS">Lets ADOS command thrust directly during a supervised lift-off. Manual flight is unchanged.</string>
+    <string name="param_why_GCS_PID_MASK">Streams roll and pitch tuning data to ADOS during a supervised lift-off.</string>
+    <string name="param_why_FS_GCS_ENABL">Turns on the ground station failsafe: losing the ADOS heartbeat triggers the long failsafe action.</string>
+    <string name="param_why_FS_LONG_TIMEOUT">Seconds without the link before the long failsafe acts.</string>
+    <string name="param_why_FS_LONG_ACTN">The long failsafe returns to launch.</string>
+    <string name="param_why_Q_GUIDED_MODE">Guided flight uses VTOL to hover at the target.</string>
+    <string name="param_why_COM_OF_LOSS_T">Seconds without ADOS setpoints before PX4 takes its failsafe.</string>
+    <string name="param_why_COM_OBL_RC_ACT">If ADOS control is lost, PX4 holds position.</string>
+    <string name="param_why_NAV_DLL_ACT">If the data link to ADOS is lost, PX4 returns home.</string>
+    <string name="param_why_COM_DL_LOSS_T">Seconds without the data link before that return starts.</string>
+</resources>

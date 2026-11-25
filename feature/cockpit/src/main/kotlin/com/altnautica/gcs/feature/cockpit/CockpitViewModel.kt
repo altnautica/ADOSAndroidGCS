@@ -24,6 +24,8 @@ import com.altnautica.gcs.core.model.DeviceId
 import com.altnautica.gcs.core.model.NodeSource
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.PilotAction
+import com.altnautica.gcs.core.model.ParamDocBook
+import com.altnautica.gcs.core.model.ParamDocs
 import com.altnautica.gcs.core.model.PilotState
 import com.altnautica.gcs.core.model.SkillState
 import com.altnautica.gcs.core.model.Vehicle
@@ -132,6 +134,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.mapLatest
 
 /** How long UI-only flows keep running after their last collector leaves. */
 internal const val UI_STOP_MS = 5_000L
@@ -186,6 +189,8 @@ class CockpitViewModel @AssistedInject constructor(
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob()),
     /** Shares the pilot's readiness with Aircraft setup, which flags the cards it names. */
     readinessStore: com.altnautica.gcs.core.link.node.PilotReadinessStore = com.altnautica.gcs.core.link.node.PilotReadinessStore(),
+    /** Parameter documentation for the alert list's parameter rows. */
+    docs: ParamDocs = object : ParamDocs { override suspend fun book(autopilot: Int, vehicleType: Int): ParamDocBook? = null },
 ) : ViewModel() {
 
     @AssistedFactory
@@ -218,6 +223,14 @@ class CockpitViewModel @AssistedInject constructor(
     /** Per-topic telemetry for the HUD, which reads each flow inside its draw pass. */
     val telemetry: StateFlow<VehicleTelemetry?> = nodeFlows.telemetry
     val status: StateFlow<CockpitStatus> = nodeFlows.status
+
+    /** The flown FC's parameter documentation (titles, units, value labels); null while unknown or not bundled. */
+    val paramDocs: StateFlow<ParamDocBook?> = telemetry
+        .flatMapLatest { it?.heartbeat ?: flowOf(null) }
+        .map { hb -> hb?.let { it.autopilot to it.vehicleType } }
+        .distinctUntilChanged()
+        .mapLatest { k -> k?.let { docs.book(it.first, it.second) } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /** The node whose extensions the cockpit mounts (the flown drone). */
     val extensionNodeId: StateFlow<DeviceId?> = vehicleNodeId
