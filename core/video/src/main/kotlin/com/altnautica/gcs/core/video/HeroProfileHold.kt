@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.video
 
+import android.os.SystemClock
 import com.altnautica.gcs.core.agent.AgentClient
 import com.altnautica.gcs.core.agent.AgentClientFactory
 import com.altnautica.gcs.core.agent.http.AgentError
@@ -14,6 +15,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -50,7 +52,9 @@ interface VideoProfileAgent {
  * - any other failed promotion (the request budget, a 503 while the video service
  *   starts, a timeout) is retried after each of [PROMOTE_BACKOFF_MS], then every last
  *   step, until the hold is dropped: a view that leaves and returns within the release
- *   grace finds its promotion still retrying.
+ *   grace finds its promotion still retrying;
+ * - [awaitReady] lets a viewer wait for the promotion, and for the encoder to settle after
+ *   a promotion that respawned it, so the first dial is not dropped by the respawn.
  * An agent that predates leases answers without a `leases` list; there the hold falls back
  * to a plain set, promoting only a drone it saw on `thumbnail` and demoting only what it
  * promoted, once its last viewer goes.
@@ -59,12 +63,13 @@ interface VideoProfileAgent {
 class HeroProfileHold(
     private val scope: CoroutineScope,
     val holderId: String,
+    private val now: () -> Long = SystemClock::elapsedRealtime,
     private val agentFor: suspend (DeviceId) -> VideoProfileAgent?,
 ) {
 
     @Inject
     constructor(clients: AgentClientFactory, @VideoScope scope: CoroutineScope) :
-        this(scope, newHolderId(), { node -> clients.forNode(node)?.let(::ClientProfileAgent) })
+        this(scope, newHolderId(), agentFor = { node -> clients.forNode(node)?.let(::ClientProfileAgent) })
 
     private enum class Outcome { Lease, Legacy, None }
 
@@ -78,6 +83,9 @@ class HeroProfileHold(
         /** The agent the promotion or the latest move reached; renewals and the release use it. */
         var agent: VideoProfileAgent? = null
         lateinit var promoted: Deferred<Outcome>
+
+        /** When this hold's promotion moved the drone off `thumbnail`, respawning its encoder. */
+        @Volatile var respawnedAtMs: Long? = null
     }
 
     private val holds = HashMap<DeviceId, Hold>()
@@ -109,6 +117,27 @@ class HeroProfileHold(
         }
     }
 
+    /**
+     * Returns once [node] is ready to dial: no hold appears within [HOLD_LOOKUP_MS] (the
+     * viewer may acquire just after asking), or its promotion settled and, when that promotion
+     * respawned the encoder, [HERO_SETTLE_MS] have passed since. Never waits past [maxWaitMs].
+     */
+    suspend fun awaitReady(node: DeviceId, maxWaitMs: Long = READY_MAX_WAIT_MS) {
+        withTimeoutOrNull(maxWaitMs) {
+            var waited = 0L
+            var hold = synchronized(holds) { holds[node] }
+            while (hold == null && waited < HOLD_LOOKUP_MS) {
+                delay(HOLD_POLL_MS)
+                waited += HOLD_POLL_MS
+                hold = synchronized(holds) { holds[node] }
+            }
+            if (hold == null) return@withTimeoutOrNull
+            hold.promoted.await()
+            val respawnedAt = hold.respawnedAtMs ?: return@withTimeoutOrNull
+            delay(respawnedAt + HERO_SETTLE_MS - now())
+        }
+    }
+
     /** The hold is still the node's; a release in its grace leaves it so until the grace ends. */
     private fun current(node: DeviceId, hold: Hold): Boolean = holds[node] === hold
 
@@ -117,7 +146,8 @@ class HeroProfileHold(
         var attempt = 0
         while (true) {
             val agent = agentFor(node) ?: return Outcome.None
-            attemptPromote(agent)?.let { outcome ->
+            attemptPromote(agent)?.let { (outcome, respawned) ->
+                if (respawned) hold.respawnedAtMs = now()
                 synchronized(holds) {
                     hold.agent = agent
                     if (outcome == Outcome.Lease && current(node, hold)) hold.renewJob = scope.launch { renew(agent, immediately = false) }
@@ -149,23 +179,27 @@ class HeroProfileHold(
         }
     }
 
-    /** One promotion; null when it failed in a way worth retrying. */
-    private suspend fun attemptPromote(agent: VideoProfileAgent): Outcome? {
+    /**
+     * One promotion and whether it moved the drone off `thumbnail` (respawning its encoder);
+     * null when it failed in a way worth retrying.
+     */
+    private suspend fun attemptPromote(agent: VideoProfileAgent): Pair<Outcome, Boolean>? {
         val full = when (val r = agent.statusFull()) {
             is AgentResult.Ok -> r.value
-            is AgentResult.Err -> return if (r.error.isTransient()) null else Outcome.None
+            is AgentResult.Err -> return if (r.error.isTransient()) null else Outcome.None to false
         }
-        if (full.profile == GROUND_STATION) return Outcome.None
+        if (full.profile == GROUND_STATION) return Outcome.None to false
         val observed = full.telemetry?.videoProfile
-        if (observed != HERO && observed != THUMBNAIL) return Outcome.None
+        if (observed != HERO && observed != THUMBNAIL) return Outcome.None to false
         val applied = when (val r = agent.setVideoProfile(HERO, holderId, LEASE_S)) {
             is AgentResult.Ok -> r.value
-            is AgentResult.Err -> return if (r.error.isTransient()) null else Outcome.None
+            is AgentResult.Err -> return if (r.error.isTransient()) null else Outcome.None to false
         }
-        if (applied.leases != null) return Outcome.Lease
+        val respawned = observed == THUMBNAIL
+        if (applied.leases != null) return Outcome.Lease to respawned
         // A pre-lease agent applied a plain set, a no-op on a drone already on hero, so only a
         // promotion from thumbnail is ours to undo.
-        return if (observed == THUMBNAIL) Outcome.Legacy else Outcome.None
+        return if (respawned) Outcome.Legacy to true else Outcome.None to false
     }
 
     /**
@@ -233,8 +267,21 @@ class HeroProfileHold(
         /** The waits before each retry of a failed renewal; the last repeats. */
         val RENEW_RETRY_MS: List<Long> = listOf(2_000L, 4_000L)
 
-        /** How long the last released hold waits before releasing the lease. */
-        const val RELEASE_GRACE_MS = 5_000L
+        /**
+         * How long the last released hold waits before releasing the lease: long enough that
+         * a hop to another screen and back does not respawn the encoder twice.
+         */
+        const val RELEASE_GRACE_MS = 30_000L
+
+        /** How long [awaitReady] looks for a hold the viewer has not taken yet. */
+        const val HOLD_LOOKUP_MS = 300L
+        private const val HOLD_POLL_MS = 50L
+
+        /** The default ceiling on [awaitReady]. */
+        const val READY_MAX_WAIT_MS = 3_000L
+
+        /** How long after a respawning promotion the encoder is given before a dial. */
+        const val HERO_SETTLE_MS = 1_500L
 
         /** The waits before each retry of a failed promotion; the last repeats while held. */
         val PROMOTE_BACKOFF_MS: List<Long> = listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L)

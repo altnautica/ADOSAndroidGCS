@@ -104,6 +104,7 @@ class VideoSessionManager @Inject constructor(
     private val published = MutableStateFlow<Map<VideoSource, VideoSessionHandle>>(emptyMap())
 
     companion object {
-        const val IDLE_STOP_MS = 10_000L
+        /** Keeps a session warm across a quick hop away and back; not longer than the hero hold's release grace. */
+        const val IDLE_STOP_MS = 30_000L
     }
 }

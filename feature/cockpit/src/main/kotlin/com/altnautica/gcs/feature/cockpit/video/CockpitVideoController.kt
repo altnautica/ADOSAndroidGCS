@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -92,9 +93,27 @@ internal class CockpitVideoController(
         if (src is VideoSource.AgentWhep) streamCatalog.noCamera(src.node) else flowOf(false)
     }.stateIn(scope, SharingStarted.Eagerly, false)
 
-    /** The source on screen: none while the vehicle has no camera, so no stale frame stays up. */
-    private val shownSource: StateFlow<VideoSource?> = combine(mainSource, noCamera) { src, none -> src.takeUnless { none } }
-        .stateIn(scope, SharingStarted.Eagerly, null)
+    /**
+     * False while the drone the main source plays from is being promoted to its full-rate
+     * profile, or its encoder is settling after that respawn: a dial made then is dropped.
+     */
+    private val heroReady: StateFlow<Boolean> = mainSource.map { (it as? VideoSource.AgentWhep)?.node }
+        .distinctUntilChanged()
+        .transformLatest { node ->
+            emit(node == null)
+            if (node != null) {
+                heroHold.awaitReady(node)
+                emit(true)
+            }
+        }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    /**
+     * The source on screen: none while the vehicle has no camera, so no stale frame stays up,
+     * and none until its drone's hero promotion is ready.
+     */
+    private val shownSource: StateFlow<VideoSource?> = combine(mainSource, noCamera, heroReady) { src, none, ready ->
+        src.takeUnless { none || !ready }
+    }.stateIn(scope, SharingStarted.Eagerly, null)
 
     /**
      * The shown source's state, without the live latency: that figure changes every second and

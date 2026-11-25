@@ -30,9 +30,12 @@ import org.webrtc.EglBase
 /**
  * One WHEP leg with its re-dial policy:
  * - connection `disconnected` gets [DISCONNECT_GRACE_MS] to recover, then re-dial;
- * - `failed` or a refused offer re-dials with 1→10 s backoff;
- * - no frame for 2.5 s marks the picture [VideoState.Frozen] and re-dials once;
- *   a second freeze before frames flow again backs off like a failure;
+ * - `failed`, a refused offer, or ICE not connected within [CONNECT_TIMEOUT_MS] re-dials
+ *   with 0.5→8 s backoff;
+ * - connected but no first frame within [FIRST_FRAME_AFTER_CONNECT_MS], or no frame for
+ *   2.5 s once flowing, marks the leg frozen and re-dials once at once; a second freeze
+ *   before frames flow again backs off like a failure;
+ * - no first frame within [FIRST_FRAME_TIMEOUT_MS] of the dial fails it;
  * - [VideoState.Live] only while frames reach a renderer on screen;
  * - once a second the peer's counters become [rates], logged under `VideoStats`; when
  *   frames go missing between decoder and sink for 5 s in a row, [onHandoffLoss] may move
@@ -58,7 +61,7 @@ class WhepSession(
     override val rates: StateFlow<VideoRates?> = _rates
 
     private val frames = FrameFanout(clock)
-    private val backoff = RedialBackoff()
+    private val backoff = RedialBackoff(initialMs = 500L, maxMs = 8_000L)
 
     override val output: VideoOutput = frames.output(eglContext)
 
@@ -85,6 +88,7 @@ class WhepSession(
         var freezeRedialUsed = false
         while (scope.isActive) {
             _state.value = VideoState.Connecting
+            Log.i(LINK_TAG, "whep_dial base=${source.baseUrl} stream=${source.streamId}")
             val dialed = try {
                 dial()
                 true
@@ -118,13 +122,24 @@ class WhepSession(
     private suspend fun dial() {
         frames.reset()
         key = apiKey()
-        val p = peerFactory.create(frames)
+        var p = peerFactory.create(frames)
         peer = p
-        val offer = p.createOffer()
+        var offer = p.createOffer()
+        // A first peer can finish gathering before the network list is ready and offer no
+        // candidate at all; that dial can never connect, so a fresh peer replaces it at once.
+        if (!hasCandidate(offer)) {
+            Log.w(LINK_TAG, "whep_offer_empty base=${source.baseUrl} stream=${source.streamId}")
+            p.close()
+            p = peerFactory.create(frames)
+            peer = p
+            offer = p.createOffer()
+        }
         val answer = signaling.offer(source.baseUrl, source.streamId, key, offer)
         resource = answer.resourceUrl
         p.applyAnswer(answer.sdp)
     }
+
+    private fun hasCandidate(sdp: String) = sdp.lineSequence().any { it.startsWith("a=candidate") }
 
     /**
      * Watches one dialled peer until it needs replacing. [Outcome.Flowed] means
@@ -134,6 +149,8 @@ class WhepSession(
     private suspend fun monitor(): Outcome {
         val p = peer ?: return Outcome.Failed
         val dialedAt = clock.nowMs()
+        var connectedAt: Long? = null
+        var loggedState: PeerLinkState? = null
         var disconnectedAt: Long? = null
         var flowed = false
         var lastStatsAt = Long.MIN_VALUE
@@ -142,7 +159,13 @@ class WhepSession(
         val handoff = HandoffLossMonitor()
         while (true) {
             val now = clock.nowMs()
-            when (p.connection.value) {
+            val link = p.connection.value
+            if (link != loggedState) {
+                loggedState = link
+                Log.i(LINK_TAG, "whep_peer state=$link at_ms=${now - dialedAt}")
+            }
+            if (link == PeerLinkState.Connected && connectedAt == null) connectedAt = now
+            when (link) {
                 PeerLinkState.Failed, PeerLinkState.Closed -> return Outcome.Failed
                 PeerLinkState.Disconnected -> {
                     val since = disconnectedAt ?: now.also { disconnectedAt = it }
@@ -159,6 +182,7 @@ class WhepSession(
                     if (!flowed) {
                         flowed = true
                         backoff.reset()
+                        Log.i(LINK_TAG, "whep_first_frame at_ms=${now - dialedAt}")
                     }
                     if (lastStatsAt == Long.MIN_VALUE || now - lastStatsAt >= STATS_INTERVAL_MS) {
                         lastStatsAt = now
@@ -172,9 +196,16 @@ class WhepSession(
                     }
                     _state.value = frames.flowingState(latency)
                 }
-                null -> if (now - dialedAt >= FIRST_FRAME_TIMEOUT_MS) {
-                    _state.value = VideoState.Failed("No video frames")
-                    return Outcome.Failed
+                null -> when {
+                    connectedAt == null && now - dialedAt >= CONNECT_TIMEOUT_MS -> {
+                        _state.value = VideoState.Failed("ICE did not connect")
+                        return Outcome.Failed
+                    }
+                    now - dialedAt >= FIRST_FRAME_TIMEOUT_MS -> {
+                        _state.value = VideoState.Failed("No video frames")
+                        return Outcome.Failed
+                    }
+                    connectedAt?.let { now - it >= FIRST_FRAME_AFTER_CONNECT_MS } == true -> return Outcome.Frozen
                 }
             }
             delay(TICK_MS)
@@ -196,7 +227,15 @@ class WhepSession(
 
     companion object {
         const val DISCONNECT_GRACE_MS = 3_000L
-        const val FIRST_FRAME_TIMEOUT_MS = 10_000L
+
+        /** ICE must reach `connected` this long after the dial, else the dial failed. */
+        const val CONNECT_TIMEOUT_MS = 3_000L
+
+        /** A connected peer with no decoded frame this long after connecting is re-dialled once. */
+        const val FIRST_FRAME_AFTER_CONNECT_MS = 3_000L
+
+        /** Overall ceiling from the dial to the first decoded frame. */
+        const val FIRST_FRAME_TIMEOUT_MS = 6_000L
         private const val STATS_INTERVAL_MS = 1_000L
         private const val TAG = "VideoStats"
         private const val LINK_TAG = "AdosLink"

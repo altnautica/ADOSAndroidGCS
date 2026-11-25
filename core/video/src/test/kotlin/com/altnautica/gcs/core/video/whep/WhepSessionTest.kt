@@ -49,6 +49,13 @@ class WhepSessionTest {
     /** The stats every fake peer reports at a virtual time; null keeps the default. */
     private var peerStats: ((nowMs: Long) -> InboundVideoStats)? = null
 
+    /** Whether a fake peer's ICE connects once the answer is applied. */
+    private var connectOnAnswer = true
+
+    /** How many of the first fake peers offer no ICE candidate. */
+    private var emptyOffers = 0
+    private var peersCreated = 0
+
     private inner class FakePeer(val sink: VideoSink, val createdAtMs: Long, private val now: () -> Long) : WhepPeer {
         override val connection = MutableStateFlow(PeerLinkState.New)
         var answer: String? = null
@@ -56,10 +63,11 @@ class WhepSessionTest {
 
         /** Requests the endpoint had received when the peer closed. */
         var requestsAtClose = -1
-        override suspend fun createOffer() = "v=0 offer"
+        private val offer = if (peersCreated++ < emptyOffers) EMPTY_OFFER else OFFER
+        override suspend fun createOffer() = offer
         override suspend fun applyAnswer(sdp: String) {
             answer = sdp
-            connection.value = PeerLinkState.Connected
+            if (connectOnAnswer) connection.value = PeerLinkState.Connected
         }
         private var statsCalls = 0
 
@@ -174,14 +182,65 @@ class WhepSessionTest {
         assertEquals(1, peers.size)
         assertTrue(s.state.value is VideoState.Failed)
 
-        advanceTimeBy(7_000)
+        advanceTimeBy(3_500)
         runCurrent()
 
-        // Backoff doubles from 1 s, and a refused POST costs no time of its own.
-        assertEquals(listOf(0L, 1_000L, 3_000L, 7_000L), peers.map { it.createdAtMs })
+        // Backoff doubles from 0.5 s, and a refused POST costs no time of its own.
+        assertEquals(listOf(0L, 500L, 1_500L, 3_500L), peers.map { it.createdAtMs })
         assertTrue(peers.take(3).all { it.closed })
         assertEquals("v=0 answer", peers[3].answer)
         assertEquals(List(4) { "POST" }, http.requests.map { it.method })
+        s.stop()
+    }
+
+    @Test
+    fun `a peer whose ICE never connects fails the dial at 3 s, then redials after the backoff`() = runTest {
+        connectOnAnswer = false
+        repeat(2) {
+            http.answer()
+            http.enqueue(200)
+        }
+        val peers = mutableListOf<FakePeer>()
+        val s = session(peers)
+        s.start()
+        advanceTimeBy(WhepSession.CONNECT_TIMEOUT_MS)
+        assertEquals("still connecting just before 3 s", VideoState.Connecting, s.state.value)
+        runCurrent()
+        assertEquals(VideoState.Failed("ICE did not connect"), s.state.value)
+        assertEquals(1, peers.size)
+        assertTrue("the failed peer is closed", peers[0].closed)
+        assertEquals(listOf("POST", "DELETE"), http.requests.map { it.method })
+
+        advanceTimeBy(500)
+        runCurrent()
+        assertEquals("redialled after the first 0.5 s backoff", listOf(0L, 3_500L), peers.map { it.createdAtMs })
+        s.stop()
+    }
+
+    @Test
+    fun `a connected peer with no frame redials once 3 s after connecting, without backoff`() = runTest {
+        connectOnAnswer = false
+        repeat(3) {
+            http.answer()
+            http.enqueue(200)
+        }
+        val peers = mutableListOf<FakePeer>()
+        val s = session(peers)
+        s.start()
+        advanceTimeBy(1_000)
+        peers.single().connection.value = PeerLinkState.Connected
+        connectOnAnswer = true
+        advanceTimeBy(WhepSession.FIRST_FRAME_AFTER_CONNECT_MS)
+        assertEquals("no redial before 3 s after connecting", 1, peers.size)
+        runCurrent()
+        assertEquals("redialled at once, 3 s after connecting", listOf(0L, 4_000L), peers.map { it.createdAtMs })
+        assertTrue(peers[0].closed)
+        assertEquals(VideoState.Connecting, s.state.value)
+
+        // The free redial is spent: a second frameless connection backs off before the next dial.
+        advanceTimeBy(WhepSession.FIRST_FRAME_AFTER_CONNECT_MS + 500)
+        runCurrent()
+        assertEquals(listOf(0L, 4_000L, 7_500L), peers.map { it.createdAtMs })
         s.stop()
     }
 
@@ -378,7 +437,27 @@ class WhepSessionTest {
         s.stop()
     }
 
+    @Test
+    fun `an offer with no candidate is replaced by a fresh peer before it is posted`() = runTest {
+        emptyOffers = 1
+        http.answer()
+        http.enqueue(200)
+        val peers = mutableListOf<FakePeer>()
+        val s = session(peers)
+        s.start()
+        runCurrent()
+
+        assertEquals(listOf(0L, 0L), peers.map { it.createdAtMs })
+        assertTrue(peers[0].closed)
+        assertEquals(0, peers[0].requestsAtClose)
+        assertEquals(listOf(OFFER), http.requests.map { it.body })
+        assertEquals("v=0 answer", peers[1].answer)
+        s.stop()
+    }
+
     private companion object {
         const val BASE_URL = "http://agent.invalid/"
+        const val OFFER = "v=0 offer\na=candidate:1 1 udp 2122260223 192.168.1.60 50000 typ host"
+        const val EMPTY_OFFER = "v=0 offer"
     }
 }

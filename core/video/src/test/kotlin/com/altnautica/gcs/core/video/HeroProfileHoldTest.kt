@@ -10,6 +10,7 @@ import com.altnautica.gcs.core.model.DeviceId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -122,17 +123,19 @@ class HeroProfileHoldTest {
     }
 
     @Test
-    fun `the lease is released 5 s after the last holder goes, and renewals stop`() = runTest {
+    fun `the lease is released once the grace after the last holder ends, and renewals stop`() = runTest {
         val agent = FakeAgent()
         val release = hold(agent).acquire(drone, url)
         runCurrent()
         release()
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS - 1)
-        assertEquals("nothing released inside the grace", listOf("status", lease), agent.calls)
+        assertEquals("nothing released inside the grace", 0, agent.calls.count { it.startsWith("DELETE") })
+        assertEquals("only the promotion and its renewals inside the grace", listOf("status"), agent.calls.filter { it != lease })
         advanceTimeBy(2)
-        assertEquals(listOf("status", lease, "DELETE $holder"), agent.calls)
+        assertEquals("DELETE $holder", agent.calls.last())
+        val settled = agent.calls.size
         advanceTimeBy(60_000)
-        assertEquals("no renewal after the release", listOf("status", lease, "DELETE $holder"), agent.calls)
+        assertEquals("no renewal after the release", settled, agent.calls.size)
     }
 
     @Test
@@ -162,7 +165,8 @@ class HeroProfileHoldTest {
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS - 1_000)
         hold.acquire(drone, url)
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS * 2)
-        assertEquals("one promotion, then only the renewal at 10 s", listOf("status", lease, lease), agent.calls)
+        assertEquals("one promotion", 1, agent.calls.count { it == "status" })
+        assertEquals("then only renewals, never a release", listOf("status"), agent.calls.filter { it != lease })
     }
 
     @Test
@@ -215,7 +219,7 @@ class HeroProfileHoldTest {
         repeat(100) { released.statusErrors += tooMany }
         hold(released).acquire(drone, url)()
         advanceTimeBy(60_000)
-        assertEquals("retried at 1 and 3 s inside the grace, then dropped at 5 s", 3, released.calls.size)
+        assertEquals("retried at 1, 3, 7 and 15 s inside the grace, then dropped when it ends", 5, released.calls.size)
     }
 
     @Test
@@ -295,12 +299,14 @@ class HeroProfileHoldTest {
         reachable = atB
         hold.acquire(drone, "http://192.168.1.50:8080/")
         runCurrent()
+        assertEquals("the lease is renewed at the new address at once", listOf(lease), atB.calls)
         releaseA()
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS + 1)
         assertEquals("the old address gets no release and no further renewal", listOf("status", lease), atA.calls)
-        assertEquals("the lease is renewed at the new address at once, never released", listOf(lease), atB.calls)
+        assertEquals("the new address only renews, never releases", listOf(lease), atB.calls.distinct())
+        val renewed = atB.calls.size
         advanceTimeBy(HeroProfileHold.RENEW_MS)
-        assertEquals("renewals carry on at the new address", listOf(lease, lease), atB.calls)
+        assertEquals("renewals carry on at the new address", renewed + 1, atB.calls.size)
     }
 
     @Test
@@ -318,5 +324,50 @@ class HeroProfileHoldTest {
         releaseB()
         advanceTimeBy(HeroProfileHold.RELEASE_GRACE_MS + 1)
         assertEquals("demoted once the last viewer goes", listOf("status", lease, "POST thumbnail"), agent.calls)
+    }
+
+    /** A hold whose clock is the test scheduler's, and the virtual time [HeroProfileHold.awaitReady] returned at. */
+    private fun TestScope.readyAt(agent: FakeAgent, acquire: Boolean = true): () -> Long {
+        val hold = HeroProfileHold(backgroundScope, holder, { testScheduler.currentTime }) { agent }
+        if (acquire) hold.acquire(drone, url)
+        var at = -1L
+        backgroundScope.launch {
+            hold.awaitReady(drone)
+            at = testScheduler.currentTime
+        }
+        return { at }
+    }
+
+    @Test
+    fun `ready waits for a promotion that respawned the encoder, then for it to settle`() = runTest {
+        val agent = FakeAgent()
+        agent.setLatencyMs = 400
+        val at = readyAt(agent)
+        advanceTimeBy(HeroProfileHold.READY_MAX_WAIT_MS + 1)
+        assertEquals("promoted at 0.4 s, then the settle", 400L + HeroProfileHold.HERO_SETTLE_MS, at())
+    }
+
+    @Test
+    fun `ready does not wait for a settle when the drone was already on hero`() = runTest {
+        val agent = FakeAgent(videoProfile = "hero")
+        val at = readyAt(agent)
+        runCurrent()
+        assertEquals(0L, at())
+    }
+
+    @Test
+    fun `ready gives up looking for a hold that never comes`() = runTest {
+        val at = readyAt(FakeAgent(), acquire = false)
+        advanceTimeBy(HeroProfileHold.READY_MAX_WAIT_MS + 1)
+        assertEquals(HeroProfileHold.HOLD_LOOKUP_MS, at())
+    }
+
+    @Test
+    fun `ready never waits past its ceiling for a promotion that keeps failing`() = runTest {
+        val agent = FakeAgent()
+        repeat(100) { agent.statusErrors += tooMany }
+        val at = readyAt(agent)
+        advanceTimeBy(HeroProfileHold.READY_MAX_WAIT_MS + 1)
+        assertEquals(HeroProfileHold.READY_MAX_WAIT_MS, at())
     }
 }

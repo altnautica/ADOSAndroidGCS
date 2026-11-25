@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.video.whep
 
+import android.util.Log
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,7 @@ class NativeWhepPeer(
             PeerConnection.RTCConfiguration(emptyList()).apply {
                 sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
                 bundlePolicy = PeerConnection.BundlePolicy.MAXBUNDLE
+                tcpCandidatePolicy = PeerConnection.TcpCandidatePolicy.DISABLED
             },
             Observer(),
         ),
@@ -53,7 +55,10 @@ class NativeWhepPeer(
         val offer = sdpCall<SessionDescription> { pc.createOffer(it, MediaConstraints()) }
         sdpCall<Unit> { pc.setLocalDescription(it, offer) }
         withTimeoutOrNull(iceGatherTimeoutMs) { gathered.await() }
-        return pc.localDescription?.description ?: offer.description
+        val sdp = pc.localDescription?.description ?: offer.description
+        val candidates = sdp.lineSequence().count { it.startsWith("a=candidate") }
+        Log.i(LINK_TAG, "whep_offer candidates=$candidates gathered=${gathered.isCompleted}")
+        return sdp
     }
 
     override suspend fun applyAnswer(sdp: String) {
@@ -124,5 +129,6 @@ class NativeWhepPeer(
     companion object {
         /** LAN gathering finishes in well under this; past it, send what we have. */
         const val ICE_GATHER_MS = 2_000L
+        private const val LINK_TAG = "AdosLink"
     }
 }

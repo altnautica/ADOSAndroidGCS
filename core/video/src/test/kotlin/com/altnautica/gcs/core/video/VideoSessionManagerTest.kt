@@ -70,7 +70,7 @@ class VideoSessionManagerTest {
     }
 
     @Test
-    fun `session stops 10 s after its last lease`() = runTest {
+    fun `session stops once the idle time after its last lease ends`() = runTest {
         val f = FakeFactory()
         val m = VideoSessionManager(setOf(f), backgroundScope)
         val lease = m.acquire(src)!!
