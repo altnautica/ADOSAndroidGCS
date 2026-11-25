@@ -3,8 +3,12 @@
 # through JNI or reflection without consumer rules are listed here.
 
 # ---- WebRTC (classes are looked up from native code) ----
+# Its JNI_OnLoad also resolves the bundled org.jni_zero runtime by name; the
+# AAR ships no consumer rules, so a renamed or removed class aborts the load.
 -keep class org.webrtc.** { *; }
+-keep class org.jni_zero.** { *; }
 -dontwarn org.webrtc.**
+-dontwarn org.jni_zero.**
 
 # ---- JNA (used by the Convex client; ships no consumer rules) ----
 # Native code resolves JNA classes, fields and callback methods by name.

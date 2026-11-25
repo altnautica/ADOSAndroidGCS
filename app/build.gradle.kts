@@ -75,6 +75,16 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
+        create("perf") {
+            // A release build (R8, resource shrinking, baseline profile) signed
+            // with the debug key and installable beside the other builds, for
+            // measuring on a real phone.
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".perf"
+            versionNameSuffix = "-perf"
+            matchingFallbacks += listOf("release")
+        }
     }
 
     packaging {

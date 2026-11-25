@@ -3,6 +3,7 @@ package com.altnautica.gcs.baselineprofile
 import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.Until
 import org.junit.Rule
 import org.junit.Test
@@ -26,6 +27,14 @@ class BaselineProfileGenerator {
     fun launchToCockpit() = rule.collect(packageName = TARGET_PACKAGE, includeInStartupProfile = true) {
         pressHome()
         startActivityAndWait()
+
+        // A fresh install opens on the terms: scroll to the end, tick the box, accept.
+        if (device.wait(Until.hasObject(By.text(DISCLAIMER_TITLE)), SHORT_WAIT_MS) == true) {
+            repeat(SCROLL_TRIES) { device.findObject(By.scrollable(true))?.fling(Direction.DOWN) }
+            device.wait(Until.findObject(By.text(DISCLAIMER_CHECK)), SHORT_WAIT_MS)?.click()
+            device.wait(Until.findObject(By.text(DISCLAIMER_ACCEPT).enabled(true)), SHORT_WAIT_MS)?.click()
+                ?: error("The terms could not be accepted")
+        }
 
         // An empty Home offers the demo drone; with a vehicle already listed it does not.
         device.wait(Until.findObject(By.text(TRY_DEMO)), SHORT_WAIT_MS)?.let { tryDemo ->
@@ -51,6 +60,10 @@ class BaselineProfileGenerator {
         const val TRY_DEMO = "Try the demo drone"
         const val NOT_NOW = "Not now"
         const val SYSTEM_IMMERSIVE_OK = "Got it"
+        const val DISCLAIMER_TITLE = "Before you fly"
+        const val DISCLAIMER_CHECK = "I have read and accept the terms above. I understand that I am the pilot in command and responsible for safe and lawful operation."
+        const val DISCLAIMER_ACCEPT = "Accept and continue"
+        const val SCROLL_TRIES = 4
         const val SHORT_WAIT_MS = 3_000L
         const val LONG_WAIT_MS = 10_000L
         const val COCKPIT_DWELL_MS = 4_000L
