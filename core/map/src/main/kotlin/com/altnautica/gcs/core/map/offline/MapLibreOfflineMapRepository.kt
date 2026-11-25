@@ -32,6 +32,7 @@ import org.maplibre.android.offline.OfflineRegionStatus
 import org.maplibre.android.offline.OfflineTilePyramidRegionDefinition
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -62,6 +63,14 @@ class MapLibreOfflineMapRepository @Inject constructor(
 
     private val styleDir get() = File(context.filesDir, "maplibre/styles")
     private val packDir get() = File(context.filesDir, "maplibre/packs")
+
+    private val loaded = AtomicBoolean(false)
+
+    /** Once loaded, the lists change only through this repository, which keeps them current. */
+    override suspend fun ensureLoaded(): Result<Unit> {
+        if (!loaded.compareAndSet(false, true)) return Result.success(Unit)
+        return refresh().onFailure { loaded.set(false) }
+    }
 
     override suspend fun refresh(): Result<Unit> = runCatching {
         withContext(Dispatchers.Main) {

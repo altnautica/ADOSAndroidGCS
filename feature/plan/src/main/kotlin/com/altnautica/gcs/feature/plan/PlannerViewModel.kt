@@ -107,7 +107,7 @@ class PlannerViewModel @Inject constructor(
             combine(plannerSettings.settings, offlineMaps.pmtiles) { settings, packs -> packs to BasemapCodec.decode(settings.basemap, packs) }
                 .collect { (packs, basemap) -> _state.update { it.copy(packs = packs, basemap = basemap) } }
         }
-        viewModelScope.launch { offlineMaps.refresh() }
+        viewModelScope.launch { offlineMaps.ensureLoaded() }
         vehicle.observeNodes(nodeSources)
         keepDraft()
     }

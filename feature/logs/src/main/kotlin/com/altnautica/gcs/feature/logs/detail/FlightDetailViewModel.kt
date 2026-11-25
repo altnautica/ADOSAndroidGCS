@@ -46,12 +46,14 @@ class FlightDetailViewModel internal constructor(
     private val files: TlogFileDao,
     private val io: CoroutineDispatcher,
     private val open: (String) -> InputStream,
+    private val cache: FlightSeriesCache = FlightSeriesCache(),
 ) : ViewModel() {
     @AssistedInject constructor(
         @Assisted sessionId: Long,
         sessions: FlightSessionDao,
         files: TlogFileDao,
-    ) : this(sessionId, sessions, files, Dispatchers.IO, { File(it).inputStream() })
+        cache: FlightSeriesCache,
+    ) : this(sessionId, sessions, files, Dispatchers.IO, { File(it).inputStream() }, cache)
 
     @AssistedFactory
     interface Factory {
@@ -81,10 +83,14 @@ class FlightDetailViewModel internal constructor(
                 _state.value = FlightDetailUiState.Content(session, SeriesState.NoLog)
                 return@launch
             }
-            _state.value = FlightDetailUiState.Content(session, SeriesState.Loading)
-            val series = withContext(io) {
+            // A finished flight's log no longer changes, so its decoded series is reused.
+            val key = "$sessionId|$path".takeIf { session.endTime > 0 }
+            val cached = key?.let(cache::get)
+            if (cached == null) _state.value = FlightDetailUiState.Content(session, SeriesState.Loading)
+            val series = cached?.let { Result.success(it) } ?: withContext(io) {
                 runCatching { open(path).use { FlightSeries.read(it) } }
             }
+            if (key != null && cached == null) series.onSuccess { cache.put(key, it) }
             _state.value = FlightDetailUiState.Content(
                 session,
                 series.fold(

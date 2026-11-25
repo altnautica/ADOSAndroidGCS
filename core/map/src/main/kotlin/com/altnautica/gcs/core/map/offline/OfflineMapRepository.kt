@@ -54,6 +54,9 @@ interface OfflineMapRepository {
     /** Reloads both lists from storage. */
     suspend fun refresh(): Result<Unit>
 
+    /** Loads both lists if this process has not loaded them yet; the default reloads every time. */
+    suspend fun ensureLoaded(): Result<Unit> = refresh()
+
     /** Creates a pack for [bounds] over [minZoom]..[maxZoom] and starts downloading it. */
     suspend fun download(name: String, provider: MapProvider, bounds: TileBounds, minZoom: Int, maxZoom: Int): Result<Unit>
 
