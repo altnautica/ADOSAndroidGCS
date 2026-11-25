@@ -5,6 +5,8 @@ app's `versionName`.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-25
+
 - **Tracked movers on the maps.** The pilot's `movers` (people, vehicles and
   things its sensors see move) draw on the cockpit's local minimap and its
   map: a marker shaped and coloured by kind (a person a dot, a vehicle a
@@ -124,6 +126,45 @@ app's `versionName`.
   as they are taken; the debug bench receivers need the adb shell's DUMP
   permission.
 - **lwIP licence** in the in-app licences.
+- **Alert panels explain each setting.** The "What blocks take-off" sheet and
+  the Alerts list draw each alert as a card with its severity, a one-line
+  summary and the parameters that differ. Each parameter row shows the
+  firmware's name for it over the raw name, the current and recommended
+  values with units and their meanings ("Disabled/NoAction → SmartRTL or
+  Land"), and opens to the firmware's description, why ADOS wants the value
+  and whether the flight controller must restart. Each action says what it
+  does before it is pressed: "Review and apply 9 values" shows every change
+  first, and nothing is written until Apply is held.
+- **The selected drone stays connected while the app is open.** The drone
+  chosen on Home keeps its link while the app is on screen (and while it is
+  armed), so Fly, Setup and Parameters open on a live link instead of
+  dialling one. The link notification shows whenever a drone is selected
+  and the app is open. A LAN drone is held on its full-rate video profile
+  while the app is open, so Fly does not wait for the encoder to restart.
+- **Faster first video frame.** A video dial whose ICE has not connected
+  in 3 s, or that connected without a frame in 3 s, is redialled at once
+  instead of after 10 s, and an offer the phone built with no network
+  candidate is replaced before it is sent. Video now appears within about a
+  second of opening Fly, where it could take over 11 s before.
+- **Parameters load once.** Parameter lists are kept in memory and on disk
+  per flight controller. Opening Parameters or Setup shows the last known
+  list at once while a background check confirms it, with a progress bar;
+  the check carries on when the screen is left, and the list download stops
+  waiting as soon as every value has arrived.
+- **Refused keys and network changes.** A drone that refuses this phone's
+  key reads "This drone no longer accepts this phone's key. Pair it again."
+  on Home, with Pair offered, instead of connecting forever. Changing
+  networks drops stale connections and restarts discovery at once; an
+  unreachable node is polled less often, up to once a minute. Discovery
+  prefers a drone's IPv4 address over a link-local IPv6 one.
+- **Fewer reloads.** The cockpit layout is read at app start rather than on
+  the first Fly; Plan no longer reloads the offline maps on every visit; a
+  finished flight's telemetry log is decoded once per session.
+- **Release build video.** The release build kept WebRTC's classes but not
+  its native helper runtime, so opening Fly closed the app; the shrinker now
+  keeps both.
+- **Link service start.** A link that opened and closed at once could close
+  the app; the link service now stops itself only after it has started.
 
 ## [0.7.0] - 2026-11-17
 
