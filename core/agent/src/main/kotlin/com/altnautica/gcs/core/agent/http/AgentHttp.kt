@@ -135,6 +135,16 @@ class AgentHttp @Inject constructor(
         .build()
 
     /**
+     * Close every idle pooled connection, so the next call dials on the current network
+     * instead of reusing a socket bound to one that has gone.
+     */
+    fun evictPools() {
+        lan.connectionPool.evictAll()
+        slow.connectionPool.evictAll()
+        webSocketClient.connectionPool.evictAll()
+    }
+
+    /**
      * Send one request. [slowCall] selects the 15 s budget used for relayed
      * calls and for writes that restart a service on the agent. The body is
      * read on the IO pool, so callers on the main thread (a composable's

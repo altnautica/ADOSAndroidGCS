@@ -212,7 +212,7 @@ private fun HeroContent(
                         card,
                         surfaces(card).firstOrNull { it.surface == HomeSurface.Fly },
                         Modifier.adosMenuAnchor(vehicleMenu),
-                        onPair = if (card.needsPairing) ({ onPair(card.node.id) }) else null,
+                        onPair = if (card.needsPairing || card.keyRefused) ({ onPair(card.node.id) }) else null,
                     )
                 }
             }

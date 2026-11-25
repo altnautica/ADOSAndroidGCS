@@ -4,11 +4,14 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import com.altnautica.gcs.core.agent.net.LanNetworkWatcher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
@@ -19,10 +22,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import java.net.Inet4Address
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -31,11 +40,14 @@ import kotlin.coroutines.resume
  * Continuous DNS-SD browse of `_ados._tcp`. Every found service is resolved
  * (one at a time: older NSD stacks refuse concurrent resolves), its TXT parsed,
  * and the result deduplicated by `device_id`. Browsing runs while [browse] has
- * a collector and holds a Wi-Fi multicast lock for that time.
+ * a collector and holds a Wi-Fi multicast lock for that time. A move to another
+ * network restarts the browse, so services are found on the new one.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class LanDiscovery @Inject constructor(
     @ApplicationContext private val context: Context,
+    watcher: LanNetworkWatcher,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -45,7 +57,18 @@ class LanDiscovery @Inject constructor(
     /** The latest browse result; empty when nothing is browsing. */
     val agents: StateFlow<List<DiscoveredAgent>> = _agents.asStateFlow()
 
-    private val shared: SharedFlow<List<DiscoveredAgent>> = callbackFlow {
+    /** The network the browse runs under: the current one when browsing starts, then each new one. */
+    private val browseNetwork: Flow<Long?> = watcher.network
+        .withIndex()
+        .filter { it.index == 0 || it.value != null }
+        .map { it.value }
+        .distinctUntilChanged()
+
+    private val shared: SharedFlow<List<DiscoveredAgent>> = browseNetwork
+        .flatMapLatest { nsdBrowse() }
+        .shareIn(scope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), replay = 1)
+
+    private fun nsdBrowse(): Flow<List<DiscoveredAgent>> = callbackFlow {
         val nsd = context.getSystemService(Context.NSD_SERVICE) as? NsdManager
         if (nsd == null) {
             Log.w(TAG, "nsd_unavailable")
@@ -82,7 +105,7 @@ class LanDiscovery @Inject constructor(
         val resolver = launch {
             for (service in found) {
                 val resolved = withTimeoutOrNull(RESOLVE_TIMEOUT_MS) { resolve(nsd, service) } ?: continue
-                val host = resolved.host?.hostAddress ?: continue
+                val host = preferredHost(resolved) ?: continue
                 val txt = AgentTxt.parse(resolved.attributes ?: emptyMap())
                 publish(
                     table.upsert(
@@ -103,7 +126,7 @@ class LanDiscovery @Inject constructor(
             table.clear()
             _agents.value = emptyList()
         }
-    }.shareIn(scope, SharingStarted.WhileSubscribed(STOP_GRACE_MS), replay = 1)
+    }
 
     /** Discovered agents, updated as services appear and disappear. */
     fun browse(): Flow<List<DiscoveredAgent>> = shared
@@ -112,6 +135,19 @@ class LanDiscovery @Inject constructor(
     fun findByCode(code: String): DiscoveredAgent? {
         val wanted = PairingCode.normalize(code)
         return _agents.value.firstOrNull { it.code == wanted }
+    }
+
+    /**
+     * The resolved address to dial: IPv4 first, then a global IPv6, then whatever NSD chose.
+     * A scoped link-local IPv6 (`fe80::…%wlan0`) cannot be stored or reused across networks.
+     */
+    @Suppress("DEPRECATION")
+    private fun preferredHost(info: NsdServiceInfo): String? {
+        val all = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) info.hostAddresses else listOfNotNull(info.host)
+        val pick = all.firstOrNull { it is Inet4Address }
+            ?: all.firstOrNull { !it.isLinkLocalAddress && !it.isLoopbackAddress }
+            ?: info.host
+        return pick?.hostAddress
     }
 
     @Suppress("DEPRECATION")

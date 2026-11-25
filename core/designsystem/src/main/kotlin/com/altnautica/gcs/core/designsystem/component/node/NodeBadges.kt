@@ -55,6 +55,7 @@ fun reachLabel(reach: Reach?): Int = when (reach) {
         BlockReason.GrantExpired -> R.string.reach_blocked_grant_expired
         BlockReason.Offline -> R.string.reach_blocked_offline
         BlockReason.ReceiveOnly -> R.string.reach_blocked_receive_only
+        BlockReason.KeyRefused -> R.string.reach_blocked_key_refused
     }
 }
 

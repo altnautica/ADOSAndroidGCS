@@ -27,6 +27,8 @@ data class NodePoll(
      * ([AgentStatusRepository.LAN_MAX_POLL_AGE_MS] or, through a relay, [AgentStatusRepository.RELAY_MAX_POLL_AGE_MS]).
      */
     val maxAgeMs: Long = AgentStatusRepository.LAN_MAX_POLL_AGE_MS,
+    /** The last poll was refused (401/403): the node no longer accepts the stored key. */
+    val keyRefused: Boolean = false,
 )
 
 /** Pure merge of stored credentials, discovery, and status polls into [NodeSummary]s. */
@@ -51,7 +53,8 @@ object LanNodeAssembler {
                 id = cred.id,
                 name = cred.name ?: txt?.name ?: cred.deviceId,
                 profile = profile(poll?.status?.profile ?: txt?.profile ?: cred.profile),
-                reaches = listOf(Reach.Lan),
+                // A refused key leaves no usable reach: the link supervisor stops redialling and Fly asks to pair again.
+                reaches = if (poll?.keyRefused == true) listOf(Reach.Blocked(BlockReason.KeyRefused)) else listOf(Reach.Lan),
                 liveness = liveness(poll?.lastOkMs, nowMs),
                 agentVersion = poll?.agentVersion ?: poll?.status?.version ?: txt?.version,
                 fcVariant = fcVariant(poll?.status),

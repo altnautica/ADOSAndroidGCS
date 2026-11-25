@@ -57,6 +57,8 @@ data class FleetCard(
      * another GCS, or not claimed yet): nothing can reach its agent until it is paired here.
      */
     val needsPairing: Boolean = false,
+    /** The node's agent refuses the key this phone holds: it was paired again elsewhere or reset. */
+    val keyRefused: Boolean = false,
 )
 
 data class HomeUiState(
@@ -200,10 +202,12 @@ class HomeViewModel @Inject constructor(
                 directLinkClosed = vitalsNeedOpenLink(node) && !linkOpen,
                 keptHeardAtMs = keptHeardAtMs,
                 needsPairing = NOT_PAIRED in node.reaches && node.reaches.all { it is Reach.Blocked },
+                keyRefused = KEY_REFUSED in node.reaches,
             )
         }
 
         private val NOT_PAIRED = Reach.Blocked(BlockReason.NotPaired)
+        private val KEY_REFUSED = Reach.Blocked(BlockReason.KeyRefused)
 
         /** No agent reports this node's vitals; they arrive only while its direct flight-controller link is open. */
         fun vitalsNeedOpenLink(node: NodeSummary): Boolean =

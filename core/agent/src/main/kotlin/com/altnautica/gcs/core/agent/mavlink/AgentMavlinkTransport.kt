@@ -4,6 +4,8 @@ import android.util.Log
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.http.AgentEndpoint
 import com.altnautica.gcs.core.agent.http.AgentHttp
+import com.altnautica.gcs.core.agent.net.LanNetworkWatcher
+import com.altnautica.gcs.core.agent.net.awaitWake
 import com.altnautica.gcs.core.model.MavlinkByteTransport
 import com.altnautica.gcs.core.model.NodeSummary
 import com.altnautica.gcs.core.model.Reach
@@ -16,13 +18,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -36,8 +38,10 @@ import javax.inject.Singleton
 
 /**
  * Raw MAVLink over the agent's WebSocket proxy (`ws://<host>:8765/`, binary
- * frames, `X-ADOS-Key` on the handshake). Re-dials with 1 → 10 s backoff until
- * [close]; a refused key ends in [TransportState.Failed].
+ * frames, `X-ADOS-Key` on the handshake). Re-dials with 1 → 3 s backoff until
+ * [close]; a refused key ends in [TransportState.Failed]. A network change
+ * ([kicks]) drops the current socket and ends any backoff, so a socket left on a
+ * network that has gone redials at once.
  *
  * [resolve] is asked for the endpoint before every dial so an address change
  * found by discovery is picked up on reconnect.
@@ -50,6 +54,8 @@ class AgentMavlinkTransport(
     /** Test seam: dial this URL instead of the derived proxy URL. */
     private val wsUrlOverride: String? = null,
     dispatcherScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    /** One emission per phone network change. */
+    private val kicks: Flow<Unit> = emptyFlow(),
 ) : MavlinkByteTransport {
 
     private val scope = dispatcherScope
@@ -70,6 +76,13 @@ class AgentMavlinkTransport(
 
     init {
         scope.launch { run() }
+        scope.launch {
+            kicks.collect {
+                val ws = socket ?: return@collect
+                Log.i(TAG, "ws_kick node=$nodeId")
+                ws.cancel()
+            }
+        }
     }
 
     private suspend fun run() {
@@ -129,8 +142,8 @@ class AgentMavlinkTransport(
             if (wasOpen) backoff = MIN_BACKOFF_MS
             _state.value = TransportState.Connecting
             Log.i(TAG, "ws_retry node=$nodeId in_ms=$backoff")
-            delay(backoff)
-            backoff = (backoff * 2).coerceAtMost(MAX_BACKOFF_MS)
+            val kicked = kicks.awaitWake(backoff)
+            backoff = if (kicked) MIN_BACKOFF_MS else (backoff * 2).coerceAtMost(MAX_BACKOFF_MS)
         }
     }
 
@@ -155,7 +168,7 @@ class AgentMavlinkTransport(
 
     companion object {
         const val MIN_BACKOFF_MS = 1_000L
-        const val MAX_BACKOFF_MS = 10_000L
+        const val MAX_BACKOFF_MS = 3_000L
         const val NORMAL_CLOSE = 1000
         const val UNAUTHORIZED_CLOSE = 4401
         private const val INCOMING_BUFFER = 512
@@ -180,6 +193,7 @@ class AgentMavlinkTransport(
 class AgentMavlinkTransportProvider @Inject constructor(
     private val endpoints: AgentEndpoints,
     private val http: AgentHttp,
+    private val watcher: LanNetworkWatcher,
 ) : TransportProvider {
 
     override fun supports(node: NodeSummary, reach: Reach): Boolean = reach is Reach.Lan || reach is Reach.ViaGround
@@ -190,6 +204,11 @@ class AgentMavlinkTransportProvider @Inject constructor(
             is Reach.ViaGround -> reach.groundId
             else -> throw IllegalArgumentException("unsupported reach $reach")
         }
-        return AgentMavlinkTransport(http.webSocketClient, nodeId = target.value, resolve = { endpoints.endpointFor(target) })
+        return AgentMavlinkTransport(
+            http.webSocketClient,
+            nodeId = target.value,
+            resolve = { endpoints.endpointFor(target) },
+            kicks = watcher.kicks,
+        )
     }
 }

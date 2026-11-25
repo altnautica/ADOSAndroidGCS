@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.agent.node
 
 import android.os.SystemClock
+import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.discovery.DiscoveredAgent
 import com.altnautica.gcs.core.agent.discovery.LanDiscovery
 import com.altnautica.gcs.core.data.vault.CredentialVault
@@ -84,10 +85,14 @@ class LanNodeSource @Inject constructor(
     /** `host:port` discovery last saw [id] at; null when it is not being seen. */
     fun discoveredHost(id: DeviceId): String? = discovery.agents.value.firstOrNull { it.deviceId == id.value }?.hostPort
 
-    /** Persist a paired node's newly discovered address so it is reachable after discovery stops. */
+    /**
+     * Persist a paired node's newly discovered address so it is reachable after discovery stops.
+     * A link-local IPv6 address is not kept: it is meaningless once the phone changes network.
+     */
     private fun rememberAddresses(discovered: List<DiscoveredAgent>) {
         val stored: Map<String, NodeCredential> = vault.nodes.value.associateBy { it.deviceId }
         for (agent in discovered) {
+            if (AgentEndpoints.isLinkLocal(agent.host)) continue
             val cred = stored[agent.deviceId ?: continue] ?: continue
             if (cred.lastIp != agent.host || cred.lastPort != agent.port) {
                 scope.launch { vault.updateAddress(cred.id, agent.host, agent.port) }

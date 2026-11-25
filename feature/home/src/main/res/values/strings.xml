@@ -50,6 +50,7 @@
     <string name="home_reason_no_fc">No flight controller</string>
     <string name="home_reason_no_link">No usable link</string>
     <string name="home_reason_not_paired">Not paired with this phone</string>
+    <string name="home_reason_key_refused">This drone no longer accepts this phone\'s key. Pair it again.</string>
     <string name="home_pair">Pair with this phone</string>
 
     <string name="home_hint_open">Open</string>

@@ -24,10 +24,11 @@ data class SurfaceCard(val surface: HomeSurface, val enabled: Boolean, @param:St
 fun surfaces(card: FleetCard?): List<SurfaceCard> {
     val profile = card?.node?.profile
     val noFc = profile == NodeProfile.Visor || profile == NodeProfile.Workstation
-    val unpaired = card?.needsPairing == true
+    val unpaired = card?.needsPairing == true || card?.keyRefused == true
     val hasFc = card != null && !unpaired && (profile == NodeProfile.Drone || Reach.DirectFc in card.node.reaches)
     val fcReason = when {
         card == null -> R.string.home_reason_no_vehicles
+        card.keyRefused -> R.string.home_reason_key_refused
         unpaired -> R.string.home_reason_not_paired
         else -> R.string.home_reason_no_fc
     }
@@ -47,6 +48,7 @@ fun surfaces(card: FleetCard?): List<SurfaceCard> {
 @StringRes
 private fun flyReason(card: FleetCard?): Int = when {
     card == null -> R.string.home_reason_no_vehicles
+    card.keyRefused -> R.string.home_reason_key_refused
     card.node.liveness == Liveness.Offline -> R.string.home_reason_offline
     card.needsPairing -> R.string.home_reason_not_paired
     card.node.profile == NodeProfile.GroundStation && card.node.carriedDroneId == null -> R.string.home_reason_no_carried

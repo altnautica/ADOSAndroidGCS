@@ -17,7 +17,11 @@ import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.model.StatusFull
 import io.mockk.every
 import kotlinx.coroutines.flow.first
+import com.altnautica.gcs.core.data.vault.NodeCredential
+import com.altnautica.gcs.core.model.BlockReason
+import com.altnautica.gcs.core.model.Reach
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -63,5 +67,24 @@ class AgentStatusRepositoryTest {
     fun `a direct poll keeps the lan age limit`() = runTest {
         assertEquals(AgentStatusRepository.LAN_MAX_POLL_AGE_MS, firstSuccess(client(relayedVia = null)).maxAgeMs)
         assertEquals(12_000L, AgentStatusRepository.LAN_MAX_POLL_AGE_MS)
+    }
+
+    @Test
+    fun `a refused key is reported on the poll and leaves the node blocked`() = runTest {
+        val refusing = mockk<AgentClient> {
+            every { endpoint } returns AgentEndpoint(DeviceId("drone-1"), "http://agent.invalid/".toHttpUrl(), "old-key")
+            coEvery { statusFull() } returns AgentResult.Err(AgentError.Unauthorized)
+        }
+        val clients = mockk<AgentClientFactory> { coEvery { forNode(any()) } returns refusing }
+        val repo = AgentStatusRepository(clients)
+        repo.scope = backgroundScope
+        repo.clock = { 1_000L }
+
+        val poll = repo.observe(DeviceId("drone-1")).first { it.keyRefused }
+        assertTrue(poll.keyRefused)
+
+        val cred = NodeCredential(deviceId = "drone-1", apiKey = "old-key", name = "Drone", lastIp = "192.168.1.50", lastPort = 8080, profile = "drone")
+        val node = LanNodeAssembler.assemble(listOf(cred), emptyList(), mapOf("drone-1" to poll), nowMs = 1_000L).single()
+        assertEquals(listOf<Reach>(Reach.Blocked(BlockReason.KeyRefused)), node.reaches)
     }
 }

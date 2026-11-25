@@ -37,7 +37,8 @@ sealed interface Reach {
     data class Blocked(val reason: BlockReason) : Reach
 }
 
-enum class BlockReason { NotPaired, CloudDisabled, SignedOut, NoGrant, GrantExpired, Offline, ReceiveOnly }
+/** Why a known node cannot be reached. [KeyRefused]: the node rejects the key this phone stored at pairing. */
+enum class BlockReason { NotPaired, CloudDisabled, SignedOut, NoGrant, GrantExpired, Offline, ReceiveOnly, KeyRefused }
 
 data class NodeSummary(
     val id: DeviceId,

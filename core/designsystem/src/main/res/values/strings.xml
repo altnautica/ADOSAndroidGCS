@@ -13,6 +13,7 @@
     <string name="reach_blocked_grant_expired">ACCESS EXPIRED</string>
     <string name="reach_blocked_offline">OFFLINE</string>
     <string name="reach_blocked_receive_only">RECEIVE ONLY</string>
+    <string name="reach_blocked_key_refused">KEY REFUSED</string>
     <string name="reach_none">NO LINK</string>
     <string name="liveness_live">Live</string>
     <string name="liveness_stale">Stale</string>
