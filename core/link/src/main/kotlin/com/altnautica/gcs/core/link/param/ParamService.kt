@@ -49,8 +49,14 @@ interface ParamService {
     val snapshot: StateFlow<ParamSnapshot>
     val loading: StateFlow<Boolean>
 
-    /** Downloads the full list (`PARAM_REQUEST_LIST`), re-requesting missing indices. */
-    suspend fun refresh(): ParamLoadResult
+    /** The values came from the cache and no list download has confirmed them on this link yet. */
+    val fromCache: StateFlow<Boolean>
+
+    /**
+     * Downloads the full list (`PARAM_REQUEST_LIST`), re-requesting missing indices.
+     * [clear] drops the known values first; otherwise they stay visible while the download confirms them.
+     */
+    suspend fun refresh(clear: Boolean = false): ParamLoadResult
 
     /** Writes [name] and waits for the matching `PARAM_VALUE`. */
     suspend fun set(name: String, value: Double): ParamSetResult

@@ -2,6 +2,7 @@ package com.altnautica.gcs.feature.configure.params
 
 import com.altnautica.gcs.core.link.param.ParamLoadResult
 import com.altnautica.gcs.core.link.param.ParamSetResult
+import com.altnautica.gcs.core.link.param.ParamSnapshot
 import com.altnautica.gcs.core.link.param.ParamValue
 import com.altnautica.gcs.core.model.CommandResult
 import com.altnautica.gcs.core.model.DeviceId
@@ -48,7 +49,8 @@ class ParametersViewModelTest {
 
     private var clock = 0L
 
-    private fun vm() = ParametersViewModel(DeviceId("d"), ConfigureTargetSource { target }, { clock }, flowOf(Unit)) { key ->
+    // State is computed on the main dispatcher here so it is current when each assertion reads it.
+    private fun vm() = ParametersViewModel(DeviceId("d"), ConfigureTargetSource { target }, { clock }, flowOf(Unit), Dispatchers.Main.immediate) { key ->
         requestedKey = key
         metadata
     }
@@ -60,11 +62,19 @@ class ParametersViewModelTest {
         val vm = vm()
         assertEquals(ParametersUiState.NoVehicle, vm.state.value)
 
-        val params = FakeParamService(mapOf("RATE" to 5.0), complete = false).apply { loading.value = true }
+        val params = FakeParamService(emptyMap(), complete = false).apply { loading.value = true }
         target.value = FakeVehicle(vehicleType = 13).target(params)
-        assertEquals(1, params.refreshes)
+        assertEquals(listOf(false), params.refreshClears)
         assertTrue(vm.state.value is ParametersUiState.Loading)
         assertEquals("ardupilot-copter", requestedKey)
+
+        // Values already received show while the rest download.
+        params.snapshot.value = ParamSnapshot(3, 1, FakeParamService.snapshotOf(mapOf("RATE" to 6.0)).values)
+        content(vm).let {
+            assertTrue(it.loading)
+            assertEquals(1, it.received)
+            assertEquals(3, it.count)
+        }
 
         params.snapshot.value = FakeParamService.snapshotOf(mapOf("RATE" to 7.0, "ADV" to 1.0, "REBOOT" to 0.0))
         params.loading.value = false
@@ -361,5 +371,43 @@ class ParametersViewModelTest {
         assertFalse(vm.rebootPending.value)
         vm.markRebootNeeded()
         assertTrue(vm.rebootPending.value)
+    }
+
+    @Test
+    fun aCachedListShowsAtOnceAndIsCheckedWithoutClearing() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0)).apply { fromCache.value = true }
+        target.value = FakeVehicle().target(params)
+        assertEquals(listOf(false), params.refreshClears)
+        assertTrue(content(vm).fromCache)
+
+        // The download confirmed the list; nothing more runs.
+        params.fromCache.value = false
+        assertFalse(content(vm).fromCache)
+        assertEquals(listOf(false), params.refreshClears)
+
+        // The flight controller came back after a silence: check again.
+        params.fromCache.value = true
+        assertEquals(listOf(false, false), params.refreshClears)
+    }
+
+    @Test
+    fun aConfirmedCompleteListIsNotDownloadedAgain() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0))
+        target.value = FakeVehicle().target(params)
+        assertTrue(params.refreshClears.isEmpty())
+        assertEquals(listOf("RATE"), content(vm).rows.map { it.name })
+    }
+
+    @Test
+    fun aFailedCheckKeepsTheCachedListOnScreen() = runTest(dispatcher) {
+        val vm = vm()
+        val params = FakeParamService(mapOf("RATE" to 5.0), complete = false).apply {
+            fromCache.value = true
+            refreshResult = ParamLoadResult.Failed("noFcLink")
+        }
+        target.value = FakeVehicle().target(params)
+        assertEquals(listOf("RATE"), content(vm).rows.map { it.name })
     }
 }

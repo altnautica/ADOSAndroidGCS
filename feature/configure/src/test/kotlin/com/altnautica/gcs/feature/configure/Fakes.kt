@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeParamService(values: Map<String, Double> = emptyMap(), complete: Boolean = true) : ParamService {
     val writes = mutableListOf<Pair<String, Double>>()
-    var refreshes = 0
     var nextSet: ((String, Double) -> ParamSetResult)? = null
 
     /** When set, every write suspends until it completes (an echo still on its way). */
@@ -31,9 +30,14 @@ class FakeParamService(values: Map<String, Double> = emptyMap(), complete: Boole
         if (complete) snapshotOf(values) else ParamSnapshot(values.size + 10, values.size, snapshotOf(values).values),
     )
     override val loading = MutableStateFlow(false)
+    override val fromCache = MutableStateFlow(false)
 
-    override suspend fun refresh(): ParamLoadResult {
-        refreshes++
+    /** The `clear` argument of every [refresh] call, in order. */
+    val refreshClears = mutableListOf<Boolean>()
+    val refreshes: Int get() = refreshClears.size
+
+    override suspend fun refresh(clear: Boolean): ParamLoadResult {
+        refreshClears += clear
         return refreshResult
     }
 

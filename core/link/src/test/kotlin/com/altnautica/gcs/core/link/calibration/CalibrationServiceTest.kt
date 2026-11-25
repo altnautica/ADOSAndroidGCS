@@ -283,8 +283,9 @@ class CalibrationServiceTest {
                 .let { ParamSnapshot(it.size, it.size, it) },
         )
         override val loading = MutableStateFlow(false)
+        override val fromCache = MutableStateFlow(false)
 
-        override suspend fun refresh() = ParamLoadResult.Complete(snapshot.value.count)
+        override suspend fun refresh(clear: Boolean) = ParamLoadResult.Complete(snapshot.value.count)
 
         override suspend fun set(name: String, value: Double): ParamSetResult {
             writes += name to value

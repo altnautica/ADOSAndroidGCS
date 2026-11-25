@@ -35,6 +35,8 @@
 
     <!-- Parameters -->
     <string name="cfg_param_loading">Loading parameters %1$d of %2$d</string>
+    <string name="params_syncing">Checking values with the flight controller… %1$d/%2$d</string>
+    <string name="params_loading_more">Loading parameters… %1$d/%2$d</string>
     <string name="cfg_param_load_failed">Parameters could not be loaded: %1$s</string>
     <string name="cfg_param_search">Search parameters</string>
     <string name="cfg_param_refresh">Reload parameters</string>

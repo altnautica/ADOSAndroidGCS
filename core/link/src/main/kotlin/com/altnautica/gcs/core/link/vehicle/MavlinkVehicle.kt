@@ -16,6 +16,7 @@ import com.altnautica.gcs.core.link.mavlink.TransportMavlinkLink
 import com.altnautica.gcs.core.link.mission.MavlinkMissionService
 import com.altnautica.gcs.core.link.mission.MissionService
 import com.altnautica.gcs.core.link.param.MavlinkParamService
+import com.altnautica.gcs.core.link.param.ParamCache
 import com.altnautica.gcs.core.link.param.ParamService
 import com.altnautica.gcs.core.link.services.VehicleServices
 import com.altnautica.gcs.core.mavlink.enums.MavCmd
@@ -59,6 +60,7 @@ class MavlinkVehicle(
     parent: CoroutineScope,
     clock: ElapsedClock,
     activity: LinkActivity?,
+    paramCache: ParamCache? = null,
 ) : Vehicle, VehicleServices {
 
     internal val scope = CoroutineScope(parent.coroutineContext + SupervisorJob(parent.coroutineContext[Job]))
@@ -79,7 +81,7 @@ class MavlinkVehicle(
         .map { it?.family }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    override val params: ParamService = MavlinkParamService(scope, link)
+    override val params: ParamService = MavlinkParamService(scope, link, paramCache, id)
     override val mission: MissionService =
         MavlinkMissionService(link, commands, mavTelemetry.home) { mavTelemetry.knownMissionCount = it }
     override val calibration: CalibrationService = MavlinkCalibrationService(scope, link, commands, params)

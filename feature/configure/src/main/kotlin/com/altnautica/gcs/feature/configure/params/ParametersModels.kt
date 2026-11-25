@@ -84,5 +84,11 @@ sealed interface ParametersUiState {
         val loading: Boolean,
         /** The newest heartbeat is younger than the shared freshness limit. */
         val linkFresh: Boolean,
+        /** Indices confirmed by the running or last list download, of [count]. */
+        val received: Int = 0,
+        /** The flight controller's `param_count`; 0 until known. */
+        val count: Int = 0,
+        /** The values come from the cache and the flight controller has not confirmed them yet. */
+        val fromCache: Boolean = false,
     ) : ParametersUiState
 }

@@ -3,6 +3,7 @@ package com.altnautica.gcs.core.link.vehicle
 import com.altnautica.gcs.core.agent.telemetry.TelemetrySnapshotSource
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
+import com.altnautica.gcs.core.link.param.ParamCache
 import com.altnautica.gcs.core.link.queue.QueuedCommandSink
 import com.altnautica.gcs.core.link.queue.QueuedVehicle
 import com.altnautica.gcs.core.model.CommandResult
@@ -67,6 +68,7 @@ class QueuedRoutingTest {
             activity = LinkActivity(),
             replays = ReplayVehicles(clock, scope),
             clock = clock,
+            paramCache = ParamCache(kotlin.io.path.createTempDirectory("param-cache").toFile(), scope),
             scope = scope,
         )
     }

@@ -52,10 +52,11 @@ data class NodeVitals(
 }
 
 /**
- * Per-node vitals without opening or holding a link the operator did not ask
- * for: agent nodes read the shared status poll (a drone known only through
- * its ground station reads the station's summary of it); direct links read a
- * vehicle only while some other observer (the cockpit) already holds it open.
+ * Per-node vitals without opening or holding a link of its own: agent nodes
+ * read the shared status poll (a drone known only through its ground station
+ * reads the station's summary of it); direct links read a vehicle only while
+ * some other observer already holds it open (the cockpit, or the app-wide
+ * holder that keeps the selected drone's link open while the app is on screen).
  */
 @Singleton
 class NodeVitalsRepository @Inject constructor(

@@ -19,6 +19,8 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -26,11 +28,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
@@ -44,13 +49,14 @@ class ParametersViewModel internal constructor(
     targets: ConfigureTargetSource,
     private val now: () -> Long,
     ticks: Flow<Unit>,
+    compute: CoroutineDispatcher,
     private val metadataFor: suspend (String) -> ParamMetadataSet?,
 ) : ViewModel() {
     @AssistedInject constructor(
         @Assisted nodeId: String,
         targets: ConfigureTargetSource,
         metadata: ParamMetadataRepository,
-    ) : this(DeviceId(nodeId), targets, SystemClock::elapsedRealtime, secondTicks(), metadata::load)
+    ) : this(DeviceId(nodeId), targets, SystemClock::elapsedRealtime, secondTicks(), Dispatchers.Default, metadata::load)
 
     @AssistedFactory
     interface Factory {
@@ -91,8 +97,11 @@ class ParametersViewModel internal constructor(
         .mapLatest { key -> key?.let { metadataFor(it) } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val snapshot: Flow<Pair<ParamSnapshot, Boolean>> = target.flatMapLatest { t ->
-        t?.let { combine(it.params.snapshot, it.params.loading) { s, l -> s to l } } ?: flowOf(ParamSnapshot.EMPTY to false)
+    private data class ListState(val snapshot: ParamSnapshot, val loading: Boolean, val fromCache: Boolean)
+
+    private val snapshot: Flow<ListState> = target.flatMapLatest { t ->
+        t?.let { combine(it.params.snapshot, it.params.loading, it.params.fromCache) { s, l, c -> ListState(s, l, c) } }
+            ?: flowOf(ListState(ParamSnapshot.EMPTY, loading = false, fromCache = false))
     }
 
     private data class VehicleInfo(val armed: Boolean, val mavType: Int?, val fresh: Boolean)
@@ -106,13 +115,14 @@ class ParametersViewModel internal constructor(
         metadata,
         filter,
         vehicleInfo,
-    ) { (t, snap, error), meta, f, info ->
-        val (s, loading) = snap
+    ) { (t, list, error), meta, f, info ->
+        val (s, loading, fromCache) = list
         when {
             t == null -> ParametersUiState.NoVehicle
-            // Values the FC broadcasts on its own (a changed parameter) are not a loaded list.
-            !s.complete && error != null -> ParametersUiState.LoadFailed(error)
-            !s.complete && (loading || s.values.isEmpty()) -> ParametersUiState.Loading(s.received, s.count)
+            // Values the FC broadcasts on its own (a changed parameter) are not a loaded list;
+            // a cached list stays on screen when the check against the FC fails.
+            !s.complete && error != null && !fromCache -> ParametersUiState.LoadFailed(error)
+            s.values.isEmpty() -> ParametersUiState.Loading(s.received, s.count)
             else -> {
                 val all = s.values.values.map { ParamRow(it.name, it.value, it.type, meta?.get(it.name)) }
                 ParametersUiState.Content(
@@ -125,16 +135,27 @@ class ParametersViewModel internal constructor(
                     hasMetadata = meta != null,
                     loading = loading,
                     linkFresh = info.fresh,
+                    received = s.received,
+                    count = s.count,
+                    fromCache = fromCache,
                 )
             }
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, ParametersUiState.NoVehicle)
+    }.flowOn(compute).stateIn(viewModelScope, SharingStarted.Eagerly, ParametersUiState.NoVehicle)
+
+    /** Refreshes this view model started and has not finished; touched on the main thread only. */
+    private var refreshing = 0
 
     init {
         viewModelScope.launch {
-            // Load once per newly attached vehicle unless its list is already complete.
-            target.filterNotNull().distinctUntilChanged { a, b -> a.params === b.params }.collect { t ->
-                if (!t.params.snapshot.value.complete) refreshWith(t)
+            // Sync per newly attached vehicle while its list is incomplete or known only from the cache.
+            // The level stays true during a sync, so a sync never triggers the next one.
+            target.filterNotNull().distinctUntilChanged { a, b -> a.params === b.params }.collectLatest { t ->
+                combine(t.params.snapshot.map { it.complete }, t.params.fromCache) { complete, cached -> !complete || cached }
+                    .distinctUntilChanged()
+                    .filter { it }
+                    // A refresh asked for on screen drops the list's coverage while it runs; that is no new trigger.
+                    .collect { if (refreshing == 0) refreshWith(t) }
             }
         }
     }
@@ -158,11 +179,16 @@ class ParametersViewModel internal constructor(
     }
 
     private suspend fun refreshWith(t: ConfigureTarget) {
-        loadError.value = null
-        when (val r = t.params.refresh()) {
-            is ParamLoadResult.Complete -> Unit
-            is ParamLoadResult.Incomplete -> _message.value = ParamMessage.LoadIncomplete(r.missing)
-            is ParamLoadResult.Failed -> loadError.value = r.reason
+        refreshing++
+        try {
+            loadError.value = null
+            when (val r = t.params.refresh(clear = false)) {
+                is ParamLoadResult.Complete -> Unit
+                is ParamLoadResult.Incomplete -> _message.value = ParamMessage.LoadIncomplete(r.missing)
+                is ParamLoadResult.Failed -> loadError.value = r.reason
+            }
+        } finally {
+            refreshing--
         }
     }
 

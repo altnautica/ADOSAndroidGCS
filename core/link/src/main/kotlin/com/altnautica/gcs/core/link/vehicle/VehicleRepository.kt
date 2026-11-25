@@ -5,6 +5,7 @@ import com.altnautica.gcs.core.agent.telemetry.TelemetrySnapshotSource
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.link.di.LinkScope
 import com.altnautica.gcs.core.link.mavlink.ElapsedClock
+import com.altnautica.gcs.core.link.param.ParamCache
 import com.altnautica.gcs.core.link.queue.QueuedCommandSink
 import com.altnautica.gcs.core.link.queue.QueuedVehicle
 import com.altnautica.gcs.core.link.services.VehicleServices
@@ -63,7 +64,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * [NodeSummary.reaches] that some provider supports). When the transport
  * fails, or the vehicle stops sending while another reach exists, the link
  * falls to the next reach after 3 s; while on a worse reach the best one is
- * probed every 10 s and taken back when it opens. The link closes 5 s after
+ * probed every 10 s and taken back when it opens. The link closes 30 s after
  * the last observer leaves.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -77,6 +78,7 @@ class VehicleRepository @Inject constructor(
     private val activity: LinkActivity,
     private val replays: ReplayVehicles,
     private val clock: ElapsedClock,
+    private val paramCache: ParamCache,
     @param:LinkScope private val scope: CoroutineScope,
 ) : VehicleProvider, VehicleServicesProvider {
 
@@ -166,7 +168,7 @@ class VehicleRepository @Inject constructor(
                         }
                     }
                     Kind.Mavlink -> {
-                        val v = MavlinkVehicle(id, this, clock, activity)
+                        val v = MavlinkVehicle(id, this, clock, activity, paramCache)
                         vault.mavlinkSigningKey(id)?.let { key -> v.link.signing = MavlinkSigning(key, linkId = 0) }
                         send(v)
                         try {
@@ -334,7 +336,7 @@ class VehicleRepository @Inject constructor(
     private fun TransportState.isTerminal() = this is TransportState.Closed || this is TransportState.Failed
 
     companion object {
-        const val KEEP_OPEN_MS = 5_000L
+        const val KEEP_OPEN_MS = 30_000L
         const val FALLBACK_DELAY_MS = 3_000L
         const val UPGRADE_PROBE_MS = 10_000L
         const val PROBE_OPEN_MS = 5_000L

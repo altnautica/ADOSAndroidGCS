@@ -139,6 +139,7 @@ fun ParametersListPane(
                     color = colors.fgTertiary,
                     modifier = Modifier.padding(horizontal = AdosSpacing.S4),
                 )
+                if (state.loading) SyncLine(state)
                 LazyColumn(Modifier.fillMaxSize(), state = listState) {
                     state.rows.grouped().forEach { (group, rows) ->
                         stickyHeader(key = "group-$group") { GroupHeader(group) }
@@ -148,6 +149,28 @@ fun ParametersListPane(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Download progress over a list already on screen: confirming cached values, or filling in the rest. */
+@Composable
+private fun SyncLine(state: ParametersUiState.Content) {
+    val colors = AdosTheme.colors
+    val text = if (state.fromCache) R.string.params_syncing else R.string.params_loading_more
+    Column(Modifier.fillMaxWidth().padding(horizontal = AdosSpacing.S4, vertical = AdosSpacing.S1)) {
+        Text(
+            stringResource(text, state.received, state.count),
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.fgSecondary,
+        )
+        if (state.count > 0) {
+            LinearProgressIndicator(
+                progress = { (state.received / state.count.toFloat()).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().padding(top = AdosSpacing.S1),
+            )
+        } else {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = AdosSpacing.S1))
         }
     }
 }
