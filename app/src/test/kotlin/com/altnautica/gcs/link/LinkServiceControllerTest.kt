@@ -18,17 +18,13 @@ class LinkServiceControllerTest {
         override fun start() {
             calls += "start"
         }
-
-        override fun stop() {
-            calls += "stop"
-        }
     }
 
     private val a = OpenLink(DeviceId("a"), Reach.Lan)
     private val b = OpenLink(DeviceId("b"), Reach.DirectFc)
 
     @Test
-    fun startsOnFirstLinkStopsOnLastAndNeverAtBoot() = runTest(UnconfinedTestDispatcher()) {
+    fun startsOnEachFirstLinkNeverStopsAndNeverAtBoot() = runTest(UnconfinedTestDispatcher()) {
         val links = MutableStateFlow<List<OpenLink>>(emptyList())
         val recorder = Recorder()
         LinkServiceController(links, recorder).start(backgroundScope)
@@ -40,10 +36,21 @@ class LinkServiceControllerTest {
         assertEquals(listOf("start"), recorder.calls)
 
         links.value = emptyList()
-        assertEquals(listOf("start", "stop"), recorder.calls)
+        assertEquals(listOf("start"), recorder.calls)
 
         links.value = listOf(b)
-        assertEquals(listOf("start", "stop", "start"), recorder.calls)
+        assertEquals(listOf("start", "start"), recorder.calls)
+    }
+
+    @Test
+    fun aLinkThatOpensAndClosesAtOnceOnlyStarts() = runTest(UnconfinedTestDispatcher()) {
+        val links = MutableStateFlow<List<OpenLink>>(emptyList())
+        val recorder = Recorder()
+        LinkServiceController(links, recorder).start(backgroundScope)
+
+        links.value = listOf(a)
+        links.value = emptyList()
+        assertEquals(listOf("start"), recorder.calls)
     }
 
     @Test

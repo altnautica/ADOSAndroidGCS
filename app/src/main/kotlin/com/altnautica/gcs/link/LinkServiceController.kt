@@ -14,10 +14,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-/** Starts or stops the foreground service. Split out so the policy is testable without Android. */
+/** Starts the foreground service. Split out so the policy is testable without Android. */
 interface LinkServiceStarter {
     fun start()
-    fun stop()
 }
 
 class AndroidLinkServiceStarter @Inject constructor(@ApplicationContext private val context: Context) : LinkServiceStarter {
@@ -29,14 +28,12 @@ class AndroidLinkServiceStarter @Inject constructor(@ApplicationContext private 
             android.util.Log.w("LinkService", "start refused while in background", e)
         }
     }
-    override fun stop() {
-        context.stopService(Intent(context, LinkService::class.java))
-    }
 }
 
 /**
- * Keeps [LinkService] running exactly while at least one vehicle link is open:
- * the first link starts it, the last link closing stops it.
+ * Starts [LinkService] when the first vehicle link opens; the service stops itself once no
+ * link is open, after it has entered the foreground, so a link that opens and closes at once
+ * never stops a service that has not started.
  */
 @Singleton
 class LinkServiceController internal constructor(
@@ -49,12 +46,8 @@ class LinkServiceController internal constructor(
     fun start(scope: CoroutineScope) {
         scope.launch {
             openLinks.map { it.isNotEmpty() }.distinctUntilChanged().collect { anyOpen ->
-                // The first emission is the cold state; with no link there is nothing to stop.
-                if (anyOpen) starter.start() else if (started) starter.stop()
-                started = anyOpen
+                if (anyOpen) starter.start()
             }
         }
     }
-
-    private var started = false
 }

@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.agent.mavlink
 
+import android.util.Log
 import com.altnautica.gcs.core.agent.AgentEndpoints
 import com.altnautica.gcs.core.agent.http.AgentEndpoint
 import com.altnautica.gcs.core.agent.http.AgentHttp
@@ -43,6 +44,8 @@ import javax.inject.Singleton
  */
 class AgentMavlinkTransport(
     private val client: OkHttpClient,
+    /** The node this link reaches; for logs only. */
+    private val nodeId: String,
     private val resolve: suspend () -> AgentEndpoint?,
     /** Test seam: dial this URL instead of the derived proxy URL. */
     private val wsUrlOverride: String? = null,
@@ -75,6 +78,7 @@ class AgentMavlinkTransport(
             _state.value = TransportState.Connecting
             val endpoint = resolve()
             if (endpoint == null) {
+                Log.w(TAG, "ws_no_endpoint node=$nodeId")
                 _state.value = TransportState.Failed("node is not paired or has no known address")
                 return
             }
@@ -86,6 +90,7 @@ class AgentMavlinkTransport(
                 request,
                 object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: Response) {
+                        Log.i(TAG, "ws_open node=$nodeId url=${request.url}")
                         _state.value = TransportState.Open
                     }
 
@@ -94,16 +99,19 @@ class AgentMavlinkTransport(
                     }
 
                     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                        Log.i(TAG, "ws_closed node=$nodeId code=$code reason=$reason")
                         webSocket.close(NORMAL_CLOSE, null)
                         ended.complete(if (code == UNAUTHORIZED_CLOSE) DialEnd.Refused else DialEnd.Dropped(reason))
                     }
 
                     override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                        Log.i(TAG, "ws_closed node=$nodeId code=$code reason=$reason")
                         ended.complete(if (code == UNAUTHORIZED_CLOSE) DialEnd.Refused else DialEnd.Dropped(reason))
                     }
 
                     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                         val code = response?.code
+                        Log.w(TAG, "ws_failure node=$nodeId code=$code error=${t.message}")
                         ended.complete(if (code == 401 || code == 403) DialEnd.Refused else DialEnd.Dropped(t.message))
                     }
                 },
@@ -114,11 +122,13 @@ class AgentMavlinkTransport(
             socket = null
             if (closed) break
             if (end is DialEnd.Refused) {
+                Log.w(TAG, "ws_refused node=$nodeId")
                 _state.value = TransportState.Failed("the node refused this device's key")
                 return
             }
             if (wasOpen) backoff = MIN_BACKOFF_MS
             _state.value = TransportState.Connecting
+            Log.i(TAG, "ws_retry node=$nodeId in_ms=$backoff")
             delay(backoff)
             backoff = (backoff * 2).coerceAtMost(MAX_BACKOFF_MS)
         }
@@ -149,6 +159,7 @@ class AgentMavlinkTransport(
         const val NORMAL_CLOSE = 1000
         const val UNAUTHORIZED_CLOSE = 4401
         private const val INCOMING_BUFFER = 512
+        private const val TAG = "AdosLink"
 
         /** `ws://<host>:8765/` for the agent behind [endpoint] (the control port is not reused). */
         fun wsUrl(endpoint: AgentEndpoint): String {
@@ -179,6 +190,6 @@ class AgentMavlinkTransportProvider @Inject constructor(
             is Reach.ViaGround -> reach.groundId
             else -> throw IllegalArgumentException("unsupported reach $reach")
         }
-        return AgentMavlinkTransport(http.webSocketClient, resolve = { endpoints.endpointFor(target) })
+        return AgentMavlinkTransport(http.webSocketClient, nodeId = target.value, resolve = { endpoints.endpointFor(target) })
     }
 }

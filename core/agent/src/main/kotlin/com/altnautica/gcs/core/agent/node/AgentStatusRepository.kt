@@ -1,6 +1,7 @@
 package com.altnautica.gcs.core.agent.node
 
 import android.os.SystemClock
+import android.util.Log
 import com.altnautica.gcs.core.agent.AgentClientFactory
 import com.altnautica.gcs.core.agent.http.AgentResult
 import com.altnautica.gcs.core.agent.http.AgentHttp
@@ -48,9 +49,14 @@ class AgentStatusRepository @Inject constructor(
     private fun poll(node: DeviceId): Flow<NodePoll> = flow {
         var last = NodePoll(status = null, lastOkMs = null, carriedDroneId = null, agentVersion = null)
         emit(last)
+        // Logged once per change, not every poll.
+        var warnedNoEndpoint = false
+        var lastError: String? = null
         while (true) {
             val client = clients.forNode(node)
             val relayed = client?.endpoint?.isRelayed == true
+            if (client == null && !warnedNoEndpoint) Log.w(TAG, "status_no_endpoint node=${node.value}")
+            warnedNoEndpoint = client == null
             if (client != null) {
                 when (val r = client.statusFull()) {
                     is AgentResult.Ok -> {
@@ -62,8 +68,13 @@ class AgentStatusRepository @Inject constructor(
                         }
                         val version = client.version().getOrNull()?.agentVersion
                         last = NodePoll(status, clock(), paired?.deviceId, version ?: status.version, paired)
+                        lastError = null
                     }
-                    is AgentResult.Err -> Unit
+                    is AgentResult.Err -> {
+                        val error = r.error.toString()
+                        if (error != lastError) Log.w(TAG, "status_err node=${node.value} err=$error")
+                        lastError = error
+                    }
                 }
                 last = last.copy(maxAgeMs = if (relayed) RELAY_MAX_POLL_AGE_MS else LAN_MAX_POLL_AGE_MS)
                 emit(last)
@@ -76,6 +87,7 @@ class AgentStatusRepository @Inject constructor(
         const val LAN_INTERVAL_MS = 3_000L
         const val RELAY_INTERVAL_MS = 10_000L
         const val STOP_GRACE_MS = 5_000L
+        private const val TAG = "AdosLink"
 
         /**
          * Oldest poll still shown as current: two status intervals plus one request timeout,

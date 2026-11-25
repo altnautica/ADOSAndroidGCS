@@ -107,6 +107,8 @@ class WhepSession(
                 Outcome.Lost, Outcome.Flowed, Outcome.Redecode -> Unit
                 Outcome.Failed -> {
                     if (_state.value !is VideoState.Failed) _state.value = VideoState.Failed("Connection failed")
+                    val reason = (_state.value as? VideoState.Failed)?.reason
+                    Log.w(LINK_TAG, "whep_failed base=${source.baseUrl} stream=${source.streamId} reason=$reason")
                     delay(backoff.nextDelayMs())
                 }
             }
@@ -197,6 +199,7 @@ class WhepSession(
         const val FIRST_FRAME_TIMEOUT_MS = 10_000L
         private const val STATS_INTERVAL_MS = 1_000L
         private const val TAG = "VideoStats"
+        private const val LINK_TAG = "AdosLink"
         private const val TICK_MS = 250L
     }
 }

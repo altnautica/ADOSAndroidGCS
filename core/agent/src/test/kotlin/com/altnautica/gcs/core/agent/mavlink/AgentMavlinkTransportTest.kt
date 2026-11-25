@@ -49,7 +49,7 @@ class AgentMavlinkTransportTest {
             ).build(),
         )
         // The test server listens on one port; point the transport straight at it.
-        val transport = AgentMavlinkTransport(OkHttpClient(), resolve = { endpoint() }, wsUrlOverride = server.url("/").toString().replaceFirst("http", "ws"))
+        val transport = AgentMavlinkTransport(OkHttpClient(), nodeId = "n", resolve = { endpoint() }, wsUrlOverride = server.url("/").toString().replaceFirst("http", "ws"))
         withTimeout(5_000) {
             transport.state.first { it == TransportState.Open }
             val echoed = async(start = CoroutineStart.UNDISPATCHED) { transport.incoming.first() }
@@ -64,7 +64,7 @@ class AgentMavlinkTransportTest {
     @Test
     fun `refused key fails without retrying`() = runBlocking {
         server.enqueue(MockResponse.Builder().code(401).build())
-        val transport = AgentMavlinkTransport(OkHttpClient(), resolve = { endpoint() }, wsUrlOverride = server.url("/").toString().replaceFirst("http", "ws"))
+        val transport = AgentMavlinkTransport(OkHttpClient(), nodeId = "n", resolve = { endpoint() }, wsUrlOverride = server.url("/").toString().replaceFirst("http", "ws"))
         withTimeout(5_000) { transport.state.first { it is TransportState.Failed } }
         assertEquals(1, server.requestCount)
         assertTrue(transport.write(byteArrayOf(1)) is WriteResult.Failed)
@@ -73,7 +73,7 @@ class AgentMavlinkTransportTest {
 
     @Test
     fun `unpaired node fails immediately`() = runBlocking {
-        val transport = AgentMavlinkTransport(OkHttpClient(), resolve = { null })
+        val transport = AgentMavlinkTransport(OkHttpClient(), nodeId = "n", resolve = { null })
         withTimeout(5_000) { transport.state.first { it is TransportState.Failed } }
         transport.close()
     }

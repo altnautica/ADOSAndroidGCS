@@ -62,6 +62,16 @@ class LinkService : LifecycleService() {
 
     @Inject lateinit var spec: CockpitSpecRepository
 
+    /** The notification last posted; re-posted by every start command to satisfy its foreground promise. */
+    private var current: Notification? = null
+
+    /**
+     * The newest start id. The service stops itself only with this id, so a stop raced by a
+     * newer `startForegroundService` is refused by the system instead of killing a service that
+     * still owes its foreground start.
+     */
+    private var lastStartId = 0
+
     override fun onCreate() {
         super.onCreate()
         ensureChannel(this)
@@ -69,9 +79,12 @@ class LinkService : LifecycleService() {
         lifecycleScope.launch {
             combine(lines(), stops.available, ::Pair).collect { (lines, controls) ->
                 if (lines.isEmpty() && vehicles.openLinks.value.isEmpty()) {
-                    stopSelf()
+                    // Before the first start command the id is unknown; onStartCommand stops then.
+                    if (lastStartId > 0) stopSelf(lastStartId)
                 } else {
-                    getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, build(lines, controls))
+                    val notification = build(lines, controls)
+                    current = notification
+                    getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, notification)
                     notificationControls.posted = controls
                 }
             }
@@ -85,6 +98,9 @@ class LinkService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        lastStartId = startId
+        // Every foreground start must be answered with startForeground, also when the service already runs.
+        current?.let(::startInForeground)
         if (intent?.action == ACTION_DISCONNECT) {
             lifecycleScope.launch {
                 vehicles.openLinks.value.forEach { vehicles.disconnect(it.id) }
@@ -92,6 +108,8 @@ class LinkService : LifecycleService() {
         }
         // A stop control from the notification runs in the open cockpit, here on the main thread.
         StopAction.of(intent?.action)?.let { stops.run(it.builtinId) }
+        // A link that opened and closed before this command arrived: stop now, after the foreground start.
+        if (vehicles.openLinks.value.isEmpty()) stopSelf(startId)
         return START_NOT_STICKY
     }
 
@@ -171,6 +189,7 @@ class LinkService : LifecycleService() {
     }
 
     private fun startInForeground(notification: Notification) {
+        current = notification
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0
         try {
             ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type)

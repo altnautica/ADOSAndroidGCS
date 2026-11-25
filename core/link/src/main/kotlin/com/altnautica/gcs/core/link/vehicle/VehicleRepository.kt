@@ -1,5 +1,6 @@
 package com.altnautica.gcs.core.link.vehicle
 
+import android.util.Log
 import com.altnautica.gcs.core.agent.telemetry.TelemetrySnapshotSource
 import com.altnautica.gcs.core.data.vault.CredentialVault
 import com.altnautica.gcs.core.link.di.LinkScope
@@ -204,7 +205,7 @@ class VehicleRepository @Inject constructor(
     }
 
     private sealed interface Outcome {
-        data object Failed : Outcome
+        data class Failed(val why: String) : Outcome
         data object Upgrade : Outcome
         data object ReachesChanged : Outcome
     }
@@ -224,6 +225,7 @@ class VehicleRepository @Inject constructor(
             val node = nodes.value ?: nodes.filter { it != null }.first()!!
             val candidates = candidatesOf(node)
             if (candidates.isEmpty()) {
+                Log.w(TAG, "link_no_candidates id=${v.id.value} reaches=${node.reaches}")
                 v.link.detach()
                 activity.closed(v.id)
                 markClosed(v.id)
@@ -236,6 +238,7 @@ class VehicleRepository @Inject constructor(
             val reach = candidates[index]
             val transport = openOrNull(node, reach)
             if (transport == null || transport.state.value.isTerminal()) {
+                Log.w(TAG, "link_open_failed id=${v.id.value} reach=$reach state=${transport?.state?.value}")
                 transport?.close()
                 delay(FALLBACK_DELAY_MS)
                 index = (index + 1) % candidates.size
@@ -245,8 +248,10 @@ class VehicleRepository @Inject constructor(
             v.setReach(reach)
             activity.opened(v.id, reach)
             markOpen(v)
-            when (monitor(v, transport, nodes, candidates, index, node)) {
-                Outcome.Failed -> {
+            Log.i(TAG, "link_opened id=${v.id.value} reach=$reach candidates=$candidates")
+            when (val outcome = monitor(v, transport, nodes, candidates, index, node)) {
+                is Outcome.Failed -> {
+                    Log.w(TAG, "link_closed id=${v.id.value} reach=$reach why=${outcome.why}")
                     v.link.detach()
                     activity.closed(v.id)
                     markClosed(v.id)
@@ -254,6 +259,7 @@ class VehicleRepository @Inject constructor(
                     index = (index + 1) % candidates.size
                 }
                 Outcome.Upgrade, Outcome.ReachesChanged -> {
+                    Log.i(TAG, "link_detached id=${v.id.value} reason=$outcome")
                     v.link.detach()
                     index = 0
                 }
@@ -270,7 +276,9 @@ class VehicleRepository @Inject constructor(
         node: NodeSummary,
     ): Outcome {
         val openedAt = clock.nowMs()
-        val failed = transport.state.filter { it.isTerminal() }.map { Outcome.Failed }
+        val failed = transport.state.filter { it.isTerminal() }.map {
+            Outcome.Failed("transport_${(it as? TransportState.Failed)?.message ?: it::class.simpleName}")
+        }
         val held = heldClosed.filter { v.id in it }.map { Outcome.ReachesChanged }
         val changed = nodes.filter { it != null && candidatesOf(it) != candidates }.map { Outcome.ReachesChanged }
         val upgrade = if (index > 0) {
@@ -288,7 +296,8 @@ class VehicleRepository @Inject constructor(
                 while (true) {
                     delay(SILENCE_CHECK_MS)
                     val last = v.link.lastTargetFrameAtMs.value ?: openedAt
-                    if (clock.nowMs() - maxOf(last, openedAt) > SILENCE_FALLBACK_MS) emit(Outcome.Failed)
+                    val quietMs = clock.nowMs() - maxOf(last, openedAt)
+                    if (quietMs > SILENCE_FALLBACK_MS) emit(Outcome.Failed("silent_${quietMs}ms"))
                 }
             }
         } else {
@@ -314,6 +323,7 @@ class VehicleRepository @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            Log.w(TAG, "open_threw reach=$reach", e)
             null
         }
     }
@@ -330,6 +340,7 @@ class VehicleRepository @Inject constructor(
         const val PROBE_OPEN_MS = 5_000L
         const val SILENCE_CHECK_MS = 1_000L
         const val SILENCE_FALLBACK_MS = 5_000L
+        private const val TAG = "AdosLink"
 
         private fun rank(r: Reach): Int = when (r) {
             Reach.DirectFc -> 0
